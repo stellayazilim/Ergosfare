@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Ergosfare.Commands.Abstractions\Ergosfare.Commands.Abstractions.csproj" />
+      <ProjectReference Include="..\Ergosfare.Commands\Ergosfare.Commands.csproj" />
+      <ProjectReference Include="..\Ergosfare.Messaging.Abstractions\Ergosfare.Messaging.Abstractions.csproj" />
+      <ProjectReference Include="..\Ergosfare.Messaging.Extensions.MicrosoftDependencyInjection\Ergosfare.Messaging.Extensions.MicrosoftDependencyInjection.csproj" />
+    </ItemGroup>
+
+</Project>

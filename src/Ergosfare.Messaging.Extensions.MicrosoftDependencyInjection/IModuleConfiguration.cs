@@ -1,0 +1,17 @@
+﻿using Ergosfare.Messaging.Abstractions.Registry;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Ergosfare.Messaging.Extensions.MicrosoftDependencyInjection;
+
+public interface IModuleConfiguration
+{
+    /// <summary>
+    ///     Gets the collection of services associated with the module configuration.
+    /// </summary>
+    IServiceCollection Services { get; }
+
+    /// <summary>
+    ///     Gets the message registry associated with the module configuration.
+    /// </summary>
+    IMessageRegistry MessageRegistry { get; }
+}

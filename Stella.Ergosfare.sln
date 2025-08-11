@@ -1,0 +1,85 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare", "src\Ergosfare\Ergosfare.csproj", "{92583D3B-AB44-4F13-B218-7DEA5B685D84}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Messaging.Abstractions", "src\Ergosfare.Messaging.Abstractions\Ergosfare.Messaging.Abstractions.csproj", "{C5DFD738-53FC-4EFC-B3AD-3470F8CDDAD5}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Messaging", "src\Ergosfare.Messaging\Ergosfare.Messaging.csproj", "{83375078-C808-466F-8ACD-B5FE875587EC}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{320B785E-A957-4E34-B748-6DA688B8D4A2}"
+	ProjectSection(SolutionItems) = preProject
+		Directory.Build.props = Directory.Build.props
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{16B49E79-4E96-4B52-BE26-462273E444E0}"
+	ProjectSection(SolutionItems) = preProject
+		test\Directory.Packages.props = test\Directory.Packages.props
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Messaging.Test", "test\Ergosfare.Messaging.Test\Ergosfare.Messaging.Test.csproj", "{83107BC9-1979-43E9-8710-948FDBB62CF4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Commands.Abstractions", "src\Ergosfare.Commands.Abstractions\Ergosfare.Commands.Abstractions.csproj", "{4AC1E430-063B-4E27-9704-6F00E3DDD820}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Messaging.Extensions.MicrosoftDependencyInjection", "src\Ergosfare.Messaging.Extensions.MicrosoftDependencyInjection\Ergosfare.Messaging.Extensions.MicrosoftDependencyInjection.csproj", "{550E83C6-C3F9-41CD-A6EE-E33E4F6AFD09}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Commands", "src\Ergosfare.Commands\Ergosfare.Commands.csproj", "{4F7C8B0D-D9DF-4EAA-9287-898310FC4866}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Commands.Extensions.MicrosoftDependencyInjection", "src\Ergosfare.Commands.Extensions.MicrosoftDependencyInjection\Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj", "{98EEB51A-C8D1-4F0A-9530-236C3BFAF143}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Commands.Test", "test\Ergosfare.Commands.Test\Ergosfare.Commands.Test.csproj", "{BC314E04-BC1A-4D5C-A16A-6BC50F6F559B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{92583D3B-AB44-4F13-B218-7DEA5B685D84}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{92583D3B-AB44-4F13-B218-7DEA5B685D84}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{92583D3B-AB44-4F13-B218-7DEA5B685D84}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{92583D3B-AB44-4F13-B218-7DEA5B685D84}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C5DFD738-53FC-4EFC-B3AD-3470F8CDDAD5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C5DFD738-53FC-4EFC-B3AD-3470F8CDDAD5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C5DFD738-53FC-4EFC-B3AD-3470F8CDDAD5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C5DFD738-53FC-4EFC-B3AD-3470F8CDDAD5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{83375078-C808-466F-8ACD-B5FE875587EC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{83375078-C808-466F-8ACD-B5FE875587EC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{83375078-C808-466F-8ACD-B5FE875587EC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{83375078-C808-466F-8ACD-B5FE875587EC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{83107BC9-1979-43E9-8710-948FDBB62CF4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{83107BC9-1979-43E9-8710-948FDBB62CF4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{83107BC9-1979-43E9-8710-948FDBB62CF4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{83107BC9-1979-43E9-8710-948FDBB62CF4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4AC1E430-063B-4E27-9704-6F00E3DDD820}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4AC1E430-063B-4E27-9704-6F00E3DDD820}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4AC1E430-063B-4E27-9704-6F00E3DDD820}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4AC1E430-063B-4E27-9704-6F00E3DDD820}.Release|Any CPU.Build.0 = Release|Any CPU
+		{550E83C6-C3F9-41CD-A6EE-E33E4F6AFD09}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{550E83C6-C3F9-41CD-A6EE-E33E4F6AFD09}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{550E83C6-C3F9-41CD-A6EE-E33E4F6AFD09}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{550E83C6-C3F9-41CD-A6EE-E33E4F6AFD09}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4F7C8B0D-D9DF-4EAA-9287-898310FC4866}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4F7C8B0D-D9DF-4EAA-9287-898310FC4866}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4F7C8B0D-D9DF-4EAA-9287-898310FC4866}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4F7C8B0D-D9DF-4EAA-9287-898310FC4866}.Release|Any CPU.Build.0 = Release|Any CPU
+		{98EEB51A-C8D1-4F0A-9530-236C3BFAF143}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{98EEB51A-C8D1-4F0A-9530-236C3BFAF143}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{98EEB51A-C8D1-4F0A-9530-236C3BFAF143}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{98EEB51A-C8D1-4F0A-9530-236C3BFAF143}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BC314E04-BC1A-4D5C-A16A-6BC50F6F559B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BC314E04-BC1A-4D5C-A16A-6BC50F6F559B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BC314E04-BC1A-4D5C-A16A-6BC50F6F559B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BC314E04-BC1A-4D5C-A16A-6BC50F6F559B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{92583D3B-AB44-4F13-B218-7DEA5B685D84} = {320B785E-A957-4E34-B748-6DA688B8D4A2}
+		{83375078-C808-466F-8ACD-B5FE875587EC} = {320B785E-A957-4E34-B748-6DA688B8D4A2}
+		{C5DFD738-53FC-4EFC-B3AD-3470F8CDDAD5} = {320B785E-A957-4E34-B748-6DA688B8D4A2}
+		{83107BC9-1979-43E9-8710-948FDBB62CF4} = {16B49E79-4E96-4B52-BE26-462273E444E0}
+		{4AC1E430-063B-4E27-9704-6F00E3DDD820} = {320B785E-A957-4E34-B748-6DA688B8D4A2}
+		{550E83C6-C3F9-41CD-A6EE-E33E4F6AFD09} = {320B785E-A957-4E34-B748-6DA688B8D4A2}
+		{4F7C8B0D-D9DF-4EAA-9287-898310FC4866} = {320B785E-A957-4E34-B748-6DA688B8D4A2}
+		{98EEB51A-C8D1-4F0A-9530-236C3BFAF143} = {320B785E-A957-4E34-B748-6DA688B8D4A2}
+		{BC314E04-BC1A-4D5C-A16A-6BC50F6F559B} = {16B49E79-4E96-4B52-BE26-462273E444E0}
+	EndGlobalSection
+EndGlobal
