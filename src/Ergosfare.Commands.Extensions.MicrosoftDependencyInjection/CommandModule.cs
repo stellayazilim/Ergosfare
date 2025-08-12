@@ -1,5 +1,5 @@
 ﻿using Ergosfare.Commands.Abstractions;
-using Ergosfare.Messaging.Extensions.MicrosoftDependencyInjection;
+using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;

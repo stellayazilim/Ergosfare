@@ -1,8 +1,9 @@
 ﻿using System.Reflection;
 using Ergosfare.Commands.Abstractions;
 using Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
-using Ergosfare.Messaging.Extensions.MicrosoftDependencyInjection;
+using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
+
 
 namespace Ergosfare.Commands.Test;
 
@@ -34,6 +35,9 @@ public class CommandModuleTests
 
         Assert.NotNull(result);
         Assert.Equal("hello", result);
+        
+        await serviceProvider.DisposeAsync();
+
     }
 
 }

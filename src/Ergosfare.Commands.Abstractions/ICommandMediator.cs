@@ -1,5 +1,7 @@
 ﻿
 
+using Ergosfare.Contracts;
+
 namespace Ergosfare.Commands.Abstractions;
 /// <summary>
 ///     Represents the mediator interface for sending commands within the application.
@@ -17,7 +19,7 @@ public interface ICommandMediator
     /// <summary>
     ///     Asynchronously sends a command for mediation.
     /// </summary>
-    /// <param name="commandConstruct">The command to be sent.</param>
+    /// <param name="command">The command to be sent.</param>
     /// <param name="commandMediationSettings">
     ///     Optional settings for command mediation that control aspects such as handler
     ///     filtering.
@@ -29,13 +31,13 @@ public interface ICommandMediator
     ///     appropriate handler based on its type, and the command handling pipeline is executed, including
     ///     pre-handlers, the main handler, post-handlers, and error handlers if exceptions occur.
     /// </remarks>
-    Task SendAsync(ICommandConstruct commandConstruct, CommandMediationSettings? commandMediationSettings = null, CancellationToken cancellationToken = default);
+    Task SendAsync(ICommand command, CommandMediationSettings? commandMediationSettings = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Asynchronously sends a command for mediation and returns a result.
     /// </summary>
     /// <typeparam name="TResult">The type of the result returned by the command.</typeparam>
-    /// <param name="commandConstruct">The command to be sent.</param>
+    /// <param name="command">The command to be sent.</param>
     /// <param name="commandMediationSettings">
     ///     Optional settings for command mediation that control aspects such as handler
     ///     filtering.
@@ -48,7 +50,7 @@ public interface ICommandMediator
     ///     is executed, including pre-handlers, the main handler, post-handlers, and error handlers if exceptions occur.
     ///     The result produced by the handler is returned to the caller.
     /// </remarks>
-    Task<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct,
+    Task<TResult> SendAsync<TResult>(ICommand<TResult> command,
                                                    CommandMediationSettings? commandMediationSettings = null,
                                                    CancellationToken cancellationToken = default);
 }

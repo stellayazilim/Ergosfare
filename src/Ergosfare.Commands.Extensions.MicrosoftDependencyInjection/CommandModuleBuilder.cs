@@ -1,7 +1,6 @@
 ﻿using System.Reflection;
-using Ergosfare.Commands.Abstractions;
-using Ergosfare.Messaging.Abstractions.Registry;
-using ICommand = System.Windows.Input.ICommand;
+using Ergosfare.Contracts;
+using Ergosfare.Core.Abstractions.Registry;
 
 namespace Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 
@@ -56,7 +55,7 @@ public sealed class CommandModuleBuilder
     /// <returns>The current <see cref="CommandModuleBuilder" /> instance for method chaining.</returns>
     public CommandModuleBuilder RegisterFromAssembly(Assembly assembly)
     {
-        foreach (var registrableCommandConstruct in assembly.GetTypes().Where(t => t.IsAssignableTo(typeof(ICommandConstruct))))
+        foreach (var registrableCommandConstruct in assembly.GetTypes().Where(t => t.IsAssignableTo(typeof(ICommand))))
         {
             _messageRegistry.Register(registrableCommandConstruct);
         }

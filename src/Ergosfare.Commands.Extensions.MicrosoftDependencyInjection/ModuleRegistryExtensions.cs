@@ -1,4 +1,4 @@
-﻿using Ergosfare.Messaging.Extensions.MicrosoftDependencyInjection;
+﻿using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
 namespace Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 
