@@ -15,7 +15,7 @@ namespace Ergosfare.Core.Abstractions;
 ///     and error handlers are invoked during the mediation process.
 /// </remarks>
 public interface IMessageMediationStrategy<in TMessage, out TMessageResult>
-    where TMessage : IMessage
+    where TMessage : notnull
 {
     /// <summary>
     ///     Mediates a message by executing the appropriate handlers and producing a result.

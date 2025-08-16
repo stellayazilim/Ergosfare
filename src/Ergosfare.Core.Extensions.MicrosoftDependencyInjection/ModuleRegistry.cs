@@ -15,13 +15,11 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
     private readonly IServiceCollection _services = services;
     private readonly IMessageRegistry _messageRegistry = messageRegistry;
 
-
     public IModuleRegistry Register(IModule module)
     {
         _modules.Add(module);
         return this;
     }
-    
     
     /// <summary>
     ///     Initializes the registered modules and their components.
@@ -54,13 +52,14 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
         var descriptorHandlerTypes = new HashSet<Type>();
 
         // Process all handlers first to avoid redundant service registrations
-        CollectHandlerTypes(descriptor.Handler, descriptorHandlerTypes);
+        CollectHandlerTypes(descriptor.Handlers, descriptorHandlerTypes);
+        CollectHandlerTypes(descriptor.IndirectHandlers, descriptorHandlerTypes);
 
         // Register each type once
         foreach (var handlerType in descriptorHandlerTypes)
         {
             // Only register concrete classes with DI container - interfaces and abstract classes are kept in 
-            // Ergosfare registry for polymorphic dispatch but cannot be instantiated by the DI container.
+            // LiteBus registry for polymorphic dispatch but cannot be instantiated by the DI container.
             // Without this filter, DI would throw "Cannot instantiate implementation type" errors.
             if (handlerType is { IsClass: true, IsAbstract: false })
             {
@@ -69,10 +68,13 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
         }
     }
 
-    private static void CollectHandlerTypes(IHandlerDescriptor descriptor, HashSet<Type> handlerTypes)
+    private static void CollectHandlerTypes(IEnumerable<IHandlerDescriptor> descriptors, HashSet<Type> handlerTypes)
     {
         
-          handlerTypes.Add(descriptor.HandlerType);
+        foreach (var descriptor in descriptors)
+        {
+            handlerTypes.Add(descriptor.HandlerType);
+        }
     
     }
 }

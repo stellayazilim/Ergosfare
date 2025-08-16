@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Ergosfare.Contracts;
@@ -27,7 +28,6 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult> : IMe
         {
             throw new ArgumentNullException(nameof(messageDependencies));
         }
-
         if (messageDependencies.Handlers.Count > 1)
         {
             throw new MultipleHandlerFoundException(typeof(TMessage), messageDependencies.Handlers.Count);

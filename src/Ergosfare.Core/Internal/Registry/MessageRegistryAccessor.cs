@@ -1,5 +1,8 @@
 ﻿using Ergosfare.Core.Abstractions.Registry;
 using Ergosfare.Core;
+using Ergosfare.Core.Internal.Factories;
+using Microsoft.Extensions.DependencyInjection;
+
 namespace Ergosfare.Core.Internal.Registry;
 
 
@@ -16,7 +19,8 @@ internal static class MessageRegistryAccessor
     /// <summary>
     /// Lazy initializer for the message registry that ensures thread-safe initialization.
     /// </summary>
-    private static readonly Lazy<IMessageRegistry> LazyInstance = new(() => new MessageRegistry(), LazyThreadSafetyMode.ExecutionAndPublication);
+    private static readonly Lazy<IMessageRegistry> LazyInstance = new(() => new MessageRegistry(new MessageDescriptorBuilderFactory()), LazyThreadSafetyMode.ExecutionAndPublication);
+
 
     /// <summary>
     /// Gets the singleton instance of the message registry.

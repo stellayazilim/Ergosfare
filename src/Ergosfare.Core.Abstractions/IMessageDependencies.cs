@@ -4,6 +4,7 @@ namespace Ergosfare.Core.Abstractions;
 
 public interface IMessageDependencies
 {
-    ILazyHandlerCollection<IHandler, IMainHandlerDescriptor> Handlers { get; }
+    ILazyHandlerCollection<IHandler, IMainHandlerDescriptor> Handlers { get; } 
 
+    ILazyHandlerCollection<IHandler, IMainHandlerDescriptor> IndirectHandlers { get; }
 }

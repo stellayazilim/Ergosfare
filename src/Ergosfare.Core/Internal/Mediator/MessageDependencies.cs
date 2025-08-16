@@ -10,28 +10,28 @@ internal sealed class MessageDependencies : IMessageDependencies
 {
     private readonly Type _messageType;
     public ILazyHandlerCollection<IHandler, IMainHandlerDescriptor> Handlers { get; }
-
+    public ILazyHandlerCollection<IHandler, IMainHandlerDescriptor> IndirectHandlers { get; }
     public MessageDependencies(Type messageType,
         IMessageDescriptor descriptor,
-        IServiceProvider serviceProvider,
-        IEnumerable<string> tags)
+        IServiceProvider serviceProvider)
     {
         _messageType = messageType;
+        Handlers = ResolveHandlers(descriptor.Handlers, handlerType => (IHandler) serviceProvider.GetRequiredService(handlerType));
+        IndirectHandlers = ResolveHandlers(descriptor.IndirectHandlers, handlerType => (IHandler) serviceProvider.GetRequiredService(handlerType));
 
-        Handlers = ResolveHandlers(descriptor.Handler, handlerType => (IHandler)serviceProvider.GetRequiredService(handlerType));
     }
 
     private ILazyHandlerCollection<THandler, TDescriptor> ResolveHandlers<THandler, TDescriptor>(
-        TDescriptor descriptor,
-        Func<Type, THandler> resolveFunc) where TDescriptor : IHandlerDescriptor
+            IEnumerable<TDescriptor> descriptors, 
+            Func<Type, THandler> resolveFunc ) where TDescriptor : IHandlerDescriptor
     {
-        var lazyHandler = new LazyHandler<THandler, TDescriptor>
-        {
-            Handler = new Lazy<THandler>(() => resolveFunc(GetHandlerType(descriptor))),
-            Descriptor = descriptor
-        };
-
-        return new[] { lazyHandler }.ToLazyReadOnlyCollection();
+        return descriptors
+            .Select(d => new LazyHandler<THandler, TDescriptor>
+            {
+                Handler = new Lazy<THandler>(() => resolveFunc(GetHandlerType(d))),
+                Descriptor = d
+            })
+            .ToLazyReadOnlyCollection();
     }
 
     private Type GetHandlerType(IHandlerDescriptor descriptor)
@@ -45,4 +45,5 @@ internal sealed class MessageDependencies : IMessageDependencies
 
         return handlerType;
     }
+    
 }

@@ -6,5 +6,5 @@ internal interface IHandlerDescriptorBuilder
 {
     bool CanBuild(Type type);
     
-    IHandlerDescriptor Build(Type type);
+    IEnumerable<IHandlerDescriptor> Build(Type type);
 }

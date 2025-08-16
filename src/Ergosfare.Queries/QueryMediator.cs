@@ -13,10 +13,11 @@ public class QueryMediator(IMessageMediator messageMediator): IQueryMediator
         queryMediationSettings ??= new QueryMediationSettings();
         var mediationStrategy = new SingleAsyncHandlerMediationStrategy<IQuery<TResult>, TResult>();
         var resolveStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
-
+        var resultStrategy = new ErgoResultStrategy<TResult>();
         return messageMediator.Mediate(query,
             new MediateOptions<IQuery<TResult>, Task<TResult>>
             {
+                ResultStrategy = resultStrategy,
                 MessageMediationStrategy = mediationStrategy,
                 MessageResolveStrategy = resolveStrategy,
                 CancellationToken = cancellationToken,
@@ -30,10 +31,11 @@ public class QueryMediator(IMessageMediator messageMediator): IQueryMediator
         queryMediationSettings ??= new QueryMediationSettings();
         var mediationStrategy = new SingleStreamHandlerMediationStrategy<IStreamQuery<TResult>, TResult>(cancellationToken);
         var resolveStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
-        
+        var resultStrategy = new ErgoResultStrategy<ErgoResult<TResult>>();
         return messageMediator.Mediate(query,
             new MediateOptions<IStreamQuery<TResult>, IAsyncEnumerable<TResult>>
             {
+                ResultStrategy = resultStrategy,
                 MessageMediationStrategy = mediationStrategy,
                 MessageResolveStrategy = resolveStrategy,
                 CancellationToken = cancellationToken,

@@ -2,21 +2,23 @@
 
 namespace Ergosfare.Core.Internal.Registry.Descriptors;
 
-internal class MessageDescriptor : IMessageDescriptor
+internal class MessageDescriptor(Type messageType) : IMessageDescriptor
 {
-    public MessageDescriptor(Type messageType)
-    {
-        MessageType = messageType;
-        IsGeneric = messageType.IsGenericType;
-    }
 
-    public Type MessageType { get; }
-    public bool IsGeneric { get; }
-    public IMainHandlerDescriptor Handler { get; private set; }
+
+
+    private readonly List<IMainHandlerDescriptor> _handlers = new();
+    private readonly List<IMainHandlerDescriptor> _indirectHandlers = new();
     
-    
+    public Type MessageType { get; } = messageType;
+    public bool IsGeneric { get; } = messageType.IsGenericType;
+
+    public IReadOnlyCollection<IMainHandlerDescriptor> Handlers => _handlers;
+    public IReadOnlyCollection<IMainHandlerDescriptor> IndirectHandlers => _indirectHandlers;
+
     public void AddDescriptors(IEnumerable<IHandlerDescriptor> descriptors)
     {
+        
         foreach (var descriptor in descriptors)
         {
             AddDescriptor(descriptor);
@@ -31,12 +33,24 @@ internal class MessageDescriptor : IMessageDescriptor
         {
             switch (descriptor)
             {
-             
-                case IMainHandlerDescriptor mainHandlerDescriptor:
-                    Handler = mainHandlerDescriptor;
-            
+                case IMainHandlerDescriptor mainHandlerDescriptor : 
+                    _handlers.Add(mainHandlerDescriptor); 
                     break;
             }
         }
+        
+        else if (MessageType.IsAssignableTo(descriptor.MessageType))
+        {
+            switch (descriptor)
+            {
+          
+                case IMainHandlerDescriptor mainHandlerDescriptor:
+                    _indirectHandlers.Add(mainHandlerDescriptor);
+                    break;
+             
+            }
+        }
     }
+    
+    
 }

@@ -11,8 +11,7 @@ namespace Ergosfare.Core.Abstractions.Strategies;
 
 
 public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
-    CancellationToken cancellationToken) : IMessageMediationStrategy<TMessage,
-    IAsyncEnumerable<TResult>>
+    CancellationToken cancellationToken) : IMessageMediationStrategy<TMessage, IAsyncEnumerable<TResult>>
     where TMessage : IMessage
 {
     

@@ -9,7 +9,7 @@ namespace Ergosfare.Contracts;
 ///     Represents the non-generic base interface for all message handlers, facilitating handling operations for messages
 ///     of any type.
 /// </summary>
-public interface IHandler: IMessage
+public interface IHandler
 {
     /// <summary>
     ///     Handles the incoming message and facilitates the necessary operations or transformations as defined by the specific

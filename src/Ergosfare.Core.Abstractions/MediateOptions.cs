@@ -1,11 +1,11 @@
 ﻿using System.Collections.Generic;
 using System.Threading;
-using Ergosfare.Contracts;
+using Ergosfare.Core.Abstractions.Strategies;
 
 namespace Ergosfare.Core.Abstractions;
 
 public sealed class MediateOptions<TMessage, TResult> 
-    where TMessage: IMessage
+    where TMessage: notnull
 {
     public required IMessageResolveStrategy MessageResolveStrategy { get; init; }
     
@@ -15,6 +15,7 @@ public sealed class MediateOptions<TMessage, TResult>
     
     public required CancellationToken CancellationToken { get; init; } = CancellationToken.None;
     
+    public IResultStrategy? ResultStrategy { get; init; }
     
     /// <summary>
     ///     Gets or initializes a value indicating whether to register plain messages on the spot.

@@ -4,11 +4,13 @@
         <TargetFramework>net9.0</TargetFramework>
         <ImplicitUsings>disable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <LangVersion>13</LangVersion>
     </PropertyGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\Ergosfare.Contracts\Ergosfare.Contracts.csproj" />
       <ProjectReference Include="..\Ergosfare.Core.Context\Ergosfare.Core.Context.csproj" />
+      <ProjectReference Include="..\Ergosfare.Events.Abstractions\Ergosfare.Events.Abstractions.csproj" />
     </ItemGroup>
 
 </Project>
