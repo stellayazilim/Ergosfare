@@ -8,7 +8,6 @@ using Xunit.Abstractions;
 namespace Ergosfare.Core.Test.Strategies;
 
 public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
-(ITestOutputHelper  testOutputHelper)
 {
     [Fact]
     public void MessageRegistryShouldResolveDescriptor()
@@ -47,7 +46,7 @@ public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
         var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
     
         // act
-        var descriptor = resolver.Find(typeof(StubMessages.StubGenericDerivedMessage), registry);
+        var descriptor = resolver.Find(typeof(StubMessages.StubNonGenericDerivedMessage), registry);
     
         // assert
         Assert.NotNull(descriptor);
@@ -64,16 +63,16 @@ public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
         
         // dummy generic string arg
         var mockGenericHandler = HandlerMocks.MockGenericHandler<string>();
+        
         registry.Register(mockGenericHandler.Object.GetType()); // handles BaseMessage
         
         var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
         
-        testOutputHelper.WriteLine(registry.First().MessageType.ToString());
         // act
-        var descriptor = resolver.Find(mockGenericHandler.Object.GetType(), registry);
+        var descriptor = resolver.Find(typeof(StubMessages.StubGenericMessage<string>), registry);
         
-        // assert
+        //assert
         Assert.NotNull(descriptor);
-        Assert.Equal(typeof(StubMessages.StubNonGenericMessage), descriptor?.MessageType);
+        Assert.Equal(typeof(StubMessages.StubGenericMessage<>), descriptor?.MessageType);
     }
 }

@@ -1,13 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace Ergosfare.Core.Abstractions.Registry.Descriptors;
 
-public interface IMessageDescriptor
+public interface IMessageDescriptor: IHasMessageType
 {
-  
-    Type MessageType { get; }
-
     bool IsGeneric { get; }
 
     IReadOnlyCollection<IMainHandlerDescriptor> Handlers  { get; }

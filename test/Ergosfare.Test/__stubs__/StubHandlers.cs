@@ -37,11 +37,13 @@ public static class StubHandlers
     };
     
     
-    public class StubGenericHandler<TArg>: IHandler<StubMessages.StubNonGenericMessage, Task>
+    public class StubGenericHandler<TArg>: IHandler<StubMessages.StubGenericMessage<TArg>, Task>
     {
-        public Task Handle(StubMessages.StubNonGenericMessage message)
+        public Task Handle(StubMessages.StubGenericMessage<TArg> message)
         {
             throw new NotImplementedException();
         }
     }
+    
+
 }

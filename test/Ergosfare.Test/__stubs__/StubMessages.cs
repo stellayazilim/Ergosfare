@@ -5,7 +5,7 @@ public static class StubMessages
 {
     public record StubNonGenericMessage : IMessage;
     public record StubNonGenericCommand : ICommand<Task>;
-    public record StubGenericDerivedMessage : StubNonGenericMessage;
+    public record StubNonGenericDerivedMessage : StubNonGenericMessage;
     
     
     // ReSharper disable once ClassNeverInstantiated.Global

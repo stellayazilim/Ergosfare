@@ -2,8 +2,7 @@
 
 namespace Ergosfare.Core.Abstractions.Registry.Descriptors;
 
-public interface IHandlerDescriptor
+public interface IHandlerDescriptor: IHasMessageType
 {
-    Type MessageType { get; }
     Type HandlerType { get; }
 }
