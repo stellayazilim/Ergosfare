@@ -13,10 +13,10 @@ public class MessageDependenciesTest
     {
         // arrange 
         var serviceCollection = new ServiceCollection().BuildServiceProvider();
-        var descriptor = new MessageDescriptor(typeof(HandlerStubs.StubGenericMessage));
+        var descriptor = new MessageDescriptor(typeof(StubMessages.StubNonGenericMessage));
         var factory = new MessageDependenciesFactory(serviceCollection);
         // act
-        var dependencies = factory.Create(typeof(HandlerStubs.StubGenericMessage), descriptor);
+        var dependencies = factory.Create(typeof(StubMessages.StubNonGenericMessage), descriptor);
         
         // assert 
         Assert.NotNull(dependencies);
