@@ -59,9 +59,24 @@ public static class StubHandlers
     {
         public Task Handle(StubMessages.StubGenericMessage<TArg> message, IExecutionContext context)
         {
-            throw new NotImplementedException();
+            return Task.CompletedTask;
         }
     }
     
-
+    
+    public class StubGenericPreInterceptor<TArg>: IPreInterceptor<StubMessages.StubGenericMessage<TArg>>
+    {
+        public object Handle(StubMessages.StubGenericMessage<TArg> message, IExecutionContext context)
+        {
+            return Task.CompletedTask;
+        }
+    }
+    
+    public class StubGenericPostInterceptor<TArg> : IPostInterceptor<StubMessages.StubGenericMessage<TArg>,Task>
+    {
+        public object Handle(StubMessages.StubGenericMessage<TArg> message, Task? messageResult, IExecutionContext context)
+        {
+            return Task.CompletedTask;
+        }
+    }
 }

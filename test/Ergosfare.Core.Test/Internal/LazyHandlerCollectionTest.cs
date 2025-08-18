@@ -1,4 +1,5 @@
-﻿using Ergosfare.Core.Abstractions.Registry.Descriptors;
+﻿using System.Collections;
+using Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Ergosfare.Core.Internal;
 using Ergosfare.Test.__stubs__;
 
@@ -22,6 +23,8 @@ public class LazyHandlerCollectionTest
     }
 
     [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
     public void LazyHandlerCollectionShouldGetEnumeratorTest()
     {
         // arrange
@@ -37,5 +40,24 @@ public class LazyHandlerCollectionTest
         Assert.False(enumerator.MoveNext());
         enumerator.Dispose();
       
+    }
+    
+    
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public void LazyHandlerCollectionShouldGetNonGenericEnumeratorTest()
+    {
+        // arrange
+        var lazyHandler = StubHandlers.StubLazyHandler;
+        var collection = new LazyHandlerCollection<StubHandlers.StubNonGenericHandler,IHandlerDescriptor>(
+            [ lazyHandler  ]);
+        var enumerable = (IEnumerable)collection;
+        // act
+        var enumerator = enumerable.GetEnumerator();
+        // assert
+        Assert.NotNull(enumerator);
+        
+        ((IDisposable)enumerator).Dispose();
     }
 }

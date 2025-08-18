@@ -9,13 +9,17 @@ namespace Ergosfare.Core.Internal.Mediator;
 internal sealed class MessageDependencies : IMessageDependencies
 {
     private readonly Type _messageType;
-    public ILazyHandlerCollection<IHandler, IMainHandlerDescriptor> Handlers { get; }
-    public ILazyHandlerCollection<IHandler, IMainHandlerDescriptor> IndirectHandlers { get; }
+    
     
     public ILazyHandlerCollection<IPreInterceptor, IPreInterceptorDescriptor> PreInterceptors { get; }
     
     public ILazyHandlerCollection<IPreInterceptor, IPreInterceptorDescriptor> IndirectPreInterceptors { get; }
     
+    
+    public ILazyHandlerCollection<IHandler, IMainHandlerDescriptor> Handlers { get; }
+    public ILazyHandlerCollection<IHandler, IMainHandlerDescriptor> IndirectHandlers { get; }
+    
+
     public ILazyHandlerCollection<IPostInterceptor, IPostInterceptorDescriptor> PostInterceptors { get; }
     
     public ILazyHandlerCollection<IPostInterceptor, IPostInterceptorDescriptor> IndirectPostInterceptors { get; }
@@ -35,7 +39,6 @@ internal sealed class MessageDependencies : IMessageDependencies
             descriptor.IndirectPreInterceptors, 
             handlerType => (IPreInterceptor) serviceProvider.GetRequiredService(handlerType));
 
-        
         
         // resolve main handlers
         Handlers = ResolveHandlers(descriptor.Handlers, handlerType => (IHandler) serviceProvider.GetRequiredService(handlerType));

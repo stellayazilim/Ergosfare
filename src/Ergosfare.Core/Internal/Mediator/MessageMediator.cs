@@ -13,7 +13,7 @@ internal sealed class MessageMediator(
     : IMessageMediator
 {
     private readonly IMessageRegistry _messageRegistry = messageRegistry ?? throw new ArgumentNullException(nameof(messageRegistry));
-
+    private readonly IMessageDependenciesFactory _messageDependenciesFactory = messageDependenciesFactory ?? throw new ArgumentNullException(nameof(messageDependenciesFactory));
 
     public TResult Mediate<TMessage, TResult>(TMessage message, MediateOptions<TMessage, TResult> options) where TMessage : notnull
     {
@@ -48,7 +48,7 @@ internal sealed class MessageMediator(
         }
 
         // Resolve the dependencies in lazy mode
-        var messageDependencies = messageDependenciesFactory.Create(messageType, descriptor);
+        var messageDependencies = _messageDependenciesFactory.Create(messageType, descriptor);
 
         // Mediate the message using the specified strategy
         return options.MessageMediationStrategy.Mediate(message, messageDependencies, AmbientExecutionContext.Current);
