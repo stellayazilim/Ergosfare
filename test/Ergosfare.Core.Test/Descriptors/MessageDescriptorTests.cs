@@ -8,6 +8,8 @@ public class MessageDescriptorTests
 {
 
     [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
     public void MessageDescriptorShouldHaveMessageType()
     {
 
@@ -18,26 +20,51 @@ public class MessageDescriptorTests
         Assert.Equal(typeof(StubMessages.StubNonGenericMessage), descriptor.MessageType);
     }
 
+    
     [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public void MessageDescriptorShouldRegisterHandlers()
+    {
+        // arrange
+        var messgeDescriptor = new MessageDescriptor(typeof(StubMessages.StubNonGenericMessage));
+      
+        var factory = new MessageDescriptorBuilderFactory();
+        // act
+        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericHandler)));
+        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericPreInterceptor)));
+        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericPostInterceptor)));
+
+        Assert.NotEmpty(messgeDescriptor.PreInterceptors);
+        Assert.NotEmpty(messgeDescriptor.PostInterceptors);
+        Assert.NotEmpty(messgeDescriptor.Handlers);
+    }
+    
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
     public void MessageDescriptorShouldRegisterIndirectHandlers()
     {
-        // arrange 
-        var descriptor = new MessageDescriptor(typeof(StubMessages.StubNonGenericDerivedMessage));
-        var descriptorFactory = new MessageDescriptorBuilderFactory();
-        var indirectDescriptors = descriptorFactory.BuildDescriptors(typeof(StubHandlers.StubNonGenericHandler));
-        
-        // act 
-        descriptor.AddDescriptors(indirectDescriptors);
-        
-        // assert
-        
-        Assert.NotEmpty(descriptor.IndirectHandlers);    
+        // arrange
+        var messgeDescriptor = new MessageDescriptor(typeof(StubMessages.StubNonGenericDerivedMessage));
+      
+        var factory = new MessageDescriptorBuilderFactory();
+        // act
+        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericHandler)));
+        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericPreInterceptor)));
+        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericPostInterceptor)));
+
+        Assert.NotEmpty(messgeDescriptor.IndirectPreInterceptors);
+        Assert.NotEmpty(messgeDescriptor.IndirectPostInterceptors);
+        Assert.NotEmpty(messgeDescriptor.IndirectHandlers);
 
     }
     
     
     
     [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
     public void MessageDescriptorShouldHandleGenericMessage()
     {
         // arrange &&  act 
@@ -47,4 +74,7 @@ public class MessageDescriptorTests
         Assert.True(genericDescriptor.IsGeneric);    
         Assert.False(nonGenericDescriptor.IsGeneric);
     }
+
+
+
 }

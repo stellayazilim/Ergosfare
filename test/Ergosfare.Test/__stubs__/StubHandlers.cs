@@ -7,11 +7,28 @@ namespace Ergosfare.Test.__stubs__;
 
 public static class StubHandlers
 {
+    
+    public class StubNonGenericPreInterceptor: IPreInterceptor<StubMessages.StubNonGenericMessage>
+    {
+        public object Handle(StubMessages.StubNonGenericMessage message, IExecutionContext context)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
     public class StubNonGenericHandler: IHandler<StubMessages.StubNonGenericMessage, Task>
     {
         public Task Handle(StubMessages.StubNonGenericMessage message, IExecutionContext context)
         {
             return Task.CompletedTask;
+        }
+    }
+    
+    public class StubNonGenericPostInterceptor: IPostInterceptor<StubMessages.StubNonGenericMessage,Task>
+    {
+        public object Handle(StubMessages.StubNonGenericMessage message, Task? messageResult, IExecutionContext context)
+        {
+            throw new NotImplementedException();
         }
     }
 

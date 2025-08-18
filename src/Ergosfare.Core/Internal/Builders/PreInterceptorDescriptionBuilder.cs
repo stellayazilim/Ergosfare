@@ -15,7 +15,7 @@ public class PreInterceptorDescriptionBuilder: IHandlerDescriptorBuilder
 
     public IEnumerable<IHandlerDescriptor> Build(Type handlerType)
     {
-        var interfaces = handlerType.GetInterfacesEqualTo(typeof(IPostInterceptor<,>));
+        var interfaces = handlerType.GetInterfacesEqualTo(typeof(IPreInterceptor<>));
 
         foreach (var @interface in interfaces)
         {
