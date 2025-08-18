@@ -1,10 +1,9 @@
-﻿
-using System.Diagnostics;
+﻿using System;
 using System.Linq;
-using System.Runtime.InteropServices.JavaScript;
 using System.Threading.Tasks;
 using Ergosfare.Contracts;
 using Ergosfare.Core.Abstractions.Exceptions;
+using Ergosfare.Core.Abstractions.Extensions;
 using Ergosfare.Core.Context;
 
 namespace Ergosfare.Core.Abstractions.Strategies;
@@ -30,7 +29,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage> : IMessageMedi
     ///     The dependencies required for message handling, including handlers, pre-handlers,
     ///     post-handlers, and error handlers.
     /// </param>
-    /// <param name="executionContext">
+    /// <param name="context">
     ///     The context in which the mediation is executed, providing access to cancellation tokens,
     ///     shared data, and other execution-related information.
     /// </param>
@@ -41,7 +40,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage> : IMessageMedi
     ///     If an exception occurs during any stage, the appropriate error handlers are executed.
     ///     If a <see cref="Exceptions.ExecutionAbortedException" /> is caught, the mediation process is aborted without error.
     /// </remarks>
-    public async Task Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext executionContext)
+    public async Task Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context)
     {
         
         
@@ -49,11 +48,17 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage> : IMessageMedi
         {
             throw new MultipleHandlerFoundException(typeof(TMessage), messageDependencies.Handlers.Count);
         }
-
         Task? result = null;
-        var handler = messageDependencies.Handlers.Single().Handler.Value;
-        result = (Task) handler.Handle(message);
-        await result;
-      
+        try
+        {
+            await messageDependencies.RunAsyncPreInterceptors(message, context);
+            result = (Task)messageDependencies.Handlers.Single().Handler.Value.Handle(message, context);
+            await result;
+            await messageDependencies.RunAsyncPostInterceptors(message, result, context);
+        }
+        catch(Exception e) when (e is not ExecutionAbortedException)
+        {
+            // handle ErrorInterceptors
+        }
     }
 }

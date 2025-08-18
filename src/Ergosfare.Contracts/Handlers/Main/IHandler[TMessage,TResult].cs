@@ -1,4 +1,6 @@
 ﻿
+using Ergosfare.Core.Context;
+
 namespace Ergosfare.Contracts;
 
 
@@ -7,10 +9,10 @@ public interface IHandler<in TMessage, out TResult> : IHandler
     where TResult : notnull
 {
     
-    object IHandler.Handle(object message)
+    object IHandler.Handle(object message, IExecutionContext context)
     {
-        return Handle((TMessage) message);
+        return Handle((TMessage) message, context);
     }
     
-    TResult Handle(TMessage message);
+    TResult Handle(TMessage message, IExecutionContext context);
 }

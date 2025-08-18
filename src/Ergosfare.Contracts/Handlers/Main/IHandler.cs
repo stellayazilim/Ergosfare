@@ -1,4 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
+using Ergosfare.Core.Context;
 
 namespace Ergosfare.Contracts;
 
@@ -16,9 +17,10 @@ public interface IHandler
     ///     handler implementation.
     /// </summary>
     /// <param name="message">The message to be handled, represented as an object which can be of any type.</param>
+    /// <param name="context">Current execution context</param>
     /// <returns>
     ///     An object representing the outcome of the handling operation, which might include results of processing,
     ///     transformed message, or other related data depending on the specific handler's implementation.
     /// </returns>
-    object Handle(object message);
+    object Handle(object message, IExecutionContext context);
 }

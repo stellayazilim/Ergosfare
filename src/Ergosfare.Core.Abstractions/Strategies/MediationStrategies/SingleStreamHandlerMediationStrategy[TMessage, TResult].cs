@@ -5,13 +5,11 @@ using System.Threading;
 using Ergosfare.Contracts;
 using Ergosfare.Core.Abstractions.Exceptions;
 using Ergosfare.Core.Context;
-using ExecutionAbortedException = Ergosfare.Core.Abstractions.Exceptions.ExecutionAbortedException;
 
 namespace Ergosfare.Core.Abstractions.Strategies;
 
 
-public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
-    CancellationToken cancellationToken) : IMessageMediationStrategy<TMessage, IAsyncEnumerable<TResult>>
+public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>( CancellationToken cancellationToken) : IMessageMediationStrategy<TMessage, IAsyncEnumerable<TResult>>
     where TMessage : IMessage
 {
     
@@ -34,7 +32,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
 
             var handler = messageDependencies.Handlers.Single().Handler.Value;
 
-            messageResultAsyncEnumerable = (IAsyncEnumerable<TResult>) handler.Handle(message);
+            messageResultAsyncEnumerable = (IAsyncEnumerable<TResult>) handler.Handle(message, executionContext);
         }      
         catch (ExecutionAbortedException)
         {

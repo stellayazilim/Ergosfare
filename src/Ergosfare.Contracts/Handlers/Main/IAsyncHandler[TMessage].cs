@@ -8,11 +8,11 @@ namespace Ergosfare.Contracts;
 public interface IAsyncHandler<in TMessage>: IHandler<TMessage, Task>
     where TMessage : notnull
 {
-    Task IHandler<TMessage, Task>.Handle(TMessage message)
+    Task IHandler<TMessage, Task>.Handle(TMessage message, IExecutionContext context)
     {
-        return HandleAsync(message,  AmbientExecutionContext.Current.CancellationToken);
+        return HandleAsync(message, context,  AmbientExecutionContext.Current.CancellationToken);
     }
         
         
-    Task HandleAsync(TMessage message, CancellationToken cancellationToken = default);
+    Task HandleAsync(TMessage message, IExecutionContext context, CancellationToken cancellationToken = default);
 }

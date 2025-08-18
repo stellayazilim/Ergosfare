@@ -10,15 +10,10 @@ using Ergosfare.Events.Abstractions;
 
 namespace Ergosfare.Core.Abstractions.Strategies;
 
-public sealed class AsyncBroadcastMediationStrategy<TMessage> : IMessageMediationStrategy<TMessage, Task> where TMessage : notnull
+public sealed class AsyncBroadcastMediationStrategy<TMessage>(EventMediationSettings settings)
+    : IMessageMediationStrategy<TMessage, Task>
+    where TMessage : notnull
 {
-    private readonly EventMediationSettings _settings;
-
-    public AsyncBroadcastMediationStrategy(EventMediationSettings settings)
-    {
-        _settings = settings;
-    }
-
     /// <summary>
     ///     Mediates the given message by broadcasting it to all registered handlers concurrently.
     /// </summary>
@@ -27,18 +22,18 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage> : IMessageMediatio
     ///     The dependencies required for message handling, including registered handlers,
     ///     pre-handlers, post-handlers, and error handlers.
     /// </param>
-    /// <param name="executionContext"></param>
+    /// <param name="context"></param>
     /// <returns>A Task representing the asynchronous operation of the mediation process.</returns>
-    public async Task Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext executionContext)
+    public async Task Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context)
     {
 
         var handlers = messageDependencies.Handlers
-            .Where(x => _settings.Filters.HandlerPredicate(x.Descriptor.HandlerType))
+            .Where(x => settings.Filters.HandlerPredicate(x.Descriptor.HandlerType))
             .ToList();
 
         if (handlers.Count == 0)
         {
-            if (_settings.ThrowIfNoHandlerFound)
+            if (settings.ThrowIfNoHandlerFound)
             {
                 throw new InvalidOperationException($"No handler found for message type '{typeof(TMessage)}'.");
             }
@@ -46,17 +41,17 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage> : IMessageMediatio
         }
         try
         {
-            var sequentialExecutionTask = PublishSequentially(message, handlers);
+            var sequentialExecutionTask = PublishSequentially(message, handlers, context);
             await Task.CompletedTask;
         }
         catch (Exception e) {  }
     }
 
-    private static async Task PublishSequentially(TMessage message, IEnumerable<LazyHandler<IHandler, IMainHandlerDescriptor>> mainHandlers)
+    private static async Task PublishSequentially(TMessage message, IEnumerable<LazyHandler<IHandler, IMainHandlerDescriptor>> mainHandlers, IExecutionContext context)
     {
         foreach (var lazyHandler in mainHandlers)
         {
-            var handleTask = (Task) lazyHandler.Handler.Value.Handle(message);
+            var handleTask = (Task) lazyHandler.Handler.Value.Handle(message, context);
 
             await handleTask;
         }

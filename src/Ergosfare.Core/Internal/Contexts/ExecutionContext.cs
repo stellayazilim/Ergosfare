@@ -1,5 +1,4 @@
 ﻿using Ergosfare.Core.Context;
-using ExecutionAbortedException = Ergosfare.Core.Abstractions.Exceptions.ExecutionAbortedException;
 
 namespace Ergosfare.Core.Internal.Contexts;
 

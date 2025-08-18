@@ -9,5 +9,10 @@ public interface IMessageDescriptor: IHasMessageType
     IReadOnlyCollection<IMainHandlerDescriptor> Handlers  { get; }
     
     IReadOnlyCollection<IMainHandlerDescriptor> IndirectHandlers { get; }
-
+    
+    IReadOnlyCollection<IPreInterceptorDescriptor> PreInterceptors { get; }
+    IReadOnlyCollection<IPreInterceptorDescriptor> IndirectPreInterceptors { get; }
+    
+    IReadOnlyCollection<IPostInterceptorDescriptor> PostInterceptors { get; }
+    IReadOnlyCollection<IPostInterceptorDescriptor> IndirectPostInterceptors { get; }
 }
