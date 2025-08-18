@@ -2,7 +2,4 @@
 
 namespace Ergosfare.Core.Abstractions.Registry.Descriptors;
 
-public interface  IMainHandlerDescriptor: IHandlerDescriptor
-{
-    Type ResultType { get; }
-}
+public interface  IMainHandlerDescriptor: IHandlerDescriptor, IHasResultType;

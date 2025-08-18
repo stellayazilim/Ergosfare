@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Ergosfare.Contracts;
 using Ergosfare.Core.Abstractions.Exceptions;
+using Ergosfare.Core.Abstractions.Extensions;
 using Ergosfare.Core.Context;
 
 namespace Ergosfare.Core.Abstractions.Strategies;
@@ -22,7 +23,7 @@ namespace Ergosfare.Core.Abstractions.Strategies;
 /// </remarks>
 public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult> : IMessageMediationStrategy<TMessage, Task<TResult>> where TMessage : IMessage
 {
-    public async Task<TResult> Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext executionContext)
+    public async Task<TResult> Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context)
     {
         if (messageDependencies is null)
         {
@@ -32,14 +33,38 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult> : IMe
         {
             throw new MultipleHandlerFoundException(typeof(TMessage), messageDependencies.Handlers.Count);
         }
+            
+        TResult? result = default;
 
-        var handler = messageDependencies.Handlers.Single().Handler.Value;
-
-        if (handler is null)
+        try
         {
-            throw new InvalidOperationException($"Handler for {typeof(TMessage).Name} is not of the expected type.");
+            await messageDependencies.RunAsyncPreInterceptors(message, context);
+            
+            var handler = messageDependencies.Handlers.Single().Handler.Value;
+
+            if (handler is null)
+            {
+                throw new InvalidOperationException($"Handler for {typeof(TMessage).Name} is not of the expected type.");
+            }
+            
+            result = await (Task<TResult>) handler.Handle(message, context);
+            
+            await messageDependencies.RunAsyncPostInterceptors(message, result, context);
+        } catch (ExecutionAbortedException)
+        {
+            if (context.MessageResult is null)
+            {
+                throw new InvalidOperationException(
+                    $"A Message result of type '{typeof(TResult).Name}' is required when the execution is aborted as this message has a specific result.");
+            }
+            return await Task.FromResult((TResult) context.MessageResult);
+            
+        } catch (Exception e) when (e is not ExecutionAbortedException)
+        {
+             // handle ErrorInterceptors
         }
 
-        return await (Task<TResult>) handler.Handle(message);
+        return result!;
+
     }
 }

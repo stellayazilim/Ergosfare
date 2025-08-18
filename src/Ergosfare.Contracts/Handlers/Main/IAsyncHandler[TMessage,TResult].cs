@@ -31,6 +31,7 @@ public interface IAsyncHandler<in TMessage,  TResult>: IHandler<TMessage, Task<T
     ///     the current ambient execution context's cancellation token.
     /// </summary>
     /// <param name="message">The message to be handled.</param>
+    /// <param name="context">Current execution context</param>
     /// <returns>
     ///     A task representing the asynchronous handling operation, which upon completion yields the result of the
     ///     handling process.
@@ -40,9 +41,9 @@ public interface IAsyncHandler<in TMessage,  TResult>: IHandler<TMessage, Task<T
     ///     HandleAsync, enabling a unified approach to message handling, where the Handle method can be used while taking
     ///     advantage of asynchronous processing.
     /// </remarks>
-    Task<TResult> IHandler<TMessage, Task<TResult>>.Handle(TMessage message)
+    Task<TResult> IHandler<TMessage, Task<TResult>>.Handle(TMessage message, IExecutionContext context)
     {
-        return HandleAsync(message, AmbientExecutionContext.Current.CancellationToken);
+        return HandleAsync(message, context, AmbientExecutionContext.Current.CancellationToken);
     }
 
     
@@ -50,6 +51,7 @@ public interface IAsyncHandler<in TMessage,  TResult>: IHandler<TMessage, Task<T
     ///     Defines a method to handle messages asynchronously and produce a result.
     /// </summary>
     /// <param name="message">The message to be handled.</param>
+    /// <param name="context">Current execution context</param>
     /// <param name="cancellationToken">
     ///     A cancellation token that can be used to request the cancellation of the handling
     ///     operation, facilitating graceful shutdown scenarios or preventing resource wastage in case of long-running
@@ -63,6 +65,6 @@ public interface IAsyncHandler<in TMessage,  TResult>: IHandler<TMessage, Task<T
     ///     Implementers should define the handling logic within this method, providing asynchronous operations to process the
     ///     message effectively and produce a result that can be used in subsequent stages of the workflow.
     /// </remarks>
-    Task<TResult> HandleAsync(TMessage message, CancellationToken cancellationToken = default);
+    Task<TResult> HandleAsync(TMessage message, IExecutionContext context, CancellationToken cancellationToken = default);
 
 }

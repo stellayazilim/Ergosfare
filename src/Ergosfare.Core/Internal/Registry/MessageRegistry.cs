@@ -186,7 +186,9 @@ internal sealed class MessageRegistry(
         messageType = messageType.IsGenericType ? messageType.GetGenericTypeDefinition() : messageType;
 
         // Check if the message type is already registered in the messages list
-        var existingMessage = _messages.FirstOrDefault(d => d.MessageType == messageType);
+        var existingMessage = _messages.FirstOrDefault(
+                d => d.MessageType == messageType
+            );
 
         // _messages içinde aynı tip zaten varsa kayıt yapılmaz.
         if (existingMessage != null)
@@ -195,12 +197,11 @@ internal sealed class MessageRegistry(
         }
 
         // Also check if it's in the newMessages list awaiting processing
-        var isNewMessage = _newMessages.FirstOrDefault(d => d.MessageType == messageType);
+        var isNewMessage = _newMessages.FirstOrDefault(
+                d => d.MessageType == messageType
+            );
 
-        if (isNewMessage != null)
-        {
-            return;
-        }
+        if (isNewMessage != null) return;
     
         // Create a new MessageDescriptor and add it to the newMessages list
         _newMessages.Add(new MessageDescriptor(messageType));

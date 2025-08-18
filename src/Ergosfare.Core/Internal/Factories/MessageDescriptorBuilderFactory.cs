@@ -10,6 +10,8 @@ public class MessageDescriptorBuilderFactory: IDisposable, IAsyncDisposable
     private readonly List<IHandlerDescriptorBuilder> _descriptorBuilders =
     [
         new HandlerDescriptorBuilder(),
+        new PreInterceptorDescriptionBuilder(),
+        new PostHandlerDescriptorBuilder()
     ];
 
 
