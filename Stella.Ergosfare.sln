@@ -7,9 +7,6 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Core", "src\Ergosfare.Core\Ergosfare.Core.csproj", "{83375078-C808-466F-8ACD-B5FE875587EC}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{320B785E-A957-4E34-B748-6DA688B8D4A2}"
-	ProjectSection(SolutionItems) = preProject
-		Directory.Build.props = Directory.Build.props
-	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{16B49E79-4E96-4B52-BE26-462273E444E0}"
 	ProjectSection(SolutionItems) = preProject
@@ -32,7 +29,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Queries.Extension
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Contracts", "src\Ergosfare.Contracts\Ergosfare.Contracts.csproj", "{98455811-A58F-481B-8C1A-9B36212CC33E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Core.Context", "src\Ergosfare.Core.Context\Ergosfare.Core.Context.csproj", "{6C45B10A-EC07-4831-9F67-17241B722691}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Context", "src\Ergosfare.Context\Ergosfare.Context.csproj", "{6C45B10A-EC07-4831-9F67-17241B722691}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Events", "src\Ergosfare.Events\Ergosfare.Events.csproj", "{412B73FD-4A22-428C-A7AE-A0D684517BBD}"
 EndProject

@@ -1,6 +1,6 @@
 using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
-using Ergosfare.Core.Context;
+using Ergosfare.Context;
 
 namespace Ergosfare.Core.Abstractions.Extensions;
 

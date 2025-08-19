@@ -1,5 +1,6 @@
 ﻿using Ergosfare.Core.Abstractions.Registry.Descriptors;
-using Ergosfare.Contracts;
+using Ergosfare.Core.Abstractions.Handlers;
+
 namespace Ergosfare.Core.Abstractions;
 
 public interface IMessageDependencies

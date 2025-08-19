@@ -2,10 +2,9 @@
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
-using Ergosfare.Contracts;
 using Ergosfare.Core.Abstractions.Exceptions;
 using Ergosfare.Core.Abstractions.Extensions;
-using Ergosfare.Core.Context;
+using Ergosfare.Context;
 
 namespace Ergosfare.Core.Abstractions.Strategies;
 

@@ -3,16 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
-using Ergosfare.Contracts;
 using Ergosfare.Core.Abstractions.Exceptions;
 using Ergosfare.Core.Abstractions.Extensions;
-using Ergosfare.Core.Context;
+using Ergosfare.Context;
 
 namespace Ergosfare.Core.Abstractions.Strategies;
 
 
 public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>( CancellationToken cancellationToken) : IMessageMediationStrategy<TMessage, IAsyncEnumerable<TResult>>
-    where TMessage : IMessage
 {
     
     private readonly CancellationToken _cancellationToken = cancellationToken;

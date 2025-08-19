@@ -1,5 +1,5 @@
-﻿using Ergosfare.Contracts;
-using Ergosfare.Core.Abstractions;
+﻿using Ergosfare.Core.Abstractions;
+using Ergosfare.Core.Abstractions.Handlers;
 using Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Ergosfare.Core.Internal.Extensions;
 using Microsoft.Extensions.DependencyInjection;

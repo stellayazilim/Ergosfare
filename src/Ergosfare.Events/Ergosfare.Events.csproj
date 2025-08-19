@@ -8,6 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\Ergosfare.Contracts\Ergosfare.Contracts.csproj" />
       <ProjectReference Include="..\Ergosfare.Core.Abstractions\Ergosfare.Core.Abstractions.csproj" />
       <ProjectReference Include="..\Ergosfare.Events.Abstractions\Ergosfare.Events.Abstractions.csproj" />
     </ItemGroup>

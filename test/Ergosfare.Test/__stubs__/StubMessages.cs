@@ -1,4 +1,6 @@
-﻿namespace Ergosfare.Test.__stubs__;
+﻿using Ergosfare.Core.Abstractions;
+
+namespace Ergosfare.Test.__stubs__;
 
 
 public static class StubMessages

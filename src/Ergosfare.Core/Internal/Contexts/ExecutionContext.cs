@@ -1,4 +1,4 @@
-﻿using Ergosfare.Core.Context;
+﻿using Ergosfare.Context;
 
 namespace Ergosfare.Core.Internal.Contexts;
 
@@ -20,7 +20,7 @@ internal sealed class ExecutionContext: IExecutionContext
     }
     
     /// <summary>
-    /// Sets <see cref="MessageResult"/> and throws <exception cref="Core.Abstractions.Exceptions.ExecutionAbortedException"></exception>
+    /// Sets <see cref="MessageResult"/> and throws <exception cref="ExecutionAbortedException"></exception>
     /// </summary>
     /// <param name="messageResult"></param>
     public void Abort(object? messageResult = null)
