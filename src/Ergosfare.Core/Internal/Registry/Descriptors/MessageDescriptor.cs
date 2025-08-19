@@ -17,6 +17,10 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
     private readonly List<IPostInterceptorDescriptor> _postInterceptors = new();
     private readonly List<IPostInterceptorDescriptor> _indirectPostInterceptors = new();
     
+    // exception interceptors
+    private readonly List<IExceptionInterceptorDescriptor> _exceptionInterceptors = new();
+    private readonly List<IExceptionInterceptorDescriptor> _indirectExceptionInterceptors = new();
+    
     public Type MessageType { get; } = messageType;
     public bool IsGeneric { get; } = messageType.IsGenericType;
 
@@ -31,6 +35,11 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
     // post interceptors
     public IReadOnlyCollection<IPostInterceptorDescriptor> PostInterceptors => _postInterceptors;
     public IReadOnlyCollection<IPostInterceptorDescriptor> IndirectPostInterceptors => _indirectPostInterceptors;
+    
+    
+    // exception interceptors
+    public IReadOnlyCollection<IExceptionInterceptorDescriptor> ExceptionInterceptors => _exceptionInterceptors;
+    public IReadOnlyCollection<IExceptionInterceptorDescriptor> IndirectExceptionInterceptors => _indirectExceptionInterceptors;
     public void AddDescriptors(IEnumerable<IHandlerDescriptor> descriptors)
     {
         
@@ -57,6 +66,9 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
                 case IPostInterceptorDescriptor postInterceptorDescriptor:
                     _postInterceptors.Add(postInterceptorDescriptor);
                     break;
+                case IExceptionInterceptorDescriptor exceptionInterceptorDescriptor:
+                    _exceptionInterceptors.Add(exceptionInterceptorDescriptor);
+                    break;
             }
         }
         
@@ -72,6 +84,9 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
                     break;
                 case IPostInterceptorDescriptor postInterceptorDescriptor:
                     _indirectPostInterceptors.Add(postInterceptorDescriptor);
+                    break;
+                case IExceptionInterceptorDescriptor exceptionInterceptorDescriptor:
+                    _indirectExceptionInterceptors.Add(exceptionInterceptorDescriptor);
                     break;
             }
         }

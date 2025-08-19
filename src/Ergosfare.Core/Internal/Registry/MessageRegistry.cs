@@ -34,7 +34,7 @@ namespace Ergosfare.Core.Internal.Registry;
 /// efficient discovery, lookup, and management of message-handler relationships.
 /// </remarks>
 internal sealed class MessageRegistry(
-    MessageDescriptorBuilderFactory  messageDescriptorBuilderFactory
+    HandlerDescriptorBuilderFactory  handlerDescriptorBuilderFactory
     ) : IMessageRegistry
 {
     
@@ -114,7 +114,7 @@ internal sealed class MessageRegistry(
         // Use builders to create handler descriptors for the given type
         // <see cref="MessageDescriptorBuilderFactory" />
 
-        var newDescriptors = messageDescriptorBuilderFactory.BuildDescriptors(type);
+        var newDescriptors = handlerDescriptorBuilderFactory.BuildDescriptors(type);
        
         
         // If no handlers were created, assume the type is a message type and register it

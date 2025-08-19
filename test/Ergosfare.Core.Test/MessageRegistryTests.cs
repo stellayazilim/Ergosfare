@@ -25,7 +25,7 @@ public class MessageRegistryTests
     public void ShouldMessageRegistryRegisterMessages()
     {
         // arrange 
-        var messageRegistry = new MessageRegistry(new MessageDescriptorBuilderFactory());
+        var messageRegistry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
 
 
 
@@ -46,7 +46,7 @@ public class MessageRegistryTests
     public void ShouldMessageRegistryRegisterMultipleMessages()
     {
         // arrange 
-        var messageRegistry = new MessageRegistry(new MessageDescriptorBuilderFactory());
+        var messageRegistry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
 
         // act
         messageRegistry.Register(typeof(StubHandlers.StubNonGenericHandler)); 
@@ -62,7 +62,7 @@ public class MessageRegistryTests
     public void MessageRegistryShouldHaveGetEnumerator()
     {
         // arrange
-        var messageRegistry = new MessageRegistry(new MessageDescriptorBuilderFactory());
+        var messageRegistry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         messageRegistry.Register(typeof(StubHandlers.StubNonGenericHandler)); 
         
         // act
@@ -80,7 +80,7 @@ public class MessageRegistryTests
     public void MessageRegistryNonGenericGetEnumeratorShouldReturnsEnumerator()
     {
         // Arrange
-        var registry = new MessageRegistry(new MessageDescriptorBuilderFactory());
+        var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         registry.Register(typeof(StubHandlers.StubNonGenericHandler)); 
         registry.Register(typeof(StubHandlers.StubNonGenericHandlerDuplicate));
 
@@ -100,7 +100,7 @@ public class MessageRegistryTests
     public void MessageRegistryShouldProcessMessageTypes()
     {
         // Arrange
-        var registry = new MessageRegistry(new MessageDescriptorBuilderFactory());
+        var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         
         // Act
         registry.Register(typeof(StubMessages.StubNonGenericMessage)); 
@@ -116,7 +116,7 @@ public class MessageRegistryTests
     public void MessageRegistryShouldIgnoreFrameworkTypes()
     {
         // Arrange
-        var registry = new MessageRegistry(new MessageDescriptorBuilderFactory());
+        var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         
         // Act
         registry.Register(typeof(System.Console)); 
@@ -132,7 +132,7 @@ public class MessageRegistryTests
     public void Register_ShouldIgnoreDuplicateMessagesInNewMessages()
     {
         // Arrange
-        var registry = new MessageRegistry(new MessageDescriptorBuilderFactory());
+        var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
 
         // Act - register the first message (goes to _newMessages initially)
         registry.Register(typeof(StubMessages.StubNonGenericMessage));
@@ -156,7 +156,7 @@ public class MessageRegistryTests
     public void Register_ShouldIgnoreDuplicatesInNewMessagesAndMessages()
     {
         // Arrange
-        var registry = new MessageRegistry(new MessageDescriptorBuilderFactory());
+        var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
 
         // Act 1: Register a message (goes to _newMessages first)
         registry.Register(typeof(StubMessages.StubNonGenericMessage));
@@ -183,7 +183,7 @@ public class MessageRegistryTests
     public void Register_ShouldSkipMessageIfAlreadyInNewMessages()
     {
         // Arrange
-        var registry = new MessageRegistry(new MessageDescriptorBuilderFactory());
+        var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         registry.Register(typeof(StubMessages.StubNonGenericMessage2));
 
         

@@ -13,7 +13,7 @@ public static class ServiceCollectionExtensions
         Action<IModuleRegistry> ergosfareBuilderAction)
     {
         
-        services.TryAddTransient<MessageDescriptorBuilderFactory>();
+        services.TryAddTransient<HandlerDescriptorBuilderFactory>();
         // Get the singleton registry instance
         var messageRegistry = MessageRegistryAccessor.Instance;
 

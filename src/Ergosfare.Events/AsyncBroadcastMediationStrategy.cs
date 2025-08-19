@@ -1,14 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.ExceptionServices;
-using System.Threading.Tasks;
 using Ergosfare.Contracts;
+using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Ergosfare.Core.Context;
 using Ergosfare.Events.Abstractions;
 
-namespace Ergosfare.Core.Abstractions.Strategies;
+namespace Ergosfare.Events;
 
 public sealed class AsyncBroadcastMediationStrategy<TMessage>(EventMediationSettings settings)
     : IMessageMediationStrategy<TMessage, Task>

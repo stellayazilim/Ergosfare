@@ -15,7 +15,7 @@ public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
         
         // arrange
         var registry = new MessageRegistry(
-            new MessageDescriptorBuilderFactory());
+            new HandlerDescriptorBuilderFactory());
         
         registry.Register(typeof(StubHandlers.StubNonGenericHandler));
         registry.Register(typeof(StubHandlers.StubGenericHandler2));
@@ -40,7 +40,7 @@ public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
     {
         // arrange
         var registry = new MessageRegistry(
-            new MessageDescriptorBuilderFactory());
+            new HandlerDescriptorBuilderFactory());
     
         registry.Register(typeof(StubHandlers.StubNonGenericHandler)); // handles BaseMessage
         var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
@@ -59,7 +59,7 @@ public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
     {
         // arrange
         var registry = new MessageRegistry(
-            new MessageDescriptorBuilderFactory());
+            new HandlerDescriptorBuilderFactory());
         
         // dummy generic string arg
         var mockGenericHandler = HandlerMocks.MockGenericHandler<string>();

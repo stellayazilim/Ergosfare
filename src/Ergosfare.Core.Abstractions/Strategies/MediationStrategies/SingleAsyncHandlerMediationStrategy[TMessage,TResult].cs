@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using Ergosfare.Contracts;
 using Ergosfare.Core.Abstractions.Exceptions;
@@ -61,7 +62,8 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult> : IMe
             
         } catch (Exception e) when (e is not ExecutionAbortedException)
         {
-             // handle ErrorInterceptors
+            await messageDependencies.RunAsyncExceptionInterceptors(message, result, ExceptionDispatchInfo.Capture(e), context);
+
         }
 
         return result!;

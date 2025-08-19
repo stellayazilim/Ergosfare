@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using Ergosfare.Contracts;
 using Ergosfare.Core.Abstractions.Exceptions;
+using Ergosfare.Core.Abstractions.Extensions;
 using Ergosfare.Core.Context;
 
 namespace Ergosfare.Core.Abstractions.Strategies;
@@ -41,7 +43,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>( Can
         }
         catch (Exception exception) when (exception is not ExecutionAbortedException)
         {
-           // error processor here
+            await messageDependencies.RunAsyncExceptionInterceptors(message, messageResultAsyncEnumerable, ExceptionDispatchInfo.Capture(exception), executionContext);
         }
         
         if (!shouldContinue)
@@ -71,7 +73,8 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>( Can
             }
             catch (Exception exception) when (exception is not ExecutionAbortedException)
             {
-                // Error processor
+                await messageDependencies.RunAsyncExceptionInterceptors(message, messageResultAsyncEnumerable, ExceptionDispatchInfo.Capture(exception), executionContext);
+
             }
 
             if (item != null && hasResult && shouldContinue)

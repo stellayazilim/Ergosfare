@@ -10,9 +10,7 @@ internal sealed class MessageDependencies : IMessageDependencies
 {
     private readonly Type _messageType;
     
-    
     public ILazyHandlerCollection<IPreInterceptor, IPreInterceptorDescriptor> PreInterceptors { get; }
-    
     public ILazyHandlerCollection<IPreInterceptor, IPreInterceptorDescriptor> IndirectPreInterceptors { get; }
     
     
@@ -21,9 +19,11 @@ internal sealed class MessageDependencies : IMessageDependencies
     
 
     public ILazyHandlerCollection<IPostInterceptor, IPostInterceptorDescriptor> PostInterceptors { get; }
-    
     public ILazyHandlerCollection<IPostInterceptor, IPostInterceptorDescriptor> IndirectPostInterceptors { get; }
+  
     
+    public ILazyHandlerCollection<IExceptionInterceptor, IExceptionInterceptorDescriptor> ExceptionInterceptors { get; }
+    public ILazyHandlerCollection<IExceptionInterceptor, IExceptionInterceptorDescriptor> IndirectExceptionInterceptors { get; }
     public MessageDependencies(Type messageType,
         IMessageDescriptor descriptor,
         IServiceProvider serviceProvider)
@@ -52,7 +52,17 @@ internal sealed class MessageDependencies : IMessageDependencies
         IndirectPostInterceptors = ResolveHandlers(
             descriptor.IndirectPostInterceptors,
             handlerType => (IPostInterceptor)  serviceProvider.GetRequiredService(handlerType));
-       
+        
+        
+        // resolve exception interceptors
+        ExceptionInterceptors = ResolveHandlers(
+            descriptor.ExceptionInterceptors,
+            handlerType => (IExceptionInterceptor)  serviceProvider.GetRequiredService(handlerType)
+            );
+        
+        IndirectExceptionInterceptors = ResolveHandlers(
+            descriptor.IndirectExceptionInterceptors,
+            handlerType => (IExceptionInterceptor)  serviceProvider.GetRequiredService(handlerType));
     }
 
     private ILazyHandlerCollection<THandler, TDescriptor> ResolveHandlers<THandler, TDescriptor>(

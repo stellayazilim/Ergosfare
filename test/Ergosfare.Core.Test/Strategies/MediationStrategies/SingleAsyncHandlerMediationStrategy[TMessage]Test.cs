@@ -40,7 +40,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests
                .BuildServiceProvider();
     
        var str = new SingleAsyncHandlerMediationStrategy<StubMessages.StubNonGenericMessage>();
-       var messageDescriptorBuilderFactory = new MessageDescriptorBuilderFactory();
+       var messageDescriptorBuilderFactory = new HandlerDescriptorBuilderFactory();
        var handlerDescriptors = messageDescriptorBuilderFactory
            .BuildDescriptors(typeof(StubHandlers.StubNonGenericHandler));
        var messageDescriptor = new MessageDescriptor(typeof(StubMessages.StubNonGenericMessage));
@@ -75,7 +75,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests
             .BuildServiceProvider();
     
         var str = new SingleAsyncHandlerMediationStrategy<StubMessages.StubNonGenericMessage>();
-        var messageDescriptorBuilderFactory = new MessageDescriptorBuilderFactory();
+        var messageDescriptorBuilderFactory = new HandlerDescriptorBuilderFactory();
         var messageDescriptor = new MessageDescriptor(typeof(StubMessages.StubNonGenericMessage));
         
         // simulate multiple handler for same message

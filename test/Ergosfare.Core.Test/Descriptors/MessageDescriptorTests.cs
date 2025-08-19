@@ -29,15 +29,16 @@ public class MessageDescriptorTests
         // arrange
         var messgeDescriptor = new MessageDescriptor(typeof(StubMessages.StubNonGenericMessage));
       
-        var factory = new MessageDescriptorBuilderFactory();
+        var factory = new HandlerDescriptorBuilderFactory();
         // act
         messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericHandler)));
         messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericPreInterceptor)));
         messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericPostInterceptor)));
-
+        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericExceptionInterceptor)));
         Assert.NotEmpty(messgeDescriptor.PreInterceptors);
         Assert.NotEmpty(messgeDescriptor.PostInterceptors);
         Assert.NotEmpty(messgeDescriptor.Handlers);
+        Assert.NotEmpty(messgeDescriptor.ExceptionInterceptors);
     }
     
     [Fact]
@@ -48,15 +49,18 @@ public class MessageDescriptorTests
         // arrange
         var messgeDescriptor = new MessageDescriptor(typeof(StubMessages.StubNonGenericDerivedMessage));
       
-        var factory = new MessageDescriptorBuilderFactory();
+        var factory = new HandlerDescriptorBuilderFactory();
         // act
         messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericHandler)));
         messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericPreInterceptor)));
         messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericPostInterceptor)));
-
+        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericExceptionInterceptor)));
+        
         Assert.NotEmpty(messgeDescriptor.IndirectPreInterceptors);
         Assert.NotEmpty(messgeDescriptor.IndirectPostInterceptors);
         Assert.NotEmpty(messgeDescriptor.IndirectHandlers);
+        Assert.NotEmpty(messgeDescriptor.IndirectExceptionInterceptors);
+        //Assert.NotEmpty(messgeDescriptor.Handlers);
 
     }
     

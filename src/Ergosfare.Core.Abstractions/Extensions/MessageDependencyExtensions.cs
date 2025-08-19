@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using Ergosfare.Core.Context;
 
@@ -30,6 +31,31 @@ public static class MessageDependencyExtensions
         foreach (var postHandler in messageDependencies.IndirectPostInterceptors)
         {
             await (Task) postHandler.Handler.Value.Handle(message, messageResult, context);
+        }
+    }
+    
+    
+    
+    public static async Task RunAsyncExceptionInterceptors(
+        this IMessageDependencies messageDependencies, 
+        object message, 
+        object? messageResult, 
+        ExceptionDispatchInfo exceptionDispatchInfo, 
+        IExecutionContext context)
+    {
+        if (messageDependencies.ExceptionInterceptors.Count + messageDependencies.IndirectExceptionInterceptors.Count == 0)
+        {
+            exceptionDispatchInfo.Throw();
+        }
+
+        foreach (var errorHandler in messageDependencies.IndirectExceptionInterceptors)
+        {
+            await (Task) errorHandler.Handler.Value.Handle(message, messageResult, exceptionDispatchInfo.SourceException, context);
+        }
+
+        foreach (var errorHandler in messageDependencies.ExceptionInterceptors)
+        {
+            await (Task) errorHandler.Handler.Value.Handle(message, messageResult, exceptionDispatchInfo.SourceException,  context);
         }
     }
 }
