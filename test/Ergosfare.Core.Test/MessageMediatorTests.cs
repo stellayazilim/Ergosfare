@@ -21,7 +21,7 @@ public class MessageMediatorTests
     public void MessageMediatorShouldThrowArgumentNullException()
     {       
         // arrange 
-        var registry = new MessageRegistry(new MessageDescriptorBuilderFactory());
+        var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         // act & assert
         Assert.Throws<ArgumentNullException>(
             () =>  new MessageMediator(null, null));
@@ -36,7 +36,7 @@ public class MessageMediatorTests
     public void MessageMediatrShouldConstructedTest()
     {
         // arrange 
-        var registry = new MessageRegistry(new MessageDescriptorBuilderFactory());
+        var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         var messageDependencyFactory = new MessageDependenciesFactory(null);
         
         // act
@@ -52,7 +52,7 @@ public class MessageMediatorTests
     public async Task MessageMediatr_Mediate_ShouldThrowArgumentNullException()
     {
         // arrange 
-        var registry = new MessageRegistry(new MessageDescriptorBuilderFactory());
+        var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         var messageDependencyFactory = new MessageDependenciesFactory(null);
         var mediator = new MessageMediator(registry, messageDependencyFactory);
 
@@ -73,7 +73,7 @@ public class MessageMediatorTests
     public async Task MessageMediatr_Mediate_ShouldSetExecutionContext()
     {
         
-        var registry = new MessageRegistry(new MessageDescriptorBuilderFactory());
+        var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         
         registry.Register(typeof(StubHandlers.StubNonGenericHandler));
         registry.Register(typeof(StubHandlers.StubNonGenericPreInterceptor));
@@ -115,7 +115,7 @@ public class MessageMediatorTests
     public async Task MessageMediatr_Mediate_ShouldThrowInvalidOperationExceptionForNonRegisteredMessages()
     {
         
-        var registry = new MessageRegistry(new MessageDescriptorBuilderFactory());
+        var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         
         var mediator = new MessageMediator(
             registry,

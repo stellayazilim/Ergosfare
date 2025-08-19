@@ -8,7 +8,7 @@ public class ExecutionContextTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public void ExecutionContextShouldConstucted()
+    public void ExecutionContextShouldConstructed()
     {
         var token = CancellationToken.None;
         var items = new Dictionary<object, object?>();
@@ -24,4 +24,17 @@ public class ExecutionContextTests
         
         
     }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void NoExecutionContextExceptionShouldHaveDefaultMessage()
+    {
+        // arrange
+        var exception = new NoExecutionContextException();
+        
+        // act & assert
+        Assert.Equal("No execution context is set", exception.Message);
+        
+    }
+
 }

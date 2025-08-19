@@ -4,14 +4,15 @@ using Ergosfare.Core.Internal.Builders;
 
 namespace Ergosfare.Core.Internal.Factories;
 
-public class MessageDescriptorBuilderFactory: IDisposable, IAsyncDisposable
+public class HandlerDescriptorBuilderFactory: IDisposable, IAsyncDisposable
 {
     
     private readonly List<IHandlerDescriptorBuilder> _descriptorBuilders =
     [
         new HandlerDescriptorBuilder(),
         new PreInterceptorDescriptionBuilder(),
-        new PostHandlerDescriptorBuilder()
+        new PostHandlerDescriptorBuilder(),
+        new ExceptionInterceptorDescriptorBuilder()
     ];
 
 

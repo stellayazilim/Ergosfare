@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using Ergosfare.Contracts;
 using Ergosfare.Core.Abstractions.Exceptions;
@@ -38,7 +39,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage> : IMessageMedi
     /// <remarks>
     ///     The mediation process includes executing pre-handlers, the main handler, and post-handlers in sequence.
     ///     If an exception occurs during any stage, the appropriate error handlers are executed.
-    ///     If a <see cref="Exceptions.ExecutionAbortedException" /> is caught, the mediation process is aborted without error.
+    ///     If a <see cref="ExecutionAbortedException" /> is caught, the mediation process is aborted without error.
     /// </remarks>
     public async Task Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context)
     {
@@ -58,7 +59,8 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage> : IMessageMedi
         }
         catch(Exception e) when (e is not ExecutionAbortedException)
         {
-            // handle ErrorInterceptors
+            await messageDependencies.RunAsyncExceptionInterceptors(message, result, ExceptionDispatchInfo.Capture(e), context);
+
         }
     }
 }

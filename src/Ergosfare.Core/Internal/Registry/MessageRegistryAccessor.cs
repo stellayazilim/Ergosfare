@@ -19,7 +19,7 @@ internal static class MessageRegistryAccessor
     /// <summary>
     /// Lazy initializer for the message registry that ensures thread-safe initialization.
     /// </summary>
-    private static readonly Lazy<IMessageRegistry> LazyInstance = new(() => new MessageRegistry(new MessageDescriptorBuilderFactory()), LazyThreadSafetyMode.ExecutionAndPublication);
+    private static readonly Lazy<IMessageRegistry> LazyInstance = new(() => new MessageRegistry(new HandlerDescriptorBuilderFactory()), LazyThreadSafetyMode.ExecutionAndPublication);
 
 
     /// <summary>

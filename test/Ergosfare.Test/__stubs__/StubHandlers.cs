@@ -79,4 +79,21 @@ public static class StubHandlers
             return Task.CompletedTask;
         }
     }
+    
+    
+    public class StubNonGenericExceptionInterceptor: IExceptionInterceptor<StubMessages.StubNonGenericMessage, Task>
+    {
+        public object Handle(StubMessages.StubNonGenericMessage message, Task? messageResult, Exception exception, IExecutionContext context)
+        {
+            return Task.CompletedTask;
+        }
+    }
+    
+    public class StubGenericExceptionInterceptor<TArg>: IExceptionInterceptor<StubMessages.StubGenericMessage<TArg>, Task>
+    {
+        public object Handle(StubMessages.StubGenericMessage<TArg> message, Task? messageResult, Exception exception, IExecutionContext context)
+        {
+            return Task.CompletedTask;
+        }
+    }
 }

@@ -11,7 +11,7 @@ public class MainHandlerDescriptorTests
     public void MainHandlerDescriptorShouldGetResultType()
     {
         // arrange
-        var builder = new MessageDescriptorBuilderFactory();
+        var builder = new HandlerDescriptorBuilderFactory();
         
         // act
         var descriptor = builder

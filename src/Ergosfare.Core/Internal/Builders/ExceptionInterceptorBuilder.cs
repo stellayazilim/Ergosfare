@@ -6,25 +6,25 @@ using Ergosfare.Core.Internal.Registry.Descriptors;
 
 namespace Ergosfare.Core.Internal.Builders;
 
-public sealed class PostHandlerDescriptorBuilder: IHandlerDescriptorBuilder
+public class ExceptionInterceptorDescriptorBuilder: IHandlerDescriptorBuilder
 {
     public bool CanBuild(Type type)
     {
-        return type.IsAssignableTo(typeof(IPostInterceptor));
+        return type.IsAssignableTo(typeof(IExceptionInterceptor));
     }
 
     public IEnumerable<IHandlerDescriptor> Build(Type handlerType)
     {
-        var interfaces = handlerType.GetInterfacesEqualTo(typeof(IPostInterceptor<,>));
+        var interfaces = handlerType.GetInterfacesEqualTo(typeof( IExceptionInterceptor<,>));
 
         foreach (var @interface in interfaces)
         {
             var messageType = @interface.GetGenericArguments()[0];
             var resultType = @interface.GetGenericArguments()[1];
 
-            yield return new PostInterceptorDescriptor
+            yield return new ExceptionInterceptorDescriptor
             {
-                MessageType = messageType.IsGenericType   ? messageType.GetGenericTypeDefinition() : messageType,
+                MessageType = messageType.IsGenericType ? messageType.GetGenericTypeDefinition() : messageType,
                 ResultType = resultType,
                 HandlerType = handlerType
             };

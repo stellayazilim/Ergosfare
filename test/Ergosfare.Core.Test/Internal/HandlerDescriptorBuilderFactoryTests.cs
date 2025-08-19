@@ -2,14 +2,14 @@ using Ergosfare.Core.Internal.Factories;
 
 namespace Ergosfare.Core.Test.Internal;
 
-public class MessageDescriptorBuilderFactoryTests
+public class HandlerDescriptorBuilderFactoryTests
 {
     [Fact]
     [Trait("Category", "Coverage")]
     public void MessageDescriptorBuilderFactoryShouldBeDisposable()
     {
         // arrange
-        var factory = new MessageDescriptorBuilderFactory();
+        var factory = new HandlerDescriptorBuilderFactory();
         
         // act 
         (factory as IDisposable).Dispose();
