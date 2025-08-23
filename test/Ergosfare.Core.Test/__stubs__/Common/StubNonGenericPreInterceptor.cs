@@ -12,6 +12,8 @@ internal class StubNonGenericPreInterceptor: IAsyncPreInterceptor<StubNonGeneric
     }
 }
 
+
+
 internal class StubNonGenericDerivedPreInterceptor: IAsyncPreInterceptor<StubNonGenericDerivedMessage>
 {
     public Task HandleAsync(StubNonGenericDerivedMessage message, IExecutionContext context,
@@ -21,6 +23,16 @@ internal class StubNonGenericDerivedPreInterceptor: IAsyncPreInterceptor<StubNon
     }
 }
 
+
+internal class StubNonGenericStreamPreInterceptorAbortExecution: IAsyncPreInterceptor<StubNonGenericMessage>
+{
+    public Task HandleAsync(StubNonGenericMessage message, IExecutionContext context,
+        CancellationToken cancellationToken = default)
+    {
+        context.Abort();
+        return Task.CompletedTask;
+    }
+}
 internal class StubNonGenericPreInterceptor2 : StubNonGenericPreInterceptor;
 
 

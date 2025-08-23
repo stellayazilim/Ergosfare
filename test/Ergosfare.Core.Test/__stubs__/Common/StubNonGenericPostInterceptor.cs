@@ -23,5 +23,29 @@ internal class StubNonGenericDerivedPostInterceptor: IAsyncPostInterceptor<StubN
     }
 }
 
+
+internal class StubNonGenericStreamPostInterceptorsAbortExecution: IAsyncPostInterceptor<StubNonGenericMessage,IAsyncEnumerable<string>>
+{
+
+    public Task HandleAsync(StubNonGenericMessage message, IAsyncEnumerable<string>? messageResult, IExecutionContext context,
+        CancellationToken cancellationToken = default)
+    {
+        context.Abort();
+        return Task.CompletedTask;
+    }
+}
+
+
+internal class StubNonGenericStreamPostInterceptorThrowsException: IAsyncPostInterceptor<StubNonGenericMessage,IAsyncEnumerable<string>>
+{
+
+
+    public Task HandleAsync(StubNonGenericMessage message, IAsyncEnumerable<string>? messageResult, IExecutionContext context,
+        CancellationToken cancellationToken = default)
+    {
+        throw new Exception("post exception");
+    }
+}
+
 internal class StubNonGenericPostInterceptor2 : StubNonGenericPostInterceptor;
 internal class StubNonGenericDerivedPostInterceptor2: StubNonGenericDerivedPostInterceptor;

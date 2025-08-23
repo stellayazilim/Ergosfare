@@ -29,8 +29,4 @@
       <ProjectReference Include="..\Ergosfare.Test\Ergosfare.Test.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-      <Folder Include="__stubs__\Common\Handlers\" />
-    </ItemGroup>
-
 </Project>

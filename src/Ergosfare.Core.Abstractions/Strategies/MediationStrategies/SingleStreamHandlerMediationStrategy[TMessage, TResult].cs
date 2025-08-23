@@ -11,9 +11,22 @@ namespace Ergosfare.Core.Abstractions.Strategies;
 
 
 public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>( CancellationToken cancellationToken) : IMessageMediationStrategy<TMessage, IAsyncEnumerable<TResult>>
+    where TMessage : notnull
 {
     
     private readonly CancellationToken _cancellationToken = cancellationToken;
+    
+
+        
+    // an unknown exception occoured that Ergosfare doesn't recognize through pipeline
+    Exception? _unknownException = null;
+        
+    // is excecution aborted at any path of pipeline
+    bool _executionAborted = false;
+        
+    // async enumerable still consumable, ie all _consumed, exception happened
+    bool _consume = true;
+    
     public async IAsyncEnumerable<TResult> Mediate(TMessage message, IMessageDependencies messageDependencies,
         IExecutionContext executionContext)
     {
@@ -22,82 +35,105 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>( Can
             throw new MultipleHandlerFoundException(typeof(TMessage), messageDependencies.Handlers.Count);
         }
         
-        IAsyncEnumerable<TResult>? messageResultAsyncEnumerable = null;
-        var shouldContinue = true;
+        AmbientExecutionContext.Current = executionContext; 
+        
+        // enumerator to consume
+        var enumerable = ((IAsyncEnumerable<TResult>)messageDependencies
+            .Handlers
+            .Single()
+            .Handler
+            .Value
+            .Handle(message, executionContext));
 
+        
+        // run pre interceptors
+        
         try
         {
-            AmbientExecutionContext.Current = executionContext;
-
-
-            var handler = messageDependencies.Handlers.Single().Handler.Value;
-
-            messageResultAsyncEnumerable = (IAsyncEnumerable<TResult>) handler.Handle(message, executionContext);
-        }      
-        catch (ExecutionAbortedException)
+            await messageDependencies.RunAsyncPreInterceptors(message, executionContext).ConfigureAwait(false);
+        }
+        catch (ExecutionAbortedException e)
         {
-            // Execution was aborted during pre-handling, terminate the stream
-            shouldContinue = false;
+            // aborted early no need to _consume
+            _consume = false; 
+            _executionAborted = true;
+                
         }
         catch (Exception exception) when (exception is not ExecutionAbortedException)
         {
-            await messageDependencies.RunAsyncExceptionInterceptors(message, messageResultAsyncEnumerable, ExceptionDispatchInfo.Capture(exception), executionContext);
+            // exception happaned no need to _consume
+            _consume = false;
+            _unknownException = exception;
         }
-        
-        if (!shouldContinue)
-        {
-            yield break;
-        }
-        
-        messageResultAsyncEnumerable ??= Empty<TResult>();
-        
-        await using var messageResultAsyncEnumerator = messageResultAsyncEnumerable.GetAsyncEnumerator(_cancellationToken);
 
-        TResult? item = default;
-        var hasResult = true;
 
-        while (hasResult && shouldContinue)
+
+        enumerable ??= Empty<TResult>();
+        await using var enumerator = enumerable.GetAsyncEnumerator(_cancellationToken);
+        
+        
+        while (_consume)
         {
+
+            TResult? item = default;
             try
             {
-                hasResult = await messageResultAsyncEnumerator.MoveNextAsync().ConfigureAwait(false);
-
-                item = hasResult ? messageResultAsyncEnumerator.Current : default;
+                _consume = await enumerator.MoveNextAsync().ConfigureAwait(false);
+                item = _consume ? enumerator.Current : default;
             }
-            catch (ExecutionAbortedException)
+            catch (ExecutionAbortedException e)
             {
-                shouldContinue = false;
-                continue;
+                _consume = false;
+                _executionAborted = true;
+                
             }
             catch (Exception exception) when (exception is not ExecutionAbortedException)
             {
-                await messageDependencies.RunAsyncExceptionInterceptors(message, messageResultAsyncEnumerable, ExceptionDispatchInfo.Capture(exception), executionContext);
-
+                _consume = false;
+                _unknownException = exception;
             }
 
-            if (item != null && hasResult && shouldContinue)
-            {
-                AmbientExecutionContext.Current = executionContext;
+
+            if (item is not null && _consume && _unknownException is null && !_executionAborted)
                 yield return item;
-            }
+
+            if (!_consume || _unknownException is not null)
+                break; // exit loop to run post-interceptors
+
+            if (_executionAborted)
+                yield break; // stop pipeline early
         }
-        
-        
-        if (!shouldContinue)
-        {
-            // Stream was terminated early, skip post-handlers
-            yield break;
-        }
+
 
         try
         {
-            AmbientExecutionContext.Current = executionContext;
-            // Post pipeline processer
+            if (_unknownException is null)
+                await messageDependencies.RunAsyncPostInterceptors(message, enumerator, executionContext).ConfigureAwait(false);
         }
+        catch (ExecutionAbortedException e)
+        { /*all chunks _consumed no action need*/ }
         catch (Exception exception) when (exception is not ExecutionAbortedException)
+        { 
+            _unknownException = exception;
+        }
+
+
+
+        try
         {
-            AmbientExecutionContext.Current = executionContext;
-            // error processor
+            if (_unknownException is not  null)
+            {
+                await messageDependencies.RunAsyncExceptionInterceptors(
+                    message,
+                    enumerator, 
+                    ExceptionDispatchInfo.Capture(_unknownException), 
+                    executionContext).ConfigureAwait(false);
+                
+            }
+        }
+        catch (Exception e) when (e is not ExecutionAbortedException)
+        {
+            throw;
         }
     }
     
@@ -110,3 +146,6 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>( Can
         yield break;
     }
 }
+
+
+

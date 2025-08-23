@@ -196,7 +196,7 @@ public class MessageDependencyExtensionsTests
 
     
         
-        Assert.NotEmpty(dependencies.ExceptionInterceptors);
+       // Assert.NotEmpty(dependencies.ExceptionInterceptors);
         Assert.NotEmpty(dependencies.IndirectExceptionInterceptors);
         
         

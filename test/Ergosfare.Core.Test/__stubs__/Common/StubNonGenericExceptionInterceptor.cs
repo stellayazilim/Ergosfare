@@ -13,16 +13,16 @@ internal class StubNonGenericExceptionInterceptor: IAsyncExceptionInterceptor<St
     }
 }
 
-internal class StubNonGenericDerivedExceptionInterceptor: IAsyncExceptionInterceptor<StubNonGenericDerivedMessage>
+internal class StubNonGenericDerivedExceptionInterceptor : StubNonGenericExceptionInterceptor;
+
+internal class StubNonGenericStreamExceptionInterceptor: IExceptionInterceptor<StubNonGenericMessage, IAsyncEnumerable<string>>
 {
-    public Task HandleAsync(StubNonGenericDerivedMessage message, object? messageResult, Exception exception,
-        IExecutionContext context, CancellationToken cancellationToken = default)
+    public object Handle(StubNonGenericMessage message, IAsyncEnumerable<string>? messageResult, Exception exception,
+        IExecutionContext context)
     {
         return Task.CompletedTask;
     }
 }
-
-
 
 internal class StubNonGenericStringResultExceptionInterceptor: IExceptionInterceptor<StubNonGenericMessage, string>
 {

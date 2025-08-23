@@ -24,4 +24,19 @@ public class ExceptionTests
         Assert.NotNull(noExecutionContextException);
         Assert.Equal("No execution context is set", noExecutionContextException.Message);
     }
+
+
+    [Fact]
+    [Trait("Category", "Coverage")]
+    public void MultipleHandlerExceptionTest()
+    {
+        // arrange & act
+        var ex = new MultipleHandlerFoundException(typeof(IMessage), 2);
+        
+        // assert
+        Assert.NotNull(ex);
+        Assert.Equal("IMessage has 2 handlers registered.", ex.Message);
+        Assert.True(ex.MessageType.IsAssignableTo(typeof(IMessage)));
+        
+    }
 }
