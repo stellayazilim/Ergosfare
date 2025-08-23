@@ -1,5 +1,20 @@
 
 
+## 🌟 v0.0.4e – Core Contracts Refactor & Exception Interceptor
+
+### 🛠️ Core Enhancements
+
+* **🔹 Refactor:** Base contracts moved from `Contracts` package into their dedicated project **Abstractions**.
+* **🔹 Refactor:** Streamlined `StreamAsyncMediationStrategy` for improved maintainability and clarity.
+* **✨ Feature:** Introduced **`IExceptionInterceptor`** handler, descriptor, and variants — all pipeline types now support exception interceptors.
+
+### ✅ Test Coverage Milestone
+
+* **💯 100% test coverage** for `Ergosfare.Core.Abstractions`.
+* **📊 Total project coverage:** 67%.
+
+
+
 ## v0.0.3e
 
 ### General
