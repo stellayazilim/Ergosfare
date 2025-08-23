@@ -28,8 +28,4 @@
       <ProjectReference Include="..\..\src\Ergosfare.Core\Ergosfare.Core.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-      <Folder Include="helpers\" />
-    </ItemGroup>
-
 </Project>

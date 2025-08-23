@@ -1,9 +1,8 @@
 using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Registry.Descriptors;
-using Ergosfare.Test.__stubs__;
+using Ergosfare.Core.Test.__stubs__;
 
-namespace Ergosfare.Core.Test;
-
+namespace Ergosfare.Core.Test.Common;
 public class MainHandlerDescriptorTests
 {
 
@@ -15,10 +14,10 @@ public class MainHandlerDescriptorTests
         
         // act
         var descriptor = builder
-            .BuildDescriptors(typeof(StubHandlers.StubNonGenericHandler))
+            .BuildDescriptors(typeof(StubNonGenericHandler))
             .First() as MainHandlerDescriptor;
   
         Assert.NotNull(descriptor?.ResultType);
-        Assert.Equal(typeof(Task), descriptor.ResultType);
+        Assert.Equal(typeof(object), descriptor.ResultType);
     }
 }

@@ -6,19 +6,14 @@ namespace Ergosfare.Core.Internal.Contexts;
 /// <summary>
 /// <inheritdoc cref="Context.IExecutionContext"/>
 /// </summary>
-internal sealed class ExecutionContext: IExecutionContext
+internal sealed class ErgosfareExecutionContext( IDictionary<object, object?> items, CancellationToken cancellationToken)
+    : IExecutionContext
 {
 
-    public CancellationToken CancellationToken { get; } 
-    public IDictionary<object, object?> Items { get; }
+    public CancellationToken CancellationToken { get; } = cancellationToken;
+    public IDictionary<object, object?> Items { get; } = items;
     public object? MessageResult { get; set; }
 
-    public ExecutionContext(CancellationToken cancelationToken, IDictionary<object, object?> items)
-    {
-        CancellationToken = cancelationToken;
-        Items = items;
-    }
-    
     /// <summary>
     /// Sets <see cref="MessageResult"/> and throws <exception cref="ExecutionAbortedException"></exception>
     /// </summary>

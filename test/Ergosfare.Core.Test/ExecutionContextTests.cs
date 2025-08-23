@@ -1,5 +1,6 @@
 using Ergosfare.Context;
-using ExecutionContext = Ergosfare.Core.Internal.Contexts.ExecutionContext;
+using Ergosfare.Core.Internal.Contexts;
+using Ergosfare.Core.Test.__stubs__;
 
 namespace Ergosfare.Core.Test;
 
@@ -13,7 +14,7 @@ public class ExecutionContextTests
         var token = CancellationToken.None;
         var items = new Dictionary<object, object?>();
         // arrange & act
-        var ctx = new ExecutionContext(token, items);
+        var ctx = new ErgosfareExecutionContext(items, token);
         
         items.Add("foo", "bar");
 

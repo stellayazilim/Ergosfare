@@ -1,9 +1,8 @@
 using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Registry.Descriptors;
-using Ergosfare.Test.__stubs__;
+using Ergosfare.Core.Test.__stubs__;
 
-namespace Ergosfare.Core.Test;
-
+namespace Ergosfare.Core.Test.Common;
 public class MessageDescriptorTests
 {
 
@@ -14,10 +13,10 @@ public class MessageDescriptorTests
     {
 
         // arrange & act
-        var descriptor = new MessageDescriptor(typeof(StubMessages.StubNonGenericMessage));
+        var descriptor = new MessageDescriptor(typeof(StubNonGenericMessage));
         
         // assert
-        Assert.Equal(typeof(StubMessages.StubNonGenericMessage), descriptor.MessageType);
+        Assert.Equal(typeof(StubNonGenericMessage), descriptor.MessageType);
     }
 
     
@@ -27,14 +26,14 @@ public class MessageDescriptorTests
     public void MessageDescriptorShouldRegisterHandlers()
     {
         // arrange
-        var messgeDescriptor = new MessageDescriptor(typeof(StubMessages.StubNonGenericMessage));
+        var messgeDescriptor = new MessageDescriptor(typeof(StubNonGenericMessage));
       
         var factory = new HandlerDescriptorBuilderFactory();
         // act
-        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericHandler)));
-        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericPreInterceptor)));
-        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericPostInterceptor)));
-        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericExceptionInterceptor)));
+        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubNonGenericHandler)));
+        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubNonGenericPreInterceptor)));
+        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubNonGenericPostInterceptor)));
+        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubNonGenericExceptionInterceptor)));
         Assert.NotEmpty(messgeDescriptor.PreInterceptors);
         Assert.NotEmpty(messgeDescriptor.PostInterceptors);
         Assert.NotEmpty(messgeDescriptor.Handlers);
@@ -47,14 +46,14 @@ public class MessageDescriptorTests
     public void MessageDescriptorShouldRegisterIndirectHandlers()
     {
         // arrange
-        var messgeDescriptor = new MessageDescriptor(typeof(StubMessages.StubNonGenericDerivedMessage));
+        var messgeDescriptor = new MessageDescriptor(typeof(StubNonGenericDerivedMessage));
       
         var factory = new HandlerDescriptorBuilderFactory();
         // act
-        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericHandler)));
-        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericPreInterceptor)));
-        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericPostInterceptor)));
-        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubHandlers.StubNonGenericExceptionInterceptor)));
+        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubNonGenericHandler)));
+        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubNonGenericPreInterceptor)));
+        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubNonGenericPostInterceptor)));
+        messgeDescriptor.AddDescriptors(factory.BuildDescriptors(typeof(StubNonGenericExceptionInterceptor)));
         
         Assert.NotEmpty(messgeDescriptor.IndirectPreInterceptors);
         Assert.NotEmpty(messgeDescriptor.IndirectPostInterceptors);
@@ -72,8 +71,8 @@ public class MessageDescriptorTests
     public void MessageDescriptorShouldHandleGenericMessage()
     {
         // arrange &&  act 
-        var genericDescriptor = new MessageDescriptor(typeof(StubMessages.StubGenericMessage<string>));
-        var nonGenericDescriptor = new MessageDescriptor(typeof(StubMessages.StubNonGenericMessage));
+        var genericDescriptor = new MessageDescriptor(typeof(StubGenericMessage<string>));
+        var nonGenericDescriptor = new MessageDescriptor(typeof(StubNonGenericMessage));
         // assert
         Assert.True(genericDescriptor.IsGeneric);    
         Assert.False(nonGenericDescriptor.IsGeneric);

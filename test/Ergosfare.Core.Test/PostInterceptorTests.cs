@@ -1,7 +1,7 @@
 using Ergosfare.Context;
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Handlers;
-using Ergosfare.Test.__stubs__;
+using Ergosfare.Core.Test.__stubs__;
 
 namespace Ergosfare.Core.Test;
 
@@ -36,8 +36,8 @@ public class PostInterceptorTests
         // arrange 
         var ct = CancellationToken.None;
         var items = new Dictionary<object, object?>();
-        var context = new Core.Internal.Contexts.ExecutionContext(ct, items);
-        var msg = new StubMessages.StubNonGenericMessage();
+        var context = StubExecutionContext.Create();
+        var msg = new StubNonGenericMessage();
         
         IPostInterceptor handler1 = new TestIPostInterceptorTMessageTResultHandler();
         IPostInterceptor<IMessage, Task> handler2 = new TestIAsyncPostInterceptorTMessageTResultHandler();

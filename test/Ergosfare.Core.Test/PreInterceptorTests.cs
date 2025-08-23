@@ -1,7 +1,7 @@
 using Ergosfare.Context;
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Handlers;
-using Ergosfare.Test.__stubs__;
+using Ergosfare.Core.Test.__stubs__;
 
 namespace Ergosfare.Core.Test;
 
@@ -33,8 +33,8 @@ public class PreInterceptorTests
         // arrange 
         var ct = CancellationToken.None;
         var items = new Dictionary<object, object?>();
-        var context = new Core.Internal.Contexts.ExecutionContext(ct, items);
-        var msg = new StubMessages.StubNonGenericMessage();
+        var context = StubExecutionContext.Create();
+        var msg = new StubNonGenericMessage();
         
         IPreInterceptor handler1 = new TestIPreInterceptorTMessageHandler();
         IPreInterceptor<IMessage> handler2 = new TestIAsyncPreInterceptorTMessageHandler();

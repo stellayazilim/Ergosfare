@@ -48,12 +48,13 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage> : IMessageMedi
         {
             throw new MultipleHandlerFoundException(typeof(TMessage), messageDependencies.Handlers.Count);
         }
+
         Task? result = null;
         try
         {
             await messageDependencies.RunAsyncPreInterceptors(message, context);
             result = (Task)messageDependencies.Handlers.Single().Handler.Value.Handle(message, context);
-            await result;
+            await result; 
             await messageDependencies.RunAsyncPostInterceptors(message, result, context);
         }
         catch(Exception e) when (e is not ExecutionAbortedException)
@@ -61,5 +62,6 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage> : IMessageMedi
             await messageDependencies.RunAsyncExceptionInterceptors(message, result, ExceptionDispatchInfo.Capture(e), context);
 
         }
+        
     }
 }

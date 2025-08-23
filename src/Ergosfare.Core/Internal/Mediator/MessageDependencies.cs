@@ -24,12 +24,18 @@ internal sealed class MessageDependencies : IMessageDependencies
     
     public ILazyHandlerCollection<IExceptionInterceptor, IExceptionInterceptorDescriptor> ExceptionInterceptors { get; }
     public ILazyHandlerCollection<IExceptionInterceptor, IExceptionInterceptorDescriptor> IndirectExceptionInterceptors { get; }
+    
+    
+    #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+  
+    #pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     public MessageDependencies(Type messageType,
         IMessageDescriptor descriptor,
         IServiceProvider serviceProvider)
     {
         _messageType = messageType;
         
+
         // resolve pre interceptors
         PreInterceptors = ResolveHandlers(
             descriptor.PreInterceptors, 
@@ -70,12 +76,12 @@ internal sealed class MessageDependencies : IMessageDependencies
             Func<Type, THandler> resolveFunc ) where TDescriptor : IHandlerDescriptor
     {
         return descriptors
-            .Select(d => new LazyHandler<THandler, TDescriptor>
+            .Select<TDescriptor, ILazyHandler<THandler, TDescriptor>>(d => new LazyHandler<THandler, TDescriptor>
             {
                 Handler = new Lazy<THandler>(() => resolveFunc(GetHandlerType(d))),
                 Descriptor = d
             })
-            .ToLazyReadOnlyCollection();
+            .ToLazyReadOnlyCollection<THandler, TDescriptor>();
     }
 
     private Type GetHandlerType(IHandlerDescriptor descriptor)

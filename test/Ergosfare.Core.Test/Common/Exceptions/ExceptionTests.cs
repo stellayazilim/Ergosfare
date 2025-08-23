@@ -1,7 +1,7 @@
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Exceptions;
 
-namespace Ergosfare.Core.Test;
+namespace Ergosfare.Core.Test.Common.Exceptions;
 
 public class ExceptionTests
 {

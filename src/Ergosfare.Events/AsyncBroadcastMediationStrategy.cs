@@ -43,7 +43,7 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(EventMediationSett
         catch (Exception e) {  }
     }
 
-    private static async Task PublishSequentially(TMessage message, IEnumerable<LazyHandler<IHandler, IMainHandlerDescriptor>> mainHandlers, IExecutionContext context)
+    private static async Task PublishSequentially(TMessage message, IEnumerable<ILazyHandler<IHandler, IMainHandlerDescriptor>> mainHandlers, IExecutionContext context)
     {
         foreach (var lazyHandler in mainHandlers)
         {

@@ -1,11 +1,9 @@
 ﻿using System.Collections;
 using System.Reflection;
-using Ergosfare.Contracts;
-using Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Registry;
 using Ergosfare.Core.Internal.Registry.Descriptors;
-using Ergosfare.Test.__stubs__;
+using Ergosfare.Core.Test.__stubs__;
 //using Telerik.JustMock;
 using Xunit.Abstractions;
 
@@ -31,10 +29,10 @@ public class MessageRegistryTests
 
         // act
         //messageRegistry.Register(typeof(TestMessageRegistryMessage));
-        messageRegistry.Register(typeof(StubHandlers.StubNonGenericHandler));
+        messageRegistry.Register(typeof(StubNonGenericHandler));
         // assert
         Assert.Single(messageRegistry);
-        Assert.True(typeof(StubMessages.StubNonGenericMessage)
+        Assert.True(typeof(StubNonGenericMessage)
             .IsAssignableFrom(messageRegistry.First().MessageType));
         
         
@@ -49,9 +47,9 @@ public class MessageRegistryTests
         var messageRegistry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
 
         // act
-        messageRegistry.Register(typeof(StubHandlers.StubNonGenericHandler)); 
-        messageRegistry.Register(typeof(StubHandlers.StubNonGenericHandler)); 
-        messageRegistry.Register(typeof(StubHandlers.StubNonGenericHandlerDuplicate));
+        messageRegistry.Register(typeof(StubNonGenericHandler)); 
+        messageRegistry.Register(typeof(StubNonGenericHandler)); 
+        messageRegistry.Register(typeof(StubNonGenericHandler2));
    
         // assert
         Assert.Single(messageRegistry);
@@ -63,7 +61,7 @@ public class MessageRegistryTests
     {
         // arrange
         var messageRegistry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
-        messageRegistry.Register(typeof(StubHandlers.StubNonGenericHandler)); 
+        messageRegistry.Register(typeof(StubNonGenericHandler)); 
         
         // act
         var enumerator = messageRegistry.GetEnumerator();
@@ -81,8 +79,8 @@ public class MessageRegistryTests
     {
         // Arrange
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
-        registry.Register(typeof(StubHandlers.StubNonGenericHandler)); 
-        registry.Register(typeof(StubHandlers.StubNonGenericHandlerDuplicate));
+        registry.Register(typeof(StubNonGenericHandler)); 
+        registry.Register(typeof(StubNonGenericHandler2));
 
         // Act
         IEnumerable enumerable = (IEnumerable)registry;
@@ -103,11 +101,11 @@ public class MessageRegistryTests
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         
         // Act
-        registry.Register(typeof(StubMessages.StubNonGenericMessage)); 
+        registry.Register(typeof(StubNonGenericMessage)); 
 
         // Assert
         Assert.Single(registry);
-        Assert.True(registry.First().MessageType == typeof(StubMessages.StubNonGenericMessage));
+        Assert.True(registry.First().MessageType == typeof(StubNonGenericMessage));
     }
 
     
@@ -135,10 +133,10 @@ public class MessageRegistryTests
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
 
         // Act - register the first message (goes to _newMessages initially)
-        registry.Register(typeof(StubMessages.StubNonGenericMessage));
+        registry.Register(typeof(StubNonGenericMessage));
 
         // Act - immediately register the same type again
-        registry.Register(typeof(StubMessages.StubNonGenericMessage));
+        registry.Register(typeof(StubNonGenericMessage));
 
         
         var field = typeof(MessageRegistry)
@@ -159,20 +157,20 @@ public class MessageRegistryTests
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
 
         // Act 1: Register a message (goes to _newMessages first)
-        registry.Register(typeof(StubMessages.StubNonGenericMessage));
+        registry.Register(typeof(StubNonGenericMessage));
 
         // Act 2: Register the same type again while still in _newMessages
-        registry.Register(typeof(StubMessages.StubNonGenericMessage));
+        registry.Register(typeof(StubNonGenericMessage));
 
         // Assert 1: Only one message should be in the registry
         Assert.Single(registry);
 
         // Act 3: Commit the message (simulate finishing processing _newMessages)
         // Depending on your implementation, calling Register on a new type moves _newMessages into _messages
-        registry.Register(typeof(StubMessages.StubNonGenericMessage2));
+        registry.Register(typeof(StubNonGenericMessage2));
 
         // Act 4: Try registering the first message again (already in _messages)
-        registry.Register(typeof(StubMessages.StubNonGenericMessage));
+        registry.Register(typeof(StubNonGenericMessage));
 
         // Assert 2: Still only one copy of the first message
         Assert.Equal(2, registry.Count); // total: first message + second message
@@ -184,24 +182,24 @@ public class MessageRegistryTests
     {
         // Arrange
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
-        registry.Register(typeof(StubMessages.StubNonGenericMessage2));
+        registry.Register(typeof(StubNonGenericMessage2));
 
         
 
         
         // Act 4: Try registering the first message again (already in _messages)
     
-        registry.Register(typeof(StubMessages.StubNonGenericDerivedMessage));
+        registry.Register(typeof(StubNonGenericDerivedMessage));
         
         var newMessagesField = typeof(MessageRegistry)
             .GetField("_newMessages", BindingFlags.NonPublic | BindingFlags.Instance);
         var newMessagesList = (List<MessageDescriptor>)newMessagesField?.GetValue(registry)!;
        
-        newMessagesList!.Add(new MessageDescriptor(typeof(StubMessages.StubNonGenericMessage)));
-        registry.Register(typeof(StubMessages.StubNonGenericMessage));
+        newMessagesList!.Add(new MessageDescriptor(typeof(StubNonGenericMessage)));
+        registry.Register(typeof(StubNonGenericMessage));
         Assert.DoesNotContain(
             newMessagesList,
-            d => d.MessageType == typeof(StubMessages.StubNonGenericDerivedMessage)
+            d => d.MessageType == typeof(StubNonGenericDerivedMessage)
         );
     }
     

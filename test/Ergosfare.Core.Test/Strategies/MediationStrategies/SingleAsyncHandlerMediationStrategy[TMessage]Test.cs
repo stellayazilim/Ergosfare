@@ -5,11 +5,9 @@ using Ergosfare.Core.Abstractions.Strategies;
 using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Mediator;
 using Ergosfare.Core.Internal.Registry.Descriptors;
-using Ergosfare.Test.__stubs__;
+using Ergosfare.Core.Test.__stubs__;
 using Microsoft.Extensions.DependencyInjection;
-using Moq;
 using Xunit.Abstractions;
-using ExecutionContext = Ergosfare.Core.Internal.Contexts.ExecutionContext;
 
 namespace Ergosfare.Core.Test.Strategies;
 
@@ -31,29 +29,49 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests
     {
         
        // arrange
-       var mockH = Mock.Of<StubHandlers.StubNonGenericHandler>();
        var serviceProvider = new ServiceCollection()
-               .AddTransient<StubHandlers.StubNonGenericHandler>()
+               .AddTransient<StubNonGenericHandler>()
+               .AddTransient<StubNonGenericPostInterceptor>()
+               .AddTransient<StubNonGenericPostInterceptor2>()
+               .AddTransient<StubNonGenericExceptionInterceptor>()
+               .AddTransient<StubNonGenericExceptionInterceptor2>()
+               .AddTransient<StubNonGenericDerivedPostInterceptor>()
                .BuildServiceProvider();
     
-       var str = new SingleAsyncHandlerMediationStrategy<StubMessages.StubNonGenericMessage>();
+       var str = new SingleAsyncHandlerMediationStrategy<StubNonGenericDerivedMessage>();
        var messageDescriptorBuilderFactory = new HandlerDescriptorBuilderFactory();
+       
        var handlerDescriptors = messageDescriptorBuilderFactory
-           .BuildDescriptors(typeof(StubHandlers.StubNonGenericHandler));
-       var messageDescriptor = new MessageDescriptor(typeof(StubMessages.StubNonGenericMessage));
+           .BuildDescriptors(typeof(StubNonGenericHandler));
+       var postInterceptorDescriptors = messageDescriptorBuilderFactory
+           .BuildDescriptors(typeof(StubNonGenericPostInterceptor));
+       var postInterceptorDescriptors2 = messageDescriptorBuilderFactory
+           .BuildDescriptors(typeof(StubNonGenericPostInterceptor2));
+       var errorInterceptorDescriptors = messageDescriptorBuilderFactory
+           .BuildDescriptors(typeof(StubNonGenericExceptionInterceptor));
+       var errorInterceptorDescriptors2 = messageDescriptorBuilderFactory
+           .BuildDescriptors(typeof(StubNonGenericExceptionInterceptor2));
+       var errorInterceptorDescriptors3 = messageDescriptorBuilderFactory
+           .BuildDescriptors(typeof(StubNonGenericDerivedPostInterceptor));
+       var messageDescriptor = new MessageDescriptor(typeof(StubNonGenericDerivedMessage));
        
        // add message descriptors to the message
        messageDescriptor.AddDescriptors(handlerDescriptors);
-
-       var mesageDependencies = new MessageDependencies(
-           typeof(StubMessages.StubNonGenericMessage), messageDescriptor, serviceProvider);
+       messageDescriptor.AddDescriptors(postInterceptorDescriptors);
+       messageDescriptor.AddDescriptors(postInterceptorDescriptors2);
+       messageDescriptor.AddDescriptors(errorInterceptorDescriptors);
+       messageDescriptor.AddDescriptors(errorInterceptorDescriptors2);
+       messageDescriptor.AddDescriptors(errorInterceptorDescriptors3);
+       
+       var messageDependencies = new MessageDependencies(
+           typeof(StubNonGenericDerivedMessage), messageDescriptor, serviceProvider);
         
        // create execution context
        AmbientExecutionContext
-           .CreateScope(new ExecutionContext(CancellationToken.None, new Dictionary<object, object?>()));
+           .CreateScope(StubExecutionContext.Create());
        
        // act
-       var nonExceptionAsync = await Record.ExceptionAsync( async () => await str.Mediate(new StubMessages.StubNonGenericMessage(), mesageDependencies,
+       var nonExceptionAsync = await Record.ExceptionAsync( async () => await str.Mediate(new StubNonGenericDerivedMessage(), messageDependencies,
            AmbientExecutionContext.Current));
         
        // assert
@@ -64,19 +82,18 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests
     public async Task SingleAsyncHandlerShouldThrowMultipleHandlerException()
     {
         // arrange
-        var mockH = Mock.Of<StubHandlers.StubNonGenericHandler>();
         var serviceProvider = new ServiceCollection()
             
-            .AddTransient<StubHandlers.StubNonGenericHandler>()
-            .AddTransient<StubHandlers.StubNonGenericHandlerDuplicate>()
+            .AddTransient<StubNonGenericHandler>()
+            .AddTransient<StubNonGenericHandler2>()
             .BuildServiceProvider();
     
-        var str = new SingleAsyncHandlerMediationStrategy<StubMessages.StubNonGenericMessage>();
+        var str = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>();
         var messageDescriptorBuilderFactory = new HandlerDescriptorBuilderFactory();
-        var messageDescriptor = new MessageDescriptor(typeof(StubMessages.StubNonGenericMessage));
+        var messageDescriptor = new MessageDescriptor(typeof(StubNonGenericMessage));
         
         // simulate multiple handler for same message
-        foreach (var type in new Type[] {typeof(StubHandlers.StubNonGenericHandler), typeof(StubHandlers.StubNonGenericHandlerDuplicate)})
+        foreach (var type in new Type[] {typeof(StubNonGenericHandler), typeof(StubNonGenericHandler2)})
         {
             var handlerDescriptors = messageDescriptorBuilderFactory
                 .BuildDescriptors(type);
@@ -85,14 +102,14 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests
       
       
         var mesageDependencies = new MessageDependencies(
-            typeof(StubMessages.StubNonGenericMessage), messageDescriptor, serviceProvider);
+            typeof(StubNonGenericMessage), messageDescriptor, serviceProvider);
         
         // create execution context
         AmbientExecutionContext
-            .CreateScope(new ExecutionContext(CancellationToken.None, new Dictionary<object, object?>()));
+            .CreateScope(StubExecutionContext.Create());
        
         // act
-        var exceptionAsync = await Record.ExceptionAsync( async () => await str.Mediate(new StubMessages.StubNonGenericMessage(), mesageDependencies,
+        var exceptionAsync = await Record.ExceptionAsync( async () => await str.Mediate(new StubNonGenericMessage(), mesageDependencies,
             AmbientExecutionContext.Current));
         
         // assert

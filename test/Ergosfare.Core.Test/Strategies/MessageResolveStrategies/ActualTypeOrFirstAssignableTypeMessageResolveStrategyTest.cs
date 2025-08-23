@@ -1,9 +1,7 @@
 ﻿using Ergosfare.Core.Abstractions.Strategies;
 using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Registry;
-using Ergosfare.Test.__mocks__;
-using Ergosfare.Test.__stubs__;
-using Xunit.Abstractions;
+using Ergosfare.Core.Test.__stubs__;
 
 namespace Ergosfare.Core.Test.Strategies;
 
@@ -12,23 +10,22 @@ public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
     [Fact]
     public void MessageRegistryShouldResolveDescriptor()
     {
-        
         // arrange
         var registry = new MessageRegistry(
             new HandlerDescriptorBuilderFactory());
         
-        registry.Register(typeof(StubHandlers.StubNonGenericHandler));
-        registry.Register(typeof(StubHandlers.StubGenericHandler2));
+        registry.Register(typeof(StubNonGenericHandler));
+        registry.Register(typeof(StubNonGenericHandler2));
         var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
         
         // act
-        var descriptor = resolver.Find(typeof(StubMessages.StubNonGenericMessage), registry);
+        var descriptor = resolver.Find(typeof(StubNonGenericMessage), registry);
         
         // assert
         Assert.NotNull(descriptor);
-        Assert.Equal(2, registry.Count);
-        Assert.Equal(typeof(StubMessages.StubNonGenericMessage), descriptor?.MessageType);
-        Assert.NotNull(descriptor?.Handlers.First( x => x.HandlerType == typeof(StubHandlers.StubNonGenericHandler)));
+        Assert.Single(registry);
+        Assert.Equal(typeof(StubNonGenericMessage), descriptor?.MessageType);
+        Assert.NotNull(descriptor?.Handlers.First( x => x.HandlerType == typeof(StubNonGenericHandler)));
 
     }
     
@@ -42,15 +39,15 @@ public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
         var registry = new MessageRegistry(
             new HandlerDescriptorBuilderFactory());
     
-        registry.Register(typeof(StubHandlers.StubNonGenericHandler)); // handles BaseMessage
+        registry.Register(typeof(StubNonGenericHandler)); // handles BaseMessage
         var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
     
         // act
-        var descriptor = resolver.Find(typeof(StubMessages.StubNonGenericDerivedMessage), registry);
+        var descriptor = resolver.Find(typeof(StubNonGenericDerivedMessage), registry);
     
         // assert
         Assert.NotNull(descriptor);
-        Assert.Equal(typeof(StubMessages.StubNonGenericMessage), descriptor?.MessageType);
+        Assert.Equal(typeof(StubNonGenericMessage), descriptor?.MessageType);
     }
     
     
@@ -62,17 +59,17 @@ public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
             new HandlerDescriptorBuilderFactory());
         
         // dummy generic string arg
-        var mockGenericHandler = HandlerMocks.MockGenericHandler<string>();
+        var mockGenericHandler = new StubGenericHandler<string>();
         
-        registry.Register(mockGenericHandler.Object.GetType()); // handles BaseMessage
+        registry.Register(typeof(StubGenericHandler<string>)); // handles BaseMessage
         
         var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
         
         // act
-        var descriptor = resolver.Find(typeof(StubMessages.StubGenericMessage<string>), registry);
+        var descriptor = resolver.Find(typeof(StubGenericMessage<string>), registry);
         
         //assert
         Assert.NotNull(descriptor);
-        Assert.Equal(typeof(StubMessages.StubGenericMessage<>), descriptor?.MessageType);
+        Assert.Equal(typeof(StubGenericMessage<>), descriptor?.MessageType);
     }
 }

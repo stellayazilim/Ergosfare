@@ -1,8 +1,7 @@
 using Ergosfare.Core.Internal.Registry.Descriptors;
-using Ergosfare.Test.__stubs__;
+using Ergosfare.Core.Test.__stubs__;
 
-namespace Ergosfare.Core.Test;
-
+namespace Ergosfare.Core.Test.Common;
 public class PostInterceptorDescriptorTests
 {
     [Fact]
@@ -13,8 +12,8 @@ public class PostInterceptorDescriptorTests
         // arrange
         var descriptor = new PostInterceptorDescriptor()
         {
-            MessageType = typeof(StubMessages.StubNonGenericMessage),
-            HandlerType = typeof(StubHandlers.StubNonGenericPostInterceptor),
+            MessageType = typeof(StubNonGenericMessage),
+            HandlerType = typeof(StubNonGenericPostInterceptor),
             ResultType = typeof(Task),
         };
         

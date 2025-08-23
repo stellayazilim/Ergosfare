@@ -1,7 +1,7 @@
 using Ergosfare.Core.Internal.Registry.Descriptors;
-using Ergosfare.Test.__stubs__;
+using Ergosfare.Core.Test.__stubs__;
 
-namespace Ergosfare.Core.Test;
+namespace Ergosfare.Core.Test.Common;
 
 public class ExceptionInterceptorDescriptorTests
 {
@@ -14,9 +14,9 @@ public class ExceptionInterceptorDescriptorTests
         // arrange
         var descriptor = new ExceptionInterceptorDescriptor()
         {
-            MessageType = typeof(StubMessages.StubNonGenericMessage),
-            HandlerType = typeof(StubHandlers.StubNonGenericExceptionInterceptor),
-            ResultType = typeof(Task)
+            MessageType = typeof(StubNonGenericMessage),
+            HandlerType = typeof(StubNonGenericExceptionInterceptor),
+            ResultType = typeof(object)
         };
         
         // act
