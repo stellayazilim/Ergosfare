@@ -14,7 +14,7 @@ namespace Ergosfare.Core.Abstractions;
 ///     This structure allows for lazy initialization of handlers, which can improve performance
 ///     by deferring the creation of handler instances until they are actually needed.
 /// </remarks>
-public struct LazyHandler<THandler, TDescriptor>
+public struct LazyHandler<THandler, TDescriptor>: ILazyHandler<THandler, TDescriptor>
 {
     /// <summary>
     ///     Gets or initializes the lazily initialized handler.

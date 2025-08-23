@@ -1,18 +1,15 @@
-using Ergosfare.Core.Context;
-using ExecutionContext = Ergosfare.Core.Internal.Contexts.ExecutionContext;
+using Ergosfare.Context;
+using Ergosfare.Core.Test.__stubs__;
 
 namespace Ergosfare.Core.Test;
 
 public class AmbientExecutionContextTests
 {
-
-
     [Fact]
     [Trait("Category", "Coverage")]
     public void AmbientExecutionContextShouldHasNoCurrent()
-    { 
-        var ctx = new ExecutionContext(
-            CancellationToken.None, new Dictionary<object, object?>());
+    {
+        var ctx = StubExecutionContext.Create();
         // arrange
         Assert.False(AmbientExecutionContext.HasCurrent);
         
@@ -27,11 +24,10 @@ public class AmbientExecutionContextTests
     [Trait("Category", "Coverage")]
     public void AmbientExecutionContextShouldHaveCurrent()
     {
-        var ctx = new ExecutionContext(
-            CancellationToken.None, new Dictionary<object, object?>());
+        var ctx = StubExecutionContext.Create();
 
-        var ctx2 = new ExecutionContext(
-            CancellationToken.None, new Dictionary<object, object?>());
+        var ctx2 = StubExecutionContext.Create();
+        
         AmbientExecutionContext.CreateScope(ctx);
         
         Assert.True(AmbientExecutionContext.HasCurrent);
@@ -47,9 +43,7 @@ public class AmbientExecutionContextTests
     {
         
         // arrange
-        var ctx = new ExecutionContext(
-            CancellationToken.None, new Dictionary<object, object?>());
-        
+        var ctx =  StubExecutionContext.Create();
         var scope = AmbientExecutionContext.CreateScope(ctx);
         
         // act

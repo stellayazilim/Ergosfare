@@ -5,14 +5,14 @@ using Ergosfare.Core.Abstractions.Registry.Descriptors;
 namespace Ergosfare.Core.Internal;
 
 public sealed class LazyHandlerCollection<THandler, TDescriptor>(
-    IEnumerable<LazyHandler<THandler, TDescriptor>> source) : ILazyHandlerCollection<THandler, TDescriptor>
+    IEnumerable<ILazyHandler<THandler, TDescriptor>> source) : ILazyHandlerCollection<THandler, TDescriptor>
     where TDescriptor : IHandlerDescriptor
 {
     
-    private readonly List<LazyHandler<THandler, TDescriptor>> _list = new(source);
+    private readonly List<ILazyHandler<THandler, TDescriptor>> _list = new(source);
 
 
-    public IEnumerator<LazyHandler<THandler, TDescriptor>> GetEnumerator()
+    public IEnumerator<ILazyHandler<THandler, TDescriptor>> GetEnumerator()
     {
         return _list.GetEnumerator();
     }

@@ -1,7 +1,7 @@
 ﻿using System.Collections;
 using Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Ergosfare.Core.Internal;
-using Ergosfare.Test.__stubs__;
+using Ergosfare.Core.Test.__stubs__;
 
 namespace Ergosfare.Core.Test.Internal;
 
@@ -12,14 +12,14 @@ public class LazyHandlerCollectionTest
     public void LazyHandlerCollectionShouldConstructedTest()
     {
         // arrange
-        var lazyHandler = StubHandlers.StubLazyHandler;
+        var lazyHandler = StubNonGenericLazyHandler.GetLazyInstance();
         // act
-        var collection = new LazyHandlerCollection<StubHandlers.StubNonGenericHandler,IHandlerDescriptor>(
-            [ StubHandlers.StubLazyHandler  ]);
+        var collection = new LazyHandlerCollection<StubNonGenericHandler,IHandlerDescriptor>(
+            [ lazyHandler  ]);
         // assert
         Assert.NotNull(collection);
         Assert.Single(collection);
-        Assert.IsType<LazyHandlerCollection<StubHandlers.StubNonGenericHandler,IHandlerDescriptor>>(collection, exactMatch: false);
+        Assert.IsType<LazyHandlerCollection<StubNonGenericHandler,IHandlerDescriptor>>(collection, exactMatch: false);
     }
 
     [Fact]
@@ -28,8 +28,9 @@ public class LazyHandlerCollectionTest
     public void LazyHandlerCollectionShouldGetEnumeratorTest()
     {
         // arrange
-        var lazyHandler = StubHandlers.StubLazyHandler;
-        var collection = new LazyHandlerCollection<StubHandlers.StubNonGenericHandler,IHandlerDescriptor>(
+        var lazyHandler = StubNonGenericLazyHandler
+            .GetLazyInstance();
+        var collection = new LazyHandlerCollection<StubNonGenericHandler,IHandlerDescriptor>(
             [ lazyHandler  ]);
         // act
         var enumerator = collection.GetEnumerator();
@@ -49,8 +50,9 @@ public class LazyHandlerCollectionTest
     public void LazyHandlerCollectionShouldGetNonGenericEnumeratorTest()
     {
         // arrange
-        var lazyHandler = StubHandlers.StubLazyHandler;
-        var collection = new LazyHandlerCollection<StubHandlers.StubNonGenericHandler,IHandlerDescriptor>(
+        var lazyHandler = StubNonGenericLazyHandler
+            .GetLazyInstance();
+        var collection = new LazyHandlerCollection<StubNonGenericHandler,IHandlerDescriptor>(
             [ lazyHandler  ]);
         var enumerable = (IEnumerable)collection;
         // act

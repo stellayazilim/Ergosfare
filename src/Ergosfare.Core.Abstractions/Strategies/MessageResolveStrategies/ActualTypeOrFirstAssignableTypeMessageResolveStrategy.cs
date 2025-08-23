@@ -17,7 +17,7 @@ namespace Ergosfare.Core.Abstractions.Strategies;
 /// </remarks>
 public sealed class ActualTypeOrFirstAssignableTypeMessageResolveStrategy : IMessageResolveStrategy
 {
-    /// <summary>0
+    /// <summary>
     ///     Finds a message descriptor for the specified message type from the message registry.
     /// </summary>
     /// <param name="messageType">The type of the message to find a descriptor for.</param>

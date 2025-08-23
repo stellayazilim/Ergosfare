@@ -15,5 +15,5 @@ namespace Ergosfare.Core.Abstractions;
 ///     allows for efficient handling of large numbers of handlers by creating handler instances
 ///     only when they are actually needed.
 /// </remarks>
-public interface ILazyHandlerCollection<THandler, TDescriptor> : IReadOnlyCollection<LazyHandler<THandler, TDescriptor>>
+public interface ILazyHandlerCollection<THandler, out TDescriptor> : IReadOnlyCollection<ILazyHandler<THandler, TDescriptor>>
     where TDescriptor : IHandlerDescriptor;

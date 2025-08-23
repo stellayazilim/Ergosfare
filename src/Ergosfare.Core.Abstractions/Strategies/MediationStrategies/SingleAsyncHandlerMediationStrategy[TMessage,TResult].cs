@@ -1,12 +1,10 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
-using Ergosfare.Contracts;
 using Ergosfare.Core.Abstractions.Exceptions;
 using Ergosfare.Core.Abstractions.Extensions;
-using Ergosfare.Core.Context;
+using Ergosfare.Context;
 
 namespace Ergosfare.Core.Abstractions.Strategies;
 
@@ -22,7 +20,8 @@ namespace Ergosfare.Core.Abstractions.Strategies;
 ///     3. Executes post-handlers.
 ///     In case of any exception during the process, it delegates the error handling to the registered error handlers.
 /// </remarks>
-public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult> : IMessageMediationStrategy<TMessage, Task<TResult>> where TMessage : IMessage
+public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult> : IMessageMediationStrategy<TMessage, Task<TResult>> 
+    where TMessage : notnull
 {
     public async Task<TResult> Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context)
     {
@@ -63,9 +62,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult> : IMe
         } catch (Exception e) when (e is not ExecutionAbortedException)
         {
             await messageDependencies.RunAsyncExceptionInterceptors(message, result, ExceptionDispatchInfo.Capture(e), context);
-
-        }
-
+        } 
         return result!;
 
     }

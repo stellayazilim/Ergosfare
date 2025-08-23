@@ -1,4 +1,3 @@
-using Ergosfare.Contracts;
 
 namespace Ergosfare.Core.Abstractions.Registry.Descriptors;
 

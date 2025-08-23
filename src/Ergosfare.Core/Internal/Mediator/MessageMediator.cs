@@ -1,9 +1,9 @@
-﻿using Ergosfare.Core.Abstractions;
+﻿using Ergosfare.Context;
+using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Exceptions;
 using Ergosfare.Core.Abstractions.Factories;
 using Ergosfare.Core.Abstractions.Registry;
-using Ergosfare.Core.Context;
-using ExecutionContext = Ergosfare.Core.Internal.Contexts.ExecutionContext;
+using Ergosfare.Core.Internal.Contexts;
 
 namespace Ergosfare.Core.Internal.Mediator;
 
@@ -19,7 +19,7 @@ internal sealed class MessageMediator(
     {
         ArgumentNullException.ThrowIfNull(options);
         // Create a new execution context for the current scope
-        var executionContext = new ExecutionContext(options.CancellationToken,  options.Items);
+        var executionContext = new ErgosfareExecutionContext(options.Items, options.CancellationToken);
         
         
         // Use a scope to manage the execution context
