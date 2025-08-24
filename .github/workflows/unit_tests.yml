@@ -1,0 +1,25 @@
+name: UnitTests
+on:
+  push: 
+    branches:
+      - *
+  pull_request: 
+    branches:
+      - main
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with: 
+          dotnet-version: '9.0.x'
+      - name: Restore Dependencies
+        run: dotnet restore Stella.Ergosfare.sln
+        
+      - name: Run Unit Tests
+        run: dotnet test --no-build --filter "Category=Unit" --logger "trx:LogFileName=unit-tests.trx"
