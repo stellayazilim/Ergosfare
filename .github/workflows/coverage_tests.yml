@@ -40,6 +40,11 @@ jobs:
 
       - name: Check coverage threshold
         run: |
+          if [ ! -f coverage/coverage.cobertura.xml ]; then
+            echo "Coverage file not found!"
+            exit 1
+          fi
+
           COVERAGE=$(grep -oP '(?<=line-rate=")[0-9.]+' coverage/coverage.cobertura.xml)
           COVERAGE_PERCENT=$(echo "$COVERAGE * 100" | bc)
           echo "Total coverage: $COVERAGE_PERCENT%"
