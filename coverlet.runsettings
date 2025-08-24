@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <RunConfiguration>
+    <!-- Filter tests by trait: run only Unit or Coverage category tests -->
+    <TestCaseFilter>(Category=Unit|Category=Coverage)</TestCaseFilter>
+  </RunConfiguration>
+
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <!-- Include only src/ projects -->
+          <Include>
+            <ModulePath>.*\\src\\.*</ModulePath>
+          </Include>
+          <Exclude>
+            <ModulePath>.*Test</ModulePath>
+          </Exclude>
+          <Format>cobertura</Format>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>
