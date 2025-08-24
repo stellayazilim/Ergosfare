@@ -1,9 +1,9 @@
 ﻿namespace Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
-public sealed class MessageModule(Action<MessageModuleBuilder> builder): IModule
+public sealed class CoreModule(Action<IModuleBuilder> builder): IModule
 {
     public void Build(IModuleConfiguration configuration)
     {
-        throw new NotImplementedException();
+        builder(new CoreModuleBuilder(configuration.MessageRegistry));
     }
 }

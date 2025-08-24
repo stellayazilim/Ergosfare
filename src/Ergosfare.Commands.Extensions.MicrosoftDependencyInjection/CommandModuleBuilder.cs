@@ -28,7 +28,7 @@ public sealed class CommandModuleBuilder
     /// <returns>The current <see cref="CommandModuleBuilder" /> instance for method chaining.</returns>
     public CommandModuleBuilder Register<T>() where T : ICommand
     {
-        _messageRegistry.Register(typeof(T));
+        Register(typeof(T));
         return this;
     }
 

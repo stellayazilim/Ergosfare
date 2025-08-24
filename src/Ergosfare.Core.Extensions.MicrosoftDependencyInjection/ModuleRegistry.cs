@@ -1,7 +1,9 @@
 ﻿using Ergosfare.Context;
 using Ergosfare.Core.Abstractions;
+using Ergosfare.Core.Abstractions.Factories;
 using Ergosfare.Core.Abstractions.Registry;
 using Ergosfare.Core.Abstractions.Registry.Descriptors;
+using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Mediator;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -12,8 +14,6 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
     : IModuleRegistry
 {
     private readonly HashSet<IModule> _modules = new();
-    private readonly IServiceCollection _services = services;
-    private readonly IMessageRegistry _messageRegistry = messageRegistry;
 
     public IModuleRegistry Register(IModule module)
     {
@@ -26,18 +26,18 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
     /// </summary>
     public void Initialize()
     {
-        var moduleConfiguration = new ModuleConfiguration(_services, _messageRegistry);
+        var moduleConfiguration = new ModuleConfiguration(services, messageRegistry);
 
         foreach (var module in _modules)
         {
             module.Build(moduleConfiguration);
         }
+        services.TryAddTransient<IMessageDependenciesFactory, MessageDependenciesFactory>();
+        services.TryAddTransient<IMessageMediator, MessageMediator>();
+        services.TryAddSingleton(messageRegistry);
+        services.TryAddTransient(_ => AmbientExecutionContext.Current);
 
-        _services.TryAddTransient<IMessageMediator, MessageMediator>();
-        _services.TryAddSingleton<IMessageRegistry>(_messageRegistry);
-        _services.TryAddTransient(_ => AmbientExecutionContext.Current);
-
-        foreach (var descriptor in _messageRegistry)
+        foreach (var descriptor in messageRegistry)
         {
             // Register all handler types from the registry
             RegisterHandlersFromDescriptor(descriptor);
@@ -54,6 +54,12 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
         // Process all handlers first to avoid redundant service registrations
         CollectHandlerTypes(descriptor.Handlers, descriptorHandlerTypes);
         CollectHandlerTypes(descriptor.IndirectHandlers, descriptorHandlerTypes);
+        CollectHandlerTypes(descriptor.PreInterceptors, descriptorHandlerTypes);
+        CollectHandlerTypes(descriptor.IndirectPreInterceptors, descriptorHandlerTypes);
+        CollectHandlerTypes(descriptor.PostInterceptors, descriptorHandlerTypes);
+        CollectHandlerTypes(descriptor.IndirectPostInterceptors, descriptorHandlerTypes);
+        CollectHandlerTypes(descriptor.ExceptionInterceptors, descriptorHandlerTypes);
+        CollectHandlerTypes(descriptor.IndirectExceptionInterceptors, descriptorHandlerTypes);
 
         // Register each type once
         foreach (var handlerType in descriptorHandlerTypes)
@@ -63,13 +69,15 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
             // Without this filter, DI would throw "Cannot instantiate implementation type" errors.
             if (handlerType is { IsClass: true, IsAbstract: false })
             {
-                _services.TryAddTransient(handlerType);
+                services.TryAddTransient(handlerType);
             }
         }
     }
 
     private static void CollectHandlerTypes(IEnumerable<IHandlerDescriptor> descriptors, HashSet<Type> handlerTypes)
     {
+        
+        
         
         foreach (var descriptor in descriptors)
         {
