@@ -41,7 +41,6 @@ jobs:
 
       - name: Merge coverage reports
         run: |
-          mkdir -p coverage
           FILES=$(find ./test -type f -name 'coverage.cobertura.xml')
           FIRST=$(echo "$FILES" | head -n 1)
           MERGED="./coverage/coverage.cobertura.xml"
