@@ -29,7 +29,6 @@ jobs:
           mkdir -p coverage
           dotnet test Stella.Ergosfare.sln \
             --settings coverlet.runsettings \
-            --no-build \
             /p:CollectCoverage=true \
             /p:CoverletOutput=./coverage/coverage.json \
             /p:CoverletOutputFormat=cobertura \
