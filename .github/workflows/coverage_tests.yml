@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - '**'
+    paths-ignore:
+      - 'coverage.svg'
 
 jobs:
   test-and-coverage:
@@ -24,20 +26,45 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore Stella.Ergosfare.sln
 
-      - name: Run unit tests with coverage
+      - name: Run tests with coverage
         run: |
           mkdir -p coverage
           dotnet test Stella.Ergosfare.sln \
             --settings coverlet.runsettings \
             /p:CollectCoverage=true \
-            /p:CoverletOutput=./coverage/coverage.json \
+            /p:CoverletOutput=./coverage/coverage.cobertura.xml \
             /p:CoverletOutputFormat=cobertura \
-            /p:MergeWith=./coverage/coverage.json \
+            /p:MergeWith=./coverage/coverage.cobertura.xml \
             /p:UseAppHost=false \
             /p:VSTestLogger=
 
       - name: Check coverage threshold
         run: |
-          TOTAL_COVERAGE=$(dotnet tool run coverlet ./coverage/coverage.json --threshold-type line --threshold 90 --fail-under 90 || echo 0)
-          echo "Total coverage: $TOTAL_COVERAGE"
-        shell: bash
+          COVERAGE=$(grep -oP '(?<=line-rate=")[0-9.]+' coverage/coverage.cobertura.xml)
+          COVERAGE_PERCENT=$(echo "$COVERAGE * 100" | bc)
+          echo "Total coverage: $COVERAGE_PERCENT%"
+          if (( $(echo "$COVERAGE_PERCENT < 90" | bc -l) )); then
+            echo "Coverage $COVERAGE_PERCENT% is below 90%"
+            exit 1
+          fi
+
+      - name: Generate coverage badge
+        uses: action-badges/cobertura-coverage-xml-badges@v0.3.1
+        with:
+          file-name: coverage.svg
+          badge-branch: ${{ github.ref_name }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          coverage-file-name: ./coverage/coverage.cobertura.xml
+
+      - name: Commit coverage badge
+        run: |
+          # Skip if no changes
+          if git diff --quiet coverage.svg; then
+            echo "No badge changes detected, skipping commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add coverage.svg
+          git commit -m "Update coverage badge"
+          git push
