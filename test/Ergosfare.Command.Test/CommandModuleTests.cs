@@ -1,12 +1,13 @@
 ﻿using System.Reflection;
 using Ergosfare.Commands.Abstractions;
+using Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Ergosfare.Context;
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Handlers;
 using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.Test;
+namespace Ergosfare.Command.Test;
 
 public class CommandModuleTests
 {
@@ -48,7 +49,7 @@ public class CommandModuleTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task ShouldNotRegisterNonCommandsToCommandModule()
+    public void  ShouldNotRegisterNonCommandsToCommandModule()
     {
         var serviceCollection = new ServiceCollection();
 

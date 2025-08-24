@@ -1,7 +1,7 @@
 using Ergosfare.Context;
 using Ergosfare.Contracts;
 
-namespace Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.Test;
+namespace Ergosfare.Command.Test;
 
 public class TestCommandHandler: ICommandHandler<TestCommand>
 {

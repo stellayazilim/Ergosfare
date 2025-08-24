@@ -4,7 +4,7 @@ namespace Ergosfare.Command.Test;
 
 public class CommandMediationSettingsTests
 {
-    CommandMediationSettings _commandMediationSettings =  new CommandMediationSettings()
+    private readonly CommandMediationSettings _commandMediationSettings =  new CommandMediationSettings()
     {
         Items = new Dictionary<object, object?>()
         {
@@ -26,7 +26,7 @@ public class CommandMediationSettingsTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task CommandMediationSettingsTest()
+    public void  CommandMediationSettingsTest()
     {
         
         Assert.Equal("Item1 value", _commandMediationSettings.Items["Item1"]);

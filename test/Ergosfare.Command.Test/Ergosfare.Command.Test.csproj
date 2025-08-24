@@ -19,6 +19,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\..\src\Ergosfare.Commands.Extensions.MicrosoftDependencyInjection\Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj" />
       <ProjectReference Include="..\..\src\Ergosfare.Commands\Ergosfare.Commands.csproj" />
       <ProjectReference Include="..\..\src\Ergosfare.Contracts\Ergosfare.Contracts.csproj" />
       <ProjectReference Include="..\..\src\Ergosfare.Core\Ergosfare.Core.csproj" />

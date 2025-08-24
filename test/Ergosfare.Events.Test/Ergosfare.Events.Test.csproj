@@ -9,7 +9,6 @@
 
     <ItemGroup>
         <PackageReference Include="coverlet.collector" Version="6.0.2"/>
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.8" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.8" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0"/>
         <PackageReference Include="xunit" Version="2.9.2"/>
@@ -21,9 +20,10 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\src\Ergosfare.Core.Abstractions\Ergosfare.Core.Abstractions.csproj" />
+      <ProjectReference Include="..\..\src\Ergosfare.Contracts\Ergosfare.Contracts.csproj" />
       <ProjectReference Include="..\..\src\Ergosfare.Core.Extensions.MicrosoftDependencyInjection\Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj" />
-      <ProjectReference Include="..\..\src\Ergosfare.Core\Ergosfare.Core.csproj" />
+      <ProjectReference Include="..\..\src\Ergosfare.Events.Extensions.MicrosoftDependencyInjection\Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj" />
+      <ProjectReference Include="..\Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test\Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test.csproj" />
     </ItemGroup>
 
 </Project>
