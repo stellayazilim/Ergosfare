@@ -22,4 +22,4 @@ jobs:
         run: dotnet restore Stella.Ergosfare.sln
         
       - name: Run Unit Tests
-        run: dotnet test --no-build --filter "Category=Unit" --logger "trx:LogFileName=unit-tests.trx"
+        run: dotnet test  --logger "trx;LogFileName=unit-tests.trx" --filter "Category=Unit"
