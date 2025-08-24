@@ -1,6 +1,25 @@
+## 🌟 v0.0.6e
+
+### 🛠️ Event & Query module unit tests & code coverage
+
+#### No breaking changes
+* **🔹Feature(Ergosfare.Contracts):** IEventExceptionInterceptor, IEventExceptionInterceptor<TEvent> interfaces added, Event module now supports ExceptionInterceptors;
+* **🔹Refactor:** `MessageModule` renamed to `CoreModule`.
+* **🔹Refactor:**`CoreModule`.Build(...) implemented.
+* **🔹Chore:** Command module related tests and code coverage.
+
+### ✅ Test Coverage Milestone
+
+* **💯 100% test coverage** for `Ergosfare.Events`, `Ergosfare.Events.Abstractions`, `Ergosfare.Events.Extensions.MicrosfotDependencyInjection`.
+* **💯 100% test coverage** for `Ergosfare.Queries`, `Ergosfare.Queries.Abstractions`, `Ergosfare.Queries.Extensions.MicrosfotDependencyInjection`.
+
+* **📊 Total project coverage:** 99%.
+
+
+
 ## 🌟 v0.0.5e 
 
-### 🛠️ CommandMocule unit tests & code coverage
+### 🛠️ CommandModule unit tests & code coverage
 
 #### No breaking changes
 * **🔹Refactor:** CommandModuleBuilder.Register<T>() now internally calls CommandModuleBuilder.Register(Type T).
