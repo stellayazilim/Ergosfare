@@ -39,16 +39,16 @@ jobs:
       - name: Merge coverage reports
         run: |
           mkdir -p coverage
-          COVERAGE_FILES=$(find ./test -type f -name 'coverage.cobertura.xml')
-          FIRST_FILE=$(echo "$COVERAGE_FILES" | head -n 1)
-          MERGED_FILE="./coverage/coverage.cobertura.xml"
+          FILES=$(find ./test -type f -name 'coverage.cobertura.xml')
+          FIRST=$(echo "$FILES" | head -n 1)
+          MERGED="./coverage/coverage.cobertura.xml"
 
-          # Copy the first report as the starting merged report
-          cp "$FIRST_FILE" "$MERGED_FILE"
+          # Copy first report as starting point
+          cp "$FIRST" "$MERGED"
 
-          # Merge the rest one by one
-          for f in $(echo "$COVERAGE_FILES" | tail -n +2); do
-            coverlet merge "$MERGED_FILE" --merge-with "$f" --output "$MERGED_FILE" --format cobertura
+          # Merge remaining reports one by one
+          for f in $(echo "$FILES" | tail -n +2); do
+            coverlet merge "$MERGED" --merge-with "$f" --output "$MERGED" --format cobertura
           done
 
       - name: Fail if coverage < 90%
