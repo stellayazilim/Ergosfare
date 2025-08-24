@@ -51,6 +51,8 @@ jobs:
           for f in $(echo "$FILES" | tail -n +2); do
             coverlet merge "$MERGED" --merge-with "$f" --output "$MERGED" --format cobertura
           done
+        env:
+          PATH: ${{ env.PATH }}:~/.dotnet/tools
 
       - name: Fail if coverage < 90%
         run: |
