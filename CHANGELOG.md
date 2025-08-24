@@ -1,3 +1,19 @@
+## 🌟 v0.0.5e 
+
+### 🛠️ CommandMocule unit tests & code coverage
+
+#### No breaking changes
+* **🔹Refactor:** CommandModuleBuilder.Register<T>() now internally calls CommandModuleBuilder.Register(Type T).
+* **🔹Refactor:** `MessageModule` renamed to `CoreModule`.
+* **🔹Refactor:**`CoreModule`.Build(...) implemented.
+* **🔹Chore:** Command module related tests and code coverage.
+
+### ✅ Test Coverage Milestone
+
+* **💯 100% test coverage** for `Ergosfare.Command`, `Ergosfare.Command.Abstractions`, `Ergosfare.Command.Extensions.MicrosfotDependencyInjection`.
+* **📊 Total project coverage:** 85%.
+
+
 
 
 ## 🌟 v0.0.4e – Core Contracts Refactor & Exception Interceptor
