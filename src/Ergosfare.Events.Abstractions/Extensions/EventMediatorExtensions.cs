@@ -10,14 +10,14 @@ public static class EventMediatorExtensions
         return eventMediator.PublishAsync(@event, null, cancellationToken);
     }
 
-    public static Task PublishAsync(this IEventMediator eventMediator, IEvent @event, string tag, CancellationToken cancellationToken = default)
+    public static Task PublishAsync(this IEventMediator eventMediator, IEvent @event, string[] tag, CancellationToken cancellationToken = default)
     {
         return eventMediator.PublishAsync(@event,
             new EventMediationSettings
             {
                 Filters =
                 {
-                    Tags = [tag]
+                    Tags = tag
                 }
             },
             cancellationToken);

@@ -51,6 +51,6 @@ internal sealed class MessageMediator(
         var messageDependencies = _messageDependenciesFactory.Create(messageType, descriptor);
 
         // Mediate the message using the specified strategy
-        return options.MessageMediationStrategy.Mediate(message, messageDependencies, AmbientExecutionContext.Current);
+        return  options.MessageMediationStrategy.Mediate(message, messageDependencies, AmbientExecutionContext.Current);
     }
 }

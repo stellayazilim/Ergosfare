@@ -7,11 +7,10 @@ namespace Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
 public class EventModuleBuilder(
     IMessageRegistry messageRegistry)
 {
-    private readonly IMessageRegistry _messageRegistry = messageRegistry;
 
     public EventModuleBuilder Register<TEvent>() where TEvent : IEvent
     {
-        _messageRegistry.Register((typeof(TEvent)));
+        Register(typeof(TEvent));
         return this;
     }
 
@@ -20,7 +19,7 @@ public class EventModuleBuilder(
         if (!eventType.IsAssignableTo(typeof(IEvent)))
             throw new NotSupportedException($"The given type '{eventType.Name}' is not an event and cannot be registered.");
         
-        _messageRegistry.Register((eventType));
+        messageRegistry.Register((eventType));
         return this;
     }
 
@@ -30,7 +29,7 @@ public class EventModuleBuilder(
         foreach (var type in assembly.GetTypes()
                      .Where( t => t.IsAssignableTo(typeof(IEvent))))
         {
-            _messageRegistry.Register(type);
+            messageRegistry.Register(type);
         }
         return this;
     }

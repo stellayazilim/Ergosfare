@@ -1,12 +1,16 @@
+using System.Runtime.ExceptionServices;
 using Ergosfare.Context;
 using Ergosfare.Core.Abstractions;
+using Ergosfare.Core.Abstractions.Exceptions;
+using Ergosfare.Core.Abstractions.Extensions;
 using Ergosfare.Core.Abstractions.Handlers;
 using Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Ergosfare.Events.Abstractions;
 
 namespace Ergosfare.Events;
 
-public sealed class AsyncBroadcastMediationStrategy<TMessage>(EventMediationSettings settings)
+public sealed class AsyncBroadcastMediationStrategy<TMessage>(
+    EventMediationSettings settings)
     : IMessageMediationStrategy<TMessage, Task>
     where TMessage : notnull
 {
@@ -22,7 +26,8 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(EventMediationSett
     /// <returns>A Task representing the asynchronous operation of the mediation process.</returns>
     public async Task Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context)
     {
-
+        
+        var executionTaskOfAllHandlers = Task.CompletedTask;
         var handlers = messageDependencies.Handlers
             .Where(x => settings.Filters.HandlerPredicate(x.Descriptor.HandlerType))
             .ToList();
@@ -31,21 +36,31 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(EventMediationSett
         {
             if (settings.ThrowIfNoHandlerFound)
             {
-                throw new InvalidOperationException($"No handler found for message type '{typeof(TMessage)}'.");
+                throw new NoHandlerFoundException(typeof(TMessage));
             }
             return;
         }
+ 
         try
         {
+           
+            await messageDependencies.RunAsyncPreInterceptors(message, context);
             var sequentialExecutionTask = PublishSequentially(message, handlers, context);
-            await Task.CompletedTask;
+            await sequentialExecutionTask;
+            await messageDependencies.RunAsyncPostInterceptors(message,sequentialExecutionTask, context);
         }
-        catch (Exception e) {  }
+        catch (Exception e)
+        {
+            await messageDependencies.RunAsyncExceptionInterceptors(message, executionTaskOfAllHandlers,
+                ExceptionDispatchInfo.Capture(e), context);
+        
+        }
     }
 
-    private static async Task PublishSequentially(TMessage message, IEnumerable<ILazyHandler<IHandler, IMainHandlerDescriptor>> mainHandlers, IExecutionContext context)
+    private async Task PublishSequentially(TMessage message, IEnumerable<ILazyHandler<IHandler, IMainHandlerDescriptor>> handlers, IExecutionContext context)
     {
-        foreach (var lazyHandler in mainHandlers)
+     
+        foreach (var lazyHandler in handlers)
         {
             var handleTask = (Task) lazyHandler.Handler.Value.Handle(message, context);
 

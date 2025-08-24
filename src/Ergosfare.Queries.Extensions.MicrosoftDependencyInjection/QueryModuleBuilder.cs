@@ -10,7 +10,7 @@ public sealed class QueryModuleBuilder(IMessageRegistry messageRegistry)
 
     public QueryModuleBuilder Register<TQuery>() where TQuery : IQuery
     {
-        _messageRegistry.Register(typeof(TQuery));
+        Register(typeof(TQuery));
         return this;
     }
 

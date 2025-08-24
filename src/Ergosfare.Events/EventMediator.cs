@@ -7,24 +7,16 @@ namespace Ergosfare.Events;
 
 
 /// <inheritdoc cref="IEventMediator" />
-public sealed class EventMediator : IPublisher
+public sealed class EventMediator(IMessageMediator messageMediator) : IPublisher
 {
-    private readonly IMessageMediator _messageMediator;
-
-    public EventMediator(IMessageMediator messageMediator)
-    {
-        _messageMediator = messageMediator;
-    }
-
     public Task PublishAsync(IEvent @event,
                              EventMediationSettings? eventMediationSettings = null,
                              CancellationToken cancellationToken = default)
     {
-        eventMediationSettings ??= new EventMediationSettings();
-        var mediationStrategy = new AsyncBroadcastMediationStrategy<IEvent>(eventMediationSettings);
+        var mediationStrategy = new AsyncBroadcastMediationStrategy<IEvent>(eventMediationSettings ??= new EventMediationSettings());
         var resolveStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
 
-        return _messageMediator.Mediate(@event,
+        return messageMediator.Mediate(@event,
             new MediateOptions<IEvent, Task>
             {
                 MessageMediationStrategy = mediationStrategy,
@@ -39,11 +31,10 @@ public sealed class EventMediator : IPublisher
                                      EventMediationSettings? eventMediationSettings = null,
                                      CancellationToken cancellationToken = default) where TEvent : notnull
     {
-        eventMediationSettings ??= new EventMediationSettings();
-        var mediationStrategy = new AsyncBroadcastMediationStrategy<TEvent>(eventMediationSettings);
+        var mediationStrategy = new AsyncBroadcastMediationStrategy<TEvent>(eventMediationSettings ??= new EventMediationSettings());
         var resolveStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
 
-        return _messageMediator.Mediate(@event,
+        return messageMediator.Mediate(@event,
             new MediateOptions<TEvent, Task>
             {
                 MessageMediationStrategy = mediationStrategy,
