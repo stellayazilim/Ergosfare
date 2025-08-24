@@ -36,6 +36,9 @@ jobs:
             /p:CoverletOutput=coverage/$(basename $(pwd)).cobertura.xml \
             --logger "trx;LogFileName=TestResults.trx"
 
+      - name: Install coverlet console
+        run: dotnet tool install --global coverlet.console
+
       - name: Merge coverage reports
         run: |
           mkdir -p coverage
@@ -43,10 +46,8 @@ jobs:
           FIRST=$(echo "$FILES" | head -n 1)
           MERGED="./coverage/coverage.cobertura.xml"
 
-          # Copy first report as starting point
           cp "$FIRST" "$MERGED"
 
-          # Merge remaining reports one by one
           for f in $(echo "$FILES" | tail -n +2); do
             coverlet merge "$MERGED" --merge-with "$f" --output "$MERGED" --format cobertura
           done
