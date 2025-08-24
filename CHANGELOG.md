@@ -1,12 +1,33 @@
-## 🌟 v0.0.6e
+# 🌟 v0.0.6e 🛠️ Event, Command & Query module, unit tests & code coverage
 
-### 🛠️ Event & Query module unit tests & code coverage
+ 
+#### 📊 New Features: Event module
+* **🔹IEventExceptionInterceptor:** interface added, Event module now supports non generic ExceptionInterceptors.
+* **🔹IEventExceptionInterceptor\<TEvent\>:** interface added, Event module now supports generic`<TEvent>` ExceptionInterceptors.
+* **🔹IEventPreInterceptor:** interface added, Event module now supports non generic PreInterceptors.
+* **🔹IEventPreInterceptor\<TEvent\> :** interface added, Event module now supports generic`<TEvent>` PreInterceptors.
+* **🔹IEventPostInterceptor :** interface added, Event module now supports non generic PostInterceptors.
+* **🔹IEventPostInterceptor\<TEvent\> :** interface added, Event module now supports generic`<TEvent>` PostInterceptors.
 
-#### No breaking changes
-* **🔹Feature(Ergosfare.Contracts):** IEventExceptionInterceptor, IEventExceptionInterceptor<TEvent> interfaces added, Event module now supports ExceptionInterceptors;
-* **🔹Refactor:** `MessageModule` renamed to `CoreModule`.
-* **🔹Refactor:**`CoreModule`.Build(...) implemented.
-* **🔹Chore:** Command module related tests and code coverage.
+
+#### 📊 New Features: Command module
+* **🔹ICommandExceptionInterceptor:** interface added, command module now supports non generic ExceptionInterceptors.
+* **🔹ICommandExceptionInterceptor\<TEvent\>:** interface added, command module now supports generic`<TEvent>` ExceptionInterceptors.
+* **🔹ICommandPreInterceptor:** interface added, command module now supports non generic PreInterceptors.
+* **🔹ICommandPreInterceptor\<TEvent\> :** interface added, command module now supports generic`<TEvent>` PreInterceptors.
+* **🔹ICommandPostInterceptor :** interface added, Command module now supports non generic PostInterceptors.
+* **🔹ICommandPostInterceptor\<TEvent\> :** interface added, Command module now supports generic`<TEvent>` PostInterceptors.
+* **🔹ICommandPostInterceptor\<TEvent,TResult\> :** interface added, Command module now supports generic`<TEvent, TResult>` PostInterceptors.
+
+
+#### 📊 New Features: Query module
+* **🔹IQueryExceptionInterceptor:** interface added, command module now supports non generic ExceptionInterceptors.
+* **🔹IQueryExceptionInterceptor\<TQuery\>:** interface added, query module now supports generic`<TQuery>` ExceptionInterceptors.
+* **🔹IQueryPreInterceptor:** interface added, query module now supports non generic PreInterceptors.
+* **🔹IQueryPreInterceptor\<TQuery\> :** interface added, query module now supports generic`<TQuery>` PreInterceptors.
+* **🔹IQueryPostInterceptor :** interface added, Query module now supports non generic PostInterceptors.
+* **🔹IQueryPostInterceptor\<TQuery\> :** interface added, Query module now supports generic`<TQuery>` PostInterceptors.
+* **🔹IQueryPostInterceptor\<TQuery,TResult\> :** interface added, query module now supports generic`<TQuery, TResult>` PostInterceptors.
 
 ### ✅ Test Coverage Milestone
 
@@ -15,9 +36,9 @@
 
 * **📊 Total project coverage:** 99%.
 
+___
 
-
-## 🌟 v0.0.5e 
+# 🌟 v0.0.5e 
 
 ### 🛠️ CommandModule unit tests & code coverage
 
@@ -35,7 +56,7 @@
 
 
 
-## 🌟 v0.0.4e – Core Contracts Refactor & Exception Interceptor
+# 🌟 v0.0.4e – Core Contracts Refactor & Exception Interceptor
 
 ### 🛠️ Core Enhancements
 
@@ -50,7 +71,7 @@
 
 
 
-## v0.0.3e
+# 🌟 v0.0.3e
 
 ### General
 
