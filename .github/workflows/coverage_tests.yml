@@ -40,17 +40,16 @@ jobs:
         run: |
           mkdir -p coverage
           COVERAGE_FILES=$(find ./test -type f -name 'coverage.cobertura.xml')
-          COVERAGE_FILES_ARGS=""
-          for f in $COVERAGE_FILES; do
-            COVERAGE_FILES_ARGS="$COVERAGE_FILES_ARGS --merge-with $f"
+          FIRST_FILE=$(echo "$COVERAGE_FILES" | head -n 1)
+          MERGED_FILE="./coverage/coverage.cobertura.xml"
+
+          # Copy the first report as the starting merged report
+          cp "$FIRST_FILE" "$MERGED_FILE"
+
+          # Merge the rest one by one
+          for f in $(echo "$COVERAGE_FILES" | tail -n +2); do
+            coverlet merge "$MERGED_FILE" --merge-with "$f" --output "$MERGED_FILE" --format cobertura
           done
-          # Merge into single coverage
-          coverlet ./test/Ergosfare.Core.Test/bin/Debug/net9.0/Ergosfare.Core.Test.dll \
-            --target "dotnet" \
-            --targetargs "test ./test/Ergosfare.Core.Test/Ergosfare.Core.Test.csproj" \
-            $COVERAGE_FILES_ARGS \
-            --output ./coverage/coverage.cobertura.xml \
-            --format cobertura
 
       - name: Fail if coverage < 90%
         run: |
