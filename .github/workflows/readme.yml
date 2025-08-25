@@ -15,7 +15,7 @@ jobs:
         with:
           version: v1.0.0
           template: '.github/templates/readme_template.md'
-          args: --branch "${{github.ref_name}}"
+          args: --branch ${{github.ref_name}}
       - name: Write to file
         shell: bash
         run: |
