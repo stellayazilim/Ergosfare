@@ -32,10 +32,10 @@ jobs:
           dotnet-version: '9.0.x'
 
       # 3️⃣ Restore entire solution
-      - run: dotnet restore ./Ergosfare.sln
+      - run: dotnet restore ./Stella.Ergosfare.sln
 
       # 4️⃣ Build entire solution
-      - run: dotnet build ./Ergosfare.sln -c Release
+      - run: dotnet build ./Stella.Ergosfare.sln -c Release
 
       # 5️⃣ Determine NuGet version (strip leading 'v')
       - name: Set NuGet version
