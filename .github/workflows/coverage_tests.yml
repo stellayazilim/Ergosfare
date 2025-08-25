@@ -57,8 +57,8 @@ jobs:
           fi
         
       - uses: action-badges/create-orphan-branch@0.1.1
-          with:
-            branch-name: badges
+        with:
+          branch-name: badges
       - name: Generate coverage badge
         uses: action-badges/cobertura-coverage-xml-badges@0.3.1
         with:
