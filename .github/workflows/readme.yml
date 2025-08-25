@@ -1,13 +1,9 @@
 name: readme
 on:
   workflow_run: 
-    workflows: 
-      - Coverage
-    branches: 
-      - "*"
+    workflows: ["Coverage"]
     types:
       - completed
-
 permissions:
   contents: write   # <-- give the workflow permission to push commits
 jobs:
