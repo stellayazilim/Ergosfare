@@ -16,7 +16,7 @@ jobs:
         id: protostar
         with:
           version: v1.0.0
-          template: '.github/templates/readme.md'
+          template: './.github/templates/readme.md'
           args: |
             "--branch ${{ github.ref_name }}"
       - name: Write to file
