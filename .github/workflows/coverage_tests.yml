@@ -40,7 +40,7 @@ jobs:
       - name: Fail if coverage < 90%
         shell: bash
         run: |
-          COVERAGE=$(grep -oP '(?<=line-rate=")[0-9.]+' coverage/cobertura.xml)
+          COVERAGE=$(grep -oP '(?<=line-rate=")[0-9.]+' coverage/Cobertura.xml)
           echo "Total line coverage: $COVERAGE"
           COVERAGE_INT=$(echo "$COVERAGE * 100 / 1" | bc)
           if [ "$COVERAGE_INT" -lt 90 ]; then
@@ -54,7 +54,7 @@ jobs:
       - name: Generate coverage badge
         uses: action-badges/cobertura-coverage-xml-badges@0.3.1
         with:
-          coverage-file-name: ./coverage/cobertura.xml
+          coverage-file-name: ./coverage/Cobertura.xml
           file-name: coverage.svg
           badge-branch: '${{ github.ref_name }}'
           github-token: '${{ secrets.GITHUB_TOKEN }}'
