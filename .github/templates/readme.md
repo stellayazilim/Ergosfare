@@ -2,6 +2,7 @@
 # Ergosfare
 ![7101c7df-6cac-4b25-994a-60e2adbdc546.png](7101c7df-6cac-4b25-994a-60e2adbdc546.png)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) 
+![coverage badge](https://raw.githubusercontent.com/stellayazilim/Ergosfare/{.branch}/.badges/main/coverage.svg)
 
 ## Description
 

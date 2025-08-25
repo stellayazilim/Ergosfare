@@ -1,4 +1,4 @@
-name: .NET Unit & Coverage Tests
+name: Coverage
 
 on:
   push:
