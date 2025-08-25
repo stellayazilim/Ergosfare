@@ -45,15 +45,45 @@ Ergosfare is organized into modular components, such as:
 
 **Note:**
 
-*  projects contain contracts and interfaces, designed for easy referencing across different projects.
-*  handles execution context (e.g. cancellation, metadata, ambient data).
-*  provides common message contracts shared between modules.
+* `Abstractions` projects contain contracts and interfaces, designed for easy referencing across different projects.
+* `Context` handles execution context (e.g. cancellation, metadata, ambient data).
+* `Contracts` provides common message contracts shared between modules.
 
 ---
 
 ## Example
 
+```csharp
+using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
+using Ergosfare.Commands.Abstractions;
+using Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 
+public record CreateProductCommand(string Name) : ICommand<Guid>;
+
+public class CreateProductHandler : ICommandHandler<CreateProductCommand, Guid>
+{
+    public Task<Guid> HandleAsync(CreateProductCommand command, CancellationToken cancellationToken = default)
+    {
+        var id = Guid.NewGuid();
+        return Task.FromResult(id);
+    }
+}
+
+// Register services
+var services = new ServiceCollection()
+    .AddErgosfare(cfg =>
+    {
+        cfg.AddCommandModule(b => b.RegisterFromAssembly(Assembly.GetExecutingAssembly()));
+        cfg.AddInterceptors(); // enables interceptor pipeline
+    })
+    .BuildServiceProvider();
+
+// Resolve mediator and send command
+var mediator = services.GetRequiredService<ICommandMediator>();
+var productId = await mediator.SendAsync(new CreateProductCommand("Laptop"));
+Console.WriteLine($"New product ID: {productId}");
+```
 
 ---
 
@@ -61,13 +91,22 @@ Ergosfare is organized into modular components, such as:
 
 Ergosfare includes an extensible interceptor pipeline for cross-cutting concerns:
 
-* 
-*  / 
-*  / 
+* `IPreInterceptor<TMessage, TResult>`
+* `IPostInterceptor<TMessage, TResult>` / `IAsyncPostInterceptor<TMessage, TResult>`
+* `IExceptionInterceptor<TMessage, TResult>` / `IAsyncExceptionInterceptor<TMessage>`
 
 Example:
 
-
+```csharp
+public class LoggingInterceptor : IAsyncPostInterceptor<ICommand, object>
+{
+    public async Task HandleAsync(ICommand message, object? result, IExecutionContext context, CancellationToken ct)
+    {
+        Console.WriteLine($"Executed {message.GetType().Name} with result {result}");
+        await Task.CompletedTask;
+    }
+}
+```
 
 ---
 
