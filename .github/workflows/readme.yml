@@ -1,0 +1,36 @@
+name: readme
+
+permissions:
+  contents: write   # <-- give the workflow permission to push commits
+jobs:
+  GenReadMe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: stellayazilim/protostar@v0.1.40
+        id: protostar
+        with:
+          version: v1.0.0
+          template: '.github/templates/readme_template.md'
+          args: 
+            "--branch ${{github.ref_name}}"
+      - name: Write to file
+        shell: bash
+        run: |
+          cat <<'EOF' > readme.md
+          ${{ steps.protostar.outputs.stdout }}
+          EOF
+      - name: Commit generated file
+        shell: bash
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add readme.md
+          git commit -m "Update readme.md" || echo "No changes to commit"
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          
+          if [ -z "${GITHUB_REF##refs/tags/*}" ]; then
+            echo "Running on a tag — skipping commit push"
+          else
+            git push origin "$BRANCH"
+          fi
