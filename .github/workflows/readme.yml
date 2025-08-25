@@ -16,15 +16,13 @@ jobs:
         id: protostar
         with:
           version: v1.0.0
-          template: './.github/templates/readme.md'
+          template: '.github/templates/readme.md'
           args: |
             "--branch ${{ github.ref_name }}"
       - name: Write to file
         shell: bash
         run: |
-          cat <<'EOF' > readme.md
-          ${{ steps.protostar.outputs.stdout }}
-          EOF
+          echo "${{ steps.protostar.outputs.stdout }}" > readme.md
       - name: Commit generated file
         shell: bash
         run: |
