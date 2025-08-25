@@ -4,6 +4,15 @@ on:
   push:
     tags:
       - '*'  # Trigger on any tag, e.g., v0.1.0e
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to release from'
+        required: true
+        default: 'main'
+      tag:
+        description: 'Tag name for release (must include e)'
+        required: true
 
 jobs:
   release:
@@ -15,7 +24,8 @@ jobs:
     steps:
       # 1️⃣ Checkout repository
       - uses: actions/checkout@v3
-
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref_name }}
       # 2️⃣ Setup .NET SDK
       - uses: actions/setup-dotnet@v3
         with:
@@ -31,8 +41,23 @@ jobs:
       - name: Set NuGet version
         id: set_version
         run: |
-          TAG_NAME=${GITHUB_REF#refs/tags/}   # e.g., v0.1.0e
-          VERSION=${TAG_NAME#v}               # remove leading 'v' -> 0.1.0e
+          # Determine tag
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG_NAME="${{ github.event.inputs.tag }}"
+          else
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+          fi
+
+          # Strip leading 'v'
+          BASE_VERSION=${TAG_NAME#v}
+
+          # Convert *.*.*e to *.*.*-e
+          if [[ "$BASE_VERSION" == *e ]]; then
+            VERSION="${BASE_VERSION%e}-e"
+          else
+            VERSION="$BASE_VERSION"
+          fi
+
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "Tag: $TAG_NAME"
           echo "NuGet version: $VERSION"
