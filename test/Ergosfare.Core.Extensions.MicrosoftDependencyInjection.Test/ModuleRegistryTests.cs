@@ -10,6 +10,7 @@ namespace Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test;
 public class ModuleRegistryTests
 {
     [Fact]
+    [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
     public async Task ShouldInitialize()
     {

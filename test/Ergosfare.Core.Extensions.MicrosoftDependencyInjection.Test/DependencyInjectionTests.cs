@@ -10,6 +10,8 @@ namespace Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test;
 public class DependencyInjectionTests
 {
     [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
     public void ErgosfareShouldRegistered()
     {
         var serviceProvider = new ServiceCollection()

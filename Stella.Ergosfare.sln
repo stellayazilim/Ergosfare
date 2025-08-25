@@ -11,6 +11,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{16B49E79-4E96-4B52-BE26-462273E444E0}"
 	ProjectSection(SolutionItems) = preProject
 		test\Directory.Packages.props = test\Directory.Packages.props
+		coverlet.runsettings = coverlet.runsettings
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Commands.Abstractions", "src\Ergosfare.Commands.Abstractions\Ergosfare.Commands.Abstractions.csproj", "{4AC1E430-063B-4E27-9704-6F00E3DDD820}"

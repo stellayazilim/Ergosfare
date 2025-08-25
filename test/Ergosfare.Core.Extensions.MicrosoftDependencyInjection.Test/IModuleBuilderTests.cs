@@ -28,6 +28,8 @@ public class IModuleBuilderTests
     }
 
     [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
     public void ShoudRegisterWithT()
     {
         // arrange 
@@ -43,6 +45,8 @@ public class IModuleBuilderTests
     
     
     [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
     public void ShoudRegisterWithoutT()
     {
         // arrange 
