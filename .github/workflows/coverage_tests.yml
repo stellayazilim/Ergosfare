@@ -56,19 +56,16 @@ jobs:
             exit 1
           fi
         
-
+      - uses: action-badges/create-orphan-branch@0.1.1
+          with:
+            branch-name: badges
       - name: Generate coverage badge
         uses: action-badges/cobertura-coverage-xml-badges@0.3.1
         with:
           file-name: coverage.svg
-          badge-branch: ${{ github.ref_name }}
+          badge-branch: badge
           github-token: ${{ secrets.GITHUB_TOKEN }}
           coverage-file-name: ./coverage/coverage.cobertura.xml
-
-      - name: Commit coverage badge
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .badges/chore_workflows/coverage.svg
-          git commit -m "chore: update coverage badge [skip ci]" || echo "Nothing to commit"
-          git push origin ${{ github.ref_name }}
+      - uses: action-badges/create-orphan-branch@0.1.1
+          with:
+            branch-name: badges
