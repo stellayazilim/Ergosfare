@@ -21,11 +21,14 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
-      # 3️⃣ Restore all projects
-      - run: dotnet restore ./src/**/*.csproj
+      # 3️⃣ Restore entire solution
+      - run: dotnet restore ./Ergosfare.sln
 
-      # 4️⃣ Determine release version (strip leading 'v')
-      - name: Set release version
+      # 4️⃣ Build entire solution
+      - run: dotnet build ./Ergosfare.sln -c Release
+
+      # 5️⃣ Determine NuGet version (strip leading 'v')
+      - name: Set NuGet version
         id: set_version
         run: |
           TAG_NAME=${GITHUB_REF#refs/tags/}   # e.g., v0.1.0e
@@ -34,11 +37,19 @@ jobs:
           echo "Tag: $TAG_NAME"
           echo "NuGet version: $VERSION"
 
-      # 5️⃣ Build all projects in Release mode
-      - run: dotnet build ./src/**/*.csproj -c Release --no-restore
-
-      # 6️⃣ Pack all modules + meta package
-      - run: dotnet pack ./src/**/*.csproj -c Release -o ./nupkg-release /p:Version=${{ env.VERSION }} --no-build
+      # 6️⃣ Pack only source projects (exclude tests)
+      - name: Pack source projects
+        run: |
+          for proj in \
+            ./src/Ergosfare/Ergosfare.csproj \
+            ./src/Ergosfare.Core/Ergosfare.Core.csproj \
+            ./src/Ergosfare.Core.Extensions.MicrosoftDependencyInjection/Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj \
+            ./src/Ergosfare.Queries/Ergosfare.Queries.csproj \
+            ./src/Ergosfare.Queries.Abstractions/Ergosfare.Queries.Abstractions.csproj \
+            ./src/Ergosfare.Contracts/Ergosfare.Contracts.csproj
+          do
+            dotnet pack $proj -c Release -o ./nupkg-release /p:Version=${{ env.VERSION }} --no-build
+          done
 
       # 7️⃣ Push packages to NuGet
       - name: Push packages to NuGet
@@ -59,7 +70,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 9️⃣ Upload NuGet packages to the Release
+      # 9️⃣ Upload NuGet packages to the GitHub Release
       - name: Upload NuGet packages to GitHub Release
         uses: softprops/action-gh-release@v1
         with:

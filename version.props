@@ -1,6 +1,6 @@
 ﻿<Project>
     <PropertyGroup>
-        <Version>0.0.6-e</Version>
+        <Version>0.0.7-e</Version>
         <Authors>Kerim Cetinbas</Authors>
         <Company>Stella Yazılım</Company>
         <PackageReleaseNotes>Initial early release</PackageReleaseNotes>
