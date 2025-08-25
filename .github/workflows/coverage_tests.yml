@@ -41,17 +41,14 @@ jobs:
         run: dotnet tool install --global coverlet.console
 
       - name: Merge coverage reports
-        shell: bash
         run: |
-          FILES=$(find ./test -type f -name 'coverage.cobertura.xml')
-          FIRST=$(echo "$FILES" | head -n 1)
-          MERGED="./coverage/coverage.cobertura.xml"
-
-          cp "$FIRST" "$MERGED"
-
-          for f in $(echo "$FILES" | tail -n +2); do
-            coverlet merge "$MERGED" --merge-with "$f" --output "$MERGED" --format cobertura
-          done
+          mkdir -p coverage
+          dotnet tool run coverlet merge \
+            ./test/Ergosfare.Core.Test/coverage/coverage.cobertura.xml \
+            ./test/Ergosfare.Commands.Test/coverage/coverage.cobertura.xml \
+            ./test/Ergosfare.Queries.Test/coverage/coverage.cobertura.xml \
+            --output ./coverage/coverage.cobertura.xml --format cobertura
+        shell: bash
         env:
           PATH: ${{ env.PATH }}:~/.dotnet/tools
 
