@@ -66,12 +66,21 @@ jobs:
       - name: Pack source projects
         run: |
           for proj in \
-            ./src/Ergosfare/Ergosfare.csproj \
-            ./src/Ergosfare.Core/Ergosfare.Core.csproj \
-            ./src/Ergosfare.Core.Extensions.MicrosoftDependencyInjection/Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj \
-            ./src/Ergosfare.Queries/Ergosfare.Queries.csproj \
-            ./src/Ergosfare.Queries.Abstractions/Ergosfare.Queries.Abstractions.csproj \
-            ./src/Ergosfare.Contracts/Ergosfare.Contracts.csproj
+          ./src/Ergosfare/Ergosfare.csproj \
+          ./src/Ergosfare.Contracts/Ergosfare.Contracts.csproj \
+          ./src/Ergosfare.Context/Ergosfare.Context.csproj \
+          ./src/Ergosfare.Core/Ergosfare.Core.csproj \
+          ./src/Ergosfare.Core.Abstractions/Ergosfare.Core.Abstractions.csproj \
+          ./src/Ergosfare.Core.Extensions.MicrosoftDependencyInjection/Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj \
+          ./src/Ergosfare.Queries/Ergosfare.Queries.csproj \
+          ./src/Ergosfare.Queries.Abstractions/Ergosfare.Queries.Abstractions.csproj \
+          ./src/Ergosfare.Queries.Extensions.MicrosoftDependencyInjection/Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.csproj \
+          ./src/Ergosfare.Commands/Ergosfare.Commands.csproj \
+          ./src/Ergosfare.Commands.Abstractions/Ergosfare.Commands.Abstractions.csproj \
+          ./src/Ergosfare.Commands.Extensions.MicrosoftDependencyInjection/Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj \
+          ./src/Ergosfare.Events/Ergosfare.Events.csproj \
+          ./src/Ergosfare.Events.Abstractions/Ergosfare.Events.Abstractions.csproj \
+          ./src/Ergosfare.Events.Extensions.MicrosoftDependencyInjection/Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj
           do
             dotnet pack $proj -c Release -o ./nupkg-release /p:Version=${{ env.VERSION }} --no-build
           done
