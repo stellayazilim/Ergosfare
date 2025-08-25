@@ -6,10 +6,7 @@ on:
       - '*'  # Trigger on any tag, e.g., v0.1.0e
   workflow_dispatch:
     inputs:
-      branch:
-        description: 'Branch to release from'
-        required: true
-        default: 'main'
+      branch: "*"
       tag:
         description: 'Tag name for release (must include e)'
         required: true
