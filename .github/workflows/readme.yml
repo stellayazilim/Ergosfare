@@ -1,8 +1,5 @@
 name: readme
-on:
-  push: 
-    branches:
-      - "*"
+
 permissions:
   contents: write   # <-- give the workflow permission to push commits
 jobs:
