@@ -1,0 +1,83 @@
+name: GitHub Packages Release Stella.Ergosfare
+
+on:
+  push:
+    tags:
+      - '*'  # Trigger on any tag, e.g., v0.1.0e
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to release from'
+        required: true
+        default: 'main'
+      tag:
+        description: 'Tag name for release (must include e)'
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Checkout branch
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      # 2️⃣ Setup .NET
+      - uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '9.0.x'
+
+      # 3️⃣ Restore entire solution
+      - run: dotnet restore ./Ergosfare.sln
+
+      # 4️⃣ Build entire solution
+      - run: dotnet build ./Ergosfare.sln -c Release
+
+      # 5️⃣ Determine NuGet version for pre-release
+      - name: Set NuGet version
+        id: set_version
+        run: |
+          TAG_NAME=${{ github.event.inputs.tag }}
+          BASE_VERSION=${TAG_NAME#v}           # strip leading v
+          if [[ "$BASE_VERSION" == *e ]]; then
+            VERSION="${BASE_VERSION%e}-e"
+          else
+            VERSION="$BASE_VERSION"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Version for GitHub Packages: $VERSION"
+
+      # 6️⃣ Pack only source projects
+      - name: Pack source projects
+        run: |
+          for proj in \
+            ./src/Ergosfare/Ergosfare.csproj \
+            ./src/Ergosfare.Core/Ergosfare.Core.csproj \
+            ./src/Ergosfare.Core.Extensions.MicrosoftDependencyInjection/Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj \
+            ./src/Ergosfare.Queries/Ergosfare.Queries.csproj \
+            ./src/Ergosfare.Queries.Abstractions/Ergosfare.Queries.Abstractions.csproj \
+            ./src/Ergosfare.Contracts/Ergosfare.Contracts.csproj
+          do
+            dotnet pack $proj -c Release -o ./nupkg-github /p:Version=${{ env.VERSION }} --no-build
+          done
+
+      # 7️⃣ Push packages to GitHub Packages
+      - name: Push packages to GitHub Packages
+        run: |
+          for pkg in ./nupkg-github/*.nupkg; do
+            dotnet nuget push "$pkg" \
+              --api-key ${{ secrets.GITHUB_TOKEN }} \
+              --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+              --skip-duplicate
+          done
+
+      # 8️⃣ Create GitHub Release and attach packages
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          files: ./nupkg-github/*.nupkg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
