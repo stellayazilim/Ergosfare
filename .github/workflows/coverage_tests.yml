@@ -42,7 +42,7 @@ jobs:
 
       - name: Merge coverage reports
         run: |
-          dotnet tool run coverlet merge \
+          coverlet merge \
             ./test/Ergosfare.Core.Test/coverage/coverage.cobertura.xml \
             ./test/Ergosfare.Commands.Test/coverage/coverage.cobertura.xml \
             ./test/Ergosfare.Queries.Test/coverage/coverage.cobertura.xml \
