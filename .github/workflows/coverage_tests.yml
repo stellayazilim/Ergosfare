@@ -64,5 +64,5 @@ jobs:
         with:
           coverage-file-name: ./coverage/coverage.cobertura.xml
           file-name: coverage.svg
-          badge-branch: badges
+          badge-branch: ${{ github.ref_name }}
           github-token: '${{ secrets.GITHUB_TOKEN }}'
