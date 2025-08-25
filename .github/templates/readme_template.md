@@ -2,7 +2,8 @@
 # Ergosfare
 ![7101c7df-6cac-4b25-994a-60e2adbdc546.png](7101c7df-6cac-4b25-994a-60e2adbdc546.png)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) 
-
+[![coveragebadge](./.badges/main/coverage.svg)(./coverage/coverage.covertura.xml)
+]
 ## Description
 
 Ergosfare is a lightweight, flexible, and high-performance mediation library for implementing CQRS and messaging patterns in the .NET ecosystem.

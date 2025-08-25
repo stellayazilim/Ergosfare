@@ -1,14 +1,13 @@
-name: .NET Unit & Coverage Tests
-
+name: Coverage
 on:
   push:
     branches:
-      - '**'
+      - '*'
     paths-ignore:
       - '.badges/chore_workflows/coverage.svg'
 
 jobs:
-  test-and-coverage:
+  Coverage:
     runs-on: ubuntu-latest
 
     steps:
