@@ -22,7 +22,9 @@ jobs:
       - name: Write to file
         shell: bash
         run: |
-          echo "${{ steps.protostar.outputs.stdout }}" > readme.md
+          cat <<'EOF' > readme.md
+          ${{ steps.protostar.outputs.stdout }}
+          EOF
       - name: Commit generated file
         shell: bash
         run: |
