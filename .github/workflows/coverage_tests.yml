@@ -33,21 +33,16 @@ jobs:
           dotnet test Stella.Ergosfare.sln \
             --settings coverlet.runsettings \
             /p:CollectCoverage=true \
-            /p:CoverletOutputFormat=cobertura \
-            /p:CoverletOutput=coverage/$(basename $(pwd)).cobertura.xml \
+            "/p:MergeWith=../../coverage/coverlet.cobertura.xml" \
+            "/p:CoverletOutputFormat=cobertura" \
+            "/p:CoverletOutput=../../coverage/coverlet.cobertura.xml" \
             --logger "trx;LogFileName=TestResults.trx"
 
-      - name: Install coverlet console
-        run: dotnet tool install --global coverlet.console
-
+      - name: Install Report Generator
+        run:  dotnet tool install --global dotnet-reportgenerator-globaltool
+      
       - name: Merge coverage reports
-        run: |
-          coverlet merge ./coverage/coverage.cobertura.xml \
-            --merge-with ./test/Ergosfare.Core.Test/coverage/coverage.cobertura.xml \
-            --merge-with ./test/Ergosfare.Commands.Test/coverage/coverage.cobertura.xml \
-            --merge-with ./test/Ergosfare.Queries.Test/coverage/coverage.cobertura.xml \
-            --output ./coverage/coverage.cobertura.xml \
-            --format cobertura
+        run:  reportgenerator -reports:./**/coverage.cobertura.xml -targetdir:./coverage -reporttypes:Cobertura
         shell: bash
         env:
           PATH: ${{ env.PATH }}:~/.dotnet/tools
