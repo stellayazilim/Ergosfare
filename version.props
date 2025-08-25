@@ -1,0 +1,10 @@
+﻿<Project>
+    <PropertyGroup>
+        <Version>0.0.6e</Version>
+        <Authors>Kerim Cetinbas</Authors>
+        <Company>Stella Yazılım</Company>
+        <PackageReleaseNotes>Initial early release</PackageReleaseNotes>
+        <RepositoryUrl>https://github.com/stellayazilim/Ergosfare</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+    </PropertyGroup>
+</Project>

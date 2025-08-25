@@ -1,8 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
+    <Import Project="../../Version.props" />
     <PropertyGroup>
         <TargetFramework>net9.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
+        <PackageId>Stella.Ergosfare.Events</PackageId>
+        <IsPackable>true</IsPackable>
         <Nullable>enable</Nullable>
         <LangVersion>13</LangVersion>
     </PropertyGroup>

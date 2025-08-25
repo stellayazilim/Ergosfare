@@ -1,8 +1,0 @@
-﻿{
-  "version": "0.0.6e",
-  "publicRelease": true,
-
-  "semVer": {
-    "mode": "ContinuousDelivery"
-  }
-}
