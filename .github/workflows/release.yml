@@ -1,0 +1,68 @@
+name: Early Release Stella.Ergosfare Packages
+
+on:
+  push:
+    tags:
+      - '*'  # Trigger on any tag, e.g., v0.1.0e
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    env:
+      NUGET_SOURCE: https://api.nuget.org/v3/index.json
+
+    steps:
+      # 1️⃣ Checkout repository
+      - uses: actions/checkout@v3
+
+      # 2️⃣ Setup .NET SDK
+      - uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '9.0.x'
+
+      # 3️⃣ Restore all projects
+      - run: dotnet restore ./src/**/*.csproj
+
+      # 4️⃣ Determine release version (strip leading 'v')
+      - name: Set release version
+        id: set_version
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}   # e.g., v0.1.0e
+          VERSION=${TAG_NAME#v}               # remove leading 'v' -> 0.1.0e
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Tag: $TAG_NAME"
+          echo "NuGet version: $VERSION"
+
+      # 5️⃣ Build all projects in Release mode
+      - run: dotnet build ./src/**/*.csproj -c Release --no-restore
+
+      # 6️⃣ Pack all modules + meta package
+      - run: dotnet pack ./src/**/*.csproj -c Release -o ./nupkg-release /p:Version=${{ env.VERSION }} --no-build
+
+      # 7️⃣ Push packages to NuGet
+      - name: Push packages to NuGet
+        run: |
+          for pkg in ./nupkg-release/*.nupkg; do
+            dotnet nuget push "$pkg" \
+              --api-key ${{ secrets.NUGET_API_KEY }} \
+              --source ${{ env.NUGET_SOURCE }} \
+              --skip-duplicate
+          done
+
+      # 8️⃣ Create GitHub Release
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 9️⃣ Upload NuGet packages to the Release
+      - name: Upload NuGet packages to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./nupkg-release/*.nupkg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
