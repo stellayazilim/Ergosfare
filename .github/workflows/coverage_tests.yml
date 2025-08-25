@@ -28,19 +28,19 @@ jobs:
       - name: Run Unit & Coverage Tests
         shell: bash
         run: |
-          dotnet test Stella.Ergosfare.sln --settings coverlet.runsettings /p:CollectCoverage=true  /p:CoverletOutputFormat=cobertura /p:CoverletOutput=coverage/coverage.cobertura.xml  --logger "trx;LogFileName=TestResults.trx"
+          dotnet test Stella.Ergosfare.sln --settings coverlet.runsettings /p:CollectCoverage=true  /p:CoverletOutputFormat=cobertura /p:CoverletOutput=./coverage/coverage.cobertura.xml  --logger "trx;LogFileName=TestResults.trx"
 
       - name: Install Report Generator
         run:  dotnet tool install --global dotnet-reportgenerator-globaltool
       
       - name: Merge coverage reports
-        run:  reportgenerator -reports:./**/coverage.cobertura.xml -targetdir:./coverage -reporttypes:Cobertura
+        run:  reportgenerator -reports:./**/coverage.cobertura.xml -targetdir:./.coverage -reporttypes:Cobertura
         shell: bash
 
       - name: Fail if coverage < 90%
         shell: bash
         run: |
-          COVERAGE=$(grep -oP '(?<=line-rate=")[0-9.]+' coverage/Cobertura.xml)
+          COVERAGE=$(grep -oP '(?<=line-rate=")[0-9.]+' ./.coverage/Cobertura.xml)
           echo "Total line coverage: $COVERAGE"
           COVERAGE_INT=$(echo "$COVERAGE * 100 / 1" | bc)
           if [ "$COVERAGE_INT" -lt 90 ]; then
