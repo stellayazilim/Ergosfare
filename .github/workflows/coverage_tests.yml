@@ -44,8 +44,6 @@ jobs:
       - name: Merge coverage reports
         run:  reportgenerator -reports:./**/coverage.cobertura.xml -targetdir:./coverage -reporttypes:Cobertura
         shell: bash
-        env:
-          PATH: ${{ env.PATH }}:~/.dotnet/tools
 
       - name: Fail if coverage < 90%
         shell: bash
