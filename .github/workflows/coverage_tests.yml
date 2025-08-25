@@ -42,11 +42,12 @@ jobs:
 
       - name: Merge coverage reports
         run: |
-          coverlet merge \
-            ./test/Ergosfare.Core.Test/coverage/coverage.cobertura.xml \
-            ./test/Ergosfare.Commands.Test/coverage/coverage.cobertura.xml \
-            ./test/Ergosfare.Queries.Test/coverage/coverage.cobertura.xml \
-            --output ./coverage/coverage.cobertura.xml --format cobertura
+          coverlet merge ./coverage/coverage.cobertura.xml \
+            --merge-with ./test/Ergosfare.Core.Test/coverage/coverage.cobertura.xml \
+            --merge-with ./test/Ergosfare.Commands.Test/coverage/coverage.cobertura.xml \
+            --merge-with ./test/Ergosfare.Queries.Test/coverage/coverage.cobertura.xml \
+            --output ./coverage/coverage.cobertura.xml \
+            --format cobertura
         shell: bash
         env:
           PATH: ${{ env.PATH }}:~/.dotnet/tools
