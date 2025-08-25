@@ -27,6 +27,7 @@ jobs:
         run: dotnet restore Stella.Ergosfare.sln
 
       - name: Run Unit & Coverage Tests
+        shell: bash
         run: |
           mkdir -p coverage
           dotnet test Stella.Ergosfare.sln \
@@ -40,6 +41,7 @@ jobs:
         run: dotnet tool install --global coverlet.console
 
       - name: Merge coverage reports
+        shell: bash
         run: |
           FILES=$(find ./test -type f -name 'coverage.cobertura.xml')
           FIRST=$(echo "$FILES" | head -n 1)
@@ -54,6 +56,7 @@ jobs:
           PATH: ${{ env.PATH }}:~/.dotnet/tools
 
       - name: Fail if coverage < 90%
+        shell: bash
         run: |
           COVERAGE=$(grep -oP '(?<=line-rate=")[0-9.]+' coverage/coverage.cobertura.xml)
           echo "Total line coverage: $COVERAGE"
@@ -62,6 +65,7 @@ jobs:
             echo "Coverage $COVERAGE% is below 90%!"
             exit 1
           fi
+        
 
       - name: Generate coverage badge
         uses: action-badges/cobertura-coverage-xml-badges@0.3.1
