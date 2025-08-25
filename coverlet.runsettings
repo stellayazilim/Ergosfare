@@ -11,10 +11,11 @@
         <Configuration>
           <!-- Include only src/ projects -->
           <Include>
-            <ModulePath>.*\\src\\.*</ModulePath>
+            <ModulePath>src\\*</ModulePath>
           </Include>
           <Exclude>
-            <ModulePath>.*Test</ModulePath>
+              <ModuleName>*.Test</ModuleName>
+              <ModuleName>*.Tests</ModuleName>
           </Exclude>
           <Format>cobertura</Format>
         </Configuration>
