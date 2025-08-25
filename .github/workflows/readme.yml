@@ -34,7 +34,7 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add CHANGELOG.md
+          git add readme.md
           git commit -m "Update changelog" || echo "No changes to commit"
           BRANCH=$(git rev-parse --abbrev-ref HEAD)
           
