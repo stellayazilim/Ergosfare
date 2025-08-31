@@ -1,3 +1,20 @@
+# v0.0.10e - 2025-09-01
+
+## Changed
+- **Handlers & Interceptors**: Removed `CancellationToken` parameters from all contracts.  
+  Execution context’s token is now used consistently instead.
+
+## Breaking Changes
+- Any custom handlers or interceptors that previously accepted a `CancellationToken`  
+  must be updated to rely on the execution context for cancellation.
+
+## Internal
+- Refactored interface definitions to eliminate redundant token passing.
+- Updated unit tests to use context-based cancellation.
+- Coverage badge regenerated to reflect new code changes.
+
+
+
 # v0.0.9e - 2025-8-31 -  Pipeline flow fixes
 
 
