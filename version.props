@@ -1,10 +1,14 @@
 ﻿<Project>
     <PropertyGroup>
-        <Version>0.0.7-e</Version>
-        <Authors>Kerim Cetinbas</Authors>
-        <Company>Stella Yazılım</Company>
-        <PackageReleaseNotes>Initial early release</PackageReleaseNotes>
+        <PackageId>Ergosfare</PackageId>
+        <Version>0.0.9-e</Version>
+        <Authors>Stella</Authors>
+        <Company>Stella Yazilim</Company>
+        <Description>Modern .NET Mediation framework</Description>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <RepositoryUrl>https://github.com/stellayazilim/Ergosfare</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
+        <PackageProjectUrl>https://github.com/stellayazilim/Ergosfare</PackageProjectUrl>
+        <PackageReleaseNotes>Initial public release</PackageReleaseNotes>
     </PropertyGroup>
 </Project>

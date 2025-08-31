@@ -77,7 +77,7 @@ jobs:
             ./src/Ergosfare.Events.Abstractions/Ergosfare.Events.Abstractions.csproj \
             ./src/Ergosfare.Events.Extensions.MicrosoftDependencyInjection/Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj
           do
-            dotnet pack $proj -c Release -o ./nupkg-github /p:Version=${{ env.VERSION }} --no-build
+            dotnet pack $proj -c Release -o ./nupkg-github /p:Version=${{ env.VERSION }} /p:IncludeSymbols=true /p:IncludeSource=true --no-build
           done
 
       # 6️⃣ Push packages to GitHub Packages
