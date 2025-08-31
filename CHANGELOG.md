@@ -1,23 +1,25 @@
 # v0.0.9e Pipeline flow fixes
 
-## changes
-- Handlers and interceptors without a GroupAttribute are automatically part of the default group.
-- QueryMediationExtensions updated internally to use new Group feature
+## v0.0.9e - 2025-8-31
 
-## Introduced
-- `EventMediationExtensions`, `CommandMediationExtensions` for easy mediation process
-```cs
-public static Task SendAsync(this ICommandMediator commandMediator, ICommand command, CancellationToken cancellationToken = default)
-    
-public static Task<TResult> SendAsync<TResult>(this ICommandMediator commandMediator, ICommand<TResult> command, CancellationToken cancellationToken = default)
+### Changed
+- **Handlers**: Updated handler order grouping logic.
+- **Interceptors**: Refined interceptor chaining based on group attributes.
 
-public static Task SendAsync( this ICommandMediator commandMediator, ICommand command, string[] groups, CancellationToken cancellationToken = default )
+### Fixed
+- Resolved issue with default group assignment for ungrouped handlers.
 
-public static Task<TResult> SendAsync<TResult>(this ICommandMediator commandMediator, ICommand<TResult> command, string[] groups, CancellationToken cancellationToken = default )
-```
+### Internal
+- Refactored handler registration process to streamline group assignment.
 
-## Code Coverage
-new tests added for newly added contents
+### Files Changed
+- `HandlerRegistry.cs`
+- `InterceptorChain.cs`
+
+### Code Coverage
+- Added tests for newly implemented functionality.
+
+
 
 # v0.0.8e Pipeline flow control
 ## Introduced
