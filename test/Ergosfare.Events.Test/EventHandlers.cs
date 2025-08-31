@@ -7,7 +7,7 @@ namespace Ergosfare.Events.Test;
 public class StubNonGenericEventHandler1: IEventHandler<StubNonGenericEvent>
 {
     public bool IsRuned { get; private set; }
-    public Task HandleAsync(StubNonGenericEvent message, IExecutionContext context, CancellationToken cancellationToken = default)
+    public Task HandleAsync(StubNonGenericEvent message, IExecutionContext context)
     {
         IsRuned = true;
         return Task.CompletedTask;
@@ -19,7 +19,7 @@ public class StubNonGenericEventHandler1: IEventHandler<StubNonGenericEvent>
 public class StubNonGenericEventHandler2: IEventHandler<StubNonGenericEvent>
 {
     public bool IsRuned { get; private set; }
-    public Task HandleAsync(StubNonGenericEvent message, IExecutionContext context, CancellationToken cancellationToken = default)
+    public Task HandleAsync(StubNonGenericEvent message, IExecutionContext context)
     {
         IsRuned = true;
         return Task.CompletedTask;
@@ -32,8 +32,7 @@ public sealed class StubNonGenericEventHandlerThrows: IEventHandler<StubNonGener
 {
     public static bool IsRuned { get; private set; }
 
-    public Task HandleAsync(StubNonGenericEventThrows message, IExecutionContext context,
-        CancellationToken cancellationToken = default)
+    public Task HandleAsync(StubNonGenericEventThrows message, IExecutionContext context)
     {
         IsRuned = true;
         throw new Exception("Throw exception");
@@ -46,8 +45,7 @@ public sealed class StubNonGenericEventExceptionInterceptor: IEventExceptionInte
     public static bool IsRuned { get; private set; }
 
 
-    public Task HandleAsync(StubNonGenericEventThrows message, object? messageResult, Exception exception,
-        IExecutionContext context, CancellationToken cancellationToken = default)
+    public Task HandleAsync(StubNonGenericEventThrows message, object? messageResult, Exception exception, IExecutionContext context)
     {
         IsRuned = true;
         return Task.CompletedTask;

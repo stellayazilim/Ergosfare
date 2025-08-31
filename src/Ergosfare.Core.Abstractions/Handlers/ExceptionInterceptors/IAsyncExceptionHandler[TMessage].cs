@@ -18,13 +18,12 @@ public interface IAsyncExceptionInterceptor<in TMessage>: IExceptionInterceptor<
         return HandleAsync(
             message, 
             messageResult, 
-            exception, context, AmbientExecutionContext.Current.CancellationToken);
+            exception, context);
     }
     
     Task HandleAsync(
         TMessage message, 
         object? messageResult, 
         Exception exception, 
-        IExecutionContext context, 
-        CancellationToken cancellationToken = default);
+        IExecutionContext context);
 }

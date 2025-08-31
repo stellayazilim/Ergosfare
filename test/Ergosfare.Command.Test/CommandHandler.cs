@@ -5,7 +5,7 @@ namespace Ergosfare.Command.Test;
 
 public class TestCommandHandler: ICommandHandler<TestCommand>
 {
-    public Task HandleAsync(TestCommand message, IExecutionContext context, CancellationToken cancellationToken = default)
+    public Task HandleAsync(TestCommand message, IExecutionContext context)
     {
         return Task.CompletedTask;
     }
@@ -14,8 +14,7 @@ public class TestCommandHandler: ICommandHandler<TestCommand>
 
 public class TestCommandStringResultHandler:ICommandHandler<TestCommandStringResult, string>
 {
-    public Task<string> HandleAsync(TestCommandStringResult message, IExecutionContext context,
-        CancellationToken cancellationToken = default)
+    public Task<string> HandleAsync(TestCommandStringResult message, IExecutionContext context)
     {
         return Task.FromResult(string.Empty);
     }

@@ -34,8 +34,7 @@ internal class StubNonGenericStringResultHandler: IHandler<StubNonGenericMessage
 
 internal class StubNonGenericAsyncHandler: IAsyncHandler<StubNonGenericMessage>
 {
-    public Task HandleAsync(StubNonGenericMessage message, IExecutionContext context,
-        CancellationToken cancellationToken = default)
+    public Task HandleAsync(StubNonGenericMessage message, IExecutionContext context)
     {
         return Task.CompletedTask;
     }
@@ -43,8 +42,7 @@ internal class StubNonGenericAsyncHandler: IAsyncHandler<StubNonGenericMessage>
 
 internal class StubNonGenericStringResultAsyncHandler: IAsyncHandler<StubNonGenericMessage, string>
 {
-    public Task<string> HandleAsync(StubNonGenericMessage message, IExecutionContext context,
-        CancellationToken cancellationToken = default)
+    public Task<string> HandleAsync(StubNonGenericMessage message, IExecutionContext context)
     {
         return Task.FromResult(string.Empty);
     }
@@ -54,8 +52,7 @@ internal class StubNonGenericStringResultAsyncHandler: IAsyncHandler<StubNonGene
 
 internal class StubNonGenericStringResultDerivedAsyncHandler: IAsyncHandler<StubNonGenericDerivedMessage>
 {
-    public Task HandleAsync(StubNonGenericDerivedMessage message, IExecutionContext context,
-        CancellationToken cancellationToken = default)
+    public Task HandleAsync(StubNonGenericDerivedMessage message, IExecutionContext context)
     {
         return Task.CompletedTask;
     }

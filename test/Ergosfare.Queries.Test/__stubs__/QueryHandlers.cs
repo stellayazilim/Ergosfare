@@ -9,8 +9,7 @@ public class StubNonGenericStringResultQueryHandler: IQueryHandler<StubNonGeneri
 {
     
     public static bool IsCalled;
-    public Task<string> HandleAsync(StubNonGenericStringResultQuery message, IExecutionContext context,
-        CancellationToken cancellationToken = default)
+    public Task<string> HandleAsync(StubNonGenericStringResultQuery message, IExecutionContext context)
     {
         IsCalled = true;
         return Task.FromResult(string.Empty);
@@ -22,16 +21,15 @@ public class StubNonGenericStringResultQueryHandler: IQueryHandler<StubNonGeneri
 public class StubNonGenericStreamStringResultQueryHandler: IStreamQueryHandler<StubNonGenericStreamStringResultQuery, string>
 {
     public static bool IsCalled;
-    public async IAsyncEnumerable<string> StreamAsync(StubNonGenericStreamStringResultQuery message, IExecutionContext context,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<string> StreamAsync(StubNonGenericStreamStringResultQuery message, IExecutionContext context)
     {
         IsCalled = true;
         
-        await Task.Delay(1, cancellationToken);
+        await Task.Delay(1, context.CancellationToken);
         yield return "Foo";
-        await Task.Delay(1, cancellationToken);
+        await Task.Delay(1, context.CancellationToken);
         yield return "Bar";
-        await Task.Delay(1, cancellationToken);
+        await Task.Delay(1, context.CancellationToken);
         yield return "Baz";
     }
 }

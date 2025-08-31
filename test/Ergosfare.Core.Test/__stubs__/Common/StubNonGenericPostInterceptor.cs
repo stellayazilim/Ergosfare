@@ -5,8 +5,7 @@ namespace Ergosfare.Core.Test.__stubs__;
 
 internal class StubNonGenericPostInterceptor: IAsyncPostInterceptor<StubNonGenericMessage,Task>
 {
-    public async Task HandleAsync(StubNonGenericMessage message, Task? messageResult, IExecutionContext context,
-        CancellationToken cancellationToken = default)
+    public async Task HandleAsync(StubNonGenericMessage message, Task? messageResult, IExecutionContext context)
     {
         await Task.Yield();
                
@@ -16,8 +15,7 @@ internal class StubNonGenericPostInterceptor: IAsyncPostInterceptor<StubNonGener
 
 internal class StubNonGenericDerivedPostInterceptor: IAsyncPostInterceptor<StubNonGenericDerivedMessage,Task>
 {
-    public async Task HandleAsync(StubNonGenericDerivedMessage message, Task? messageResult, IExecutionContext context,
-        CancellationToken cancellationToken = default)
+    public async Task HandleAsync(StubNonGenericDerivedMessage message, Task? messageResult, IExecutionContext context)
     {
         await Task.Yield();
     }
@@ -27,8 +25,7 @@ internal class StubNonGenericDerivedPostInterceptor: IAsyncPostInterceptor<StubN
 internal class StubNonGenericStreamPostInterceptorsAbortExecution: IAsyncPostInterceptor<StubNonGenericMessage,IAsyncEnumerable<string>>
 {
 
-    public Task HandleAsync(StubNonGenericMessage message, IAsyncEnumerable<string>? messageResult, IExecutionContext context,
-        CancellationToken cancellationToken = default)
+    public Task HandleAsync(StubNonGenericMessage message, IAsyncEnumerable<string>? messageResult, IExecutionContext context)
     {
         context.Abort();
         return Task.CompletedTask;
@@ -40,8 +37,7 @@ internal class StubNonGenericStreamPostInterceptorThrowsException: IAsyncPostInt
 {
 
 
-    public Task HandleAsync(StubNonGenericMessage message, IAsyncEnumerable<string>? messageResult, IExecutionContext context,
-        CancellationToken cancellationToken = default)
+    public Task HandleAsync(StubNonGenericMessage message, IAsyncEnumerable<string>? messageResult, IExecutionContext context)
     {
         throw new Exception("post exception");
     }

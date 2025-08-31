@@ -11,9 +11,9 @@ public interface IAsyncHandler<in TMessage>: IHandler<TMessage, Task>
 {
     Task IHandler<TMessage, Task>.Handle(TMessage message, IExecutionContext context)
     {
-        return HandleAsync(message, context,  AmbientExecutionContext.Current.CancellationToken);
+        return HandleAsync(message, context);
     }
         
         
-    Task HandleAsync(TMessage message, IExecutionContext context, CancellationToken cancellationToken = default);
+    Task HandleAsync(TMessage message, IExecutionContext context);
 }

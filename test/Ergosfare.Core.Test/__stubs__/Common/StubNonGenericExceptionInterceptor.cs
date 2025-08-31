@@ -6,8 +6,7 @@ namespace Ergosfare.Core.Test.__stubs__;
 
 internal class StubNonGenericExceptionInterceptor: IAsyncExceptionInterceptor<StubNonGenericMessage>
 {
-    public Task HandleAsync(StubNonGenericMessage message, object? messageResult, Exception exception, IExecutionContext context,
-        CancellationToken cancellationToken = default)
+    public Task HandleAsync(StubNonGenericMessage message, object? messageResult, Exception exception, IExecutionContext context)
     {
         return Task.CompletedTask;
     }
@@ -35,8 +34,7 @@ internal class StubNonGenericStringResultExceptionInterceptor: IExceptionInterce
 internal class StubNonGenericAsyncExceptionInterceptor: IAsyncExceptionInterceptor<StubNonGenericMessage>
 {
 
-    public Task HandleAsync(StubNonGenericMessage message, object? messageResult, Exception exception, IExecutionContext context,
-        CancellationToken cancellationToken = default)
+    public Task HandleAsync(StubNonGenericMessage message, object? messageResult, Exception exception, IExecutionContext context)
     {
         return Task.CompletedTask;
     }
@@ -45,8 +43,7 @@ internal class StubNonGenericAsyncExceptionInterceptor: IAsyncExceptionIntercept
 
 public class StubNonGenericAsyncStringResultExceptionInterceptor: IAsyncExceptionInterceptor<StubNonGenericMessage, string>
 {
-    public Task HandleAsync(StubNonGenericMessage message, string? result, Exception exception, IExecutionContext context,
-        CancellationToken cancellation = default)
+    public Task HandleAsync(StubNonGenericMessage message, string? result, Exception exception, IExecutionContext context)
     {
         return Task.CompletedTask;
     }

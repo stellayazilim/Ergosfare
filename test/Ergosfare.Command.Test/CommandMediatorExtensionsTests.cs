@@ -25,9 +25,9 @@ public class CommandMediatorExtensionsTests
         var cancellationToken = CancellationToken.None;
         var cmd = new StubNonGenericCommand();
         mockInterceptor1.Setup(s =>
-            s.HandleAsync(It.IsAny<StubNonGenericCommand>(), It.IsAny<IExecutionContext>(), It.IsAny<CancellationToken>())) .CallBase();;
+            s.HandleAsync(It.IsAny<StubNonGenericCommand>(), It.IsAny<IExecutionContext>())) .CallBase();;
         mockInterceptor2.Setup(s => 
-            s.HandleAsync(It.IsAny<StubNonGenericCommand>(), It.IsAny<IExecutionContext>(), It.IsAny<CancellationToken>())) .CallBase();;
+            s.HandleAsync(It.IsAny<StubNonGenericCommand>(), It.IsAny<IExecutionContext>())) .CallBase();;
         
         
         var services = new ServiceCollection()

@@ -8,8 +8,7 @@ namespace Ergosfare.Command.Test.__stubs__;
 public class StubNonGenericCommandHandler: ICommandHandler<StubNonGenericCommand>
 {
     public static bool HasCalled;
-    public Task HandleAsync(StubNonGenericCommand message, IExecutionContext context,
-        CancellationToken cancellationToken = default)
+    public Task HandleAsync(StubNonGenericCommand message, IExecutionContext context)
     {
         HasCalled = true;
         return Task.CompletedTask;
@@ -23,8 +22,7 @@ public class StubNonGenericCommandStringResultHandler: ICommandHandler<StubNonGe
 {
     
     public static bool HasCalled;
-    public Task<string> HandleAsync(StubNonGenericCommandStringResult message, IExecutionContext context,
-        CancellationToken cancellationToken = default)
+    public Task<string> HandleAsync(StubNonGenericCommandStringResult message, IExecutionContext context)
     {
         HasCalled = true;
         return Task.FromResult(string.Empty);
