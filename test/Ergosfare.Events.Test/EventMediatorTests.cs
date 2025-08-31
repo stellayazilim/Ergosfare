@@ -4,7 +4,6 @@
 using System.Reflection;
 using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Ergosfare.Events.Abstractions;
-using Ergosfare.Events.Abstractions.Extensions;
 using Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 

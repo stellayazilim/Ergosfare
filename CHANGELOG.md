@@ -1,3 +1,39 @@
+# v0.0.9e Pipeline flow fixes
+
+## changes
+- Handlers and interceptors without a GroupAttribute are automatically part of the default group.
+- QueryMediationExtensions updated internally to use new Group feature
+
+## Introduced
+- `EventMediationExtensions`, `CommandMediationExtensions` for easy mediation process
+```cs
+public static Task SendAsync(this ICommandMediator commandMediator, ICommand command, CancellationToken cancellationToken = default)
+    
+public static Task<TResult> SendAsync<TResult>(this ICommandMediator commandMediator, ICommand<TResult> command, CancellationToken cancellationToken = default)
+
+public static Task SendAsync( this ICommandMediator commandMediator, ICommand command, string[] groups, CancellationToken cancellationToken = default )
+
+public static Task<TResult> SendAsync<TResult>(this ICommandMediator commandMediator, ICommand<TResult> command, string[] groups, CancellationToken cancellationToken = default )
+```
+
+## Code Coverage
+new tests added for newly added contents
+
+# v0.0.8e Pipeline flow control
+## Introduced
+- `public class GroupAttribute(params string[] groupNames)`
+- `public class WeightAttribute(uint weight)`
+
+## New Features: 
+- Handler Grouping with GroupAttribute
+- Handler Ordering with WeightAttribute
+
+## Changes:
+- IHandlerDescriptor has new two property `Weight` and `Groups`
+- All handler descriptor builders updated internally to support grouping and ordering
+- All internal mediator definitions updated to use grouping and ordering
+- MessageDependencies and MessageDependenciesFactory updated internally
+- TypeExtensions has new metohods `GetWeightFromAttribute()`, `GetGroupsFromAttribute()`
 # 🌟 v0.0.6e 🛠️ Event, Command & Query module, unit tests & code coverage
 
  

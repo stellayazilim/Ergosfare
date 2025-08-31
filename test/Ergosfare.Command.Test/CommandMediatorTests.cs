@@ -16,9 +16,9 @@ public class CommandMediatorTests
     {
 
         var serviceCollection = new ServiceCollection()
-            .AddErgosfare(x =>
+            .AddErgosfare(options =>
                 {
-                    x.AddCoreModule(x =>
+                    options.AddCoreModule(x =>
                     {
                         x.Register<StubNonGenericCommandHandler>();
                     });
@@ -40,9 +40,9 @@ public class CommandMediatorTests
     {
         
         var serviceCollection = new ServiceCollection()
-            .AddErgosfare(x =>
+            .AddErgosfare(options =>
             {
-                x.AddCoreModule(x =>
+                options.AddCoreModule(x =>
                 {
                     x.Register<StubNonGenericCommandStringResultHandler>();
                 });
@@ -51,7 +51,7 @@ public class CommandMediatorTests
         
         var messageMediator = serviceCollection.GetRequiredService<IMessageMediator>();
         var mediator = new CommandMediator(messageMediator!);
-        var result = mediator.SendAsync(new StubNonGenericCommandStringResult(), null,  CancellationToken.None);
+        var result = mediator.SendAsync(new StubNonGenericCommandStringResult(), StubDefaultMediationSetting.CommandDefaultSetting,  CancellationToken.None);
         
         Assert.NotNull(result);
         Assert.Equal(string.Empty, await result);

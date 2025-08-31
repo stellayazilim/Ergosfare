@@ -1,4 +1,5 @@
-﻿using Ergosfare.Core.Abstractions;
+﻿using Ergosfare.Contracts.Attributes;
+using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Mediator;
 using Ergosfare.Core.Internal.Registry.Descriptors;
@@ -69,7 +70,7 @@ public class MessageDependenciesTest
         var handlerDescriptor = new MainHandlerDescriptor()
         {
             Weight = 1,
-            Groups = [],
+            Groups = [GroupAttribute.DefaultGroupName],
             MessageType = typeof(StubGenericMessage<>),
             HandlerType = typeof(StubGenericHandler<>),
             ResultType = typeof(Task)
@@ -79,7 +80,7 @@ public class MessageDependenciesTest
         var preInterceptorDescriptor = new PreInterceptorDescriptor()
         {
             Weight = 1,
-            Groups = [],
+            Groups = [GroupAttribute.DefaultGroupName],
             MessageType = typeof(StubGenericMessage<>),
             HandlerType = typeof(StubGenericPreInterceptor<>),
         }; 
@@ -88,7 +89,7 @@ public class MessageDependenciesTest
         var postInterceptorDescriptor = new PostInterceptorDescriptor()
         {
             Weight = 1,
-            Groups = [],
+            Groups = [GroupAttribute.DefaultGroupName],
             MessageType = typeof(StubGenericMessage<>),
             HandlerType = typeof(StubGenericPostInterceptor<>),
             ResultType = typeof(Task)
@@ -98,7 +99,7 @@ public class MessageDependenciesTest
         var exceptionInterceptorDescriptor = new ExceptionInterceptorDescriptor()
         {
             Weight = 1,
-            Groups = [],
+            Groups = [GroupAttribute.DefaultGroupName],
             MessageType = typeof(StubGenericMessage<>),
             HandlerType = typeof(StubGenericExceptionInterceptor<>),
             ResultType = typeof(Task)
@@ -113,7 +114,7 @@ public class MessageDependenciesTest
         var dependencies = new MessageDependencies(
             typeof(StubGenericMessage<string>),
             messageDescriptor,
-            serviceProvider, []);
+            serviceProvider, [GroupAttribute.DefaultGroupName]);
 
 
         // Assert: should be StubGenericHandler<string>
@@ -145,7 +146,7 @@ public class MessageDependenciesTest
         var handlerDescriptor = new MainHandlerDescriptor()
         {
             Weight = 1,
-            Groups = [],
+            Groups = [GroupAttribute.DefaultGroupName],
             MessageType = indirectMessageType,
             HandlerType = typeof(StubNonGenericHandler),
             ResultType = typeof(Task)
@@ -155,7 +156,7 @@ public class MessageDependenciesTest
         var preInterceptorDescriptor = new PreInterceptorDescriptor()
         {
             Weight = 1,
-            Groups = [],
+            Groups = [GroupAttribute.DefaultGroupName],
             MessageType = indirectMessageType,
             HandlerType = typeof(StubNonGenericPreInterceptor),
         }; 
@@ -164,7 +165,7 @@ public class MessageDependenciesTest
         var postInterceptorDescriptor = new PostInterceptorDescriptor()
         {
             Weight = 1,
-            Groups = [],
+            Groups = [GroupAttribute.DefaultGroupName],
             MessageType = indirectMessageType,
             HandlerType = typeof(StubNonGenericPostInterceptor),
             ResultType = typeof(Task)
@@ -174,7 +175,7 @@ public class MessageDependenciesTest
         var exceptionInterceptorDescriptor = new ExceptionInterceptorDescriptor()
         {
             Weight = 1,
-            Groups = [],
+            Groups = [GroupAttribute.DefaultGroupName],
             MessageType = indirectMessageType,
             HandlerType = typeof(StubNonGenericExceptionInterceptor),
             ResultType = typeof(Task)
@@ -191,7 +192,7 @@ public class MessageDependenciesTest
             messageType,
             messageDescriptor,
             serviceProvider,
-            []);
+            [GroupAttribute.DefaultGroupName]);
 
         Assert.True(messageType.IsAssignableTo(handlerDescriptor.MessageType));
         Assert.Equal(typeof(StubNonGenericDerivedMessage),messageDescriptor.MessageType);
@@ -241,7 +242,7 @@ public class MessageDependenciesTest
         var dependencies = new MessageDependencies(
             typeof(StubNonGenericMessage),
             descriptor,
-            serviceProvider, []);
+            serviceProvider, [GroupAttribute.DefaultGroupName]);
 
         // Assert: should be StubGenericHandler<string>
         Assert.Equal(typeof(StubNonGenericHandler), dependencies.Handlers.First().Descriptor.HandlerType);
