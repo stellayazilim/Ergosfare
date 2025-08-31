@@ -18,6 +18,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      # 1️⃣ Checkout
       - uses: actions/checkout@v3
         with:
           ref: ${{ github.event.inputs.branch }}
@@ -27,35 +28,36 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
+      # 3️⃣ Restore & Build
       - run: dotnet restore ./Stella.Ergosfare.sln
-
       - run: dotnet build ./Stella.Ergosfare.sln -c Release
 
-    - name: Set NuGet version
-      id: set_version
-      run: |
-        # Determine tag
-        if [ -n "${{ github.event.inputs.tag }}" ]; then
-          TAG_NAME="${{ github.event.inputs.tag }}"
-        else
-          TAG_NAME=${GITHUB_REF#refs/tags/}
-        fi
-        
-        # Strip leading 'v'
-        BASE_VERSION=${TAG_NAME#v}
-        
-        # Convert *.*.*e to *.*.*-e
-        if [[ "$BASE_VERSION" == *e ]]; then
-          VERSION="${BASE_VERSION%e}-e"
-        else
-          VERSION="$BASE_VERSION"
-        fi
-        
-        echo "VERSION=$VERSION" >> $GITHUB_ENV
-        echo "Tag: $TAG_NAME"
-        echo "NuGet version: $VERSION"
+      # 4️⃣ Set NuGet version
+      - name: Set NuGet version
+        id: set_version
+        run: |
+          # Determine tag
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG_NAME="${{ github.event.inputs.tag }}"
+          else
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+          fi
+          
+          # Strip leading 'v'
+          BASE_VERSION=${TAG_NAME#v}
+          
+          # Convert *.*.*e to *.*.*-e
+          if [[ "$BASE_VERSION" == *e ]]; then
+            VERSION="${BASE_VERSION%e}-e"
+          else
+            VERSION="$BASE_VERSION"
+          fi
+          
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Tag: $TAG_NAME"
+          echo "NuGet version: $VERSION"
 
-      # 6️⃣ Pack only source projects
+      # 5️⃣ Pack source projects
       - name: Pack source projects
         run: |
           for proj in \
@@ -74,12 +76,11 @@ jobs:
             ./src/Ergosfare.Events/Ergosfare.Events.csproj \
             ./src/Ergosfare.Events.Abstractions/Ergosfare.Events.Abstractions.csproj \
             ./src/Ergosfare.Events.Extensions.MicrosoftDependencyInjection/Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj
-            
           do
             dotnet pack $proj -c Release -o ./nupkg-github /p:Version=${{ env.VERSION }} --no-build
           done
 
-      # 7️⃣ Push packages to GitHub Packages
+      # 6️⃣ Push packages to GitHub Packages
       - name: Push packages to GitHub Packages
         run: |
           for pkg in ./nupkg-github/*.nupkg; do
@@ -89,7 +90,7 @@ jobs:
               --skip-duplicate
           done
 
-      # 8️⃣ Create GitHub Release and attach packages
+      # 7️⃣ Create GitHub Release and attach packages
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
