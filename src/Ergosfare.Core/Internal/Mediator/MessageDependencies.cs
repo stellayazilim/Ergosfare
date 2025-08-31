@@ -81,6 +81,7 @@ internal sealed class MessageDependencies : IMessageDependencies
     {
         return descriptors
             .OrderByDescending(d => d.Weight)
+            .ThenBy(d => d.HandlerType.FullName, StringComparer.Ordinal)
             .Where(d => d.Groups.Count == 0 || d.Groups.Intersect(_groups).Any())
             .Select<TDescriptor, ILazyHandler<THandler, TDescriptor>>(d => new LazyHandler<THandler, TDescriptor>
             {
