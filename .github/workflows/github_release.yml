@@ -17,9 +17,7 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-
     steps:
-      # 1️⃣ Checkout branch
       - uses: actions/checkout@v3
         with:
           ref: ${{ github.event.inputs.branch }}
@@ -29,13 +27,10 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
-      # 3️⃣ Restore entire solution
       - run: dotnet restore ./Stella.Ergosfare.sln
 
-      # 4️⃣ Build entire solution
       - run: dotnet build ./Stella.Ergosfare.sln -c Release
 
-      # 5️⃣ Determine NuGet version for pre-release
     - name: Set NuGet version
       id: set_version
       run: |
