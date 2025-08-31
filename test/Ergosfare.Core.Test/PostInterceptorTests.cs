@@ -19,8 +19,7 @@ public class PostInterceptorTests
     private class TestIAsyncPostInterceptorTMessageTResultHandler: IAsyncPostInterceptor<IMessage, Task>
     {
     
-        public Task HandleAsync(IMessage message, Task? messageResult, IExecutionContext context,
-            CancellationToken cancellationToken = default)
+        public Task HandleAsync(IMessage message, Task? messageResult, IExecutionContext context)
         {
             return Task.CompletedTask;
         }

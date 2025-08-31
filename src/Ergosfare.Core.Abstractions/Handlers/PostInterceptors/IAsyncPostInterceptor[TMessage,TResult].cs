@@ -17,9 +17,8 @@ public interface IAsyncPostInterceptor<in TMessage, in TResult>
         return HandleAsync(
             message, 
             messageResult, 
-            AmbientExecutionContext.Current,  
-            AmbientExecutionContext.Current.CancellationToken);
+            AmbientExecutionContext.Current);
     }
     
-    Task HandleAsync(TMessage message, TResult? messageResult, IExecutionContext context, CancellationToken cancellationToken = default);
+    Task HandleAsync(TMessage message, TResult? messageResult, IExecutionContext context);
 }

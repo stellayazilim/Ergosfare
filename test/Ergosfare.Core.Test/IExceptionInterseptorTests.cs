@@ -28,8 +28,7 @@ public class ExceptionInterceptorTests
 
     private class TestExceptionInterceptor3: IAsyncExceptionInterceptor<StubNonGenericMessage>
     {
-        public Task HandleAsync(StubNonGenericMessage message, object? result, Exception exception, IExecutionContext context,
-            CancellationToken cancellationToken = default)
+        public Task HandleAsync(StubNonGenericMessage message, object? result, Exception exception, IExecutionContext context)
         {
             return Task.CompletedTask;
         }
@@ -38,8 +37,7 @@ public class ExceptionInterceptorTests
     
     private class TestExceptionInterceptor4: IAsyncExceptionInterceptor<StubNonGenericMessage, Task>
     {
-        public Task HandleAsync(StubNonGenericMessage message, Task? result, Exception exception, IExecutionContext context,
-            CancellationToken cancellation = default)
+        public Task HandleAsync(StubNonGenericMessage message, Task? result, Exception exception, IExecutionContext context)
         {
             return Task.CompletedTask;
         }

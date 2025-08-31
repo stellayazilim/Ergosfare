@@ -44,7 +44,7 @@ public interface IAsyncHandler<in TMessage,  TResult>: IHandler<TMessage, Task<T
     /// </remarks>
     Task<TResult> IHandler<TMessage, Task<TResult>>.Handle(TMessage message, IExecutionContext context)
     {
-        return HandleAsync(message, context, AmbientExecutionContext.Current.CancellationToken);
+        return HandleAsync(message, context);
     }
 
     
@@ -66,6 +66,6 @@ public interface IAsyncHandler<in TMessage,  TResult>: IHandler<TMessage, Task<T
     ///     Implementers should define the handling logic within this method, providing asynchronous operations to process the
     ///     message effectively and produce a result that can be used in subsequent stages of the workflow.
     /// </remarks>
-    Task<TResult> HandleAsync(TMessage message, IExecutionContext context, CancellationToken cancellationToken = default);
+    Task<TResult> HandleAsync(TMessage message, IExecutionContext context);
 
 }

@@ -15,10 +15,10 @@ public interface IAsyncExceptionInterceptor<in TMessage, in TResult>:
         Exception exception,
         IExecutionContext context)
     {
-        return   HandleAsync(message, result, exception, context, AmbientExecutionContext.Current.CancellationToken);
+        return   HandleAsync(message, result, exception, context);
     }
        
 
-    Task HandleAsync(TMessage message, TResult? result, Exception exception, IExecutionContext context, CancellationToken cancellation = default);
+    Task HandleAsync(TMessage message, TResult? result, Exception exception, IExecutionContext context);
     
 }

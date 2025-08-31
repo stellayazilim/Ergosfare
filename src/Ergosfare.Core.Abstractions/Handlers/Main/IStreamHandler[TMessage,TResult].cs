@@ -11,8 +11,8 @@ public interface IStreamHandler<in TMessage, out TResult>
         TMessage message, 
         IExecutionContext context)
     {
-        return StreamAsync(message, context, AmbientExecutionContext.Current.CancellationToken);
+        return StreamAsync(message, context);
     }
     
-    IAsyncEnumerable<TResult> StreamAsync(TMessage message,IExecutionContext context, CancellationToken cancellationToken = default);
+    IAsyncEnumerable<TResult> StreamAsync(TMessage message,IExecutionContext context);
 }

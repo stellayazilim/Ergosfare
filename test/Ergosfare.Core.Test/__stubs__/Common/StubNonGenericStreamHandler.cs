@@ -6,8 +6,7 @@ namespace Ergosfare.Core.Test.__stubs__;
 
 internal class StubNonGenericStreamHandler: IStreamHandler<StubNonGenericMessage, string>
 {
-    public async IAsyncEnumerable<string> StreamAsync(StubNonGenericMessage message, IExecutionContext context,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<string> StreamAsync(StubNonGenericMessage message, IExecutionContext context)
     {
 
 
@@ -16,7 +15,7 @@ internal class StubNonGenericStreamHandler: IStreamHandler<StubNonGenericMessage
 
         foreach (var result in results)
         {
-            await Task.Delay(10, cancellationToken);
+            await Task.Delay(10, context.CancellationToken);
             yield return result;
         }   
 
@@ -29,8 +28,7 @@ internal class StubNonGenericStreamHandler2: StubNonGenericStreamHandler;
 
 internal class StubNonGenericStreamHandlerAbortsExecution:  IStreamHandler<StubNonGenericMessage, string>
 {
-    public async IAsyncEnumerable<string> StreamAsync(StubNonGenericMessage message, IExecutionContext context,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<string> StreamAsync(StubNonGenericMessage message, IExecutionContext context)
     {
         var results = new string[] {"foo", "bar", "baz"};
 
@@ -39,10 +37,10 @@ internal class StubNonGenericStreamHandlerAbortsExecution:  IStreamHandler<StubN
         {
             if (result == "bar")
             {
-                await Task.Delay(10, cancellationToken);
+                await Task.Delay(10, context.CancellationToken);
                 context.Abort();
             }
-            await Task.Delay(10, cancellationToken);
+            await Task.Delay(10, context.CancellationToken);
             yield return result;
         }   
     }
@@ -51,8 +49,7 @@ internal class StubNonGenericStreamHandlerAbortsExecution:  IStreamHandler<StubN
 
 internal class StubNonGenericStreamHandlerThrowsException:IStreamHandler<StubNonGenericMessage, string>
 {
-    public async IAsyncEnumerable<string> StreamAsync(StubNonGenericMessage message, IExecutionContext context,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<string> StreamAsync(StubNonGenericMessage message, IExecutionContext context)
     {
         var results = new string[] {"foo", "bar", "baz"};
 
@@ -63,7 +60,7 @@ internal class StubNonGenericStreamHandlerThrowsException:IStreamHandler<StubNon
             {
                throw new Exception("bar exception");
             }
-            await Task.Delay(10, cancellationToken);
+            await Task.Delay(10, context.CancellationToken);
             yield return result;
         }   
     }

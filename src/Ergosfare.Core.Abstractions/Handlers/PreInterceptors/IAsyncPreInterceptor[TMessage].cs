@@ -10,11 +10,9 @@ public interface IAsyncPreInterceptor<in TMessage>:
     object IPreInterceptor<TMessage>.Handle(
         TMessage message,  IExecutionContext context) => HandleAsync(
             message, 
-            context, 
-            AmbientExecutionContext.Current.CancellationToken);
+            context);
     
     Task HandleAsync(
         TMessage message, 
-        IExecutionContext context, 
-        CancellationToken cancellationToken = default);
+        IExecutionContext context);
 }

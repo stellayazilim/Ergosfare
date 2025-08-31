@@ -23,7 +23,7 @@ public class SingleAsyncHandlerMediationStrategyTests
     
     private class TestExceptionMessageHandler: IAsyncHandler<TestExceptionMessage, string>
     {
-        public Task<string> HandleAsync(TestExceptionMessage message, IExecutionContext context, CancellationToken cancellationToken = default)
+        public Task<string> HandleAsync(TestExceptionMessage message, IExecutionContext context)
         {
             if (message.Throw)
             {
@@ -35,7 +35,7 @@ public class SingleAsyncHandlerMediationStrategyTests
     }
     private class TestExceptionMessageDuplicateHandler: IAsyncHandler<TestExceptionMessage, string>
     {
-        public Task<string> HandleAsync(TestExceptionMessage message, IExecutionContext context, CancellationToken cancellationToken = default)
+        public Task<string> HandleAsync(TestExceptionMessage message, IExecutionContext context)
         {
             if (message.Throw)
             {
@@ -48,7 +48,7 @@ public class SingleAsyncHandlerMediationStrategyTests
 
     private class TestExceptionMessagePreInterceptor: IAsyncPreInterceptor<TestExceptionMessage>
     {
-        public Task HandleAsync(TestExceptionMessage message, IExecutionContext context, CancellationToken cancellationToken = default)
+        public Task HandleAsync(TestExceptionMessage message, IExecutionContext context)
         {
             return Task.CompletedTask;
         }
@@ -56,8 +56,7 @@ public class SingleAsyncHandlerMediationStrategyTests
     
     private class TestExceptionMessagePostInterceptor: IAsyncPostInterceptor<TestExceptionMessage, string>
     {
-        public Task HandleAsync(TestExceptionMessage message, string? messageResult, IExecutionContext context,
-            CancellationToken cancellationToken = default)
+        public Task HandleAsync(TestExceptionMessage message, string? messageResult, IExecutionContext context)
         {
             return Task.CompletedTask;
         }
@@ -65,8 +64,7 @@ public class SingleAsyncHandlerMediationStrategyTests
     
     private class TestExceptionMessageExceptionInterceptor: IAsyncExceptionInterceptor<TestExceptionMessage, string>
     {
-        public Task HandleAsync(TestExceptionMessage message, string? result, Exception exception, IExecutionContext context,
-            CancellationToken cancellation = default)
+        public Task HandleAsync(TestExceptionMessage message, string? result, Exception exception, IExecutionContext context)
         {
             return Task.CompletedTask;
         }

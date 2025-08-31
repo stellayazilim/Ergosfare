@@ -19,7 +19,7 @@ public class PreInterceptorTests
     
     private class TestIAsyncPreInterceptorTMessageHandler: IAsyncPreInterceptor<IMessage>
     {
-        public Task HandleAsync(IMessage message, IExecutionContext context, CancellationToken cancellationToken = default)
+        public Task HandleAsync(IMessage message, IExecutionContext context)
         {
             return Task.CompletedTask;
         }
