@@ -18,18 +18,18 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: ${{ github.event.inputs.branch }}
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ github.event.inputs.branch }}
 
-      # 2️⃣ Setup .NET
-      - uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: '9.0.x'
+    # 2️⃣ Setup .NET
+    - uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '9.0.x'
 
-      - run: dotnet restore ./Stella.Ergosfare.sln
+    - run: dotnet restore ./Stella.Ergosfare.sln
 
-      - run: dotnet build ./Stella.Ergosfare.sln -c Release
+    - run: dotnet build ./Stella.Ergosfare.sln -c Release
 
     - name: Set NuGet version
       id: set_version
