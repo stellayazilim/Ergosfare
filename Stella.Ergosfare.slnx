@@ -1,0 +1,34 @@
+﻿<Solution>
+  <Folder Name="/docs/">
+    <Project Path="changelog\Ergosfare.Changelog.njsproj" />
+    <Project Path="docs\Ergosfare.Docs.njsproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src\Ergosfare.Commands.Abstractions\Ergosfare.Commands.Abstractions.csproj" Type="Classic C#" />
+    <Project Path="src\Ergosfare.Commands.Extensions.MicrosoftDependencyInjection\Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj" Type="Classic C#" />
+    <Project Path="src\Ergosfare.Commands\Ergosfare.Commands.csproj" Type="Classic C#" />
+    <Project Path="src\Ergosfare.Context\Ergosfare.Context.csproj" Type="Classic C#" />
+    <Project Path="src\Ergosfare.Contracts\Ergosfare.Contracts.csproj" Type="Classic C#" />
+    <Project Path="src\Ergosfare.Core.Abstractions\Ergosfare.Core.Abstractions.csproj" Type="Classic C#" />
+    <Project Path="src\Ergosfare.Core.Extensions.MicrosoftDependencyInjection\Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj" Type="Classic C#" />
+    <Project Path="src\Ergosfare.Core\Ergosfare.Core.csproj" Type="Classic C#" />
+    <Project Path="src\Ergosfare.Events.Abstractions\Ergosfare.Events.Abstractions.csproj" Type="Classic C#" />
+    <Project Path="src\Ergosfare.Events.Extensions.MicrosoftDependencyInjection\Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj" Type="Classic C#" />
+    <Project Path="src\Ergosfare.Events\Ergosfare.Events.csproj" Type="Classic C#" />
+    <Project Path="src\Ergosfare.Queries.Abstractions\Ergosfare.Queries.Abstractions.csproj" Type="Classic C#" />
+    <Project Path="src\Ergosfare.Queries.Extensions.MicrosoftDependencyInjection\Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.csproj" Type="Classic C#" />
+    <Project Path="src\Ergosfare.Queries\Ergosfare.Queries.csproj" Type="Classic C#" />
+    <Project Path="src\Ergosfare\Ergosfare.csproj" Type="Classic C#" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test\Ergosfare.Command.Test\Ergosfare.Command.Test.csproj" Type="Classic C#" />
+    <Project Path="test\Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test\Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test.csproj" Type="Classic C#" />
+    <Project Path="test\Ergosfare.Core.Test\Ergosfare.Core.Test.csproj" Type="Classic C#" />
+    <Project Path="test\Ergosfare.Events.Test\Ergosfare.Events.Test.csproj" Type="Classic C#" />
+    <Project Path="test\Ergosfare.Queries.Test\Ergosfare.Queries.Test.csproj" Type="Classic C#" />
+    <Project Path="test\Ergosfare.Test\Ergosfare.Test.csproj" Type="Classic C#" />
+    <File Path="test\Directory.Packages.props" />
+    <File Path="coverlet.runsettings" />
+  </Folder>
+  <Folder Name="/workflows/" />
+</Solution>

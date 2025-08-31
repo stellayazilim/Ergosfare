@@ -36,7 +36,7 @@ public class MessageDependencyExtensionsTests
         var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
         var descriptor = resolver.Find(typeof(StubNonGenericDerivedMessage), registry);
         var factory = new MessageDependenciesFactory(serviceProvider);
-        var dependencies = factory.Create(typeof(StubNonGenericDerivedMessage), descriptor);
+        var dependencies = factory.Create(typeof(StubNonGenericDerivedMessage), descriptor, []);
     
     
         var res =  
@@ -86,7 +86,7 @@ public class MessageDependencyExtensionsTests
         var dependencyFactory = new MessageDependenciesFactory(serviceProvider);
         
         // act
-        var dependencies = dependencyFactory.Create(typeof(StubNonGenericDerivedMessage), descriptor!);
+        var dependencies = dependencyFactory.Create(typeof(StubNonGenericDerivedMessage), descriptor!, []);
         
         await using var _ = AmbientExecutionContext.CreateScope(StubExecutionContext.Create());
         await dependencies
@@ -132,7 +132,7 @@ public class MessageDependencyExtensionsTests
         messageDescriptor.AddDescriptors(postInterceptorDescriptor);
         
         var messageDependencies = new MessageDependencies(
-            typeof(StubNonGenericMessage), messageDescriptor, serviceProvider);
+            typeof(StubNonGenericMessage), messageDescriptor, serviceProvider, []);
 
         var res = messageDependencies
                 .RunAsyncPostInterceptors(
@@ -181,7 +181,7 @@ public class MessageDependencyExtensionsTests
         var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
         var descriptor = resolver.Find(typeof(StubNonGenericDerivedMessage), registry);
         var dependencyFactory = new MessageDependenciesFactory(serviceProvider);
-        var dependencies = dependencyFactory.Create(typeof(StubNonGenericMessage), descriptor!);
+        var dependencies = dependencyFactory.Create(typeof(StubNonGenericMessage), descriptor!, []);
         
 
         
@@ -228,7 +228,7 @@ public class MessageDependencyExtensionsTests
 
         
         var messageDependencies = new MessageDependencies(
-            typeof(StubNonGenericMessage), messageDescriptor, serviceProvider);
+            typeof(StubNonGenericMessage), messageDescriptor, serviceProvider, []);
 
         var res = messageDependencies
                 .RunAsyncPostInterceptors(

@@ -17,14 +17,17 @@ public sealed class HandlerDescriptorBuilder: IHandlerDescriptorBuilder
     {
         var interfaces = handlerType.GetInterfacesEqualTo(typeof(IHandler<,>));
 
+        var weight = handlerType.GetWeightFromAttribute();
         
         foreach (var @interface in interfaces)
         {
             var messageType = @interface.GetGenericArguments()[0];
             var resultType = @interface.GetGenericArguments()[1];
-
+            var groups = handlerType.GetGroupsFromAttribute();
             yield return new MainHandlerDescriptor
             {
+                Weight = weight,
+                Groups = groups,
                 MessageType = messageType,
                 ResultType = resultType,
                 HandlerType = handlerType,

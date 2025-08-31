@@ -11,7 +11,7 @@ public class QueryMediationSettingsTests
             {
                 { "Item1", "Item1 value"}
             },
-            Filters = { Tags = ["Tag1", "Tag2"]}
+            Filters = { Groups = ["Tag1", "Tag2"]}
         };
 
     [Fact]
@@ -21,7 +21,7 @@ public class QueryMediationSettingsTests
     {
         Assert.NotNull(_queryMediationSettings);
         Assert.Equal("Item1 value", _queryMediationSettings.Items["Item1"]);
-        Assert.Equal(["Tag1", "Tag2"], _queryMediationSettings.Filters.Tags);
+        Assert.Equal(["Tag1", "Tag2"], _queryMediationSettings.Filters.Groups);
     }
     
 }

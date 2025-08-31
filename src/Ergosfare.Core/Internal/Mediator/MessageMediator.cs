@@ -48,7 +48,7 @@ internal sealed class MessageMediator(
         }
 
         // Resolve the dependencies in lazy mode
-        var messageDependencies = _messageDependenciesFactory.Create(messageType, descriptor);
+        var messageDependencies = _messageDependenciesFactory.Create(messageType, descriptor, options.Groups);
 
         // Mediate the message using the specified strategy
         return  options.MessageMediationStrategy.Mediate(message, messageDependencies, AmbientExecutionContext.Current);

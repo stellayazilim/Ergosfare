@@ -20,7 +20,8 @@ public class CommandMediator(IMessageMediator messageMediator) : ICommandMediato
             MessageMediationStrategy = mediationStrategy,
             MessageResolveStrategy = findStrategy,
             CancellationToken = cancellationToken,
-            Items = commandMediationSettings.Items
+            Items = commandMediationSettings.Items,
+            Groups = commandMediationSettings.Filters.Groups
         };
 
         return messageMediator.Mediate(commandConstruct, options);
@@ -42,6 +43,7 @@ public class CommandMediator(IMessageMediator messageMediator) : ICommandMediato
             MessageMediationStrategy = mediationStrategy,
             CancellationToken = cancellationToken,
             Items = commandMediationSettings.Items,
+            Groups = commandMediationSettings.Filters.Groups
         };
 
         return messageMediator.Mediate(commandConstruct, options);

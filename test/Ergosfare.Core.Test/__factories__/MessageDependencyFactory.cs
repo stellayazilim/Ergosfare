@@ -34,7 +34,7 @@ internal class SingleMessageDependencyMediationFactory
         
         // 4. Create dependencies
         var dependencyFactory = new MessageDependenciesFactory(serviceProvider);
-        var dependencies = dependencyFactory.Create(typeof(TMessage), descriptor!);
+        var dependencies = dependencyFactory.Create(typeof(TMessage), descriptor!, []);
         
         return (dependencies,  descriptor, registry);
     }

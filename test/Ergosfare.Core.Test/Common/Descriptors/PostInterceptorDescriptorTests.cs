@@ -12,6 +12,8 @@ public class PostInterceptorDescriptorTests
         // arrange
         var descriptor = new PostInterceptorDescriptor()
         {
+            Weight = 1,
+            Groups = [],
             MessageType = typeof(StubNonGenericMessage),
             HandlerType = typeof(StubNonGenericPostInterceptor),
             ResultType = typeof(Task),

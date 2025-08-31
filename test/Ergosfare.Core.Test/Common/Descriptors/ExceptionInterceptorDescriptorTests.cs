@@ -14,6 +14,8 @@ public class ExceptionInterceptorDescriptorTests
         // arrange
         var descriptor = new ExceptionInterceptorDescriptor()
         {
+            Weight = 1,
+            Groups = [],
             MessageType = typeof(StubNonGenericMessage),
             HandlerType = typeof(StubNonGenericExceptionInterceptor),
             ResultType = typeof(object)

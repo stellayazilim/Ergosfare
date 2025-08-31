@@ -16,13 +16,15 @@ public class PreInterceptorDescriptionBuilder: IHandlerDescriptorBuilder
     public IEnumerable<IHandlerDescriptor> Build(Type handlerType)
     {
         var interfaces = handlerType.GetInterfacesEqualTo(typeof(IPreInterceptor<>));
-
+        var weight = handlerType.GetWeightFromAttribute();
         foreach (var @interface in interfaces)
         {
             var messageType = @interface.GetGenericArguments()[0];
-
+            var groups = handlerType.GetGroupsFromAttribute();
             yield return new PreInterceptorDescriptor
             {
+                Weight = weight,
+                Groups = groups,
                 MessageType = messageType.IsGenericType ? messageType.GetGenericTypeDefinition() : messageType,
                 HandlerType = handlerType
             };

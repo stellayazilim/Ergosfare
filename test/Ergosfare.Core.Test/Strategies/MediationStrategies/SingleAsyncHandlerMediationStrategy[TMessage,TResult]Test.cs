@@ -159,7 +159,7 @@ public class SingleAsyncHandlerMediationStrategyTests
         
         var descriptor = resolver.Find(typeof(TestExceptionMessage), registry);
         var dependencies = new MessageDependenciesFactory(serviceProvider)
-            .Create(typeof(TestExceptionMessage), descriptor!);
+            .Create(typeof(TestExceptionMessage), descriptor!,[]);
         
         // act
         await using( var  _ = AmbientExecutionContext
@@ -203,7 +203,7 @@ public class SingleAsyncHandlerMediationStrategyTests
         
         var descriptor = resolver.Find(typeof(TestExceptionMessage), registry);
         var dependencies = new MessageDependenciesFactory(serviceProvider)
-            .Create(typeof(TestExceptionMessage), descriptor!);
+            .Create(typeof(TestExceptionMessage), descriptor!, []);
         
      
         await using( var  _ = AmbientExecutionContext
@@ -273,7 +273,7 @@ public class SingleAsyncHandlerMediationStrategyTests
         var descriptor = resolver.Find(typeof(StubNonGenericMessage), messageRegistry);
 
         var dependencies = new MessageDependenciesFactory(serviceProvider).Create(
-            typeof(StubNonGenericMessage), descriptor!);
+            typeof(StubNonGenericMessage), descriptor!, []);
         
         var mediationStrategy = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage, string>();
 
@@ -318,7 +318,7 @@ public class SingleAsyncHandlerMediationStrategyTests
         var descriptor = resolver.Find(typeof(StubNonGenericMessage), messageRegistry);
 
         var dependencies = new MessageDependenciesFactory(serviceProvider).Create(
-            typeof(StubNonGenericMessage), descriptor!);
+            typeof(StubNonGenericMessage), descriptor!, []);
         
         var mediationStrategy = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage, string>();
 
@@ -363,7 +363,7 @@ public class SingleAsyncHandlerMediationStrategyTests
         var descriptor = resolver.Find(typeof(StubNonGenericMessage), messageRegistry);
 
         var dependencies = new MessageDependenciesFactory(serviceProvider).Create(
-            typeof(StubNonGenericMessage), descriptor!);
+            typeof(StubNonGenericMessage), descriptor!, []);
         
         var mediationStrategy = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage, string>();
 

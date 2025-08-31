@@ -14,6 +14,8 @@ internal class StubNonGenericLazyHandler
             Handler = new Lazy<StubNonGenericHandler>(),
             Descriptor = new MainHandlerDescriptor()
             {
+                Weight = 1,
+                Groups = [],
                 ResultType = typeof(Task),
                 MessageType = typeof(StubNonGenericMessage),
                 HandlerType = typeof(StubNonGenericHandler)

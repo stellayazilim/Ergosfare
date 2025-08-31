@@ -17,14 +17,16 @@ public class ExceptionInterceptorDescriptorBuilder: IHandlerDescriptorBuilder
     public IEnumerable<IHandlerDescriptor> Build(Type handlerType)
     {
         var interfaces = handlerType.GetInterfacesEqualTo(typeof( IExceptionInterceptor<,>));
-
+        var weight = handlerType.GetWeightFromAttribute();
         foreach (var @interface in interfaces)
         {
             var messageType = @interface.GetGenericArguments()[0];
             var resultType = @interface.GetGenericArguments()[1];
-
+            var groups = handlerType.GetGroupsFromAttribute();
             yield return new ExceptionInterceptorDescriptor
             {
+                Weight = weight,
+                Groups = groups,
                 MessageType = messageType.IsGenericType ? messageType.GetGenericTypeDefinition() : messageType,
                 ResultType = resultType,
                 HandlerType = handlerType

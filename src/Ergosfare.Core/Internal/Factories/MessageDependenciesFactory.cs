@@ -7,9 +7,9 @@ namespace Ergosfare.Core.Internal.Factories;
 
 public sealed class MessageDependenciesFactory(IServiceProvider serviceProvider): IMessageDependenciesFactory
 {
-    public IMessageDependencies Create(Type messageType, IMessageDescriptor descriptor)
+    public IMessageDependencies Create(Type messageType, IMessageDescriptor descriptor, IEnumerable<string> groups)
     {
-        return new MessageDependencies(messageType, descriptor, serviceProvider);
+        return new MessageDependencies(messageType, descriptor, serviceProvider, groups);
 
     }
 }

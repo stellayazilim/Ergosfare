@@ -23,7 +23,8 @@ public sealed class EventMediator(IMessageMediator messageMediator) : IPublisher
                 MessageResolveStrategy = resolveStrategy,
                 CancellationToken = cancellationToken,
                 RegisterPlainMessagesOnSpot = !eventMediationSettings.ThrowIfNoHandlerFound,
-                Items = eventMediationSettings.Items
+                Items = eventMediationSettings.Items,
+                Groups = eventMediationSettings.Filters.Groups
             });
     }
 
@@ -41,7 +42,8 @@ public sealed class EventMediator(IMessageMediator messageMediator) : IPublisher
                 MessageResolveStrategy = resolveStrategy,
                 CancellationToken = cancellationToken,
                 RegisterPlainMessagesOnSpot = !eventMediationSettings.ThrowIfNoHandlerFound,
-                Items = eventMediationSettings.Items
+                Items = eventMediationSettings.Items,
+                Groups = eventMediationSettings.Filters.Groups
             });
     }
 }

@@ -17,7 +17,7 @@ public sealed class EventMediationSettings
     public sealed class EventMediationFilters
     {
    
-        public IEnumerable<string> Tags { get; set; } = new List<string>();
+        public IEnumerable<string> Groups { get; set; } = new List<string>();
 
 
         public Func<Type, bool> HandlerPredicate { get; set; } = _ => true;
