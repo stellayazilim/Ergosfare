@@ -1,22 +1,21 @@
-# v0.0.9e Pipeline flow fixes
+# v0.0.9e - 2025-8-31 -  Pipeline flow fixes
 
-## v0.0.9e - 2025-8-31
 
-### Changed
+##Changed
 - **Handlers**: Updated handler order grouping logic.
 - **Interceptors**: Refined interceptor chaining based on group attributes.
 
-### Fixed
+## Fixed
 - Resolved issue with default group assignment for ungrouped handlers.
 
-### Internal
+## Internal
 - Refactored handler registration process to streamline group assignment.
 
-### Files Changed
+## Files Changed
 - `HandlerRegistry.cs`
 - `InterceptorChain.cs`
 
-### Code Coverage
+## Code Coverage
 - Added tests for newly implemented functionality.
 
 
