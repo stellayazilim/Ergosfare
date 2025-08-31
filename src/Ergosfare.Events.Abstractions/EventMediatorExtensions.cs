@@ -1,6 +1,6 @@
 ﻿using Ergosfare.Contracts;
 
-namespace Ergosfare.Events.Abstractions.Extensions;
+namespace Ergosfare.Events.Abstractions;
 
 public static class EventMediatorExtensions
 {

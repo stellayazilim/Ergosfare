@@ -1,3 +1,41 @@
+# v0.0.9e Pipeline flow fixes
+
+## v0.0.9e - 2025-8-31
+
+### Changed
+- **Handlers**: Updated handler order grouping logic.
+- **Interceptors**: Refined interceptor chaining based on group attributes.
+
+### Fixed
+- Resolved issue with default group assignment for ungrouped handlers.
+
+### Internal
+- Refactored handler registration process to streamline group assignment.
+
+### Files Changed
+- `HandlerRegistry.cs`
+- `InterceptorChain.cs`
+
+### Code Coverage
+- Added tests for newly implemented functionality.
+
+
+
+# v0.0.8e Pipeline flow control
+## Introduced
+- `public class GroupAttribute(params string[] groupNames)`
+- `public class WeightAttribute(uint weight)`
+
+## New Features: 
+- Handler Grouping with GroupAttribute
+- Handler Ordering with WeightAttribute
+
+## Changes:
+- IHandlerDescriptor has new two property `Weight` and `Groups`
+- All handler descriptor builders updated internally to support grouping and ordering
+- All internal mediator definitions updated to use grouping and ordering
+- MessageDependencies and MessageDependenciesFactory updated internally
+- TypeExtensions has new metohods `GetWeightFromAttribute()`, `GetGroupsFromAttribute()`
 # 🌟 v0.0.6e 🛠️ Event, Command & Query module, unit tests & code coverage
 
  

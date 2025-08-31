@@ -1,4 +1,5 @@
-﻿using Ergosfare.Core.Abstractions;
+﻿using Ergosfare.Contracts.Attributes;
+using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Handlers;
 using Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Ergosfare.Core.Internal.Extensions;
@@ -38,7 +39,8 @@ internal sealed class MessageDependencies : IMessageDependencies
     {
         _messageType = messageType;
         
-        _groups = groups;
+        var groupNames = groups.ToList();
+        _groups = groupNames.Count == 0 ? [ GroupAttribute.DefaultGroupName ]: groupNames;
 
         // resolve pre interceptors
         PreInterceptors = ResolveHandlers(
@@ -82,7 +84,7 @@ internal sealed class MessageDependencies : IMessageDependencies
         return descriptors
             .OrderByDescending(d => d.Weight)
             .ThenBy(d => d.HandlerType.FullName, StringComparer.Ordinal)
-            .Where(d => d.Groups.Count == 0 || d.Groups.Intersect(_groups).Any())
+            .Where(d => d.Groups.Intersect(_groups).Any())
             .Select<TDescriptor, ILazyHandler<THandler, TDescriptor>>(d => new LazyHandler<THandler, TDescriptor>
             {
                 Handler = new Lazy<THandler>(() => resolveFunc(GetHandlerType(d))),
