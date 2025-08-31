@@ -35,6 +35,8 @@
 - All internal mediator definitions updated to use grouping and ordering
 - MessageDependencies and MessageDependenciesFactory updated internally
 - TypeExtensions has new metohods `GetWeightFromAttribute()`, `GetGroupsFromAttribute()`
+
+
 # 🌟 v0.0.6e 🛠️ Event, Command & Query module, unit tests & code coverage
 
  
