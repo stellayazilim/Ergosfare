@@ -12,6 +12,8 @@ internal static class StubHandlerDescriptors
 {
     internal static IMainHandlerDescriptor GetDescriptor() => new MainHandlerDescriptor()
     {
+        Weight = 1,
+        Groups = [],
         MessageType = typeof(StubNonGenericMessage),
         HandlerType = typeof(StubNonGenericStringResultHandler),
         ResultType = typeof(string)

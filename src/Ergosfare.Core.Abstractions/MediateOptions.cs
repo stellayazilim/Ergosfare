@@ -6,6 +6,8 @@ namespace Ergosfare.Core.Abstractions;
 public sealed class MediateOptions<TMessage, TResult> 
     where TMessage: notnull
 {
+    
+    public required IEnumerable<string> Groups { get; init; }
     public required IMessageResolveStrategy MessageResolveStrategy { get; init; }
     
     public IDictionary<object, object?> Items { get; init; } = new Dictionary<object, object?>();

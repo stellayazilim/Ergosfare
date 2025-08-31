@@ -17,7 +17,7 @@ public class EventMediationSettingsTests
             },
             Filters =
             {
-                Tags = ["Tag1", "Tag2"],
+                Groups = ["Tag1", "Tag2"],
                 HandlerPredicate = _ => false
             }
         };
@@ -28,6 +28,6 @@ public class EventMediationSettingsTests
         settings.Filters.HandlerPredicate = Predicate;
         Assert.Equal(Predicate, settings.Filters.HandlerPredicate);
         Assert.Equal("value", settings.Items["Key"]);
-        Assert.Equal(["Tag1", "Tag2"], settings.Filters.Tags);
+        Assert.Equal(["Tag1", "Tag2"], settings.Filters.Groups);
     }
 }

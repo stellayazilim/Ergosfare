@@ -10,6 +10,8 @@ internal sealed class MessageDependencies : IMessageDependencies
 {
     private readonly Type _messageType;
     
+    private readonly IEnumerable<string> _groups;
+    
     public ILazyHandlerCollection<IPreInterceptor, IPreInterceptorDescriptor> PreInterceptors { get; }
     public ILazyHandlerCollection<IPreInterceptor, IPreInterceptorDescriptor> IndirectPreInterceptors { get; }
     
@@ -31,10 +33,12 @@ internal sealed class MessageDependencies : IMessageDependencies
     #pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     public MessageDependencies(Type messageType,
         IMessageDescriptor descriptor,
-        IServiceProvider serviceProvider)
+        IServiceProvider serviceProvider,
+        IEnumerable<string> groups)
     {
         _messageType = messageType;
         
+        _groups = groups;
 
         // resolve pre interceptors
         PreInterceptors = ResolveHandlers(
@@ -76,6 +80,8 @@ internal sealed class MessageDependencies : IMessageDependencies
             Func<Type, THandler> resolveFunc ) where TDescriptor : IHandlerDescriptor
     {
         return descriptors
+            .OrderByDescending(d => d.Weight)
+            .Where(d => d.Groups.Count == 0 || d.Groups.Intersect(_groups).Any())
             .Select<TDescriptor, ILazyHandler<THandler, TDescriptor>>(d => new LazyHandler<THandler, TDescriptor>
             {
                 Handler = new Lazy<THandler>(() => resolveFunc(GetHandlerType(d))),

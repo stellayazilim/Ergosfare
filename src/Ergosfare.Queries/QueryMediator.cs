@@ -20,7 +20,8 @@ public class QueryMediator(IMessageMediator messageMediator): IQueryMediator
                 MessageMediationStrategy = mediationStrategy,
                 MessageResolveStrategy = resolveStrategy,
                 CancellationToken = cancellationToken,
-                Items = queryMediationSettings.Items
+                Items = queryMediationSettings.Items,
+                Groups = queryMediationSettings.Filters.Groups
             });
     }
 
@@ -36,7 +37,8 @@ public class QueryMediator(IMessageMediator messageMediator): IQueryMediator
                 MessageMediationStrategy = mediationStrategy,
                 MessageResolveStrategy = resolveStrategy,
                 CancellationToken = cancellationToken,
-                Items = queryMediationSettings.Items
+                Items = queryMediationSettings.Items,
+                Groups = queryMediationSettings.Filters.Groups
             });
 
     }

@@ -68,7 +68,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests
        messageDescriptor.AddDescriptors(errorInterceptorDescriptors3);
        
        var messageDependencies = new MessageDependencies(
-           typeof(StubNonGenericDerivedMessage), messageDescriptor, serviceProvider);
+           typeof(StubNonGenericDerivedMessage), messageDescriptor, serviceProvider, []);
         
        // create execution context
        AmbientExecutionContext
@@ -106,7 +106,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests
       
       
         var mesageDependencies = new MessageDependencies(
-            typeof(StubNonGenericMessage), messageDescriptor, serviceProvider);
+            typeof(StubNonGenericMessage), messageDescriptor, serviceProvider, []);
         
         // create execution context
         AmbientExecutionContext

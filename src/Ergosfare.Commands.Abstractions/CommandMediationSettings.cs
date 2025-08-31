@@ -45,6 +45,6 @@ public sealed class CommandMediationSettings
         ///     processing.
         ///     If the collection is empty, all registered handlers will be considered.
         /// </remarks>
-        public IEnumerable<string> Tags { get; set; } = new List<string>();
+        public IEnumerable<string> Groups { get; set; } = new List<string>();
     }
 }

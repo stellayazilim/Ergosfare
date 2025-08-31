@@ -34,7 +34,8 @@ public class DependencyInjectionTests
         {
             MessageResolveStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(),
             MessageMediationStrategy = new SingleAsyncHandlerMediationStrategy<Message>(),
-            CancellationToken = default
+            CancellationToken = default,
+            Groups = []
         };
         
         var result = mediator.Mediate(new  Message(), options);

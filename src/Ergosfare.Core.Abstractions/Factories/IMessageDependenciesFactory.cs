@@ -6,5 +6,5 @@ namespace Ergosfare.Core.Abstractions.Factories;
 
 public interface IMessageDependenciesFactory
 {
-    public IMessageDependencies Create(Type messageType, IMessageDescriptor descriptor);
+    public IMessageDependencies Create(Type messageType, IMessageDescriptor descriptor, IEnumerable<string> groups);
 }

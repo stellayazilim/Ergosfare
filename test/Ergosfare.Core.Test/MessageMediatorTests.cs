@@ -95,7 +95,8 @@ public class MessageMediatorTests
             Items = new Dictionary<object, object?>(),
             MessageResolveStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy()!,
             MessageMediationStrategy = 
-                new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>()
+                new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>(),
+            Groups = []
         };
 
         // Act
@@ -135,7 +136,8 @@ public class MessageMediatorTests
             Items = new Dictionary<object, object?>(),
             MessageResolveStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy()!,
             MessageMediationStrategy = 
-                new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>()
+                new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>(),
+            Groups = []
         };
 
         // Act & assert
@@ -163,6 +165,7 @@ public class MessageMediatorTests
             MessageMediationStrategy = mediationstrategy.Object,
             RegisterPlainMessagesOnSpot = true,
             CancellationToken = CancellationToken.None,
+            Groups = []
         };
 
         var mediator = new MessageMediator(registry.Object, new MessageDependenciesFactory(null));

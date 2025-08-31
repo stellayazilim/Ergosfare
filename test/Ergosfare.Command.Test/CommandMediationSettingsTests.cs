@@ -15,7 +15,7 @@ public class CommandMediationSettingsTests
         
         Filters =
         {
-            Tags =
+            Groups = 
             [
                 "Tag1", "Tag2"
             ]
@@ -30,6 +30,6 @@ public class CommandMediationSettingsTests
     {
         
         Assert.Equal("Item1 value", _commandMediationSettings.Items["Item1"]);
-        Assert.Equal(["Tag1", "Tag2"], _commandMediationSettings.Filters.Tags);
+        Assert.Equal(["Tag1", "Tag2"], _commandMediationSettings.Filters.Groups);
     }
 }

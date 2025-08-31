@@ -36,25 +36,29 @@ jobs:
       - run: dotnet build ./Stella.Ergosfare.sln -c Release
 
       # 5️⃣ Determine NuGet version for pre-release
-      - name: Set NuGet version
-        id: set_version
-        run: |
-          if [ -z "${{ github.event.inputs.tag }}" ]; then
-            echo "Error: tag input is required"
-            exit 1
-          fi
-
+    - name: Set NuGet version
+      id: set_version
+      run: |
+        # Determine tag
+        if [ -n "${{ github.event.inputs.tag }}" ]; then
           TAG_NAME="${{ github.event.inputs.tag }}"
-          BASE_VERSION=${TAG_NAME#v}
-
-          if [[ "$BASE_VERSION" == *e ]]; then
-            VERSION="${BASE_VERSION%e}-e"
-          else
-            VERSION="$BASE_VERSION"
-          fi
-
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "NuGet version: $VERSION"
+        else
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+        fi
+        
+        # Strip leading 'v'
+        BASE_VERSION=${TAG_NAME#v}
+        
+        # Convert *.*.*e to *.*.*-e
+        if [[ "$BASE_VERSION" == *e ]]; then
+          VERSION="${BASE_VERSION%e}-e"
+        else
+          VERSION="$BASE_VERSION"
+        fi
+        
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        echo "Tag: $TAG_NAME"
+        echo "NuGet version: $VERSION"
 
       # 6️⃣ Pack only source projects
       - name: Pack source projects

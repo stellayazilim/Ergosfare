@@ -16,14 +16,16 @@ public sealed class PostHandlerDescriptorBuilder: IHandlerDescriptorBuilder
     public IEnumerable<IHandlerDescriptor> Build(Type handlerType)
     {
         var interfaces = handlerType.GetInterfacesEqualTo(typeof(IPostInterceptor<,>));
-
+        var weight = handlerType.GetWeightFromAttribute();
         foreach (var @interface in interfaces)
         {
             var messageType = @interface.GetGenericArguments()[0];
             var resultType = @interface.GetGenericArguments()[1];
-
+            var groups = handlerType.GetGroupsFromAttribute();
             yield return new PostInterceptorDescriptor
             {
+                Weight = weight,
+                Groups = groups,
                 MessageType = messageType.IsGenericType   ? messageType.GetGenericTypeDefinition() : messageType,
                 ResultType = resultType,
                 HandlerType = handlerType
