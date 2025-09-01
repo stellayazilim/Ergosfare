@@ -5,7 +5,11 @@ on:
       - '*'
     paths-ignore:
       - '.badges/chore_workflows/coverage.svg'
-
+  pull_request: 
+    branches:
+      - '*'
+    paths-ignore:
+      - '.badges/chore_workflows/coverage.svg'
 jobs:
   Coverage:
     runs-on: ubuntu-latest
