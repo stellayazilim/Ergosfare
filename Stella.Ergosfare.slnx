@@ -35,5 +35,10 @@
     <File Path="test\Directory.Packages.props" />
     <File Path="coverlet.runsettings" />
   </Folder>
-  <Folder Name="/workflows/" />
+  <Folder Name="/workflows/">
+    <File Path=".github\workflows\coverage_tests.yml" />
+    <File Path=".github\workflows\github_release.yml" />
+    <File Path=".github\workflows\nuget_release.yml" />
+    <File Path=".github\workflows\unit_tests.yml" />
+  </Folder>
 </Solution>
