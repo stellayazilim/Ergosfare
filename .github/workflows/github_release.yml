@@ -1,4 +1,4 @@
-name: GitHub Packages Release Stella.Ergosfare
+name: GitHubPackagesRelease
 
 on:
   push:

@@ -3,7 +3,10 @@
 
 ![Ergosfare Logo](./7101c7df-6cac-4b25-994a-60e2adbdc546.png)
 
-[![NuGet](https://img.shields.io/nuget/v/Stella.Ergosfare.svg)](https://www.nuget.org/packages/Stella.Ergosfare) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![Coverage](./.badges/main/coverage.svg)](./coverage/coverage.cobertura.xml)
+[![NuGet](https://img.shields.io/nuget/v/Stella.Ergosfare.svg)](https://www.nuget.org/packages/Stella.Ergosfare)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/stellayazilim/ergosfare/coverage_tests.yml?label=tests)
+[![Coverage](./.badges/main/coverage.svg)](./coverage/coverage.cobertura.xml)
 
 ---
 

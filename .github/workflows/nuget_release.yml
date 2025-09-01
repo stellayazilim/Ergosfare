@@ -1,4 +1,4 @@
-name: Early Release Stella.Ergosfare Packages
+name: NugetPackagesRelease
 
 on:
   push:
