@@ -7,7 +7,10 @@ Stella.Ergosfare.sln.DotSettings.user
 run_tests.bat
 .idea
 .vs
-**/TestResults/
+*/TestResults/
 TestResults/
 .coverage/
-**/.coverage/
+*/.coverage/
+
+*/node_modules/
+.coverage/

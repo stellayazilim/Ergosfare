@@ -1,0 +1,3 @@
+[submodule "changelog"]
+	path = changelog
+	url = git@github.com:stellayazilim/ergosfare.changelog.git
