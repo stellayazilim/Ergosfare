@@ -3,6 +3,11 @@
     <Project Path="changelog\Ergosfare.Changelog.njsproj" />
     <Project Path="docs\Ergosfare.Docs.njsproj" />
   </Folder>
+  <Folder Name="/RepositoryItems/">
+    <File Path="readme.md" />
+    <File Path="CHANGELOG.md" />
+    <File Path="LICENSE" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src\Ergosfare.Commands.Abstractions\Ergosfare.Commands.Abstractions.csproj" Type="Classic C#" />
     <Project Path="src\Ergosfare.Commands.Extensions.MicrosoftDependencyInjection\Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj" Type="Classic C#" />

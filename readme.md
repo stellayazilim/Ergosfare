@@ -1,78 +1,96 @@
 
 # Ergosfare
-![7101c7df-6cac-4b25-994a-60e2adbdc546.png](7101c7df-6cac-4b25-994a-60e2adbdc546.png)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![coveragebadge](./.badges/main/coverage.svg)](./coverage/coverage.cobertura.xml)
+![Ergosfare Logo](./7101c7df-6cac-4b25-994a-60e2adbdc546.png)
 
-## Description
+[![NuGet](https://img.shields.io/nuget/v/Stella.Ergosfare.svg)](https://www.nuget.org/packages/Stella.Ergosfare) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![Coverage](./.badges/main/coverage.svg)](./coverage/coverage.cobertura.xml)
 
-Ergosfare is a lightweight, flexible, and high-performance mediation library for implementing CQRS and messaging patterns in the .NET ecosystem.
+---
 
-It was created as an open-source alternative to MediatR's commercial licensing and avoids runtime reflection by leveraging compile-time type safety.
-Additionally, it offers built-in support for covariance and contravariance, enabling more flexible type relationships.
+## 📖 Documentation & 📜 Changelog
+
+- [Documentation](https://stellayazilim.github.io/Ergosfare.Docs)  
+- [Changelog](https://stellayazilim.github.io/ergosfare.changelog)
+
+---
+
+## Overview
+
+**Ergosfare** is a lightweight, reflection-free, high-performance mediation library for implementing **CQRS** and messaging patterns in the .NET ecosystem.  
+
+Unlike other mediator libraries, Ergosfare is:
+
+- ⚡ **Fast & AOT-friendly** — No runtime reflection, compile-time registration.  
+- ✅ **Fully open-source** — MIT licensed, no restrictions.  
+- 🧩 **Modular** — Commands, Queries, Events can be used independently.  
+- 🔄 **Flexible** — Supports covariance & contravariance for more natural type matching.  
+- 🛠 **Extensible** — Interceptor pipeline for cross-cutting concerns.  
+- 🔗 **DI-friendly** — Works out of the box with `Microsoft.Extensions.DependencyInjection`.  
 
 ---
 
 ## Features
 
-* ✅ Fully open-source — no licensing restrictions.
-* ⚡ Reflection-free design — compile-time registration for AOT compatibility.
-* 🔄 Covariance & Contravariance support — enables more flexible handler assignments.
-* 🧩 Modular architecture — Command, Query, Event, Stream modules can be used independently.
-* 🛠 Interceptor pipeline — pre/post/exception interceptors (sync & async).
-* 🔗 Fully compatible with Microsoft.Extensions.DependencyInjection — easily integrates with your existing DI container.
-* 🔗 No external dependencies required — you can choose any DI infrastructure you prefer.
+- Command, Query, Event, and Stream modules with unified execution model.  
+- Group-based handler execution ordering (default group for undecorated handlers).  
+- Cancellation propagation via **execution context** (no need to pass `CancellationToken` manually).  
+- Interceptors:
+  - Pre / Post / Exception stages  
+  - Sync & Async variants  
+- No external dependencies — works with your DI container of choice.  
 
 ---
 
-## Modular Structure
+## Modules
 
-Ergosfare is organized into modular components, such as:
+Ergosfare is structured into independent modules:
 
-* **Core**
-* **Core.Abstractions**
-* **Context**
-* **Contracts**
-* **Core.Extensions.DependencyInjection**
-* **Commands**
-* **Commands.Abstractions**
-* **Queries**
-* **Queries.Abstractions**
-* **Events**
-* **Events.Abstractions**
-* **Streams**
-* **Streams.Abstractions**
-* … and other related modules
+- **Core**  
+- **Core.Abstractions**  
+- **Context** (execution context: cancellation, metadata, ambient data)  
+- **Contracts** (common message contracts)  
+- **Commands**, **Commands.Abstractions**  
+- **Queries**, **Queries.Abstractions**  
+- **Events**, **Events.Abstractions**  
+- **Streams**, **Streams.Abstractions**  
 
-**Note:**
-
-* `Abstractions` projects contain contracts and interfaces, designed for easy referencing across different projects.
-* `Context` handles execution context (e.g. cancellation, metadata, ambient data).
-* `Contracts` provides common message contracts shared between modules.
+👉 *Use only what you need — modules are designed to be composable and independent.*  
 
 ---
 
-## Example
+## 💿 Installation
+
+Ergosfare packages are available on **NuGet.org**.  
+
+```bash
+dotnet add package Stella.Ergosfare
+````
+
+> Replace with module-specific package if needed (`Stella.Ergosfare.Commands`, `Stella.Ergosfare.Queries`, etc.)
+> **Tip:** If using GitHub Packages, make sure your `nuget.config` includes the GitHub feed.
+
+---
+
+## Quick Start
 
 ```csharp
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Ergosfare.Commands.Abstractions;
 using Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
+using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
-public record CreateProductCommand(string Name) : ICommand<Guid>;
+public record CreateProduct(string Name) : ICommand<Guid>;
 
-public class CreateProductHandler : ICommandHandler<CreateProductCommand, Guid>
+public class CreateProductHandler : ICommandHandler<CreateProduct, Guid>
 {
-    public Task<Guid> HandleAsync(CreateProductCommand command, CancellationToken cancellationToken = default)
+    public Task<Guid> HandleAsync(CreateProduct command, IExecutionContext context)
     {
         var id = Guid.NewGuid();
         return Task.FromResult(id);
     }
 }
 
-// Register services
 var services = new ServiceCollection()
     .AddErgosfare(cfg =>
     {
@@ -81,28 +99,21 @@ var services = new ServiceCollection()
     })
     .BuildServiceProvider();
 
-// Resolve mediator and send command
 var mediator = services.GetRequiredService<ICommandMediator>();
-var productId = await mediator.SendAsync(new CreateProductCommand("Laptop"));
-Console.WriteLine($"New product ID: {productId}");
+var productId = await mediator.SendAsync(new CreateProduct("Laptop"));
+Console.WriteLine($"Created product: {productId}");
 ```
 
 ---
 
 ## Interceptors
 
-Ergosfare includes an extensible interceptor pipeline for cross-cutting concerns:
-
-* `IPreInterceptor<TMessage, TResult>`
-* `IPostInterceptor<TMessage, TResult>` / `IAsyncPostInterceptor<TMessage, TResult>`
-* `IExceptionInterceptor<TMessage, TResult>` / `IAsyncExceptionInterceptor<TMessage>`
-
-Example:
+Cross-cutting concerns are handled via interceptors:
 
 ```csharp
-public class LoggingInterceptor : IAsyncPostInterceptor<ICommand, object>
+public class LoggingInterceptor : IAsyncPostInterceptor<ICommand>
 {
-    public async Task HandleAsync(ICommand message, object? result, IExecutionContext context, CancellationToken ct)
+    public async Task HandleAsync(ICommand message, object? result, IExecutionContext context)
     {
         Console.WriteLine($"Executed {message.GetType().Name} with result {result}");
         await Task.CompletedTask;
@@ -110,40 +121,50 @@ public class LoggingInterceptor : IAsyncPostInterceptor<ICommand, object>
 }
 ```
 
+Available interceptor types:
+
+* `IPreInterceptor<TMessage, TResult>`
+* `IPostInterceptor<TMessage, TResult>` / `IAsyncPostInterceptor<TMessage, TResult>`
+* `IExceptionInterceptor<TMessage, TResult>` / `IAsyncExceptionInterceptor<TMessage>`
+
 ---
 
 ## Roadmap
 
-* Built-in specialized interceptors (Validation, UnitOfWork etc)
-* Built-in error handling policies
-* Query module — advanced query patterns
-* Event module — publishing / subscriptions
-* Stream module — event sourcing and reactive stream support
-* Execution ordering
-* Execution filtering
-* Result adapters (railway-oriented results) — enables the FluentResults pattern and allows capturing exceptions without throwing.
+* Built-in interceptors: Validation, Unit of Work, etc.
+* Built-in error handling policies.
+* Built-in caching mechanism for query module.
+* Railway style Result adapters (FluentResults-style).
+* Execution-Snapshotting:
+
+    * Resume execution from the failed handler instead of restarting the pipeline.
+    * Pause/Continue execution programmatically via snapshot support.
+
 ---
+
 ## Project Status
 
-Ergosfare's core functionality is nearly complete. The main library provides a robust and reflection-free mediator with support for commands, queries, events, and streams.
+The core functionality is fully working with support for commands, queries, and events.
+Handler contracts are **stable** and unlikely to change further.
+Interceptor contracts (especially **post- and exception-interceptors**) are still being refined, so **minor API changes** may occur in future releases.
 
-### Currently, the focus is on:
+---
 
-- Writing unit tests
+## Current Focus
 
-- Improving code coverage
+* Refining interceptor contracts.
+* Strengthening the Execution Context.
 
-- Refining interfaces according to the CQRS design
+---
 
-Most of the features listed in the roadmap are on the horizon and will be implemented in the near future, including additional validation, advanced query support, and enhanced event/stream helpers.
 ## Contributing
 
-Ergosfare is an open-source project.
-We welcome your contributions, suggestions, and bug reports.
+Contributions, discussions, and feedback are welcome!
+Feel free to open issues, submit PRs, or suggest improvements.
 
 ---
 
 ## License
 
-This project is licensed under the MIT License.
-See the LICENSE file for details.
+Licensed under the [MIT License](LICENSE).
+
