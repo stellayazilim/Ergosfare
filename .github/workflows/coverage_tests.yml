@@ -3,6 +3,8 @@ on:
   push:
     branches:
       - 'main'
+    paths-ignore:
+      - '.badges/chore_workflows/coverage.svg'
   pull_request: 
     branches:
       - '*'
@@ -58,3 +60,6 @@ jobs:
         uses: action-badges/cobertura-coverage-xml-badges@0.3.1
         with:
           coverage-file-name: ./.coverage/Cobertura.xml
+          file-name: coverage.svg
+          badge-branch: '${{ github.ref_name }}'
+          github-token: '${{ secrets.GITHUB_TOKEN }}'
