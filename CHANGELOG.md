@@ -1,38 +1,63 @@
-# v0.0.10e - 2025-09-01
+Perfect! Here’s a **changelog entry** in your style, minimal emoji, ready for `ergosfare.changelog`:
 
-## Changed
+---
+
+## v0.0.11e - Refactor - 2025-09-01
+
+### Changed
+
+* `ActualTypeOrFirstAssignableTypeMessageResolveStrategy`
+
+    * Now constructor-injected with `IMessageRegistry`.
+    * Simplified `Find` method signature (`Find(Type)` instead of `Find(Type, IMessageRegistry)`).
+* `MessageMediator` updated to use the simplified strategy method.
+* DI registration added for `ActualTypeOrFirstAssignableTypeMessageResolveStrategy`.
+* Unit tests updated to reflect new DI-based message resolution.
+
+### Notes
+
+* Only the **message resolution part** of mediation is now resolved through DI.
+* Other mediation internals (e.g., message dependencies creation, execution context) are still manually constructed and may be migrated to DI in future updates.
+
+---
+
+
+
+## v0.0.10e - 2025-09-01
+
+### Changed
 - **Handlers & Interceptors**: Removed `CancellationToken` parameters from all contracts.  
   Execution context’s token is now used consistently instead.
 
-## Breaking Changes
+### Breaking Changes
 - Any custom handlers or interceptors that previously accepted a `CancellationToken`  
   must be updated to rely on the execution context for cancellation.
 
-## Internal
+### Internal
 - Refactored interface definitions to eliminate redundant token passing.
 - Updated unit tests to use context-based cancellation.
 - Coverage badge regenerated to reflect new code changes.
 
 
 
-# v0.0.9e - 2025-8-31 -  Pipeline flow fixes
+## v0.0.9e - 2025-8-31 -  Pipeline flow fixes
 
 
-##Changed
+### Changed
 - **Handlers**: Updated handler order grouping logic.
 - **Interceptors**: Refined interceptor chaining based on group attributes.
 
-## Fixed
+### Fixed
 - Resolved issue with default group assignment for ungrouped handlers.
 
-## Internal
+### Internal
 - Refactored handler registration process to streamline group assignment.
 
-## Files Changed
+### Files Changed
 - `HandlerRegistry.cs`
 - `InterceptorChain.cs`
 
-## Code Coverage
+### Code Coverage
 - Added tests for newly implemented functionality.
 
 
