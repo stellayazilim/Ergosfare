@@ -1,6 +1,32 @@
-Perfect! Here’s a **changelog entry** in your style, minimal emoji, ready for `ergosfare.changelog`:
+
+## v0.0.12e - EventHub - 2025-09-03
+
+## **New Features**
+
+* **Centralized EventHub**: A thread-safe, global hub for Pre, Post, Handler, and Exception stage events.
+* **Weak and Strong Subscriptions**: Subscribers can be registered as strong or weak references.
+
+    * `IsAlive` property allows automatic cleanup of dead weak references.
+    * Subscriptions implement `IDisposable`.
+* **DI Integration**: EventHub now resolves via DI as a singleton using `EventHubAccessor`.
+* **Thread-safe Publishing**: Publishing events is safe across multiple threads, with automatic cleanup of dead weak subscriptions.
+* **Extensible Plugin Support**: Modules can subscribe to events without modifying core components.
+
+**Keynote**
+
+- This EventHub forms the foundation for future plugins and modules that do not need to be directly coupled with main modules.
+
+- It enables developers to write their own n-party plugins, extending the system safely and independently.
 
 ---
+
+**Side Note:**
+
+* This EventHub system is **separate from the message mediation events** (pre/post/interceptor) used in command, query, and event pipelines.
+* It provides a **general-purpose, centralized event mechanism** for modules and plugins to subscribe to runtime events without coupling to the core pipeline.
+
+---
+
 
 ## v0.0.11e - Refactor - 2025-09-01
 
