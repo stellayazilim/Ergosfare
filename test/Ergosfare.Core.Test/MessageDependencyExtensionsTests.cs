@@ -33,8 +33,8 @@ public class MessageDependencyExtensionsTests
         registry.Register(typeof(StubNonGenericPreInterceptor));
         registry.Register(typeof(StubNonGenericDerivedPreInterceptor));
 
-        var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
-        var descriptor = resolver.Find(typeof(StubNonGenericDerivedMessage), registry);
+        var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry);
+        var descriptor = resolver.Find(typeof(StubNonGenericDerivedMessage));
         var factory = new MessageDependenciesFactory(serviceProvider);
         var dependencies = factory.Create(typeof(StubNonGenericDerivedMessage), descriptor, []);
     
@@ -79,9 +79,9 @@ public class MessageDependencyExtensionsTests
         registry.Register(typeof(StubNonGenericDerivedPostInterceptor2));
 
 
-        var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
+        var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry);
         
-        var descriptor = resolver.Find(typeof(StubNonGenericDerivedMessage), registry);
+        var descriptor = resolver.Find(typeof(StubNonGenericDerivedMessage));
 
         var dependencyFactory = new MessageDependenciesFactory(serviceProvider);
         
@@ -178,8 +178,8 @@ public class MessageDependencyExtensionsTests
         registry.Register(typeof(StubNonGenericDerivedExceptionInterceptor2));
         
 
-        var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
-        var descriptor = resolver.Find(typeof(StubNonGenericDerivedMessage), registry);
+        var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry);
+        var descriptor = resolver.Find(typeof(StubNonGenericDerivedMessage));
         var dependencyFactory = new MessageDependenciesFactory(serviceProvider);
         var dependencies = dependencyFactory.Create(typeof(StubNonGenericMessage), descriptor!, []);
         

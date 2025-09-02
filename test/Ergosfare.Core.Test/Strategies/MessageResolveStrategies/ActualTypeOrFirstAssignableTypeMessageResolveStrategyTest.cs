@@ -16,10 +16,10 @@ public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
         
         registry.Register(typeof(StubNonGenericHandler));
         registry.Register(typeof(StubNonGenericHandler2));
-        var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
+        var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry);
         
         // act
-        var descriptor = resolver.Find(typeof(StubNonGenericMessage), registry);
+        var descriptor = resolver.Find(typeof(StubNonGenericMessage));
         
         // assert
         Assert.NotNull(descriptor);
@@ -40,10 +40,10 @@ public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
             new HandlerDescriptorBuilderFactory());
     
         registry.Register(typeof(StubNonGenericHandler)); // handles BaseMessage
-        var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
+        var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry);
     
         // act
-        var descriptor = resolver.Find(typeof(StubNonGenericDerivedMessage), registry);
+        var descriptor = resolver.Find(typeof(StubNonGenericDerivedMessage));
     
         // assert
         Assert.NotNull(descriptor);
@@ -63,10 +63,10 @@ public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
         
         registry.Register(typeof(StubGenericHandler<string>)); // handles BaseMessage
         
-        var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
+        var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry);
         
         // act
-        var descriptor = resolver.Find(typeof(StubGenericMessage<string>), registry);
+        var descriptor = resolver.Find(typeof(StubGenericMessage<string>));
         
         //assert
         Assert.NotNull(descriptor);

@@ -29,8 +29,8 @@ internal class SingleMessageDependencyMediationFactory
         }
         
         // 3. Resolve descriptor
-        var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
-        var descriptor = resolver.Find(typeof(TMessage), registry);
+        var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry);
+        var descriptor = resolver.Find(typeof(TMessage));
         
         // 4. Create dependencies
         var dependencyFactory = new MessageDependenciesFactory(serviceProvider);

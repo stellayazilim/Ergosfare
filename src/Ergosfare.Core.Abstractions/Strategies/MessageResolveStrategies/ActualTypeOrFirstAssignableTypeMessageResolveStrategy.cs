@@ -15,7 +15,7 @@ namespace Ergosfare.Core.Abstractions.Strategies;
 ///     It allows messages to be handled by handlers registered for their exact type or for any base type or interface
 ///     that they implement. When multiple assignable types are found, the first one is returned.
 /// </remarks>
-public sealed class ActualTypeOrFirstAssignableTypeMessageResolveStrategy : IMessageResolveStrategy
+public sealed class ActualTypeOrFirstAssignableTypeMessageResolveStrategy(IMessageRegistry messageRegistry) : IMessageResolveStrategy
 {
     /// <summary>
     ///     Finds a message descriptor for the specified message type from the message registry.
@@ -29,7 +29,7 @@ public sealed class ActualTypeOrFirstAssignableTypeMessageResolveStrategy : IMes
     /// <remarks>
     ///     For generic types, this method uses the generic type definition for matching.
     /// </remarks>
-    public IMessageDescriptor? Find(Type messageType, IMessageRegistry messageRegistry)
+    public IMessageDescriptor? Find(Type messageType)
     {
         if (messageType.IsGenericType)
         {

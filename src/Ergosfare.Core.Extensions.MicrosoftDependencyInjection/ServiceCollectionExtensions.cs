@@ -1,5 +1,4 @@
-﻿using Ergosfare.Core.Abstractions.Registry;
-using Ergosfare.Core.Internal.Builders;
+﻿
 using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Registry;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,6 +18,7 @@ public static class ServiceCollectionExtensions
 
         // Register it as a singleton in DI
         services.TryAddSingleton(messageRegistry);
+        
 
         // Create module registry with the shared message registry
         var ergosfareBuilder = new ModuleRegistry(services, messageRegistry);

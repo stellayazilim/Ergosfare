@@ -1,4 +1,5 @@
 ﻿using Ergosfare.Core.Abstractions;
+using Ergosfare.Core.Abstractions.Strategies;
 using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Ergosfare.Queries.Abstractions;
 using Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
@@ -12,13 +13,15 @@ public class QueryMediatorTests
     [Fact]
     public async Task ShouldResolveTQueryTResult()
     {
-        var serviceCollection = new ServiceCollection()
+        var services = new ServiceCollection()
             .AddErgosfare(x => x.AddQueryModule(q => q.Register<StubNonGenericStringResultQueryHandler>()
             )).BuildServiceProvider();
         
         
-        var messageMediator = serviceCollection.GetService<IMessageMediator>();
-        var mediator = new QueryMediator(messageMediator!);
+        var messageMediator = services.GetService<IMessageMediator>();
+        var mediator = new QueryMediator(
+            services.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
+            messageMediator!);
 
         var result = mediator.QueryAsync(new StubNonGenericStringResultQuery(), null);
         
@@ -38,7 +41,9 @@ public class QueryMediatorTests
         
         
         var messageMediator = serviceCollection.GetService<IMessageMediator>();
-        var mediator = new QueryMediator(messageMediator!);
+        var mediator = new QueryMediator(
+            serviceCollection.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
+            messageMediator!);
         var expected = new []  {"Foo", "Bar", "Baz"};
         var result = new List<string>();
         // act

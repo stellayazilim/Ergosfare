@@ -10,6 +10,5 @@ public sealed class MessageDependenciesFactory(IServiceProvider serviceProvider)
     public IMessageDependencies Create(Type messageType, IMessageDescriptor descriptor, IEnumerable<string> groups)
     {
         return new MessageDependencies(messageType, descriptor, serviceProvider, groups);
-
     }
 }
