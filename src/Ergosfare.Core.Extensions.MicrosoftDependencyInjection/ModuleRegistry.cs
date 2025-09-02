@@ -3,6 +3,7 @@ using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Factories;
 using Ergosfare.Core.Abstractions.Registry;
 using Ergosfare.Core.Abstractions.Registry.Descriptors;
+using Ergosfare.Core.Abstractions.Strategies;
 using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Mediator;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,6 +37,7 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
         services.TryAddTransient<IMessageMediator, MessageMediator>();
         services.TryAddSingleton(messageRegistry);
         services.TryAddTransient(_ => AmbientExecutionContext.Current);
+        services.TryAddTransient<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>();
 
         foreach (var descriptor in messageRegistry)
         {

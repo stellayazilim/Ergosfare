@@ -27,7 +27,7 @@ internal sealed class MessageMediator(
         // Get the actual type of the message
         var messageType = message.GetType();
         
-        var descriptor = options.MessageResolveStrategy.Find(messageType, _messageRegistry);
+        var descriptor = options.MessageResolveStrategy.Find(messageType);
         
         
         if (descriptor is null)
@@ -39,7 +39,7 @@ internal sealed class MessageMediator(
 
             _messageRegistry.Register(messageType);
 
-            descriptor = options.MessageResolveStrategy.Find(messageType, _messageRegistry);
+            descriptor = options.MessageResolveStrategy.Find(messageType);
         }
 
         if (descriptor is null)

@@ -93,7 +93,7 @@ public class MessageMediatorTests
         {
             CancellationToken = CancellationToken.None,
             Items = new Dictionary<object, object?>(),
-            MessageResolveStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy()!,
+            MessageResolveStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry)!,
             MessageMediationStrategy = 
                 new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>(),
             Groups = []
@@ -134,7 +134,7 @@ public class MessageMediatorTests
             RegisterPlainMessagesOnSpot = false,
             CancellationToken = CancellationToken.None,
             Items = new Dictionary<object, object?>(),
-            MessageResolveStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy()!,
+            MessageResolveStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry)!,
             MessageMediationStrategy = 
                 new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>(),
             Groups = []

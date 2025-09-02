@@ -18,5 +18,5 @@ public interface IMessageResolveStrategy
     ///     The implementation determines the specific rules for matching a message type to a descriptor.
     ///     For example, it might look for an exact type match, or it might consider inheritance relationships.
     /// </remarks>
-    IMessageDescriptor? Find(Type messageType, IMessageRegistry messageRegistry);
+    IMessageDescriptor? Find(Type messageType);
 }

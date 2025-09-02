@@ -6,19 +6,20 @@ using Ergosfare.Core.Abstractions.Strategies;
 
 namespace Ergosfare.Commands;
 
-public class CommandMediator(IMessageMediator messageMediator) : ICommandMediator
+public class CommandMediator(
+    ActualTypeOrFirstAssignableTypeMessageResolveStrategy messageResolveStrategy,
+    IMessageMediator messageMediator) : ICommandMediator
 {
     public Task SendAsync(ICommand commandConstruct, CommandMediationSettings? commandMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
         commandMediationSettings ??= new CommandMediationSettings();
         var mediationStrategy = new SingleAsyncHandlerMediationStrategy<ICommand>();
-        var findStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
 
         var options = new MediateOptions<ICommand, Task>
         {
             MessageMediationStrategy = mediationStrategy,
-            MessageResolveStrategy = findStrategy,
+            MessageResolveStrategy = messageResolveStrategy,
             CancellationToken = cancellationToken,
             Items = commandMediationSettings.Items,
             Groups = commandMediationSettings.Filters.Groups
@@ -35,11 +36,10 @@ public class CommandMediator(IMessageMediator messageMediator) : ICommandMediato
     {
         commandMediationSettings ??= new CommandMediationSettings();
         var mediationStrategy = new SingleAsyncHandlerMediationStrategy<ICommand<TResult>, TResult>();
-        var findStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
 
         var options = new MediateOptions<ICommand<TResult>, Task<TResult>>
         {
-            MessageResolveStrategy = findStrategy,
+            MessageResolveStrategy = messageResolveStrategy,
             MessageMediationStrategy = mediationStrategy,
             CancellationToken = cancellationToken,
             Items = commandMediationSettings.Items,

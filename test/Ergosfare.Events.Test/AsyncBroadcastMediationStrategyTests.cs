@@ -29,6 +29,7 @@ public class AsyncBroadcastMediationStrategyTests
                 new MessageDependenciesFactory(services));
         
         var mediator = new EventMediator(
+            new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(messageRegistry),
             messageMediator
             );
 
@@ -64,6 +65,7 @@ public class AsyncBroadcastMediationStrategyTests
             new MessageDependenciesFactory(services));
         
         var mediator = new EventMediator(
+            new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(messageRegistry),
             messageMediator
         );
 

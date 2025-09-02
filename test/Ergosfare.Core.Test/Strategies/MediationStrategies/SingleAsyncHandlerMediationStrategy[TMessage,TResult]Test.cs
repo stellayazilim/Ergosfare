@@ -152,10 +152,10 @@ public class SingleAsyncHandlerMediationStrategyTests
         registry.Register(typeof(TestExceptionMessageHandler));
         registry.Register(typeof(TestExceptionMessageDuplicateHandler));
 
-        var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
+        var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry);
         var strategy = new SingleAsyncHandlerMediationStrategy<TestExceptionMessage, string>();
         
-        var descriptor = resolver.Find(typeof(TestExceptionMessage), registry);
+        var descriptor = resolver.Find(typeof(TestExceptionMessage));
         var dependencies = new MessageDependenciesFactory(serviceProvider)
             .Create(typeof(TestExceptionMessage), descriptor!,[]);
         
@@ -196,10 +196,10 @@ public class SingleAsyncHandlerMediationStrategyTests
         registry.Register(typeof(TestExceptionMessagePostInterceptor));
         registry.Register(typeof(TestExceptionMessageExceptionInterceptor));
 
-        var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
+        var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry);
         var strategy = new SingleAsyncHandlerMediationStrategy<TestExceptionMessage, string>();
         
-        var descriptor = resolver.Find(typeof(TestExceptionMessage), registry);
+        var descriptor = resolver.Find(typeof(TestExceptionMessage));
         var dependencies = new MessageDependenciesFactory(serviceProvider)
             .Create(typeof(TestExceptionMessage), descriptor!, []);
         
@@ -266,9 +266,9 @@ public class SingleAsyncHandlerMediationStrategyTests
         messageRegistry.Register(typeof(StubNonGenericStringResultHandler));
         messageRegistry.Register(typeof(TestExceptionAborterPreInterceptor));
         
-        var  resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
+        var  resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(messageRegistry);
 
-        var descriptor = resolver.Find(typeof(StubNonGenericMessage), messageRegistry);
+        var descriptor = resolver.Find(typeof(StubNonGenericMessage));
 
         var dependencies = new MessageDependenciesFactory(serviceProvider).Create(
             typeof(StubNonGenericMessage), descriptor!, []);
@@ -311,9 +311,9 @@ public class SingleAsyncHandlerMediationStrategyTests
         messageRegistry.Register(typeof(StubNonGenericStringResultHandler));
         messageRegistry.Register(typeof(TestExceptionAborterResultPreInterceptor));
         
-        var  resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
+        var  resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(messageRegistry);
 
-        var descriptor = resolver.Find(typeof(StubNonGenericMessage), messageRegistry);
+        var descriptor = resolver.Find(typeof(StubNonGenericMessage));
 
         var dependencies = new MessageDependenciesFactory(serviceProvider).Create(
             typeof(StubNonGenericMessage), descriptor!, []);
@@ -356,9 +356,9 @@ public class SingleAsyncHandlerMediationStrategyTests
         messageRegistry.Register(typeof(TestUnknownExceptionPreInterceptor));
         messageRegistry.Register(typeof(TestUnknownExceptionInterceptor));
         
-        var  resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy();
+        var  resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(messageRegistry);
 
-        var descriptor = resolver.Find(typeof(StubNonGenericMessage), messageRegistry);
+        var descriptor = resolver.Find(typeof(StubNonGenericMessage));
 
         var dependencies = new MessageDependenciesFactory(serviceProvider).Create(
             typeof(StubNonGenericMessage), descriptor!, []);
