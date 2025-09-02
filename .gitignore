@@ -14,3 +14,8 @@ TestResults/
 
 */node_modules/
 .coverage/
+
+/changelog/
+changelog/
+docs/
+/docs/
