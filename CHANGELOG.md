@@ -1,5 +1,5 @@
 
-## 🌟 v0.0.15e – Pipeline Event System Refactor & Coverage 2025-03-09
+## v0.0.15e – Pipeline Event System Refactor & Coverage 2025-03-09
 
 ### **Added**
 

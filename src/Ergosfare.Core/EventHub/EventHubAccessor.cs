@@ -5,7 +5,7 @@ namespace Ergosfare.Core.EventHub;
 /// Provides access to a global singleton instance of <see cref="IEventHub"/>.
 /// Ensures only one hub exists across multiple module registrations.
 /// </summary>
-internal static class EventHubAccessor
+public static class EventHubAccessor
 {
     /// <summary>
     /// Lazy initializer ensures thread-safe initialization.
