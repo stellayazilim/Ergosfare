@@ -1,3 +1,61 @@
+
+## 🌟 v0.0.15e – Pipeline Event System Refactor & Coverage 2025-03-09
+
+### **Added**
+
+* `PipelineEvent` abstract base class (formerly `PipelineEventBase`) with:
+    * `Timestamp` auto-initialization
+    * `RelatedEvents` support (`Add`, `AddRange`)
+    * `GetEqualityComponents()` for value-based equality
+* 20+ concrete pipeline events:
+    * `BeginExceptionInterceptingEvent`, `BeginExceptionInterceptorInvocationEvent`, `BeginHandlerInvocationEvent`, `BeginHandlingEvent`, `BeginPipelineEvent`
+    * `BeginPostInterceptingEvent`, `BeginPreInterceptorInvocationEvent`, `FinishExceptionInterceptingEvent`, `FinishExceptionInterceptorInvocationEvent`
+    * `FinishHandlerInvocationEvent`, `FinishHandlingEvent`, `FinishHandlingWithExceptionEvent`, `FinishPipelineEvent`
+    * `FinishPostInterceptingEvent`, `FinishPostInterceptingWithException`, `FinishPostInterceptorInvocationEvent`
+    * `FinishPreInterceptingEvent`, `FinishPreInterceptingWithException`, `FinishPreInterceptorInvocationEvent`
+* Factory methods (`Create`) for all pipeline events with null checks and default handling (`ResultType ?? typeof(void)`)
+* Static subscription & publish support via `PipelineEvent.Subscribe<TEvent>`
+* In-place instance invocation via `Invoke()` extension method
+
+### **Changed**
+
+* Renamed `PipelineEventBase` → `PipelineEvent`
+* `HubEvent` updated:
+
+    * `Timestamp` is instance-based, not static
+    * `GetHashCode` and `Equals` use `GetEqualityComponents()`
+    * `RelatedEvents` added to allow event chaining
+
+### **Fixed / Improved**
+
+* Full unit test coverage for:
+
+    * All pipeline events (`Create`, `GetEqualityComponents`, equality, timestamp)
+    * `RelatedEvents` behavior (add, add range, read-only enforcement)
+    * Static subscription / publish mechanics
+    * In-place `Invoke()` calls
+
+### **Impact**
+
+* Event pipeline fully type-safe and decoupled
+* Subscribers can register without creating instances
+* Improved consistency and maintainability of pipeline events
+
+### **Testing**
+- Unit tests updated to account for recent changes in HubEvent and PipelineEvent
+
+- New unit tests added for all new pipeline events and related components
+
+- RelatedEvents functionality fully tested (add, add range, read-only enforcement)
+
+- Static subscription and in-place Invoke() methods tested for all pipeline events
+
+- Value-based equality (GetEqualityComponents, Equals, GetHashCode) fully covered
+
+- Maintained 100% test coverage for all event classes and base logic
+
+---
+
 ## v0.0.14e – Event Hub Refines & Proxy Event System
 ### New Features
 * Generic Event Hub (EventHub): Supports strongly-typed events using `HubEvent` base class, with strong and weak subscriptions.
