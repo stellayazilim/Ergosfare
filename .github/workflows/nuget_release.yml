@@ -1,4 +1,6 @@
 name: NugetPackagesRelease
+permissions:
+  contents: write
 
 on:
   push:

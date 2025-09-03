@@ -1,4 +1,6 @@
 name: UnitTests
+permissions:
+  contents: read
 on:
   push: 
     branches:
