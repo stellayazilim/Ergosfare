@@ -44,9 +44,7 @@ public abstract class HubEvent: IEquatable<HubEvent>
 
     public override int GetHashCode()
     {
-        var components = GetEqualityComponents().ToList(); 
-        components.Add(Timestamp);
-        return  components
+        return  GetEqualityComponents()
             .Select(x => x?.GetHashCode() ?? 0)
             .Aggregate((x, y) => x ^ y);
     }
