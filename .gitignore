@@ -17,5 +17,5 @@ TestResults/
 
 /changelog/
 changelog/
-docs/
-/docs/
+docs/**
+docs/**/
