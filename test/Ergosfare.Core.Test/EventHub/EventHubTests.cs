@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Reflection;
+using Ergosfare.Core.Abstractions.EventHub;
 using Ergosfare.Core.Internal.EventHub;
 using Hub = Ergosfare.Core.Internal.EventHub.EventHub;
 
@@ -7,145 +8,117 @@ namespace Ergosfare.Core.Test.EventHub;
 
 public class EventHubTests
 {
+    
+    
+    // helper class
+    private class Target
+    {
+        public void Handler(Hub.PreInterceptorBeingInvokeEvent e) { /* do nothing */ }
+    }
+    
+    
+    private sealed class UnsubscribedEvent : HubEvent
+    {
+        public override IEnumerable<object> GetEqualityComponents()
+        {
+            yield break;
+        }
+    }
+
+    
+    private sealed class TestEvent : HubEvent
+    {
+        public override IEnumerable<object> GetEqualityComponents() => Enumerable.Empty<object>();
+    }
+    
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public void ShouldHaveRegisteredEvents()
+    public void ShouldRegisterSubscriptions()
     {
-        // arrange
         var hub = new Hub();
 
-        hub.Subscribe<string>(_ => {});
-        // Get the private _subscriptions field
+        hub.Subscribe<Hub.PreInterceptorBeingInvokeEvent>(_ => { });
+
         var subsField = typeof(Hub).GetField("_subscriptions",
             BindingFlags.NonPublic | BindingFlags.Instance)!;
 
-        // act
-        // Cast the field value back to the dictionary
         var dict = (ConcurrentDictionary<Type, List<object>>)subsField.GetValue(hub)!;
-        
-        //assert
-        Assert.True(dict.ContainsKey(typeof(string)));
-        Assert.Single(dict[typeof(string)]);
-    }
 
+        Assert.True(dict.ContainsKey(typeof(Hub.PreInterceptorBeingInvokeEvent)));
+        Assert.Single(dict[typeof(Hub.PreInterceptorBeingInvokeEvent)]);
+    }
 
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public void ShouldInvokeEvent()
+    public void ShouldInvokeStrongSubscription()
     {
-        // arrange
-        var hub = new Hub();
+        var hub  = new Hub();
+        var invoked = false;
 
-        // act
-        hub.Publish<string>("Foo");
+        hub.Subscribe<Hub.PreInterceptorBeingInvokeEvent>(_ => invoked = true);
 
-        // assert
-        hub.Subscribe<string>(s => Assert.Equal("Foo", s));
-    }
-    
-    
-    
-      
-    
-    [Fact]
-    public void Publish_ShouldInvokeSubscribers_AndRemoveDeadWeakSubscriptions()
-    {
-        var hub = new Hub();
-
-        bool strongInvoked = false;
-        bool weakInvoked = false;
-
-        // Strong subscription
-        hub.Subscribe<string>(msg => strongInvoked = msg == "test");
-
-        // Weak subscription that will be collected
-        var tempObj = new object();
-        hub.Subscribe<string>(msg =>
+        hub.Publish(new Hub.PreInterceptorBeingInvokeEvent()
         {
-            weakInvoked = true;
-        }, useWeakReference: true);
+            InterceptorName = "TestInterceptor"
+        });
 
-        // Force GC to potentially collect weak references
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-
-        // Publish event
-        hub.Publish("test");
-
-        // Assert strong subscription invoked
-        Assert.True(strongInvoked);
-
-        // weakInvoked may or may not be true depending on GC
-        // But the key is that dead weak subscriptions are removed
-        var subsField = typeof(Hub).GetField("_subscriptions",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
-
-        var dict = (System.Collections.Concurrent.ConcurrentDictionary<Type, System.Collections.Generic.List<object>>)subsField.GetValue(hub)!;
-        var subsList = dict[typeof(string)];
-
-        // There should be at least 1 alive subscription (the strong one)
-        Assert.All(subsList, s => Assert.True(((ISubscription<string>)s).IsAlive));
+        Assert.True(invoked);
     }
-    
-    
-    
-    
+
     [Fact]
     public void Publish_ShouldRemoveDeadWeakSubscriptions()
     {
-        var hub = new Hub();
+        var hub  = new Hub();
 
-        // Create a weak subscription with a target that will be collected
-        void CreateWeakSubscription()
+        void CreateWeak()
         {
             var temp = new object();
-            hub.Subscribe<string>(_ => { _ = temp.ToString(); }, useWeakReference: true);
+            hub.Subscribe<Hub.PreInterceptorBeingInvokeEvent>(_ => temp = temp.ToString(), useWeakReference: true);
         }
 
-        CreateWeakSubscription();
+        CreateWeak();
 
-        // Force GC to collect the weakly referenced target
         GC.Collect();
         GC.WaitForPendingFinalizers();
 
-        // Access the private subscriptions field via reflection
         var subsField = typeof(Hub).GetField("_subscriptions",
             BindingFlags.NonPublic | BindingFlags.Instance)!;
         var dict = (ConcurrentDictionary<Type, List<object>>)subsField.GetValue(hub)!;
 
-        var subsBefore = dict[typeof(string)].Count;
+        var beforeCount = dict[typeof(Hub.PreInterceptorBeingInvokeEvent)].Count;
 
-        // Publish event to trigger cleanup of dead weak subscriptions
-        hub.Publish("test");
+        hub.Publish(new Hub.PreInterceptorBeingInvokeEvent() {
+            InterceptorName = "TestInterceptor"
+        });
 
-        var subsAfter = dict[typeof(string)].Count;
+        var afterCount = dict[typeof(Hub.PreInterceptorBeingInvokeEvent)].Count;
 
-        // Assert that at least one dead weak subscription was removed
-        Assert.True(subsAfter < subsBefore, "Dead weak subscriptions should be removed during publish");
+        Assert.True(afterCount <= beforeCount, "Dead weak subscriptions should be removed");
+        Assert.All(dict[typeof(Hub.PreInterceptorBeingInvokeEvent)],
+            s => Assert.True(((ISubscription<Hub.PreInterceptorBeingInvokeEvent>)s).IsAlive));
     }
-    
-    
+
     [Fact]
-    public void WeakSubscription_Invoke_ReturnsFalse_WhenTargetCollected()
+    public void WeakSubscription_Invoke_ReturnsFalse_WhenCollected()
     {
-        WeakSubscription<string> weakSub;
-        
-        void CreateWeakSub()
+        WeakSubscription<Hub.PreInterceptorBeingInvokeEvent> weakSub = null!;
+
+        void CreateWeak()
         {
             var temp = new object();
-            weakSub = new WeakSubscription<string>(_ => { _ = temp.ToString(); });
+            weakSub = new WeakSubscription<Hub.PreInterceptorBeingInvokeEvent>(_ => temp = temp.ToString());
         }
 
-        CreateWeakSub();
+        CreateWeak();
 
-        // Force GC to collect the target
         GC.Collect();
         GC.WaitForPendingFinalizers();
 
-        // Now target is gone, Invoke should return false
-        bool result = weakSub.Invoke("test");
+        var result = weakSub.Invoke(new Hub.PreInterceptorBeingInvokeEvent() {
+            InterceptorName = "TestInterceptor"
+        });
 
         Assert.False(result);
         Assert.False(weakSub.IsAlive);
@@ -154,10 +127,12 @@ public class EventHubTests
     [Fact]
     public void StrongSubscription_Invoke_ReturnsTrue()
     {
-        bool called = false;
-        var strongSub = new StrongSubscription<string>(_ => called = true);
+        var called = false;
+        var strongSub = new StrongSubscription<Hub.PreInterceptorBeingInvokeEvent>(_ => called = true);
 
-        bool result = strongSub.Invoke("test");
+        var result = strongSub.Invoke(new Hub.PreInterceptorBeingInvokeEvent() {
+            InterceptorName = "TestInterceptor"
+        });
 
         Assert.True(result);
         Assert.True(called);
@@ -167,14 +142,263 @@ public class EventHubTests
     [Fact]
     public void StrongSubscription_Dispose_DoesNotThrow()
     {
-        var strongSub = new StrongSubscription<string>(_ => { });
+        var strongSub = new StrongSubscription<Hub.PreInterceptorBeingInvokeEvent>(_ => { });
         strongSub.Dispose();
     }
 
     [Fact]
     public void WeakSubscription_Dispose_DoesNotThrow()
     {
-        var weakSub = new WeakSubscription<string>(_ => { });
+        var weakSub = new WeakSubscription<Hub.PreInterceptorBeingInvokeEvent>(_ => { });
         weakSub.Dispose();
+    }
+    
+    
+    
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public void StrongSubscription_Matches_ReturnsTrueForSameAction()
+    {
+        // Arrange
+        bool called = false;
+        Action<Hub.PreInterceptorBeingInvokeEvent> action = _ => called = true;
+        var strongSub = new StrongSubscription<Hub.PreInterceptorBeingInvokeEvent>(action);
+
+        // Act & Assert
+        Assert.True(strongSub.Matches(action)); // should match the same delegate
+        Assert.False(strongSub.Matches(_ => { })); // different delegate should not match
+    }
+    
+    
+    
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public void WeakSubscription_Matches_ReturnsTrueForSameAction()
+    {
+        // Arrange
+        bool called = false;
+        Action<Hub.PreInterceptorBeingInvokeEvent> action = _ => called = true;
+        var weakSub = new WeakSubscription<Hub.PreInterceptorBeingInvokeEvent>(action);
+
+        // Act & Assert
+        Assert.True(weakSub.Matches(action)); // should match the same delegate
+        Assert.False(weakSub.Matches(_ => { })); // different delegate should not match
+    }
+    
+    
+    
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public void WeakSubscription_Invoke_ReturnsTrue_WhenTargetAlive()
+    {
+        // Arrange
+        bool called = false;
+        var strongRef = new object();
+        Action<Hub.PreInterceptorBeingInvokeEvent> action = e => { called = true; _ = strongRef; };
+        var weakSub = new WeakSubscription<Hub.PreInterceptorBeingInvokeEvent>(action);
+
+        // Act
+        bool result = weakSub.Invoke(new Hub.PreInterceptorBeingInvokeEvent() {
+            InterceptorName = "TestInterceptor"
+        });
+
+        // Assert
+        Assert.True(result);
+        Assert.True(called);
+        Assert.True(weakSub.IsAlive);
+    }
+
+    [Fact]
+    public void WeakSubscription_Invoke_ReturnsFalse_WhenTargetCollected()
+    {
+        WeakSubscription<Hub.PreInterceptorBeingInvokeEvent> weakSub;
+
+        void CreateWeak()
+        {
+            var target = new Target(); // strong reference
+            weakSub = new WeakSubscription<Hub.PreInterceptorBeingInvokeEvent>(target.Handler);
+        }
+
+        CreateWeak();
+
+        // Force GC after target goes out of scope
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        bool result = weakSub.Invoke(new Hub.PreInterceptorBeingInvokeEvent() {
+            InterceptorName = "TestInterceptor"
+        });
+
+        Assert.False(result);
+        Assert.False(weakSub.IsAlive);
+    }
+    
+    
+    
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public void Publish_Returns_WhenNoSubscribers()
+    {
+        // Arrange
+        var hub = new Hub();
+
+        var evt = new Hub.PreInterceptorBeingInvokeEvent() {
+            InterceptorName = "TestInterceptor"
+        };
+
+        // Act & Assert: no exception, should hit the "return" branch
+        hub.Publish(new UnsubscribedEvent());
+
+        // No assertion needed; just ensuring code path executes
+    }
+
+
+    
+    
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public void Unsubscribe_Returns_WhenNoSubscribersExist()
+    {
+        // Arrange
+        var hub = new Hub();
+
+        // Act: try to unsubscribe a handler that was never added
+        hub.Unsubscribe<UnsubscribedEvent>(_ => { });
+
+        // Assert: just ensure no exception is thrown
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public void Unsubscribe_RemovesMatchingSubscription()
+    {
+        // Arrange
+        var hub = new Hub();
+        bool invoked = false;
+
+        void Handler(TestEvent e) => invoked = true;
+
+        // Subscribe
+        hub.Subscribe<TestEvent>(Handler);
+
+        // Act: unsubscribe the same handler
+        hub.Unsubscribe<TestEvent>(Handler);
+
+        // Publish event, handler should not be invoked
+        hub.Publish(new TestEvent());
+
+        // Assert
+        Assert.False(invoked, "Handler should have been removed by Unsubscribe");
+    }
+    
+    
+    
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public void Unsubscribe_RemovesMatchingSubscription_LambdaCovered()
+    {
+        // Arrange
+        var hub = new Hub();
+        bool invoked = false;
+
+        // Create a subscription
+        void Handler(TestEvent e) => invoked = true;
+
+        // Subscribe the handler
+        hub.Subscribe<TestEvent>(Handler);
+
+        // Access the private _subscriptions dictionary via reflection
+        var subsField = typeof(Hub).GetField("_subscriptions", 
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        var dict = (ConcurrentDictionary<Type, List<object>>)subsField.GetValue(hub)!;
+    
+        // Ensure initially one subscription
+        Assert.Single(dict[typeof(TestEvent)]);
+
+        // Act: Unsubscribe the same handler
+        hub.Unsubscribe<TestEvent>(Handler);
+
+        // Assert: subscription list is empty
+        Assert.Empty(dict[typeof(TestEvent)]);
+
+        // Publish event to ensure handler is not invoked
+        hub.Publish(new TestEvent());
+        Assert.False(invoked, "Handler should not be invoked after unsubscribe");
+    }
+    
+    
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public void Unsubscribe_IgnoresNonSubscriptionObjects()
+    {
+        // Arrange
+        var hub = new Hub();
+
+        // Access _subscriptions via reflection
+        var subsField = typeof(Hub).GetField("_subscriptions",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        var dict = (ConcurrentDictionary<Type, List<object>>)subsField.GetValue(hub)!;
+
+        // Add a "dummy" object to the subscription list
+        var dummy = new object();
+        dict.GetOrAdd(typeof(TestEvent), _ => new List<object>()).Add(dummy);
+
+        // Act: call Unsubscribe
+        hub.Unsubscribe<TestEvent>(_ => { });
+
+        // Assert: dummy object is still there (return false path executed)
+        Assert.Contains(dummy, dict[typeof(TestEvent)]);
+    }
+
+    
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public void ProxyEvent_OperatorPlusAndMinus_ShouldSubscribeAndUnsubscribe()
+    {
+        // Arrange
+        var hub = new Hub();
+        var called = false;
+
+        void Handler(Hub.PreInterceptorBeingInvokeEvent e)
+        {
+            called = true;
+        }
+
+        var proxy = hub.PreInterceptorBeingInvokeEventProxy;
+
+        // Act: subscribe using +=
+        proxy += Handler;
+
+        // Publish to ensure subscription works
+        hub.Publish(new Hub.PreInterceptorBeingInvokeEvent() {
+            InterceptorName = "TestInterceptor"
+        });
+    
+        // Assert: handler called
+        Assert.True(called);
+
+        // Reset
+        called = false;
+
+        // Act: unsubscribe using -=
+        proxy -= Handler;
+
+        // Publish again
+        hub.Publish(new Hub.PreInterceptorBeingInvokeEvent() {
+            InterceptorName = "TestInterceptor"
+        });
+
+        // Assert: handler not called after unsubscribe
+        Assert.False(called);
     }
 }

@@ -1,13 +1,24 @@
+
+using Ergosfare.Contracts;
+using Ergosfare.Core.Abstractions.EventHub;
+
 namespace Ergosfare.Core.Internal.EventHub;
 
-public sealed class StrongSubscription<TEvent>(Action<TEvent> action) : ISubscription<TEvent>
+internal sealed class StrongSubscription<TEvent> : ISubscription<TEvent> where TEvent : HubEvent
 {
+    private readonly Action<TEvent> _action;
+    public StrongSubscription(Action<TEvent> action) => _action = action;
     public bool Invoke(TEvent evt)
     {
-        action(evt);
+        _action(evt);
         return true;
     }
-
     public bool IsAlive => true;
-    public void Dispose() { /* nothing */ }
+  
+    public bool Matches(Action<TEvent> action)
+    {
+        return _action.Equals(action);
+    }
+
+    public void Dispose() { /* nothing to dispose */ }
 }
