@@ -1,3 +1,34 @@
+## v0.0.14e – Event Hub Refines & Proxy Event System
+### New Features
+* Generic Event Hub (EventHub): Supports strongly-typed events using `HubEvent` base class, with strong and weak subscriptions.
+* Proxy Events (`ProxyEvent<T>`)  
+Subscribe to predefined events using += and unsubscribe using -= syntax for cleaner code.
+* Predefined Event: `PreInterceptorBeingInvokeEvent` added as a foundational example for interceptors and handlers.
+* Custom Events: Subscribe, publish, and unsubscribe custom HubEvent types independently of predefined proxies.
+* Value Object Base for Events:
+  HubEvent includes equality operators (`==`, `!=`) and value-based `Equals` / `GetHashCode` for future-proof event comparisons.
+
+### Improvements
+* Thread-safe subscriptions using ConcurrentDictionary and locking.
+* Automatic cleanup of dead weak subscriptions during event publishing.
+
+### Removals
+* `ISubscription` and `IHubEvent` interfaces have been removed.
+  * Replace `ISubscription` with `ISubscription<TEvent>`
+  * Replace `IHubEvent` with the abstract `HubEvent` class
+  
+### Testing
+#### Unit tests enhanced to cover:
+* Strong/weak subscription invoke behavior
+* Proxy `+=` / `-=` operators
+* Subscription matching and unsubscription
+* Base HubEvent equality and hash code computation
+
+### Keynotes 
+* This release lays the foundation for next-generation plug-ins and modules, allowing n-party decoupled event-driven integrations.
+
+* Users can create their own events implementing HubEvent for custom plugin scenarios.
+___
 ## v0.0.13e - Republish of v0.0.12e - 2025-09-03
 - no changes
 ## v0.0.12e - EventHub - 2025-09-03
