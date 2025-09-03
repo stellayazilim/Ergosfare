@@ -1,14 +1,13 @@
 using System.Collections.Concurrent;
 using Ergosfare.Core.Abstractions.EventHub;
 
-namespace Ergosfare.Core.Internal.EventHub;
-
+namespace Ergosfare.Core.EventHub;
 public class EventHub: IEventHub
 {
         private readonly object _lock = new();
         
         private readonly ConcurrentDictionary<Type, List<object>> _subscriptions = new();
-
+    
         public EventHub()
         {
             PreInterceptorBeingInvokeEventProxy = new ProxyEvent<PreInterceptorBeingInvokeEvent>(this);

@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
 using System.Reflection;
 using Ergosfare.Core.Abstractions.EventHub;
-using Ergosfare.Core.Internal.EventHub;
-using Hub = Ergosfare.Core.Internal.EventHub.EventHub;
+using Ergosfare.Core.EventHub;
+using Hub = Ergosfare.Core.EventHub.EventHub;
 
 namespace Ergosfare.Core.Test.EventHub;
 

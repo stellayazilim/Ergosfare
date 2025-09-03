@@ -1,5 +1,5 @@
 ﻿
-using Ergosfare.Core.Internal.EventHub;
+using Ergosfare.Core.EventHub;
 using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Registry;
 using Microsoft.Extensions.DependencyInjection;

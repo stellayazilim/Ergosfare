@@ -2,8 +2,7 @@
 using Ergosfare.Contracts;
 using Ergosfare.Core.Abstractions.EventHub;
 
-namespace Ergosfare.Core.Internal.EventHub;
-
+namespace Ergosfare.Core.EventHub;
 internal sealed class StrongSubscription<TEvent> : ISubscription<TEvent> where TEvent : HubEvent
 {
     private readonly Action<TEvent> _action;

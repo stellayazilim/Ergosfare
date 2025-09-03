@@ -1,4 +1,4 @@
-using Hub = Ergosfare.Core.Internal.EventHub.EventHub;
+using Hub = Ergosfare.Core.EventHub.EventHub;
 namespace Ergosfare.Core.Test.EventHub;
 
 public class PreInterceptorBeingInvokeEventTests
