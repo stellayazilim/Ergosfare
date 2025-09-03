@@ -6,7 +6,20 @@ namespace Ergosfare.Core.Abstractions.EventHub;
 
 public abstract class HubEvent: IEquatable<HubEvent>
 {
+    private readonly List<HubEvent> _relatedEvents = new();
+    public IReadOnlyList<HubEvent> RelatedEvents =>  _relatedEvents.AsReadOnly(); 
+    public DateTime Timestamp { get; } = DateTime.UtcNow;
     public abstract IEnumerable<object> GetEqualityComponents();
+    
+    public void Add(HubEvent hubEvent)
+    {
+        _relatedEvents.Add(hubEvent);
+    }
+
+    public void AddRange(IEnumerable<HubEvent> hubEvents)
+    {
+        _relatedEvents.AddRange(hubEvents);
+    }
     public override bool Equals(object? obj)
     {
         if (obj is null || obj.GetType() != GetType())
@@ -31,7 +44,7 @@ public abstract class HubEvent: IEquatable<HubEvent>
 
     public override int GetHashCode()
     {
-        return GetEqualityComponents()
+        return  GetEqualityComponents()
             .Select(x => x?.GetHashCode() ?? 0)
             .Aggregate((x, y) => x ^ y);
     }
@@ -40,5 +53,5 @@ public abstract class HubEvent: IEquatable<HubEvent>
     {
         return Equals((object?)other);
     }
-
+    
 }

@@ -1,7 +1,6 @@
 using Ergosfare.Core.Abstractions.EventHub;
 
-namespace Ergosfare.Core.Internal.EventHub;
-
+namespace Ergosfare.Core.EventHub;
 
 internal sealed class WeakSubscription<TEvent> : ISubscription<TEvent> where TEvent : HubEvent
 {
