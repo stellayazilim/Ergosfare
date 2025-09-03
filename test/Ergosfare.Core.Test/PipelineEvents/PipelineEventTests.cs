@@ -117,7 +117,7 @@ public class PipelineEventTests
             resultType: typeof(void),
             interceptorCount: 5),
         
-        () => FinishPostInterceptingWithException.Create(
+        () => FinishPostInterceptingWithExceptionEvent.Create(
             mediatorInstance: typeof(string),
             messageType: typeof(int),
             interceptorType: typeof(int),
@@ -130,7 +130,7 @@ public class PipelineEventTests
             interceptorType: typeof(string),
             resultType: typeof(void)),
         
-        () => FinishPreInterceptingWithException.Create(
+        () => FinishPreInterceptingWithExceptionEvent.Create(
             mediatorInstance: typeof(string),
             messageType: typeof(int),
             interceptorType: typeof(string),

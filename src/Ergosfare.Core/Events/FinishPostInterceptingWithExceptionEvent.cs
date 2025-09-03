@@ -1,10 +1,10 @@
 namespace Ergosfare.Core.Events;
 
-public sealed class FinishPostInterceptingWithException: PipelineEvent
+public sealed class FinishPostInterceptingWithExceptionEvent: PipelineEvent
 {
     public required Type InterceptorType { get; init; }
     public required Exception Exception { get; init; }
-    public static FinishPostInterceptingWithException Create(Type mediatorInstance, Type messageType, Type interceptorType, Exception exception, Type? resultType) => new()
+    public static FinishPostInterceptingWithExceptionEvent Create(Type mediatorInstance, Type messageType, Type interceptorType, Exception exception, Type? resultType) => new()
     {
         InterceptorType = interceptorType,
         Exception = exception,
