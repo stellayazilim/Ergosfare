@@ -1,7 +1,6 @@
 ﻿<Solution>
   <Folder Name="/docs/">
     <Project Path="changelog\Ergosfare.Changelog.njsproj" />
-    <Project Path="docs\Ergosfare.Docs.njsproj" />
   </Folder>
   <Folder Name="/RepositoryItems/">
     <File Path="readme.md" />
