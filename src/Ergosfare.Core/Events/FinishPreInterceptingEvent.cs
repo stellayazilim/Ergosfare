@@ -1,8 +1,8 @@
 namespace Ergosfare.Core.Events;
 
-public sealed class FinishPreInterceptingEvent: PipelineEventBase
+public sealed class FinishPreInterceptingEvent: PipelineEvent
 {
-    public static FinishPipelineEvent Create(Type mediatorInstance, Type messageType, Type? resultType) => new()
+    public static FinishPreInterceptingEvent Create(Type mediatorInstance, Type messageType, Type? resultType) => new()
     {
         MediatorInstance = mediatorInstance ?? throw new ArgumentNullException(nameof(mediatorInstance)),
         MessageType = messageType ?? throw new ArgumentNullException(nameof(messageType)),

@@ -1,6 +1,6 @@
 namespace Ergosfare.Core.Events;
 
-public sealed class FinishHandlingEvent: PipelineEventBase
+public sealed class FinishHandlingEvent: PipelineEvent
 {
     public static FinishHandlingEvent Create(Type mediatorInstance, Type messageType, Type? resultType) => new()
     {

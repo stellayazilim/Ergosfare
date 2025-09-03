@@ -2,7 +2,7 @@ using Ergosfare.Core.Abstractions.EventHub;
 
 namespace Ergosfare.Core.Events;
 
-public sealed class BeginPreInterceptingEvent: PipelineEventBase
+public sealed class BeginPreInterceptingEvent: PipelineEvent
 {
     public required ushort InterceptorCount { get; init; }
 

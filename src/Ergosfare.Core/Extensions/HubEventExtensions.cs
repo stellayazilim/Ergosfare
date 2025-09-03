@@ -1,7 +1,7 @@
 using Ergosfare.Core.Abstractions.EventHub;
 using Ergosfare.Core.EventHub;
 
-namespace Ergosfare.Core.Internal.Extensions;
+namespace Ergosfare.Core.Extensions;
 
 public static class HubEventExtensions
 {

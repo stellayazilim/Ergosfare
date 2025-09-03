@@ -1,8 +1,6 @@
-using Ergosfare.Core.Abstractions.EventHub;
-
 namespace Ergosfare.Core.Events;
 
-public sealed class BeginPipelineEvent : PipelineEventBase
+public sealed class BeginPipelineEvent : PipelineEvent
 {
  
     public static BeginPipelineEvent Create(Type mediatorInstance, Type messageType, Type? resultType) => new()

@@ -1,6 +1,6 @@
 namespace Ergosfare.Core.Events;
 
-public sealed class BeginHandlerInvocationEvent: PipelineEventBase
+public sealed class BeginHandlerInvocationEvent: PipelineEvent
 {
     public required Type HandlerType { get; init; }
 

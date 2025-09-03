@@ -1,6 +1,6 @@
-namespace Ergosfare.Core.Events.ExceptionIntercept;
+namespace Ergosfare.Core.Events;
 
-public class FinishExceptionInterceptingEvent: PipelineEventBase
+public class FinishExceptionInterceptingEvent: PipelineEvent
 {
     public required Exception Exception { get; init; }
     public required Exception FinalException { get; init; }

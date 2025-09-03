@@ -1,6 +1,6 @@
-namespace Ergosfare.Core.Events.ExceptionIntercept;
+namespace Ergosfare.Core.Events;
 
-public sealed class BeginExceptionInterceptingEvent: PipelineEventBase
+public sealed class BeginExceptionInterceptingEvent: PipelineEvent
 {
     
     public required ushort InterceptorCount { get; init; }

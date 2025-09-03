@@ -1,10 +1,12 @@
 namespace Ergosfare.Core.Events;
 
-public sealed class FinishPreInterceptingWithException: PipelineEventBase
+public sealed class FinishPreInterceptingWithException: PipelineEvent
 {
     public required Exception Exception { get; init; }
-    public static FinishPreInterceptingWithException Create(Type mediatorInstance, Type messageType, Exception exception, Type? resultType) => new()
+    public required Type InterceptorType { get; init; }
+    public static FinishPreInterceptingWithException Create(Type mediatorInstance, Type messageType, Type interceptorType, Exception exception, Type? resultType) => new()
     {
+        InterceptorType = interceptorType,
         Exception = exception,
         MediatorInstance = mediatorInstance ?? throw new ArgumentNullException(nameof(mediatorInstance)),
         MessageType = messageType ?? throw new ArgumentNullException(nameof(messageType)),
@@ -12,5 +14,5 @@ public sealed class FinishPreInterceptingWithException: PipelineEventBase
     };
 
     public override IEnumerable<object> GetEqualityComponents()
-        => base.GetEqualityComponents().Concat([Exception]);
+        => base.GetEqualityComponents().Concat([Exception, InterceptorType]);
 }

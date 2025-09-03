@@ -1,11 +1,11 @@
 namespace Ergosfare.Core.Events;
 
-public sealed class BeginPostInterceptingEvent: PipelineEventBase
+public sealed class BeginPostInterceptingEvent: PipelineEvent
 {
     public required ushort InterceptorCount { get; init; }
 
 
-    public static BeginPreInterceptingEvent Create(Type mediatorInstance, Type messageType, Type? resultType, ushort interceptorCount = 0) => new()
+    public static BeginPostInterceptingEvent Create(Type mediatorInstance, Type messageType, Type? resultType, ushort interceptorCount = 0) => new()
     {
         InterceptorCount = interceptorCount,
         MediatorInstance = mediatorInstance ?? throw new ArgumentNullException(nameof(mediatorInstance)),

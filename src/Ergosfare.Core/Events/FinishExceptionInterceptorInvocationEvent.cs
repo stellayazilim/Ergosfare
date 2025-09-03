@@ -1,6 +1,6 @@
-namespace Ergosfare.Core.Events.ExceptionIntercept;
+namespace Ergosfare.Core.Events;
 
-public sealed class FinishExceptionInterceptorInvocationEvent: PipelineEventBase
+public sealed class FinishExceptionInterceptorInvocationEvent: PipelineEvent
 {
     public required Exception Exception { get; init; }
  

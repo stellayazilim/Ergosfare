@@ -1,6 +1,6 @@
 namespace Ergosfare.Core.Events;
 
-public sealed class FinishPostInterceptingEvent
+public sealed class FinishPostInterceptingEvent: PipelineEvent
 {
 
     public static BeginPostInterceptingEvent Create(Type mediatorInstance, Type messageType, Type? resultType, ushort interceptorCount = 0) => new()

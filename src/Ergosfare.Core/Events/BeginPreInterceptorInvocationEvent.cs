@@ -1,6 +1,6 @@
 namespace Ergosfare.Core.Events;
 
-public sealed class BeginPreInterceptorInvocationEvent: PipelineEventBase
+public sealed class BeginPreInterceptorInvocationEvent: PipelineEvent
 {
     public required Type InterceptorType { get; init; }
 

@@ -1,6 +1,6 @@
 namespace Ergosfare.Core.Events;
 
-public sealed class BeginHandlingEvent: PipelineEventBase
+public sealed class BeginHandlingEvent: PipelineEvent
 {
     // only useful for EventHandlers
     public required ushort HandlerCount { get; init; }

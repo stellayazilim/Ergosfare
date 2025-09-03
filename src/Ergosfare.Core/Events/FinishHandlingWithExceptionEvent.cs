@@ -1,6 +1,6 @@
 namespace Ergosfare.Core.Events;
 
-public sealed class FinishHandlingWithExceptionEvent: PipelineEventBase
+public sealed class FinishHandlingWithExceptionEvent: PipelineEvent
 {
     public required Exception Exception { get; init; }
     public static FinishHandlingWithExceptionEvent Create(Type mediatorInstance, Type messageType, Exception exception, Type? resultType) => new()
