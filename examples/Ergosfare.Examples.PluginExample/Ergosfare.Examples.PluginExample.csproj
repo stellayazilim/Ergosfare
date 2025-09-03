@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <LangVersion>13</LangVersion>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\..\src\Ergosfare.Context\Ergosfare.Context.csproj" />
+      <ProjectReference Include="..\..\src\Ergosfare.Contracts\Ergosfare.Contracts.csproj" />
+      <ProjectReference Include="..\..\src\Ergosfare.Core.Abstractions\Ergosfare.Core.Abstractions.csproj" />
+      <ProjectReference Include="..\..\src\Ergosfare.Core.Extensions.MicrosoftDependencyInjection\Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj" />
+      <ProjectReference Include="..\..\src\Ergosfare.Core\Ergosfare.Core.csproj" />
+    </ItemGroup>
+
+</Project>

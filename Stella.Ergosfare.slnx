@@ -2,6 +2,9 @@
   <Folder Name="/docs/">
     <Project Path="changelog\Ergosfare.Changelog.njsproj" />
   </Folder>
+  <Folder Name="/Examples/">
+    <Project Path="examples\Ergosfare.Examples.PluginExample\Ergosfare.Examples.PluginExample.csproj" Type="Classic C#" />
+  </Folder>
   <Folder Name="/RepositoryItems/">
     <File Path="readme.md" />
     <File Path="CHANGELOG.md" />
