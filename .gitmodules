@@ -2,3 +2,6 @@
 	path = changelog
 	url = git@github.com:stellayazilim/ergosfare.changelog.git
 
+[submodule "docs"]
+	path = docs
+	url = git@github.com:stellayazilim/Ergosfare.Docs
