@@ -1,3 +1,8 @@
+## unreleased – IHasProxyEvents 2025-05-09
+### **Added**
+- IHasProxyEvents interface, contains all known proxy events
+- EventHub now implements IHasProxyEvents
+- Now known pipeline events subscrible with += and unsubscrible with -= syntax from EventHub
 
 ## v0.0.15e – Pipeline Event System Refactor & Coverage 2025-03-09
 
