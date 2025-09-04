@@ -2,18 +2,23 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using Ergosfare.Core.Abstractions.EventHub;
 using Ergosfare.Core.EventHub;
+using Ergosfare.Core.Events;
 using Hub = Ergosfare.Core.EventHub.EventHub;
 
 namespace Ergosfare.Core.Test.EventHub;
 
 public class EventHubTests
 {
-    
-    
+    private BeginPipelineEvent _event = new ()
+    {
+        MediatorInstance = typeof(string),
+        MessageType = typeof(string),
+        ResultType = typeof(string)
+    };
     // helper class
     private class Target
     {
-        public void Handler(Hub.PreInterceptorBeingInvokeEvent e) { /* do nothing */ }
+        public void Handler(BeginPipelineEvent e) { /* do nothing */ }
     }
     
     
@@ -38,15 +43,15 @@ public class EventHubTests
     {
         var hub = new Hub();
 
-        hub.Subscribe<Hub.PreInterceptorBeingInvokeEvent>(_ => { });
+        hub.Subscribe<BeginPipelineEvent>(_ => { });
 
         var subsField = typeof(Hub).GetField("_subscriptions",
             BindingFlags.NonPublic | BindingFlags.Instance)!;
 
         var dict = (ConcurrentDictionary<Type, List<object>>)subsField.GetValue(hub)!;
 
-        Assert.True(dict.ContainsKey(typeof(Hub.PreInterceptorBeingInvokeEvent)));
-        Assert.Single(dict[typeof(Hub.PreInterceptorBeingInvokeEvent)]);
+        Assert.True(dict.ContainsKey(typeof(BeginPipelineEvent)));
+        Assert.Single(dict[typeof(BeginPipelineEvent)]);
     }
 
     [Fact]
@@ -57,12 +62,9 @@ public class EventHubTests
         var hub  = new Hub();
         var invoked = false;
 
-        hub.Subscribe<Hub.PreInterceptorBeingInvokeEvent>(_ => invoked = true);
+        hub.Subscribe<BeginPipelineEvent>(_ => invoked = true);
 
-        hub.Publish(new Hub.PreInterceptorBeingInvokeEvent()
-        {
-            InterceptorName = "TestInterceptor"
-        });
+        hub.Publish(_event);
 
         Assert.True(invoked);
     }
@@ -75,7 +77,7 @@ public class EventHubTests
         void CreateWeak()
         {
             var temp = new object();
-            hub.Subscribe<Hub.PreInterceptorBeingInvokeEvent>(_ => temp = temp.ToString(), useWeakReference: true);
+            hub.Subscribe<BeginPipelineEvent>(_ => temp = temp.ToString(), useWeakReference: true);
         }
 
         CreateWeak();
@@ -87,28 +89,26 @@ public class EventHubTests
             BindingFlags.NonPublic | BindingFlags.Instance)!;
         var dict = (ConcurrentDictionary<Type, List<object>>)subsField.GetValue(hub)!;
 
-        var beforeCount = dict[typeof(Hub.PreInterceptorBeingInvokeEvent)].Count;
+        var beforeCount = dict[typeof(BeginPipelineEvent)].Count;
 
-        hub.Publish(new Hub.PreInterceptorBeingInvokeEvent() {
-            InterceptorName = "TestInterceptor"
-        });
+        hub.Publish(_event);
 
-        var afterCount = dict[typeof(Hub.PreInterceptorBeingInvokeEvent)].Count;
+        var afterCount = dict[typeof(BeginPipelineEvent)].Count;
 
         Assert.True(afterCount <= beforeCount, "Dead weak subscriptions should be removed");
-        Assert.All(dict[typeof(Hub.PreInterceptorBeingInvokeEvent)],
-            s => Assert.True(((ISubscription<Hub.PreInterceptorBeingInvokeEvent>)s).IsAlive));
+        Assert.All(dict[typeof(BeginPipelineEvent)],
+            s => Assert.True(((ISubscription<BeginPipelineEvent>)s).IsAlive));
     }
 
     [Fact]
     public void WeakSubscription_Invoke_ReturnsFalse_WhenCollected()
     {
-        WeakSubscription<Hub.PreInterceptorBeingInvokeEvent> weakSub = null!;
+        WeakSubscription<BeginPipelineEvent> weakSub = null!;
 
         void CreateWeak()
         {
             var temp = new object();
-            weakSub = new WeakSubscription<Hub.PreInterceptorBeingInvokeEvent>(_ => temp = temp.ToString());
+            weakSub = new WeakSubscription<BeginPipelineEvent>(_ => temp = temp.ToString());
         }
 
         CreateWeak();
@@ -116,9 +116,7 @@ public class EventHubTests
         GC.Collect();
         GC.WaitForPendingFinalizers();
 
-        var result = weakSub.Invoke(new Hub.PreInterceptorBeingInvokeEvent() {
-            InterceptorName = "TestInterceptor"
-        });
+        var result = weakSub.Invoke(_event);
 
         Assert.False(result);
         Assert.False(weakSub.IsAlive);
@@ -128,11 +126,9 @@ public class EventHubTests
     public void StrongSubscription_Invoke_ReturnsTrue()
     {
         var called = false;
-        var strongSub = new StrongSubscription<Hub.PreInterceptorBeingInvokeEvent>(_ => called = true);
+        var strongSub = new StrongSubscription<BeginPipelineEvent>(_ => called = true);
 
-        var result = strongSub.Invoke(new Hub.PreInterceptorBeingInvokeEvent() {
-            InterceptorName = "TestInterceptor"
-        });
+        var result = strongSub.Invoke(_event);
 
         Assert.True(result);
         Assert.True(called);
@@ -142,14 +138,14 @@ public class EventHubTests
     [Fact]
     public void StrongSubscription_Dispose_DoesNotThrow()
     {
-        var strongSub = new StrongSubscription<Hub.PreInterceptorBeingInvokeEvent>(_ => { });
+        var strongSub = new StrongSubscription<BeginPipelineEvent>(_ => { });
         strongSub.Dispose();
     }
 
     [Fact]
     public void WeakSubscription_Dispose_DoesNotThrow()
     {
-        var weakSub = new WeakSubscription<Hub.PreInterceptorBeingInvokeEvent>(_ => { });
+        var weakSub = new WeakSubscription<BeginPipelineEvent>(_ => { });
         weakSub.Dispose();
     }
     
@@ -162,8 +158,8 @@ public class EventHubTests
     {
         // Arrange
         bool called = false;
-        Action<Hub.PreInterceptorBeingInvokeEvent> action = _ => called = true;
-        var strongSub = new StrongSubscription<Hub.PreInterceptorBeingInvokeEvent>(action);
+        Action<BeginPipelineEvent> action = _ => called = true;
+        var strongSub = new StrongSubscription<BeginPipelineEvent>(action);
 
         // Act & Assert
         Assert.True(strongSub.Matches(action)); // should match the same delegate
@@ -179,8 +175,8 @@ public class EventHubTests
     {
         // Arrange
         bool called = false;
-        Action<Hub.PreInterceptorBeingInvokeEvent> action = _ => called = true;
-        var weakSub = new WeakSubscription<Hub.PreInterceptorBeingInvokeEvent>(action);
+        Action<BeginPipelineEvent> action = _ => called = true;
+        var weakSub = new WeakSubscription<BeginPipelineEvent>(action);
 
         // Act & Assert
         Assert.True(weakSub.Matches(action)); // should match the same delegate
@@ -197,13 +193,11 @@ public class EventHubTests
         // Arrange
         bool called = false;
         var strongRef = new object();
-        Action<Hub.PreInterceptorBeingInvokeEvent> action = e => { called = true; _ = strongRef; };
-        var weakSub = new WeakSubscription<Hub.PreInterceptorBeingInvokeEvent>(action);
+        Action<BeginPipelineEvent> action = e => { called = true; _ = strongRef; };
+        var weakSub = new WeakSubscription<BeginPipelineEvent>(action);
 
         // Act
-        bool result = weakSub.Invoke(new Hub.PreInterceptorBeingInvokeEvent() {
-            InterceptorName = "TestInterceptor"
-        });
+        bool result = weakSub.Invoke(_event);
 
         // Assert
         Assert.True(result);
@@ -214,12 +208,12 @@ public class EventHubTests
     [Fact]
     public void WeakSubscription_Invoke_ReturnsFalse_WhenTargetCollected()
     {
-        WeakSubscription<Hub.PreInterceptorBeingInvokeEvent> weakSub;
+        WeakSubscription<BeginPipelineEvent> weakSub;
 
         void CreateWeak()
         {
             var target = new Target(); // strong reference
-            weakSub = new WeakSubscription<Hub.PreInterceptorBeingInvokeEvent>(target.Handler);
+            weakSub = new WeakSubscription<BeginPipelineEvent>(target.Handler);
         }
 
         CreateWeak();
@@ -229,9 +223,7 @@ public class EventHubTests
         GC.WaitForPendingFinalizers();
         GC.Collect();
 
-        bool result = weakSub.Invoke(new Hub.PreInterceptorBeingInvokeEvent() {
-            InterceptorName = "TestInterceptor"
-        });
+        bool result = weakSub.Invoke(_event);
 
         Assert.False(result);
         Assert.False(weakSub.IsAlive);
@@ -247,9 +239,7 @@ public class EventHubTests
         // Arrange
         var hub = new Hub();
 
-        var evt = new Hub.PreInterceptorBeingInvokeEvent() {
-            InterceptorName = "TestInterceptor"
-        };
+        var evt = _event;
 
         // Act & Assert: no exception, should hit the "return" branch
         hub.Publish(new UnsubscribedEvent());
@@ -369,20 +359,18 @@ public class EventHubTests
         var hub = new Hub();
         var called = false;
 
-        void Handler(Hub.PreInterceptorBeingInvokeEvent e)
+        void Handler(BeginPipelineEvent e)
         {
             called = true;
         }
 
-        var proxy = hub.PreInterceptorBeingInvokeEventProxy;
+        var proxy = hub.BeginPipelineEvent;
 
         // Act: subscribe using +=
         proxy += Handler;
 
         // Publish to ensure subscription works
-        hub.Publish(new Hub.PreInterceptorBeingInvokeEvent() {
-            InterceptorName = "TestInterceptor"
-        });
+        hub.Publish(_event);
     
         // Assert: handler called
         Assert.True(called);
@@ -394,9 +382,7 @@ public class EventHubTests
         proxy -= Handler;
 
         // Publish again
-        hub.Publish(new Hub.PreInterceptorBeingInvokeEvent() {
-            InterceptorName = "TestInterceptor"
-        });
+        hub.Publish(_event);
 
         // Assert: handler not called after unsubscribe
         Assert.False(called);
