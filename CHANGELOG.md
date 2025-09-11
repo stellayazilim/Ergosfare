@@ -1,4 +1,4 @@
-## unreleased – IHasProxyEvents 2025-05-09
+## v0.0.16e – IHasProxyEvents 2025-11-09
 ### **Added**
 - IHasProxyEvents interface, contains all known proxy events
 - EventHub now implements IHasProxyEvents
