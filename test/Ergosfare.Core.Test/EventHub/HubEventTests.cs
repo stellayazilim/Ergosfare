@@ -162,4 +162,19 @@ public class HubEventTests
         Assert.True(@event.Timestamp < now);
         Assert.InRange(@event.Timestamp, now.AddSeconds(-1), now.AddSeconds(1));
     }
+    
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public void RelatedEvents_ShouldNotEqual()
+    {
+
+        // arrange & act
+        var @event = new TestEvent();
+        var other = new object();
+        var now = DateTime.UtcNow;
+        // assert
+        Assert.NotEqual(@event, other);
+        
+    }
 }

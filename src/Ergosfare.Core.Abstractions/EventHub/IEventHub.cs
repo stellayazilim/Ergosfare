@@ -10,4 +10,5 @@ public interface IEventHub
     void Publish<TEvent>(TEvent evt) where TEvent : HubEvent;
 
     void Unsubscribe<TEvent>(Action<TEvent> handler) where TEvent : HubEvent;
+    
 }
