@@ -15,7 +15,7 @@ TestResults/
 */node_modules/
 .coverage/
 
-/changelog/
-changelog/
+changelog/**
+changelog/**/
 docs/**
 docs/**/

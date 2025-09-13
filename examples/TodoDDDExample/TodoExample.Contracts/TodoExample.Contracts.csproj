@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <LangVersion>13</LangVersion>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Stella.Ergosfare.Contracts" Version="0.0.16-e" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\TodoExample.Domain\TodoExample.Domain.csproj" />
+    </ItemGroup>
+
+</Project>
