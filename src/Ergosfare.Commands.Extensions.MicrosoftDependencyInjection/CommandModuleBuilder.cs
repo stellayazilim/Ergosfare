@@ -1,5 +1,5 @@
 ﻿using System.Reflection;
-using Ergosfare.Contracts;
+using Ergosfare.Commands.Abstractions;
 using Ergosfare.Core.Abstractions.Registry;
 
 namespace Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;

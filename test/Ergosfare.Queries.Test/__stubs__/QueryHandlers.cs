@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using Ergosfare.Context;
 using Ergosfare.Contracts;
 using Ergosfare.Core.Abstractions.Handlers;
+using Ergosfare.Queries.Abstractions;
 
 namespace Ergosfare.Queries.Test.__stubs__;
 

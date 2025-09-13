@@ -17,14 +17,16 @@ namespace Ergosfare.Core.Abstractions.Handlers;
 /// otherwise an exception may be thrown at runtime.
 /// </remarks>
 public interface IPostInterceptor<in TMessage,in TResult>
-    : IPostInterceptor where TMessage : notnull
+    : IPostInterceptor 
+        where TMessage : notnull 
+        where TResult : notnull
 {
 
     /// <inheritdoc cref="IPostInterceptor.Handle"/>
-    object IPostInterceptor.Handle(object message, object? messageResult, IExecutionContext context)
+    object IPostInterceptor.Handle(object message, object messageResult, IExecutionContext context)
     {
-        return Handle((TMessage) message, (TResult?) messageResult, AmbientExecutionContext.Current);
+        return Handle((TMessage) message, (TResult) messageResult, AmbientExecutionContext.Current);
     }
 
-    object Handle(TMessage message, TResult? messageResult, IExecutionContext context);
+    object Handle(TMessage message, TResult messageResult, IExecutionContext context);
 }

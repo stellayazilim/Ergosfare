@@ -1,6 +1,7 @@
 using Ergosfare.Context;
 using Ergosfare.Contracts;
 using Ergosfare.Core.Abstractions.Handlers;
+using Ergosfare.Events.Abstractions;
 
 namespace Ergosfare.Events.Test;
 

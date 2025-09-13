@@ -27,5 +27,5 @@ public interface IPostInterceptor
     /// Returns the (possibly modified) result as <see cref="object"/>. It is expected that the actual result matches the
     /// type produced by the main handler.
     /// </returns>
-    object Handle(object message, object? messageResult, IExecutionContext context);
+    object Handle(object message, object messageResult, IExecutionContext context);
 }

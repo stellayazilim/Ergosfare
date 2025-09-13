@@ -1,6 +1,5 @@
 ﻿
 using Ergosfare.Commands.Abstractions;
-using Ergosfare.Contracts;
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Strategies;
 
