@@ -48,25 +48,25 @@ public class SingleAsyncHandlerMediationStrategyTests
 
     private class TestExceptionMessagePreInterceptor: IAsyncPreInterceptor<TestExceptionMessage>
     {
-        public Task HandleAsync(TestExceptionMessage message, IExecutionContext context)
+        public Task<object> HandleAsync(TestExceptionMessage message, IExecutionContext context)
         {
-            return Task.CompletedTask;
+            return Task.FromResult<object>(message);
         }
     }
     
     private class TestExceptionMessagePostInterceptor: IAsyncPostInterceptor<TestExceptionMessage, string>
     {
-        public Task HandleAsync(TestExceptionMessage message, string? messageResult, IExecutionContext context)
+        public Task<object> HandleAsync(TestExceptionMessage message, string? messageResult, IExecutionContext context)
         {
-            return Task.CompletedTask;
+            return Task.FromResult<object>(messageResult);
         }
     }
     
     private class TestExceptionMessageExceptionInterceptor: IAsyncExceptionInterceptor<TestExceptionMessage, string>
     {
-        public Task HandleAsync(TestExceptionMessage message, string? result, Exception exception, IExecutionContext context)
+        public Task<object> HandleAsync(TestExceptionMessage message, string? result, Exception exception, IExecutionContext context)
         {
-            return Task.CompletedTask;
+            return Task.FromResult<object>(result);
         }
     }
     

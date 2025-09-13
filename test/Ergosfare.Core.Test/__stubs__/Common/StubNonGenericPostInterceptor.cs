@@ -3,32 +3,34 @@ using Ergosfare.Core.Abstractions.Handlers;
 
 namespace Ergosfare.Core.Test.__stubs__;
 
-internal class StubNonGenericPostInterceptor: IAsyncPostInterceptor<StubNonGenericMessage,Task>
+internal class StubNonGenericPostInterceptor: IAsyncPostInterceptor<StubNonGenericMessage>
 {
-    public async Task HandleAsync(StubNonGenericMessage message, Task? messageResult, IExecutionContext context)
+ 
+    public Task HandleAsync(StubNonGenericMessage message, object? _, IExecutionContext context)
     {
-        await Task.Yield();
-               
+        return Task.CompletedTask;
     }
 }
 
 
-internal class StubNonGenericDerivedPostInterceptor: IAsyncPostInterceptor<StubNonGenericDerivedMessage,Task>
+internal class StubNonGenericDerivedPostInterceptor: IAsyncPostInterceptor<StubNonGenericDerivedMessage>
 {
-    public async Task HandleAsync(StubNonGenericDerivedMessage message, Task? messageResult, IExecutionContext context)
+    public Task HandleAsync(StubNonGenericDerivedMessage message, object? messageResult, IExecutionContext context)
     {
-        await Task.Yield();
+        return Task.CompletedTask;
     }
+
+   
 }
 
 
 internal class StubNonGenericStreamPostInterceptorsAbortExecution: IAsyncPostInterceptor<StubNonGenericMessage,IAsyncEnumerable<string>>
 {
 
-    public Task HandleAsync(StubNonGenericMessage message, IAsyncEnumerable<string>? messageResult, IExecutionContext context)
+    public Task<object> HandleAsync(StubNonGenericMessage message, IAsyncEnumerable<string>? messageResult, IExecutionContext context)
     {
         context.Abort();
-        return Task.CompletedTask;
+        return Task.FromResult<object>(messageResult ?? throw new ArgumentNullException(nameof(messageResult)));
     }
 }
 
@@ -37,7 +39,7 @@ internal class StubNonGenericStreamPostInterceptorThrowsException: IAsyncPostInt
 {
 
 
-    public Task HandleAsync(StubNonGenericMessage message, IAsyncEnumerable<string>? messageResult, IExecutionContext context)
+    public Task<object> HandleAsync(StubNonGenericMessage message, IAsyncEnumerable<string>? messageResult, IExecutionContext context)
     {
         throw new Exception("post exception");
     }

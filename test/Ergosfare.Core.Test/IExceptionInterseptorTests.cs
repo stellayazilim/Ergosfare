@@ -35,9 +35,9 @@ public class ExceptionInterceptorTests
     }
 
     
-    private class TestExceptionInterceptor4: IAsyncExceptionInterceptor<StubNonGenericMessage, Task>
+    private class TestExceptionInterceptor4: IAsyncExceptionInterceptor<StubNonGenericMessage>
     {
-        public Task HandleAsync(StubNonGenericMessage message, Task? result, Exception exception, IExecutionContext context)
+        public Task HandleAsync(StubNonGenericMessage message, object? result, Exception exception, IExecutionContext context)
         {
             return Task.CompletedTask;
         }

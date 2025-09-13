@@ -45,9 +45,9 @@ public sealed class StubNonGenericEventExceptionInterceptor: IEventExceptionInte
     public static bool IsRuned { get; private set; }
 
 
-    public Task HandleAsync(StubNonGenericEventThrows message, object? messageResult, Exception exception, IExecutionContext context)
+    public Task<object> HandleAsync(StubNonGenericEventThrows message, object? messageResult, Exception exception, IExecutionContext context)
     {
         IsRuned = true;
-        return Task.CompletedTask;
+        return Task.FromResult<object>(messageResult);
     }
 }
