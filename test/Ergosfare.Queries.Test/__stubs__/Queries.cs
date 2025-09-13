@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices.ComTypes;
 using Ergosfare.Contracts;
+using Ergosfare.Queries.Abstractions;
 
 namespace Ergosfare.Queries.Test.__stubs__;
 

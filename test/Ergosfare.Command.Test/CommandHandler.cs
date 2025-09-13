@@ -1,3 +1,4 @@
+using Ergosfare.Commands.Abstractions;
 using Ergosfare.Context;
 using Ergosfare.Contracts;
 

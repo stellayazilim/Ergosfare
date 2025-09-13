@@ -1,5 +1,5 @@
+using Ergosfare.Commands.Abstractions;
 using Ergosfare.Context;
-using Ergosfare.Contracts;
 using Ergosfare.Contracts.Attributes;
 
 namespace Ergosfare.Command.Test.__stubs__;

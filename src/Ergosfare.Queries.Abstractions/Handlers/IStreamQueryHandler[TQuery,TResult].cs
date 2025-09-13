@@ -1,0 +1,6 @@
+using Ergosfare.Core.Abstractions.Handlers;
+
+namespace Ergosfare.Queries.Abstractions;
+
+public interface IStreamQueryHandler<in TQuery, out TResult> : 
+    IQuery, IStreamHandler<TQuery, TResult> where TQuery : IStreamQuery<TResult>;

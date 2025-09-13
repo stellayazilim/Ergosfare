@@ -1,4 +1,4 @@
-using Ergosfare.Contracts;
+using Ergosfare.Commands.Abstractions;
 
 namespace Ergosfare.Command.Test.__stubs__;
 

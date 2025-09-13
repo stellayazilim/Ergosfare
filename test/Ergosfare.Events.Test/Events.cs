@@ -1,4 +1,5 @@
 using Ergosfare.Contracts;
+using Ergosfare.Events.Abstractions;
 
 namespace Ergosfare.Events.Test;
 
