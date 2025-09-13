@@ -3,9 +3,10 @@ using Ergosfare.Core.Abstractions.Handlers;
 
 namespace Ergosfare.Core.Test.__stubs__;
 
-public class StubGenericExceptionInterceptor<TArg>: IAsyncExceptionInterceptor<StubNonGenericMessage, Task>
+public class StubGenericExceptionInterceptor<TArg>: IAsyncExceptionInterceptor<StubNonGenericMessage>
 {
-    public Task HandleAsync(StubNonGenericMessage message, Task? result, Exception exception, IExecutionContext context)
+    
+    public Task HandleAsync(StubNonGenericMessage message, object? messageResult, Exception exception, IExecutionContext context)
     {
         return Task.CompletedTask;
     }

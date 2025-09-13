@@ -10,10 +10,10 @@ namespace Ergosfare.Command.Test.__stubs__;
 public class StubCommandPreInterceptor1: ICommandPreInterceptor<StubNonGenericCommand>
 {
     public static  bool HasCalled;
-    public virtual Task HandleAsync(StubNonGenericCommand message, IExecutionContext context)
+    public virtual Task<object> HandleAsync(StubNonGenericCommand message, IExecutionContext context)
     {
         HasCalled = true;
-        return Task.CompletedTask;
+        return Task.FromResult<object>(message);
     }
 }
 
@@ -24,9 +24,9 @@ public class StubCommandPreInterceptor2: ICommandPreInterceptor<StubNonGenericCo
 {
    
     public static bool HasCalled;
-    public virtual Task HandleAsync(StubNonGenericCommand message, IExecutionContext context)
+    public virtual Task<object>  HandleAsync(StubNonGenericCommand message, IExecutionContext context)
     {
         HasCalled = true;
-        return Task.CompletedTask;
+        return Task.FromResult<object>(message);
     }
 }

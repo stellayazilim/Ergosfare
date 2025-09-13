@@ -19,9 +19,9 @@ public class PreInterceptorTests
     
     private class TestIAsyncPreInterceptorTMessageHandler: IAsyncPreInterceptor<IMessage>
     {
-        public Task HandleAsync(IMessage message, IExecutionContext context)
+        public Task<object> HandleAsync(IMessage message, IExecutionContext context)
         {
-            return Task.CompletedTask;
+            return Task.FromResult<object>(message);
         }
     }
 

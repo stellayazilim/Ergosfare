@@ -8,18 +8,18 @@ namespace Ergosfare.Core.Test;
 public class PostInterceptorTests
 {
     
-    private class TestIPostInterceptorTMessageTResultHandler: IPostInterceptor<IMessage, Task>
+    private class TestIPostInterceptorTMessageTResultHandler: IAsyncPostInterceptor<IMessage, string>
     {
-        public object Handle(IMessage message, Task? messageResult, IExecutionContext context)
+       
+        public Task<object> HandleAsync(IMessage message, string? messageResult, IExecutionContext context)
         {
-            return Task.CompletedTask;
+            return Task.FromResult<object>(messageResult ?? "string result");
         }
     }
     
-    private class TestIAsyncPostInterceptorTMessageTResultHandler: IAsyncPostInterceptor<IMessage, Task>
+    private class TestIAsyncPostInterceptorTMessageTResultHandler: IAsyncPostInterceptor<IMessage>
     {
-    
-        public Task HandleAsync(IMessage message, Task? messageResult, IExecutionContext context)
+        public Task HandleAsync(IMessage message, object? _, IExecutionContext context)
         {
             return Task.CompletedTask;
         }
@@ -33,27 +33,31 @@ public class PostInterceptorTests
     public async Task TestPostInterceptorsShouldImplement()
     {
         // arrange 
-        var ct = CancellationToken.None;
-        var items = new Dictionary<object, object?>();
         var context = StubExecutionContext.Create();
         var msg = new StubNonGenericMessage();
-        
-        IPostInterceptor handler1 = new TestIPostInterceptorTMessageTResultHandler();
-        IPostInterceptor<IMessage, Task> handler2 = new TestIAsyncPostInterceptorTMessageTResultHandler();
-        
-        
+
+        IPostInterceptor<IMessage, string> handler1 = new TestIPostInterceptorTMessageTResultHandler();
+        IPostInterceptor<IMessage, object> handler2 = new TestIAsyncPostInterceptorTMessageTResultHandler();
+
+        // Use a proper string result for handler1
+        string initialStringResult = "test-result";
+
         await using (AmbientExecutionContext.CreateScope(context))
         {
-            var result = handler1.Handle(msg,Task.CompletedTask, AmbientExecutionContext.Current); 
+            var result = handler1.Handle(msg, initialStringResult, AmbientExecutionContext.Current);
             Assert.NotNull(result);
-            await Assert.IsType<Task>(result, exactMatch: false);
+
+            // Await the result if it is a Task<string>
+            var awaitedResult = await Assert.IsType<Task<object>>(result, exactMatch: false);
+            Assert.Equal(initialStringResult, awaitedResult);
         }
-        
-        
+
         await using (AmbientExecutionContext.CreateScope(context))
         {
-            var result = handler2.Handle(msg,Task.CompletedTask, AmbientExecutionContext.Current); 
+            var result = handler2.Handle(msg, null, AmbientExecutionContext.Current);
             Assert.NotNull(result);
+
+            // Await the Task returned by the async post interceptor
             await Assert.IsType<Task>(result, exactMatch: false);
         }
     }

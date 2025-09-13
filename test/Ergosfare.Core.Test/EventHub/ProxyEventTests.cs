@@ -1,4 +1,6 @@
+using System.Reflection;
 using Ergosfare.Core.EventHub;
+using Ergosfare.Core.Events;
 
 namespace Ergosfare.Core.Test.EventHub;
 
@@ -31,9 +33,33 @@ public class ProxyEventTests
             new object[] { nameof(_hub.FinishPreInterceptingWithExceptionEvent) },
             new object[] { nameof(_hub.FinishPreInterceptorInvocationEvent) }
         };
+    
+        
+    [Fact]
+    [Trait("Category", "Coverage")]
+    [Trait("Category", "Unit")]
+    public void All_ProxyEvent_Properties_Should_Be_Initialized()
+    {
+        // Arrange
+        var hub = new Core.EventHub.EventHub();
+        var properties = typeof(Core.EventHub.EventHub).GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+        // Act & Assert
+        foreach (var prop in properties)
+        {
+            // Only test ProxyEvent<> properties
+            if (!prop.PropertyType.IsGenericType) continue;
+            if (prop.PropertyType.GetGenericTypeDefinition() != typeof(ProxyEvent<>)) continue;
+
+            var value = prop.GetValue(hub);
+            Assert.NotNull(value);
+        }
+    }
 
         [Theory]
         [MemberData(nameof(ProxyEventData))]
+        [Trait("Category", "Coverage")]
+        [Trait("Category", "Unit")]
         public void ProxyEvent_Should_Invoke_Handler_When_Raised(string propertyName)
         {
             // Arrange
@@ -41,4 +67,7 @@ public class ProxyEventTests
             // Assert
             Assert.NotNull(property);
         }
+        
+    
+
 }

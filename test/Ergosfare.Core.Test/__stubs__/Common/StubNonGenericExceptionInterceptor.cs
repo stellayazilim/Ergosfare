@@ -43,9 +43,9 @@ internal class StubNonGenericAsyncExceptionInterceptor: IAsyncExceptionIntercept
 
 public class StubNonGenericAsyncStringResultExceptionInterceptor: IAsyncExceptionInterceptor<StubNonGenericMessage, string>
 {
-    public Task HandleAsync(StubNonGenericMessage message, string? result, Exception exception, IExecutionContext context)
+    public Task<object> HandleAsync(StubNonGenericMessage message, string? result, Exception exception, IExecutionContext context)
     {
-        return Task.CompletedTask;
+        return Task.FromResult((object)result);
     }
 }
 
