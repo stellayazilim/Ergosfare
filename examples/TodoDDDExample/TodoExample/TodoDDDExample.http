@@ -1,0 +1,36 @@
+@TodoDDDExample_HostAddress = http://localhost:5295
+
+GET {{TodoDDDExample_HostAddress}}/weatherforecast/1
+Accept: application/json
+
+###
+
+
+POST {{TodoDDDExample_HostAddress}}/todos
+Content-Type: application/json
+
+{
+  "Name": "Todo1",
+  "IsCompleted": false
+}
+
+###
+
+PATCH {{TodoDDDExample_HostAddress}}/todos
+Content-Type: application/json
+
+{
+  "Name": "Todo1",
+  "IsCompleted": true
+}
+###
+
+DELETE {{TodoDDDExample_HostAddress}}/todos
+Content-Type: application/json
+
+{
+  "Name": "Todo1"
+}
+###
+
+GET {{TodoDDDExample_HostAddress}}/todos
