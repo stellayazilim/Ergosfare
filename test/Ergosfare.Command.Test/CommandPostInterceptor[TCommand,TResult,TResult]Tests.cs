@@ -25,7 +25,7 @@ public class CommandPostInterceptorTCommandTResultTResultTests
         IAsyncPostInterceptor<StubNonGenericCommandStringResult, string> interceptor = new TestCommandTCommandTResultTResultPostInterceptor();
         
         // act 
-        var result = await interceptor.HandleAsync(new StubNonGenericCommandStringResult(), null, null);
+        var result = await interceptor.HandleAsync(new StubNonGenericCommandStringResult(), String.Empty, null);
         
         // assert
         Assert.IsType<string>(result);
