@@ -7,6 +7,8 @@ public class MainHandlerDescriptorTests
 {
 
     [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
     public void MainHandlerDescriptorShouldGetResultType()
     {
         // arrange

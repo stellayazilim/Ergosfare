@@ -3,7 +3,7 @@ using Ergosfare.Core.Abstractions.Handlers;
 
 namespace Ergosfare.Commands.Abstractions;
 
-public interface IAsyncCommandPostInterceptor<in TCommand, in TResult,  TModifiedResult> : ICommandPostInterceptor<TCommand, TResult>
+public interface ICommandPostInterceptor<in TCommand, in TResult,  TModifiedResult> : ICommandPostInterceptor<TCommand, TResult>
     where TCommand : ICommand<TResult>
     where TResult : notnull
 {
