@@ -49,4 +49,7 @@ internal class StubMessageDependencies : IMessageDependencies
     {
         get;
     } = new LazyHandlerCollection<IExceptionInterceptor, IExceptionInterceptorDescriptor>([]);
+    
+    public ILazyHandlerCollection<IFinalInterceptor, IFinalInterceptorDescriptor> FinalInterceptors  { get; } = new LazyHandlerCollection<IFinalInterceptor, IFinalInterceptorDescriptor>([]);
+    public  ILazyHandlerCollection<IFinalInterceptor, IFinalInterceptorDescriptor> IndirectFinalInterceptors  { get; } = new LazyHandlerCollection<IFinalInterceptor, IFinalInterceptorDescriptor>([]);
 }

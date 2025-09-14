@@ -25,6 +25,7 @@ public class PreInterceptorTests
         }
     }
 
+    
     [Fact]
     [Trait("Category", "Coverage")]
     [Trait("Category", "Unit")]

@@ -3,15 +3,14 @@ using Ergosfare.Core.Abstractions.Handlers;
 
 namespace Ergosfare.Commands.Abstractions;
 
-public interface ICommandPreInterceptor<in TCommand, out TModifiedCommand>: ICommand, IPreInterceptor<TCommand>
+public interface ICommandPreInterceptor<in TCommand,  TModifiedCommand>: ICommand, IAsyncPreInterceptor<TCommand>
     where TCommand : ICommand
     where TModifiedCommand : TCommand
 {
-    
-    object IPreInterceptor<TCommand>.Handle(TCommand command, IExecutionContext context)
+    async Task<object> IAsyncPreInterceptor<TCommand>.HandleAsync(TCommand command, IExecutionContext context)
     {
-        return Handle(command, context);
+        return await HandleAsync(command, context);
     }
-    public new TModifiedCommand Handle(TCommand command, IExecutionContext context);
+    public new Task<TModifiedCommand> HandleAsync(TCommand command, IExecutionContext context);
 
 }

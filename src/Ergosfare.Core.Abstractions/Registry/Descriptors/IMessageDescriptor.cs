@@ -18,4 +18,7 @@ public interface IMessageDescriptor: IHasMessageType
     
     IReadOnlyCollection<IExceptionInterceptorDescriptor> ExceptionInterceptors { get; }
     IReadOnlyCollection<IExceptionInterceptorDescriptor> IndirectExceptionInterceptors { get; }
+    
+    IReadOnlyCollection<IFinalInterceptorDescriptor> FinalInterceptors { get; }
+    IReadOnlyCollection<IFinalInterceptorDescriptor> IndirectFinalInterceptors { get; }
 }

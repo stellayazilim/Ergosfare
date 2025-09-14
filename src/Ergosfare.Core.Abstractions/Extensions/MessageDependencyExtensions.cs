@@ -52,4 +52,23 @@ public static class MessageDependencyExtensions
             await (Task) errorHandler.Handler.Value.Handle(message, messageResult, exceptionDispatchInfo.SourceException,  context);
         }
     }
+
+
+    public static async Task RunAsyncFinalInterceptors(
+        this IMessageDependencies messageDependencies,
+        object message,
+        object? messageResult,
+        Exception? exception,
+        IExecutionContext context)
+    {
+        foreach (var finalHandler in messageDependencies.FinalInterceptors)
+            await (Task) finalHandler.Handler.Value.Handle(message, messageResult, exception, context);
+        
+
+
+        foreach (var finalHandler in messageDependencies.FinalInterceptors)
+        {
+            await (Task) finalHandler.Handler.Value.Handle(message, messageResult, exception,  context);
+        }
+    }
 }

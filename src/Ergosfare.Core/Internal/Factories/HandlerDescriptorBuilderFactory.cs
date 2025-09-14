@@ -12,7 +12,8 @@ public class HandlerDescriptorBuilderFactory: IDisposable, IAsyncDisposable
         new HandlerDescriptorBuilder(),
         new PreInterceptorDescriptionBuilder(),
         new PostHandlerDescriptorBuilder(),
-        new ExceptionInterceptorDescriptorBuilder()
+        new ExceptionInterceptorDescriptorBuilder(),
+        new FinalInterceptorDescriptorBuilder()
     ];
 
 
@@ -27,12 +28,10 @@ public class HandlerDescriptorBuilderFactory: IDisposable, IAsyncDisposable
 
     public void Dispose()
     {
-        // TODO release managed resources here
     }
 
     public ValueTask DisposeAsync()
     {
-        // TODO release managed resources here
         return ValueTask.CompletedTask;
     }
 }

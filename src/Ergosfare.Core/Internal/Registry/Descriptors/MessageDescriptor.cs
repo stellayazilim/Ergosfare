@@ -21,6 +21,10 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
     private readonly List<IExceptionInterceptorDescriptor> _exceptionInterceptors = new();
     private readonly List<IExceptionInterceptorDescriptor> _indirectExceptionInterceptors = new();
     
+    // final intercepors
+    private readonly List<IFinalInterceptorDescriptor> _finalInterceptors = new();
+    private readonly List<IFinalInterceptorDescriptor> _indirectFinalInterceptors = new();
+    
     public Type MessageType { get; } = messageType;
     public bool IsGeneric { get; } = messageType.IsGenericType;
 
@@ -40,6 +44,10 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
     // exception interceptors
     public IReadOnlyCollection<IExceptionInterceptorDescriptor> ExceptionInterceptors => _exceptionInterceptors;
     public IReadOnlyCollection<IExceptionInterceptorDescriptor> IndirectExceptionInterceptors => _indirectExceptionInterceptors;
+    
+    // filan interceptors
+    public IReadOnlyCollection<IFinalInterceptorDescriptor> FinalInterceptors => _finalInterceptors;
+    public IReadOnlyCollection<IFinalInterceptorDescriptor> IndirectFinalInterceptors => _indirectFinalInterceptors;
     public void AddDescriptors(IEnumerable<IHandlerDescriptor> descriptors)
     {
         
@@ -69,6 +77,9 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
                 case IExceptionInterceptorDescriptor exceptionInterceptorDescriptor:
                     _exceptionInterceptors.Add(exceptionInterceptorDescriptor);
                     break;
+                case IFinalInterceptorDescriptor finalInterceptorDescriptor:
+                    _finalInterceptors.Add(finalInterceptorDescriptor);
+                    break;
             }
         }
         
@@ -87,6 +98,9 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
                     break;
                 case IExceptionInterceptorDescriptor exceptionInterceptorDescriptor:
                     _indirectExceptionInterceptors.Add(exceptionInterceptorDescriptor);
+                    break;
+                case IFinalInterceptorDescriptor finalInterceptorDescriptor:
+                    _indirectFinalInterceptors.Add(finalInterceptorDescriptor);
                     break;
             }
         }

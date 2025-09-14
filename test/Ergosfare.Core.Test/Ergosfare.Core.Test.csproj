@@ -32,6 +32,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\..\src\Ergosfare.Core.Extensions.MicrosoftDependencyInjection\Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj" />
       <ProjectReference Include="..\..\src\Ergosfare.Core\Ergosfare.Core.csproj" />
       <ProjectReference Include="..\Ergosfare.Test\Ergosfare.Test.csproj" />
     </ItemGroup>

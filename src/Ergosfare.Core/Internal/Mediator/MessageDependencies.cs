@@ -29,6 +29,8 @@ internal sealed class MessageDependencies : IMessageDependencies
     public ILazyHandlerCollection<IExceptionInterceptor, IExceptionInterceptorDescriptor> IndirectExceptionInterceptors { get; }
     
     
+    public ILazyHandlerCollection<IFinalInterceptor, IFinalInterceptorDescriptor> FinalInterceptors { get; }
+    public ILazyHandlerCollection<IFinalInterceptor, IFinalInterceptorDescriptor> IndirectFinalInterceptors { get; }
     #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
   
     #pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
@@ -75,6 +77,15 @@ internal sealed class MessageDependencies : IMessageDependencies
         IndirectExceptionInterceptors = ResolveHandlers(
             descriptor.IndirectExceptionInterceptors,
             handlerType => (IExceptionInterceptor)  serviceProvider.GetRequiredService(handlerType));
+        
+        // resolve filan interceptors
+        FinalInterceptors = ResolveHandlers(
+            descriptor.FinalInterceptors,
+            handlerType => (IFinalInterceptor)  serviceProvider.GetRequiredService(handlerType));
+        
+        IndirectFinalInterceptors = ResolveHandlers(
+            descriptor.IndirectFinalInterceptors,
+            handlerType => (IFinalInterceptor)  serviceProvider.GetRequiredService(handlerType));
     }
 
     private ILazyHandlerCollection<THandler, TDescriptor> ResolveHandlers<THandler, TDescriptor>(

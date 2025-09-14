@@ -50,17 +50,25 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage> : IMessageMedi
         }
 
         Task? result = null;
+        Exception? exception = null;
         try
         {
             await messageDependencies.RunAsyncPreInterceptors(message, context);
             result = (Task)messageDependencies.Handlers.Single().Handler.Value.Handle(message, context);
-            await result; 
+            await result;
             await messageDependencies.RunAsyncPostInterceptors(message, result, context);
         }
-        catch(Exception e) when (e is not ExecutionAbortedException)
+        catch (Exception e) when (e is not ExecutionAbortedException)
         {
-            await messageDependencies.RunAsyncExceptionInterceptors(message, result, ExceptionDispatchInfo.Capture(e), context);
+            exception = e;
+            await messageDependencies.RunAsyncExceptionInterceptors(message, result, ExceptionDispatchInfo.Capture(e),
+                context);
 
+        }
+
+        finally
+        {
+            await messageDependencies.RunAsyncFinalInterceptors(message, result, exception, context);
         }
         
     }

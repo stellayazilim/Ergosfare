@@ -1,15 +1,18 @@
 ﻿using Ergosfare.Contracts.Attributes;
 using Ergosfare.Core.Abstractions;
+using Ergosfare.Core.Internal.Builders;
 using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Mediator;
 using Ergosfare.Core.Internal.Registry.Descriptors;
 using Ergosfare.Core.Test.__stubs__;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
+using Xunit.Abstractions;
 
 namespace Ergosfare.Core.Test;
 
 public class MessageDependenciesTest
+(ITestOutputHelper testOutputHelper)
 {
 
     [Fact]
@@ -59,6 +62,7 @@ public class MessageDependenciesTest
             .AddTransient<StubGenericPreInterceptor<string>>()
             .AddTransient<StubGenericPostInterceptor<string>>()
             .AddTransient<StubGenericExceptionInterceptor<string>>()
+            .AddTransient<StubGenericFinalInterceptor<string>>()
             .BuildServiceProvider();
 
         // our generic message type to resolve against
@@ -105,12 +109,21 @@ public class MessageDependenciesTest
             ResultType = typeof(Task)
         };
 
+        var finalInterceptorDescriptor = new FinalInterceptorDescriptor()
+        {
+            Weight = 1,
+            Groups = [GroupAttribute.DefaultGroupName],
+            MessageType = typeof(StubGenericMessage<>),
+            HandlerType = typeof(StubGenericFinalInterceptor<>),
+            ResultType = typeof(Task)
+        };
+
         var messageDescriptor = new MessageDescriptor(typeof(StubGenericMessage<>));
         messageDescriptor.AddDescriptor(handlerDescriptor);
         messageDescriptor.AddDescriptor(preInterceptorDescriptor);
         messageDescriptor.AddDescriptor(postInterceptorDescriptor);
         messageDescriptor.AddDescriptor(exceptionInterceptorDescriptor);
-        
+        messageDescriptor.AddDescriptor(finalInterceptorDescriptor);
         var dependencies = new MessageDependencies(
             typeof(StubGenericMessage<string>),
             messageDescriptor,
@@ -122,10 +135,11 @@ public class MessageDependenciesTest
         Assert.Equal(typeof(StubGenericPreInterceptor<string>), dependencies.PreInterceptors.First().Handler.Value.GetType());
         Assert.Equal(typeof(StubGenericPostInterceptor<string>), dependencies.PostInterceptors.First().Handler.Value.GetType());
         Assert.Equal(typeof(StubGenericExceptionInterceptor<string>),  dependencies.ExceptionInterceptors.First().Handler.Value.GetType());
+        Assert.Equal(typeof(StubGenericFinalInterceptor<string>),  dependencies.FinalInterceptors.First().Handler.Value.GetType());
     }
     
     
-       [Fact]
+    [Fact]
     [Trait("Category", "Coverage")]
     public void MessageDependenciesShouldGetIndirectHandlerType()
     {
@@ -135,6 +149,7 @@ public class MessageDependenciesTest
             .AddTransient<StubNonGenericPreInterceptor>()
             .AddTransient<StubNonGenericPostInterceptor>()
             .AddTransient<StubNonGenericExceptionInterceptor>()
+            .AddTransient<StubNonGenericFinalInterceptor>()
             .BuildServiceProvider();
 
         // our generic message type to resolve against
@@ -180,13 +195,22 @@ public class MessageDependenciesTest
             HandlerType = typeof(StubNonGenericExceptionInterceptor),
             ResultType = typeof(Task)
         };
-            
+
+        var finalInterceptorDescriptor = new FinalInterceptorDescriptor()
+        {
+            Weight = 1,
+            Groups = [GroupAttribute.DefaultGroupName],
+            MessageType = indirectMessageType,
+            HandlerType = typeof(StubNonGenericFinalInterceptor),
+            ResultType = typeof(Task)
+        };
+        
         var messageDescriptor = new MessageDescriptor(messageType);
         messageDescriptor.AddDescriptor(handlerDescriptor);
         messageDescriptor.AddDescriptor(preInterceptorDescriptor);
         messageDescriptor.AddDescriptor(postInterceptorDescriptor);
         messageDescriptor.AddDescriptor(exceptionInterceptorDescriptor);
-        
+        messageDescriptor.AddDescriptor(finalInterceptorDescriptor);
         
         var dependencies = new MessageDependencies(
             messageType,
@@ -201,6 +225,7 @@ public class MessageDependenciesTest
         Assert.Equal(typeof(StubNonGenericPreInterceptor), dependencies.IndirectPreInterceptors.First().Handler.Value.GetType());
         Assert.Equal(typeof(StubNonGenericPostInterceptor), dependencies.IndirectPostInterceptors.First().Handler.Value.GetType());
         Assert.Equal(typeof(StubNonGenericExceptionInterceptor), dependencies.IndirectExceptionInterceptors.First().Handler.Value.GetType());
+        Assert.Equal(typeof(StubNonGenericFinalInterceptor), dependencies.IndirectFinalInterceptors.First().Handler.Value.GetType());
     }
     
     [Fact]
@@ -213,6 +238,7 @@ public class MessageDependenciesTest
             .AddTransient<StubNonGenericPreInterceptor>()
             .AddTransient<StubNonGenericPostInterceptor>()
             .AddTransient<StubNonGenericExceptionInterceptor>()
+            .AddTransient<StubNonGenericFinalInterceptor>()
             .BuildServiceProvider();
         var descriptorFactory = new HandlerDescriptorBuilderFactory();
 
@@ -233,11 +259,14 @@ public class MessageDependenciesTest
         var exceptionHandlerDescriptor = descriptorFactory.BuildDescriptors(
             typeof(StubNonGenericExceptionInterceptor)
             );
+
+        var finalInterceptorDescriptor = descriptorFactory.BuildDescriptors(
+            typeof(StubNonGenericFinalInterceptor));
         descriptor.AddDescriptors(mainHandlerDescriptor);
         descriptor.AddDescriptors(preHandlerDescriptor);
         descriptor.AddDescriptors(postHandlerDescriptor);
         descriptor.AddDescriptors(exceptionHandlerDescriptor);
-
+        descriptor.AddDescriptors(finalInterceptorDescriptor);
         // Act
         var dependencies = new MessageDependencies(
             typeof(StubNonGenericMessage),
@@ -249,7 +278,7 @@ public class MessageDependenciesTest
         Assert.Equal(typeof(StubNonGenericPreInterceptor), dependencies.PreInterceptors.First().Descriptor.HandlerType);
         Assert.Equal(typeof(StubNonGenericPostInterceptor), dependencies.PostInterceptors.First().Descriptor.HandlerType);
         Assert.Equal(typeof(StubNonGenericExceptionInterceptor), dependencies.ExceptionInterceptors.First().Descriptor.HandlerType);
-
+//        Assert.Equal(typeof(StubNonGenericFinalInterceptor), dependencies.FinalInterceptors.First().Descriptor.HandlerType);
     }   
     
     

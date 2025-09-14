@@ -130,7 +130,9 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests
         var (dependencies, _, _) = SingleMessageDependencyMediationFactory.Create<StubNonGenericMessage>(
             typeof(StubNonGenericHandler),
             typeof(StubNonGenericPostInterceptor),
-            typeof(StubNonGenericStreamExceptionInterceptor));
+            typeof(StubNonGenericStreamExceptionInterceptor),
+            
+            typeof(StubNonGenericFinalInterceptor));
         
         var strategy = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>();
         
@@ -153,7 +155,8 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests
         var (dependencies, _, _) = SingleMessageDependencyMediationFactory.Create<StubNonGenericMessage>(
             typeof(StubNonGenericHandler),
             typeof(StubNonGenericPostInterceptor),
-            typeof(StubNonGenericStreamExceptionInterceptor));
+            typeof(StubNonGenericStreamExceptionInterceptor),
+            typeof(StubNonGenericFinalInterceptor));
         
         var strategy = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>();
         
