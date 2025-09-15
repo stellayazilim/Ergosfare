@@ -29,13 +29,13 @@ public class BeginFinalInterceptorInvocationEvent: PipelineEvent
     /// <param name="message">The message being processed.</param>
     /// <param name="result">The current result of the message, if any.</param>
     /// <param name="exception">An optional exception captured earlier in the pipeline.</param>
-    /// <param name="handlerType">The type of the final interceptor that is about to execute.</param>
+    /// <param name="interceptorType">The type of the final interceptor that is about to execute.</param>
     /// <returns>A new <see cref="BeginFinalInterceptorInvocationEvent"/> instance.</returns>
-    public static BeginFinalInterceptorInvocationEvent Create(object message, object? result, Exception? exception, Type handlerType) => new()
+    public static BeginFinalInterceptorInvocationEvent Create(object message, object? result, Exception? exception, Type interceptorType) => new()
     {
         Message = message ?? throw new ArgumentNullException(nameof(message)),
         Result = result,
-        HandlerType = handlerType ?? throw new ArgumentNullException(nameof(handlerType)),
+        HandlerType = interceptorType ?? throw new ArgumentNullException(nameof(interceptorType)),
         Exception = exception
     };
     

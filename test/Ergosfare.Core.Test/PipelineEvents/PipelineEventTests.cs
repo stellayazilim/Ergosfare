@@ -5,6 +5,143 @@ namespace Ergosfare.Core.Test.PipelineEvents;
 public class PipelineEventTests
 {
     
+       // Test data: event type, invoke action
+    public static IEnumerable<object[]> EventInvokeData()
+    {
+        object dummyMessage = new object();
+        object dummyResult = new object();
+        Exception dummyException = new InvalidOperationException("test");
+
+        yield return new object[]
+        {
+            "BeginPreInterceptingEvent",
+            new Action(() => BeginPreInterceptingEvent.Invoke(dummyMessage, dummyResult, 2))
+        };
+        yield return new object[]
+        {
+            "FinishPreInterceptingEvent",
+            new Action(() => FinishPreInterceptingEvent.Invoke(dummyMessage, dummyResult))
+        };
+        yield return new object[]
+        {
+            "BeginPreInterceptorInvocationEvent",
+            new Action(() => BeginPreInterceptorInvocationEvent.Invoke(dummyMessage, dummyResult, typeof(string)))
+        };
+        yield return new object[]
+        {
+            "FinishPreInterceptorInvocationEvent",
+            new Action(() => FinishPreInterceptorInvocationEvent.Invoke(dummyMessage, dummyResult))
+        };
+
+        yield return new object[]
+        {
+            "FinishPreInterceptingWithExceptionEvent",
+            new Action(() => FinishPreInterceptingWithExceptionEvent.Invoke(dummyMessage, dummyResult, typeof(string), dummyException))
+        };
+        
+        yield return new object[]
+        {
+            "BeginHandlingEvent",
+            new Action(() => BeginHandlingEvent.Invoke(dummyMessage, dummyResult, 0))
+        };
+        
+        yield return new object[]
+        {
+            "BeginHandlerInvocationEvent",
+            new Action(() => BeginHandlerInvocationEvent.Invoke(dummyMessage, dummyResult, typeof(string)))
+        };
+        
+        yield return new object[]
+        {
+            "FinishHandlerInvocationEvent",
+            new Action(() => FinishHandlerInvocationEvent.Invoke(dummyMessage, dummyResult, typeof(string)))
+        };
+        
+        yield return new object[]
+        {
+            "FinishHandlerInvocationEvent",
+            new Action(() => FinishHandlerInvocationEvent.Invoke(dummyMessage, dummyResult, typeof(string)))
+        };
+        
+        yield return new object[]
+        {
+            "BeginPostInterceptingEvent",
+            new Action(() => BeginPostInterceptingEvent.Invoke(dummyMessage, dummyResult, 3))
+        };
+        yield return new object[]
+        {
+            "FinishPostInterceptingEvent",
+            new Action(() => FinishPostInterceptingEvent.Invoke(dummyMessage, dummyResult))
+        };
+        yield return new object[]
+        {
+            "FinishHandlingEvent",
+            new Action(() => FinishHandlingEvent.Invoke(dummyMessage, dummyResult))
+        };
+        yield return new object[]
+        {
+            "FinishPostInterceptorInvocationEvent",
+            new Action(() => FinishPostInterceptorInvocationEvent.Invoke(dummyMessage, dummyResult))
+        };
+        yield return new object[]
+        {
+            "FinishPostInterceptingWithExceptionEvent",
+            new Action(() => FinishPostInterceptingWithExceptionEvent.Invoke(dummyMessage, dummyResult, typeof(string), dummyException))
+        };
+        yield return new object[]
+        {
+            "BeginExceptionInterceptingEvent",
+            new Action(() => BeginExceptionInterceptingEvent.Invoke(dummyMessage, dummyResult, dummyException, 4))
+        };
+        yield return new object[]
+        {
+            "FinishExceptionInterceptingEvent",
+            new Action(() => FinishExceptionInterceptingEvent.Invoke(dummyMessage, dummyResult, dummyException))
+        };
+        yield return new object[]
+        {
+            "BeginExceptionInterceptorInvocationEvent",
+            new Action(() => BeginExceptionInterceptorInvocationEvent.Invoke(dummyMessage, dummyResult, typeof(string), dummyException))
+        };
+        yield return new object[]
+        {
+            "FinishExceptionInterceptorInvocationEvent",
+            new Action(() => FinishExceptionInterceptorInvocationEvent.Invoke(dummyMessage, dummyResult, dummyException))
+        };
+        yield return new object[]
+        {
+            "BeginFinalInterceptingEvent",
+            new Action(() => BeginFinalInterceptingEvent.Invoke(dummyMessage, dummyResult, dummyException, 5))
+        };
+        yield return new object[]
+        {
+            "FinishFinalInterceptingEvent",
+            new Action(() => FinishFinalInterceptingEvent.Invoke(dummyMessage, dummyResult))
+        };
+        yield return new object[]
+        {
+            "BeginFinalInterceptorInvocationEvent",
+            new Action(() => BeginFinalInterceptorInvocationEvent.Invoke(dummyMessage, dummyResult, dummyException, typeof(string)))
+        };
+        yield return new object[]
+        {
+            "FinishFinalInterceptorInvocationEvent",
+            new Action(() => FinishFinalInterceptorInvocationEvent.Invoke(dummyMessage, dummyResult))
+        };
+        yield return new object[]
+        {
+            "BeginPipelineEvent",
+            new Action(() => BeginPipelineEvent.Invoke(dummyMessage, dummyResult))
+        };
+        yield return new object[]
+        {
+            "FinishPipelineEvent",
+            new Action(() => FinishPipelineEvent.Invoke(dummyMessage, dummyResult))
+        };
+    }
+
+    
+    
     // Factory lambdas for all pipeline events
     public static readonly TheoryData<Func<PipelineEvent>> EventFactories = new()
     {
@@ -113,10 +250,38 @@ public class PipelineEventTests
         
         () => FinishPreInterceptorInvocationEvent.Create(
             message: "string",
+            result: null),
+        () => BeginFinalInterceptingEvent.Create(
+            message:  "string",
+            result: null,
+            interceptorCount: 5,
+            exception: null
+            ),
+        () => BeginFinalInterceptorInvocationEvent.Create(
+            message: "string",
+            result: null,
+            exception: null,
+            interceptorType: typeof(int)
+            ),
+        () => FinishFinalInterceptorInvocationEvent.Create(
+            message: "string",
+            result: null),
+        () => FinishFinalInterceptingEvent.Create(
+            message:  "string",
             result: null)
     };
     
- 
+    
+    [Trait("Category", "Coverage")]
+    [Trait("Category", "Unit")]
+    [Theory]
+    [MemberData(nameof(EventInvokeData))]
+    public void Invoke_ShouldNotThrow(string eventName, Action invokeAction)
+    {
+        // Act & Assert
+        var ex = Record.Exception(invokeAction);
+        Assert.Null(ex); // all invokes must succeed
+    }
     
     [Theory]
     [MemberData(nameof(EventFactories))]
