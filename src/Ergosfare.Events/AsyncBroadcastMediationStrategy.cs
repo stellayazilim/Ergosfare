@@ -10,6 +10,7 @@ using Ergosfare.Events.Abstractions;
 namespace Ergosfare.Events;
 
 public sealed class AsyncBroadcastMediationStrategy<TMessage>(
+    IResultAdapterService? resultAdapterService,
     EventMediationSettings settings)
     : IMessageMediationStrategy<TMessage, Task>
     where TMessage : notnull
@@ -47,7 +48,7 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
             await messageDependencies.RunAsyncPreInterceptors(message, context);
             var sequentialExecutionTask = PublishSequentially(message, handlers, context);
             await sequentialExecutionTask;
-            await messageDependencies.RunAsyncPostInterceptors(message,sequentialExecutionTask, context);
+            await messageDependencies.RunAsyncPostInterceptors(message,sequentialExecutionTask, context, resultAdapterService);
         }
         catch (Exception e)
         {

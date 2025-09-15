@@ -10,7 +10,9 @@ using Ergosfare.Context;
 namespace Ergosfare.Core.Abstractions.Strategies;
 
 
-public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>( CancellationToken cancellationToken) : IMessageMediationStrategy<TMessage, IAsyncEnumerable<TResult>>
+public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>( 
+    IResultAdapterService? resultAdapterService,
+    CancellationToken cancellationToken) : IMessageMediationStrategy<TMessage, IAsyncEnumerable<TResult>>
     where TMessage : notnull
 {
     
@@ -47,7 +49,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>( Can
 
         
         // run pre interceptors
-        
+
         try
         {
             await messageDependencies.RunAsyncPreInterceptors(message, executionContext).ConfigureAwait(false);
@@ -55,9 +57,9 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>( Can
         catch (ExecutionAbortedException e)
         {
             // aborted early no need to _consume
-            _consume = false; 
+            _consume = false;
             _executionAborted = true;
-                
+
         }
         catch (Exception exception) when (exception is not ExecutionAbortedException)
         {
@@ -66,7 +68,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>( Can
             _unknownException = exception;
         }
 
-
+     
 
         enumerable ??= Empty<TResult>();
         await using var enumerator = enumerable.GetAsyncEnumerator(_cancellationToken);
@@ -108,7 +110,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>( Can
         try
         {
             if (_unknownException is null)
-                await messageDependencies.RunAsyncPostInterceptors(message, enumerator, executionContext).ConfigureAwait(false);
+                await messageDependencies.RunAsyncPostInterceptors(message, enumerator, executionContext, resultAdapterService).ConfigureAwait(false);
         }
         catch (ExecutionAbortedException e)
         { /*all chunks _consumed no action need*/ }
@@ -121,19 +123,24 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>( Can
 
         try
         {
-            if (_unknownException is not  null)
+            if (_unknownException is not null)
             {
                 await messageDependencies.RunAsyncExceptionInterceptors(
                     message,
-                    enumerator, 
-                    ExceptionDispatchInfo.Capture(_unknownException), 
+                    enumerator,
+                    ExceptionDispatchInfo.Capture(_unknownException),
                     executionContext).ConfigureAwait(false);
-                
+
             }
         }
         catch (Exception e) when (e is not ExecutionAbortedException)
         {
             throw;
+        }
+
+        finally
+        {
+            await messageDependencies.RunAsyncFinalInterceptors(message, enumerator, _unknownException, executionContext);
         }
     }
     

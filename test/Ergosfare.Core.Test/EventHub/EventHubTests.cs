@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
 using System.Reflection;
 using Ergosfare.Core.Abstractions.EventHub;
+using Ergosfare.Core.Abstractions.Events;
 using Ergosfare.Core.EventHub;
-using Ergosfare.Core.Events;
-using Hub = Ergosfare.Core.EventHub.EventHub;
+using Hub = Ergosfare.Core.Abstractions.EventHub.EventHub;
 
 namespace Ergosfare.Core.Test.EventHub;
 
@@ -11,9 +11,8 @@ public class EventHubTests
 {
     private BeginPipelineEvent _event = new ()
     {
-        MediatorInstance = typeof(string),
-        MessageType = typeof(string),
-        ResultType = typeof(string)
+        Message = "string",
+        Result = null
     };
     // helper class
     private class Target

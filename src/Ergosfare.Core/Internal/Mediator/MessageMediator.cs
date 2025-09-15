@@ -1,5 +1,6 @@
 ﻿using Ergosfare.Context;
 using Ergosfare.Core.Abstractions;
+using Ergosfare.Core.Abstractions.EventHub;
 using Ergosfare.Core.Abstractions.Exceptions;
 using Ergosfare.Core.Abstractions.Factories;
 using Ergosfare.Core.Abstractions.Registry;
@@ -9,6 +10,7 @@ namespace Ergosfare.Core.Internal.Mediator;
 
 internal sealed class MessageMediator(
     IMessageRegistry messageRegistry,
+    IEventHub  eventHub,
     IMessageDependenciesFactory messageDependenciesFactory)
     : IMessageMediator
 {
@@ -17,8 +19,12 @@ internal sealed class MessageMediator(
 
     public TResult Mediate<TMessage, TResult>(TMessage message, MediateOptions<TMessage, TResult> options) where TMessage : notnull
     {
+        
+    
         ArgumentNullException.ThrowIfNull(options);
         // Create a new execution context for the current scope
+        
+        
         var executionContext = new ErgosfareExecutionContext(options.Items, options.CancellationToken);
         
         

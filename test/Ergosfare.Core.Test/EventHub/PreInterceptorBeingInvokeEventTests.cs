@@ -1,5 +1,5 @@
-using Ergosfare.Core.Events;
-using Hub = Ergosfare.Core.EventHub.EventHub;
+using Ergosfare.Core.Abstractions.Events;
+using Hub = Ergosfare.Core.Abstractions.EventHub.EventHub;
 namespace Ergosfare.Core.Test.EventHub;
 
 public class PreInterceptorBeingInvokeEventTests
@@ -15,23 +15,20 @@ public class PreInterceptorBeingInvokeEventTests
      
         var interceptor1 = new BeginPipelineEvent()
         {
-            MediatorInstance = typeof(string),
-            ResultType = typeof(string),
-            MessageType = typeof(string),
+            Message = "string",
+            Result = null,
         };
 
         var interceptor2 = new BeginPipelineEvent()
         {
-            MediatorInstance = typeof(string),
-            ResultType = typeof(string),
-            MessageType = typeof(string),
+            Message = "string",
+            Result = null,
         };
 
         var interceptor3 =  new BeginPipelineEvent()
         {
-            MediatorInstance = typeof(int),
-            ResultType = typeof(string),
-            MessageType = typeof(string),
+            Message = "string2",
+            Result = null,
         };
         // act
 

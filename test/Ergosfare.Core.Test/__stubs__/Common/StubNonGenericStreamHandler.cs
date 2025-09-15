@@ -8,17 +8,12 @@ internal class StubNonGenericStreamHandler: IStreamHandler<StubNonGenericMessage
 {
     public async IAsyncEnumerable<string> StreamAsync(StubNonGenericMessage message, IExecutionContext context)
     {
-
-
         var results = new string[] {"foo", "bar", "baz"};
-
-
         foreach (var result in results)
         {
             await Task.Delay(10, context.CancellationToken);
             yield return result;
         }   
-
     }
 }
 

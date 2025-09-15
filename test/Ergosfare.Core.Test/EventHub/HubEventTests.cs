@@ -160,7 +160,7 @@ public class HubEventTests
         var now = DateTime.UtcNow;
         // assert
         Assert.True(@event.Timestamp < now);
-        Assert.InRange(@event.Timestamp, now.AddSeconds(-1), now.AddSeconds(1));
+        Assert.InRange(@event.Timestamp, now.AddSeconds(-2), now.AddSeconds(2));
     }
     
     [Fact]

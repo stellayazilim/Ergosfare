@@ -1,15 +1,16 @@
-﻿using Ergosfare.Context;
+﻿using Castle.Components.DictionaryAdapter;
+using Ergosfare.Context;
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Exceptions;
 using Ergosfare.Core.Abstractions.Strategies;
 using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Mediator;
-using Ergosfare.Core.Internal.Registry;
 using Ergosfare.Core.Internal.Registry.Descriptors;
-using Ergosfare.Core.Test.__factories__;
+using Ergosfare.Core.Test.__fixtures__;
 using Ergosfare.Core.Test.__stubs__;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit.Abstractions;
+using GroupAttribute = Ergosfare.Contracts.Attributes.GroupAttribute;
 
 namespace Ergosfare.Core.Test.Strategies;
 
@@ -40,7 +41,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests
                .AddTransient<StubNonGenericDerivedPostInterceptor>()
                .BuildServiceProvider();
     
-       var str = new SingleAsyncHandlerMediationStrategy<StubNonGenericDerivedMessage>();
+       var str = new SingleAsyncHandlerMediationStrategy<StubNonGenericDerivedMessage>(new ResultAdapterService());
        var messageDescriptorBuilderFactory = new HandlerDescriptorBuilderFactory();
        
        
@@ -92,7 +93,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests
             .AddTransient<StubNonGenericHandler2>()
             .BuildServiceProvider();
     
-        var str = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>();
+        var str = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>(new ResultAdapterService());
         var messageDescriptorBuilderFactory = new HandlerDescriptorBuilderFactory();
         var messageDescriptor = new MessageDescriptor(typeof(StubNonGenericMessage));
         
@@ -126,15 +127,15 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests
     [Trait("Category", "Coverage")]
     public async Task SingleAsyncHandlerMediationStrategyTMessage_Mediate_ShouldRunAsyncPreInterceptors()
     {
-
-        var (dependencies, _, _) = SingleMessageDependencyMediationFactory.Create<StubNonGenericMessage>(
+        
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubNonGenericMessage>(
+            [GroupAttribute.DefaultGroupName],
             typeof(StubNonGenericHandler),
             typeof(StubNonGenericPostInterceptor),
             typeof(StubNonGenericStreamExceptionInterceptor),
-            
             typeof(StubNonGenericFinalInterceptor));
-        
-        var strategy = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>();
+
+        var strategy = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>(new ResultAdapterService());
         
         await using var _ = AmbientExecutionContext.CreateScope(
             StubExecutionContext.Create()
@@ -152,13 +153,17 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests
     public async Task SingleAsyncHandlerMediationStrategyTMessage_Mediate_ShouldRunAsyncExceptionInterceptors()
     {
 
-        var (dependencies, _, _) = SingleMessageDependencyMediationFactory.Create<StubNonGenericMessage>(
+        
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubNonGenericMessage>(
+            [GroupAttribute.DefaultGroupName],
             typeof(StubNonGenericHandler),
             typeof(StubNonGenericPostInterceptor),
             typeof(StubNonGenericStreamExceptionInterceptor),
             typeof(StubNonGenericFinalInterceptor));
         
-        var strategy = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>();
+       
+        
+        var strategy = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>(new ResultAdapterService());
         
         await using var _ = AmbientExecutionContext.CreateScope(
             StubExecutionContext.Create()

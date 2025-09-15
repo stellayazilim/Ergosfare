@@ -1,4 +1,6 @@
-﻿using Ergosfare.Core.Abstractions;
+﻿using Ergosfare.Core;
+using Ergosfare.Core.Abstractions;
+using Ergosfare.Core.Abstractions.EventHub;
 using Ergosfare.Core.Abstractions.Strategies;
 using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Ergosfare.Queries.Abstractions;
@@ -21,6 +23,7 @@ public class QueryMediatorTests
         var messageMediator = services.GetService<IMessageMediator>();
         var mediator = new QueryMediator(
             services.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
+            new ResultAdapterService(),
             messageMediator!);
 
         var result = mediator.QueryAsync(new StubNonGenericStringResultQuery(), null);
@@ -43,6 +46,7 @@ public class QueryMediatorTests
         var messageMediator = serviceCollection.GetService<IMessageMediator>();
         var mediator = new QueryMediator(
             serviceCollection.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
+            new ResultAdapterService(),
             messageMediator!);
         var expected = new []  {"Foo", "Bar", "Baz"};
         var result = new List<string>();

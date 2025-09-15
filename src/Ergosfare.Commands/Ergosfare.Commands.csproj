@@ -11,6 +11,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Ergosfare.Commands.Abstractions\Ergosfare.Commands.Abstractions.csproj" />
+      <ProjectReference Include="..\Ergosfare.Core\Ergosfare.Core.csproj" />
     </ItemGroup>
 
 </Project>

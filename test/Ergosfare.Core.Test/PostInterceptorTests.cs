@@ -19,9 +19,9 @@ public class PostInterceptorTests
     
     private class TestIAsyncPostInterceptorTMessageTResultHandler: IAsyncPostInterceptor<IMessage>
     {
-        public Task HandleAsync(IMessage message, object? _, IExecutionContext context)
+        public Task<object> HandleAsync(IMessage message, object? _, IExecutionContext context)
         {
-            return Task.CompletedTask;
+            return Task.FromResult(new object());
         }
     }
 

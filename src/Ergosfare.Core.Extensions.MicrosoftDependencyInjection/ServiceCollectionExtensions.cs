@@ -1,4 +1,6 @@
 ﻿
+using Ergosfare.Core.Abstractions;
+using Ergosfare.Core.Abstractions.EventHub;
 using Ergosfare.Core.EventHub;
 using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Registry;
@@ -12,7 +14,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddErgosfare(this IServiceCollection services,
         Action<IModuleRegistry> ergosfareBuilderAction)
     {
-        
+        var resultAdapterService = new ResultAdapterService();
+        services.TryAddSingleton<IResultAdapterService>(resultAdapterService);
         services.TryAddTransient<HandlerDescriptorBuilderFactory>();
         // Get the singleton registry instance
         var messageRegistry = MessageRegistryAccessor.Instance;
@@ -24,7 +27,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(eventHub);
 
         // Create module registry with the shared message registry
-        var ergosfareBuilder = new ModuleRegistry(services, messageRegistry);
+        var ergosfareBuilder = new ModuleRegistry(services, messageRegistry, resultAdapterService);
         ergosfareBuilderAction(ergosfareBuilder);
         ergosfareBuilder.Initialize();
 

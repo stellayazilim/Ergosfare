@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Registry;
 
 namespace Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -26,4 +27,6 @@ public class CoreModuleBuilder(IMessageRegistry registry): IModuleBuilder
         }
         return this;
     }
+
+
 }

@@ -1,12 +1,12 @@
 using System.Reflection;
+using Ergosfare.Core.Abstractions.EventHub;
 using Ergosfare.Core.EventHub;
-using Ergosfare.Core.Events;
 
 namespace Ergosfare.Core.Test.EventHub;
 
 public class ProxyEventTests
 {
-    private readonly IHasProxyEvents _hub = new Core.EventHub.EventHub();
+    private readonly IHasProxyEvents _hub = new Core.Abstractions.EventHub.EventHub();
 
     public static IEnumerable<object[]> ProxyEventData =>
         new List<object[]>
@@ -41,8 +41,8 @@ public class ProxyEventTests
     public void All_ProxyEvent_Properties_Should_Be_Initialized()
     {
         // Arrange
-        var hub = new Core.EventHub.EventHub();
-        var properties = typeof(Core.EventHub.EventHub).GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        var hub = new Core.Abstractions.EventHub.EventHub();
+        var properties = typeof(Core.Abstractions.EventHub.EventHub).GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
         // Act & Assert
         foreach (var prop in properties)
@@ -63,7 +63,7 @@ public class ProxyEventTests
         public void ProxyEvent_Should_Invoke_Handler_When_Raised(string propertyName)
         {
             // Arrange
-            var property = typeof(Core.EventHub.EventHub).GetProperty(propertyName)!;
+            var property = typeof(Core.Abstractions.EventHub.EventHub).GetProperty(propertyName)!;
             // Assert
             Assert.NotNull(property);
         }

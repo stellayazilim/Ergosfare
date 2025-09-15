@@ -20,7 +20,7 @@ public class ModuleRegistryTests
         var messageRegistry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
 
         await using var _ = AmbientExecutionContext.CreateScope(new ErgosfareExecutionContext(null, default));
-        var moduleRegistry = new ModuleRegistry(serviceCollection, messageRegistry);
+        var moduleRegistry = new ModuleRegistry(serviceCollection, messageRegistry, new ResultAdapterService());
         
       
      

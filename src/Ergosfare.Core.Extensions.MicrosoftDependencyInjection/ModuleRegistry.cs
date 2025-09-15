@@ -11,7 +11,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
-public class ModuleRegistry(IServiceCollection services, IMessageRegistry messageRegistry)
+public class ModuleRegistry(IServiceCollection services, IMessageRegistry messageRegistry, IResultAdapterService resultAdapterService)
     : IModuleRegistry
 {
     private readonly HashSet<IModule> _modules = new();
@@ -76,11 +76,14 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
         }
     }
 
+    public IModuleRegistry ConfigureResultAdapters(Action<ResultAdapterBuilder> builder)
+    {
+        builder(new ResultAdapterBuilder(resultAdapterService));
+        return this;
+    }
+
     private static void CollectHandlerTypes(IEnumerable<IHandlerDescriptor> descriptors, HashSet<Type> handlerTypes)
     {
-        
-        
-        
         foreach (var descriptor in descriptors)
         {
             handlerTypes.Add(descriptor.HandlerType);

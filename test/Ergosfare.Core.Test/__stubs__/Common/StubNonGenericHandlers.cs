@@ -9,7 +9,7 @@ internal class StubNonGenericHandler: IHandler<StubNonGenericMessage,  object>
 {
     public object Handle(StubNonGenericMessage message, IExecutionContext context)
     {
-        return Task.CompletedTask;
+        return Task.FromResult<object>(new object());
     }
 }
 
@@ -18,7 +18,7 @@ internal class StubNonGenericDerivedHandler: IHandler<StubNonGenericDerivedMessa
 {
     public object Handle(StubNonGenericDerivedMessage message, IExecutionContext context)
     {
-        return Task.CompletedTask;
+        return Task.FromResult<object>(new object());
     }
 }
 

@@ -1,4 +1,4 @@
-using Ergosfare.Core.Events;
+using Ergosfare.Core.Abstractions.Events;
 
 namespace Ergosfare.Examples.PluginExample;
 

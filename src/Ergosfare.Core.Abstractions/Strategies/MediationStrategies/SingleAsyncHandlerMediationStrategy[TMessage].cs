@@ -19,7 +19,8 @@ namespace Ergosfare.Core.Abstractions.Strategies;
 ///     3. Executes post-handlers.
 ///     In case of any exception during the process, it delegates the error handling to the registered error handlers.
 /// </remarks>
-public sealed class SingleAsyncHandlerMediationStrategy<TMessage> : IMessageMediationStrategy<TMessage, Task> where TMessage : IMessage
+public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
+    IResultAdapterService? resultAdapterService) : IMessageMediationStrategy<TMessage, Task> where TMessage : IMessage
 {
     /// <summary>
     ///     Mediates a message by executing the appropriate handler and orchestrating the handling pipeline.
@@ -56,7 +57,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage> : IMessageMedi
             await messageDependencies.RunAsyncPreInterceptors(message, context);
             result = (Task)messageDependencies.Handlers.Single().Handler.Value.Handle(message, context);
             await result;
-            await messageDependencies.RunAsyncPostInterceptors(message, result, context);
+            await messageDependencies.RunAsyncPostInterceptors(message, result, context, resultAdapterService);
         }
         catch (Exception e) when (e is not ExecutionAbortedException)
         {

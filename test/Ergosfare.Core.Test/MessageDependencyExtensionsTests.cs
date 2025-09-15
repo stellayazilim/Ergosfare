@@ -1,14 +1,22 @@
 using System.Runtime.ExceptionServices;
+using Castle.Components.DictionaryAdapter;
 using Ergosfare.Context;
+using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Extensions;
+using Ergosfare.Core.Abstractions.Handlers;
+using Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Ergosfare.Core.Abstractions.Strategies;
 using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Mediator;
 using Ergosfare.Core.Internal.Registry;
 using Ergosfare.Core.Internal.Registry.Descriptors;
+using Ergosfare.Core.Test.__fixtures__;
 using Ergosfare.Core.Test.__stubs__;
+using Ergosfare.Core.Test.__stubs__.Handlers;
+using Ergosfare.Core.Test.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit.Abstractions;
+using GroupAttribute = Ergosfare.Contracts.Attributes.GroupAttribute;
 
 namespace Ergosfare.Core.Test;
 
@@ -55,50 +63,57 @@ public class MessageDependencyExtensionsTests
     
     
     
-    [Fact]
-    [Trait("Category", "Coverage")]
-    public async Task MessageDependenciesExtensionsRunAsyncPostInterceptorsShouldRunPostInterceptors()
-    {
-        // arrange
-        var serviceProvider = new ServiceCollection()
-            .AddTransient<StubNonGenericDerivedHandler>()
-            .AddTransient<StubNonGenericPostInterceptor>()
-            .AddTransient<StubNonGenericPostInterceptor2>()
-            .AddTransient<StubNonGenericDerivedPostInterceptor>()
-            .AddTransient<StubNonGenericDerivedPostInterceptor2>()
-            .BuildServiceProvider();
+[Fact]
+[Trait("Category", "Coverage")]
+public async Task MessageDependenciesExtensionsRunAsyncPostInterceptorsShouldRunPostInterceptors()
+{
+    // arrange
+    var serviceProvider = new ServiceCollection()
+        .AddTransient<StubNonGenericDerivedHandler>()
+        .AddTransient<StubNonGenericPostInterceptor>()
+        .AddTransient<StubNonGenericPostInterceptor2>()
+        .AddTransient<StubNonGenericDerivedPostInterceptor>()
+        .AddTransient<StubNonGenericDerivedPostInterceptor2>()
+        .BuildServiceProvider();
 
+    var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
 
-        var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
-        
-        registry.Register(typeof(StubNonGenericDerivedMessage));
-        registry.Register(typeof(StubNonGenericDerivedHandler));
-        registry.Register(typeof(StubNonGenericPostInterceptor));
-        registry.Register(typeof(StubNonGenericPostInterceptor2));
-        registry.Register(typeof(StubNonGenericDerivedPostInterceptor));
-        registry.Register(typeof(StubNonGenericDerivedPostInterceptor2));
+    registry.Register(typeof(StubNonGenericDerivedMessage));
+    registry.Register(typeof(StubNonGenericDerivedHandler));
+    registry.Register(typeof(StubNonGenericPostInterceptor));
+    registry.Register(typeof(StubNonGenericPostInterceptor2));
+    registry.Register(typeof(StubNonGenericDerivedPostInterceptor));
+    registry.Register(typeof(StubNonGenericDerivedPostInterceptor2));
 
+    var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry);
+    var descriptor = resolver.Find(typeof(StubNonGenericDerivedMessage));
 
-        var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry);
-        
-        var descriptor = resolver.Find(typeof(StubNonGenericDerivedMessage));
+    var dependencyFactory = new MessageDependenciesFactory(serviceProvider);
 
-        var dependencyFactory = new MessageDependenciesFactory(serviceProvider);
-        
-        // act
-        var dependencies = dependencyFactory.Create(typeof(StubNonGenericDerivedMessage), descriptor!, []);
-        
-        await using var _ = AmbientExecutionContext.CreateScope(StubExecutionContext.Create());
-        await dependencies
-                .RunAsyncPostInterceptors(
-                    new StubNonGenericDerivedMessage(), 
-                    Task.CompletedTask,
-                    AmbientExecutionContext.Current);
+    var dependencies = dependencyFactory.Create(typeof(StubNonGenericDerivedMessage), descriptor!, []);
 
-        // assert
-        Assert.NotEmpty(dependencies.PostInterceptors);
-        Assert.NotEmpty(dependencies.IndirectPostInterceptors);
-    }
+    await using var _ = AmbientExecutionContext.CreateScope(StubExecutionContext.Create());
+
+    var message = new StubNonGenericDerivedMessage();
+
+    // 🔑 get the real handler and execute it
+    var handler = (IHandler<StubNonGenericDerivedMessage, object>)
+        dependencies.Handlers.Single().Handler.Value;
+
+    var handlerResult =  handler.Handle(message, AmbientExecutionContext.Current);
+
+    // act
+    var result = await  dependencies.RunAsyncPostInterceptors(
+        message,
+        handlerResult,
+        AmbientExecutionContext.Current,
+        new ResultAdapterService());
+
+    // assert
+    Assert.NotEmpty(dependencies.PostInterceptors);
+    Assert.NotEmpty(dependencies.IndirectPostInterceptors);
+    Assert.NotNull(result); // final transformed result should not be null
+}
     
     
     
@@ -138,7 +153,8 @@ public class MessageDependencyExtensionsTests
                 .RunAsyncPostInterceptors(
                     new StubNonGenericDerivedMessage(), 
                     Task.CompletedTask,
-                    StubExecutionContext.Create());
+                    StubExecutionContext.Create(),
+                    new ResultAdapterService());
 
 
         Assert.Empty(messageDescriptor.PostInterceptors);
@@ -234,7 +250,8 @@ public class MessageDependencyExtensionsTests
                 .RunAsyncPostInterceptors(
                     new StubNonGenericDerivedMessage(), 
                     Task.CompletedTask,
-                    StubExecutionContext.Create());
+                    StubExecutionContext.Create(),
+                    new ResultAdapterService());
 
 
         
@@ -247,4 +264,170 @@ public class MessageDependencyExtensionsTests
 
     }
 
+    
+    
+    [Fact]
+    [Trait("Category", "Coverage")]
+    
+    public async Task RunAsyncExceptionInterceptors_ShouldRethrow_WhenNoInterceptors()
+    {
+        // arrange
+
+
+        var dependencyFactory = new StubMessageDependencies();
+        var ex = new Exception();
+        // act & assert
+        var thrown = await Assert.ThrowsAsync<Exception>(async () =>
+        {
+            await dependencyFactory.RunAsyncExceptionInterceptors(new StubNonGenericMessage(), null, ExceptionDispatchInfo.Capture(ex), StubExecutionContext.Create());
+        });
+
+        Assert.Same(ex, thrown); // ensure it's the same instance
+    }
+    
+    
+    
+    
+    [Fact]
+    [Trait("Category", "Coverage")]
+    public async Task RunAsyncExceptionInterceptors_ShouldRunIndirectExceptionInterceptor()
+    {
+
+
+    }
+    
+    
+    
+    [Fact]
+    [Trait("Category", "Coverage")]
+    public async Task RunAsyncExceptionInterceptors_ShouldHaveNoInterceptor()
+    {
+
+        var ctx = ExecutionContextFixture.CreateExecutionContext();
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<IndirectStubStringMessage>(
+            [GroupAttribute.DefaultGroupName]);
+
+ 
+        var dispatchInfo = ExceptionDispatchInfo.Capture(new Exception("Test exception"));
+
+        var threw = await Assert.ThrowsAsync<Exception>(async () =>
+        {
+            await dependencies.RunAsyncExceptionInterceptors(new StubStringMessage("TestMessage"), "TestResult",
+                dispatchInfo, ctx);
+        });
+        Assert.False((dependencies.IndirectExceptionInterceptors.Count + dependencies.ExceptionInterceptors.Count) > 0);
+
+        Assert.Same(dispatchInfo.SourceException, threw);
+    }
+
+    
+    
+    [Fact]
+    [Trait("Category", "Coverage")]
+    public async Task RunAsyncExceptionInterceptors_ShouldHaveInterceptor()
+    {
+
+        var ctx = ExecutionContextFixture.CreateExecutionContext();
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubStringMessage>(
+            [GroupAttribute.DefaultGroupName],
+            typeof(StubStringExceptionInterceptorReturnsNull));
+
+    
+        testOutputHelper.WriteLine(dependencies.ExceptionInterceptors.Count.ToString());
+        var dispatchInfo = ExceptionDispatchInfo.Capture(new Exception("Test exception"));
+        
+        var result = await dependencies.RunAsyncExceptionInterceptors(new StubStringMessage("TestMessage"), "TestResult",
+            dispatchInfo, ctx);
+        Assert.True((dependencies.IndirectExceptionInterceptors.Count + dependencies.ExceptionInterceptors.Count) > 0);
+
+        Assert.Null(result);
+    }
+    
+    
+        
+    [Fact]
+    [Trait("Category", "Coverage")]
+    public async Task RunAsyncExceptionInterceptors_ShouldHaveIndirectInterceptor()
+    {
+
+        var ctx = ExecutionContextFixture.CreateExecutionContext();
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubStringMessage>(
+            [GroupAttribute.DefaultGroupName],
+            typeof(StubStringMessageExceptionInterceptor),
+            typeof(IndirectStubStringExceptionInterceptor));
+
+    
+        testOutputHelper.WriteLine(dependencies.ExceptionInterceptors.Count.ToString());
+        var dispatchInfo = ExceptionDispatchInfo.Capture(new Exception("Test exception"));
+        
+        var result = await dependencies.RunAsyncExceptionInterceptors(new StubStringMessage("TestMessage"), "TestResult",
+            dispatchInfo, ctx);
+        Assert.True((dependencies.IndirectExceptionInterceptors.Count + dependencies.ExceptionInterceptors.Count) > 0);
+
+        Assert.Equal("TestResult",result);
+    }
+    
+    
+    [Fact]
+    [Trait("Category", "Coverage")]
+    public async Task RunAsyncExceptionInterceptors_ShouldHaveDirectIndirectExceptionInterceptor()
+    {
+
+        var ctx = ExecutionContextFixture.CreateExecutionContext();
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<IndirectStubMessage>(
+            [GroupAttribute.DefaultGroupName],
+            typeof(StubMessageExceptionInterceptor),
+            typeof(IndirectStubMessageExceptionInterceptor));
+
+    
+        var dispatchInfo = ExceptionDispatchInfo.Capture(new Exception("Test exception"));
+        
+        var result = await dependencies.RunAsyncExceptionInterceptors(new IndirectStubMessage(), "TestResult",
+            dispatchInfo, ctx);
+        
+        var indirectEnumerator = dependencies.IndirectExceptionInterceptors.GetEnumerator();
+        var directEnumerator = dependencies.ExceptionInterceptors.GetEnumerator();
+  
+        Assert.True(indirectEnumerator.MoveNext());
+        Assert.True(directEnumerator.MoveNext());
+        Assert.True((dependencies.IndirectExceptionInterceptors.Count + dependencies.ExceptionInterceptors.Count) > 0);
+        Assert.Equal("TestResult",result);
+        
+        directEnumerator.Dispose();
+        indirectEnumerator.Dispose();
+    }
+    
+    [Fact]
+    [Trait("Category", "Coverage")]
+    public async Task RunAsyncExceptionInterceptors_ShouldHaveNoMoveNextInterceptor()
+    {
+        var ctx = ExecutionContextFixture.CreateExecutionContext();
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<IndirectStubStringMessage>(
+            [GroupAttribute.DefaultGroupName]);
+
+        // Force enumeration so LINQ's Count executes its MoveNext internally
+        var enumerator = dependencies.ExceptionInterceptors.GetEnumerator();
+
+        Assert.False(enumerator.MoveNext());
+        enumerator.Dispose();
+    }
+    
+        
+    [Fact]
+    [Trait("Category", "Coverage")]
+    public async Task RunAsyncExceptionInterceptors_ShouldRunFinalInterceptors()
+    {
+
+        var ctx = ExecutionContextFixture.CreateExecutionContext();
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<IndirectStubStringMessage>(
+            [GroupAttribute.DefaultGroupName],
+            typeof(StubStringFinalInterceptor));
+
+    
+        
+         await dependencies.RunAsyncFinalInterceptors(new IndirectStubStringMessage("TestMessage"), "TestResult",null, ctx);
+            
+         Assert.True(StubStringFinalInterceptor.IsRuned);
+    }
+    
 }

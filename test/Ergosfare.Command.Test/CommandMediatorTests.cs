@@ -1,7 +1,9 @@
 ﻿using Ergosfare.Command.Test.__stubs__;
 using Ergosfare.Commands;
 using Ergosfare.Commands.Abstractions;
+using Ergosfare.Core;
 using Ergosfare.Core.Abstractions;
+using Ergosfare.Core.Abstractions.EventHub;
 using Ergosfare.Core.Abstractions.Strategies;
 using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,7 +30,9 @@ public class CommandMediatorTests
         
         var messageMediator = serviceCollection.GetService<IMessageMediator>();
         var mediator = new CommandMediator(
+            new EventHub(),
             serviceCollection.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
+            new ResultAdapterService(),
             messageMediator!);
         var result = mediator.SendAsync(new StubNonGenericCommand(), null,  CancellationToken.None);
         
@@ -54,7 +58,9 @@ public class CommandMediatorTests
         
         var messageMediator = serviceCollection.GetRequiredService<IMessageMediator>();
         var mediator = new CommandMediator(
+            new EventHub(),
             serviceCollection.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
+            new ResultAdapterService(),
             messageMediator!);
         var result = mediator.SendAsync(new StubNonGenericCommandStringResult(), StubDefaultMediationSetting.CommandDefaultSetting,  CancellationToken.None);
         

@@ -1,5 +1,5 @@
 using Ergosfare.Core.Abstractions.EventHub;
-using Ergosfare.Core.Events;
+using Ergosfare.Core.Abstractions.Events;
 using Ergosfare.Core.Extensions;
 namespace Ergosfare.Core.Test.EventHub;
 
@@ -24,9 +24,8 @@ public class HubEventExtensionsTests
         // arrange
         var @event = new TestEvent
         {
-            MessageType = null,
-            MediatorInstance = null,
-            ResultType = null,
+            Message = "string",
+            Result = null,
             Data = "data",
         };
 

@@ -1,19 +1,26 @@
 ﻿
 using Ergosfare.Commands.Abstractions;
 using Ergosfare.Core.Abstractions;
+using Ergosfare.Core.Abstractions.EventHub;
+using Ergosfare.Core.Abstractions.Events;
 using Ergosfare.Core.Abstractions.Strategies;
 
 namespace Ergosfare.Commands;
 
 public class CommandMediator(
+    IEventHub eventHub,
     ActualTypeOrFirstAssignableTypeMessageResolveStrategy messageResolveStrategy,
+    IResultAdapterService? resultAdapterService,
     IMessageMediator messageMediator) : ICommandMediator
 {
+    
     public Task SendAsync(ICommand commandConstruct, CommandMediationSettings? commandMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
+        BeginPipelineEvent.Invoke(commandConstruct, null);
+        
         commandMediationSettings ??= new CommandMediationSettings();
-        var mediationStrategy = new SingleAsyncHandlerMediationStrategy<ICommand>();
+        var mediationStrategy = new SingleAsyncHandlerMediationStrategy<ICommand>(resultAdapterService);
 
         var options = new MediateOptions<ICommand, Task>
         {
@@ -23,8 +30,9 @@ public class CommandMediator(
             Items = commandMediationSettings.Items,
             Groups = commandMediationSettings.Filters.Groups
         };
-
-        return messageMediator.Mediate(commandConstruct, options);
+        var result =  messageMediator.Mediate(commandConstruct, options);
+        FinishPipelineEvent.Invoke(commandConstruct, result);
+        return result;
     }
 
 
@@ -34,7 +42,7 @@ public class CommandMediator(
         CancellationToken cancellationToken = default)
     {
         commandMediationSettings ??= new CommandMediationSettings();
-        var mediationStrategy = new SingleAsyncHandlerMediationStrategy<ICommand<TResult>, TResult>();
+        var mediationStrategy = new SingleAsyncHandlerMediationStrategy<ICommand<TResult>, TResult>(resultAdapterService);
 
         var options = new MediateOptions<ICommand<TResult>, Task<TResult>>
         {
@@ -47,4 +55,6 @@ public class CommandMediator(
 
         return messageMediator.Mediate(commandConstruct, options);
     }
+
+  
 }

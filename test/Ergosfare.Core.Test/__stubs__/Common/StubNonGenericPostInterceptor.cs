@@ -3,21 +3,21 @@ using Ergosfare.Core.Abstractions.Handlers;
 
 namespace Ergosfare.Core.Test.__stubs__;
 
-internal class StubNonGenericPostInterceptor: IAsyncPostInterceptor<StubNonGenericMessage>
+internal class StubNonGenericPostInterceptor: IAsyncPostInterceptor<StubNonGenericMessage, object>
 {
  
-    public Task HandleAsync(StubNonGenericMessage message, object? _, IExecutionContext context)
+    public Task<object> HandleAsync(StubNonGenericMessage message, object? _, IExecutionContext context)
     {
-        return Task.CompletedTask;
+        return Task.FromResult<object>(new object());
     }
 }
 
 
 internal class StubNonGenericDerivedPostInterceptor: IAsyncPostInterceptor<StubNonGenericDerivedMessage>
 {
-    public Task HandleAsync(StubNonGenericDerivedMessage message, object? messageResult, IExecutionContext context)
+    public Task<object> HandleAsync(StubNonGenericDerivedMessage message, object? messageResult, IExecutionContext context)
     {
-        return Task.CompletedTask;
+        return Task.FromResult<object>(new object());
     }
 
    

@@ -1,4 +1,6 @@
 using System.Reflection;
+using Ergosfare.Core;
+using Ergosfare.Core.Abstractions.EventHub;
 using Ergosfare.Core.Abstractions.Registry;
 using Ergosfare.Core.Abstractions.Strategies;
 using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -25,11 +27,14 @@ public class AsyncBroadcastMediationStrategyTests
         messageRegistry.Register(typeof(StubNonGenericEvent));
 
         var messageMediator = new MessageMediator(
+            
                 messageRegistry,
+                new EventHub(),
                 new MessageDependenciesFactory(services));
         
         var mediator = new EventMediator(
             new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(messageRegistry),
+            new ResultAdapterService(),
             messageMediator
             );
 
@@ -62,10 +67,12 @@ public class AsyncBroadcastMediationStrategyTests
 
         var messageMediator = new MessageMediator(
             messageRegistry,
+            new EventHub(),
             new MessageDependenciesFactory(services));
         
         var mediator = new EventMediator(
             new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(messageRegistry),
+            new ResultAdapterService(),
             messageMediator
         );
 

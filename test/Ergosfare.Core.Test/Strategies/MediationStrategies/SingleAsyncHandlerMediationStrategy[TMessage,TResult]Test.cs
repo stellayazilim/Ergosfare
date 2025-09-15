@@ -1,4 +1,5 @@
 ﻿using Ergosfare.Context;
+using Ergosfare.Contracts.Attributes;
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Exceptions;
 using Ergosfare.Core.Abstractions.Handlers;
@@ -6,7 +7,9 @@ using Ergosfare.Core.Abstractions.Strategies;
 using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Registry;
 using Ergosfare.Core.Internal.Registry.Descriptors;
+using Ergosfare.Core.Test.__fixtures__;
 using Ergosfare.Core.Test.__stubs__;
+using Ergosfare.Core.Test.__stubs__.Handlers;
 using Ergosfare.Core.Test.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit.Abstractions;
@@ -58,7 +61,7 @@ public class SingleAsyncHandlerMediationStrategyTests
     {
         public Task<object> HandleAsync(TestExceptionMessage message, string? messageResult, IExecutionContext context)
         {
-            return Task.FromResult<object>(messageResult);
+            return Task.FromResult<object>(messageResult ?? string.Empty);
         }
     }
     
@@ -66,7 +69,7 @@ public class SingleAsyncHandlerMediationStrategyTests
     {
         public Task<object> HandleAsync(TestExceptionMessage message, string? result, Exception exception, IExecutionContext context)
         {
-            return Task.FromResult<object>(result);
+            return Task.FromResult<object>(result ?? string.Empty);
         }
     }
     
@@ -105,6 +108,7 @@ public class SingleAsyncHandlerMediationStrategyTests
     
     private class TestUnknownExceptionInterceptor: IExceptionInterceptor<StubNonGenericMessage, string>
     {
+     
         public object Handle(StubNonGenericMessage message, string? messageResult, Exception exception, IExecutionContext context)
         {
             return Task.FromResult("unknown exception");
@@ -118,7 +122,7 @@ public class SingleAsyncHandlerMediationStrategyTests
     {
         var messageDescriptor = new MessageDescriptor(typeof(TestExceptionMessage));
 
-        var strategy = new SingleAsyncHandlerMediationStrategy<TestExceptionMessage, string>();
+        var strategy = new SingleAsyncHandlerMediationStrategy<TestExceptionMessage, string>(new ResultAdapterService());
         
         
         await using( var  _ = AmbientExecutionContext
@@ -141,6 +145,7 @@ public class SingleAsyncHandlerMediationStrategyTests
 
         // arrange
         var serviceProvider = new ServiceCollection()
+            .AddTransient<IResultAdapterService, ResultAdapterService>()
             .AddTransient<TestExceptionMessageHandler>()
             .AddTransient<TestExceptionMessageDuplicateHandler>()
             .BuildServiceProvider();
@@ -153,7 +158,7 @@ public class SingleAsyncHandlerMediationStrategyTests
         registry.Register(typeof(TestExceptionMessageDuplicateHandler));
 
         var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry);
-        var strategy = new SingleAsyncHandlerMediationStrategy<TestExceptionMessage, string>();
+        var strategy = new SingleAsyncHandlerMediationStrategy<TestExceptionMessage, string>(serviceProvider.GetRequiredService<IResultAdapterService>());
         
         var descriptor = resolver.Find(typeof(TestExceptionMessage));
         var dependencies = new MessageDependenciesFactory(serviceProvider)
@@ -181,6 +186,7 @@ public class SingleAsyncHandlerMediationStrategyTests
 
         // arrange
         var serviceProvider = new ServiceCollection()
+            .AddTransient<IResultAdapterService, ResultAdapterService>()
             .AddTransient<TestExceptionMessageHandler>()
             .AddTransient<TestExceptionMessagePreInterceptor>()
             .AddTransient<TestExceptionMessagePostInterceptor>()
@@ -197,7 +203,7 @@ public class SingleAsyncHandlerMediationStrategyTests
         registry.Register(typeof(TestExceptionMessageExceptionInterceptor));
 
         var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry);
-        var strategy = new SingleAsyncHandlerMediationStrategy<TestExceptionMessage, string>();
+        var strategy = new SingleAsyncHandlerMediationStrategy<TestExceptionMessage, string>(serviceProvider.GetRequiredService<IResultAdapterService>());
         
         var descriptor = resolver.Find(typeof(TestExceptionMessage));
         var dependencies = new MessageDependenciesFactory(serviceProvider)
@@ -228,7 +234,7 @@ public class SingleAsyncHandlerMediationStrategyTests
         // Arrange
         
         var dependencies = new StubMessageDependencies();
-        var strategy = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage, string>();
+        var strategy = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage, string>(new ResultAdapterService());
 
      
         await using (var _ = AmbientExecutionContext.CreateScope( StubExecutionContext.Create() ))
@@ -255,6 +261,7 @@ public class SingleAsyncHandlerMediationStrategyTests
     {
         // arrange
         var serviceProvider = new ServiceCollection()
+            .AddTransient<IResultAdapterService, ResultAdapterService>()
             .AddTransient<StubNonGenericStringResultHandler>()
             .AddTransient<TestExceptionAborterPreInterceptor>()
             .BuildServiceProvider();
@@ -273,7 +280,7 @@ public class SingleAsyncHandlerMediationStrategyTests
         var dependencies = new MessageDependenciesFactory(serviceProvider).Create(
             typeof(StubNonGenericMessage), descriptor!, []);
         
-        var mediationStrategy = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage, string>();
+        var mediationStrategy = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage, string>(serviceProvider.GetRequiredService<IResultAdapterService>());
 
 
         await using var _ = AmbientExecutionContext.CreateScope(
@@ -318,7 +325,7 @@ public class SingleAsyncHandlerMediationStrategyTests
         var dependencies = new MessageDependenciesFactory(serviceProvider).Create(
             typeof(StubNonGenericMessage), descriptor!, []);
         
-        var mediationStrategy = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage, string>();
+        var mediationStrategy = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage, string>(new ResultAdapterService());
 
 
         await using var _ = AmbientExecutionContext.CreateScope(
@@ -341,11 +348,10 @@ public class SingleAsyncHandlerMediationStrategyTests
     [Trait("Category", "Coverage")]
     public async Task SingleAsyncHandlerMediationStrategy_ShouldThrowWhenCatchUnknownException()
     {
-        // arrange
         var serviceProvider = new ServiceCollection()
+            .AddTransient<IResultAdapterService, ResultAdapterService>()
             .AddTransient<StubNonGenericStringResultHandler>()
-            .AddTransient<TestUnknownExceptionPreInterceptor>()
-            .AddTransient<TestUnknownExceptionInterceptor>()
+            .AddTransient<TestExceptionAborterResultPreInterceptor>()
             .BuildServiceProvider();
 
 
@@ -353,8 +359,7 @@ public class SingleAsyncHandlerMediationStrategyTests
         
         messageRegistry.Register(typeof(StubNonGenericMessage));
         messageRegistry.Register(typeof(StubNonGenericStringResultHandler));
-        messageRegistry.Register(typeof(TestUnknownExceptionPreInterceptor));
-        messageRegistry.Register(typeof(TestUnknownExceptionInterceptor));
+        messageRegistry.Register(typeof(TestExceptionAborterResultPreInterceptor));
         
         var  resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(messageRegistry);
 
@@ -363,20 +368,40 @@ public class SingleAsyncHandlerMediationStrategyTests
         var dependencies = new MessageDependenciesFactory(serviceProvider).Create(
             typeof(StubNonGenericMessage), descriptor!, []);
         
-        var mediationStrategy = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage, string>();
+        var mediationStrategy = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage, string>(serviceProvider.GetRequiredService<IResultAdapterService>());
 
 
         await using var _ = AmbientExecutionContext.CreateScope(
-           StubExecutionContext.Create()
+            StubExecutionContext.Create()
         );
 
         // Assert that Abort throws
         var result = await mediationStrategy.Mediate(
-            new StubNonGenericMessage(),
+            new StubNonGenericDerivedMessage(),
             dependencies,
             AmbientExecutionContext.Current);
 
         
-        Assert.Null(result);
+        Assert.Equal("foo", result);
+    }
+    
+    
+    [Fact]
+    [Trait("Category", "Coverage")]
+    public async Task Mediate_ShouldApplyModifiedResultFromExceptionInterceptor()
+    {   
+        // arrange
+        var message = "Test Message";
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubStringMessage>(
+            [GroupAttribute.DefaultGroupName],
+            typeof(StubStringMessageHandler),
+            typeof(StubStringMessagePreInterceptorThrows),
+            typeof(StubStringMessageExceptionInterceptorModifyResult));
+        var ctx = ExecutionContextFixture.CreateExecutionContext();
+        var strategy = new SingleAsyncHandlerMediationStrategy<StubStringMessage, string>(new ResultAdapterService());
+
+        // act
+        var result = await strategy.Mediate(new StubStringMessage(message), dependencies, ctx);
+        Assert.Equal("modified result", result);
     }
 }

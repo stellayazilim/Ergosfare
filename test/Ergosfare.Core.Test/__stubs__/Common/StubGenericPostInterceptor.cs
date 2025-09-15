@@ -5,9 +5,9 @@ namespace Ergosfare.Core.Test.__stubs__;
 
 internal class StubGenericPostInterceptor<TArg>: IAsyncPostInterceptor<StubNonGenericMessage>
 {
-    public Task HandleAsync(StubNonGenericMessage message, object? messageResult, IExecutionContext context)
+    public Task<object> HandleAsync(StubNonGenericMessage message, object? messageResult, IExecutionContext context)
     {
-        return Task.CompletedTask;
+        return Task.FromResult(new object());
     }
 
     public object Handle(StubNonGenericMessage message, object? messageResult, IExecutionContext context)

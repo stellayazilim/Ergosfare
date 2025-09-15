@@ -1,10 +1,11 @@
 using System.Reflection;
 using Ergosfare.Context;
+using Ergosfare.Contracts.Attributes;
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Exceptions;
 using Ergosfare.Core.Abstractions.Strategies;
 using Ergosfare.Core.Internal.Contexts;
-using Ergosfare.Core.Test.__factories__;
+using Ergosfare.Core.Test.__fixtures__;
 using Ergosfare.Core.Test.__stubs__;
 using Xunit.Abstractions;
 
@@ -20,15 +21,19 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests(
     public async Task ShouldHaveThrowMultipleHandlerException()
     {
         // arrange
-        var (dependencies, _, _) = SingleMessageDependencyMediationFactory.Create<StubNonGenericMessage>(
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubNonGenericMessage>(
+            [GroupAttribute.DefaultGroupName],
             typeof(StubNonGenericStreamHandler),
             typeof(StubNonGenericStreamHandler2));
+
         
         await using var _ = AmbientExecutionContext.CreateScope(StubExecutionContext.Create());
 
         var strategy = new SingleStreamHandlerMediationStrategy<StubNonGenericMessage, string>(
+            new ResultAdapterService(),
             AmbientExecutionContext.Current.CancellationToken
             );
+        
         // act
         try
         {
@@ -53,14 +58,17 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests(
     [Trait("Category", "Coverage")]
     public async Task ShouldSetExecutionContext()
     {
+        
         // arrange
-        var (dependencies, _, _) = SingleMessageDependencyMediationFactory.Create<StubNonGenericMessage>(
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubNonGenericMessage>(
+            [GroupAttribute.DefaultGroupName],
             typeof(StubNonGenericStreamHandler));
         
         var items = new Dictionary<object, object?>();
         var context = new ErgosfareExecutionContext(items,CancellationToken.None);
 
         var strategy = new SingleStreamHandlerMediationStrategy<StubNonGenericMessage, string>(
+            new ResultAdapterService(),
             context.CancellationToken
         );
         
@@ -86,12 +94,14 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests(
     public async Task ShouldHaveReturnValues()
     {
         // arrange
-        var (dependencies, _, _) = SingleMessageDependencyMediationFactory.Create<StubNonGenericMessage>(
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubNonGenericMessage>(
+            [GroupAttribute.DefaultGroupName],
             typeof(StubNonGenericStreamHandler));
         
         await using var _ = AmbientExecutionContext.CreateScope(StubExecutionContext.Create());
 
         var strategy = new SingleStreamHandlerMediationStrategy<StubNonGenericMessage, string>(
+            new ResultAdapterService(),
             AmbientExecutionContext.Current.CancellationToken
         );
         
@@ -121,14 +131,17 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests(
     public async Task ShouldHaveNotContinueOnPreException()
     {
         // arrange
-        var (dependencies, _, _) = SingleMessageDependencyMediationFactory.Create<StubNonGenericMessage>(
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubNonGenericMessage>(
+            [GroupAttribute.DefaultGroupName],
             typeof(StubPreInterceptorThrowsUnknownException),
             typeof(StubNonGenericStreamExceptionInterceptor),
             typeof(StubNonGenericStreamHandler));
+
         
         await using var _ = AmbientExecutionContext.CreateScope(StubExecutionContext.Create());
 
         var strategy = new SingleStreamHandlerMediationStrategy<StubNonGenericMessage, string>(
+            new ResultAdapterService(),
             AmbientExecutionContext.Current.CancellationToken
         );
         
@@ -165,15 +178,18 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests(
     [Trait("Category", "Coverage")]
     public async Task ShouldHaveNotContinueOnPreAbort()
     {
+        
         // arrange
-        var (dependencies, _, _) = SingleMessageDependencyMediationFactory.Create<StubNonGenericMessage>(
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubNonGenericMessage>(
+            [GroupAttribute.DefaultGroupName],
             typeof(StubPreInterceptorAbortExecution),
             typeof(StubNonGenericStreamExceptionInterceptor),
             typeof(StubNonGenericStreamHandler));
-        
+
         await using var _ = AmbientExecutionContext.CreateScope(StubExecutionContext.Create());
 
         var strategy = new SingleStreamHandlerMediationStrategy<StubNonGenericMessage, string>(
+            new ResultAdapterService(),
             AmbientExecutionContext.Current.CancellationToken
         );
         
@@ -209,14 +225,16 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests(
     public async Task ShouldHaveAbortWhileRunningPostInterceptors()
     {
         // arrange
-        var (dependencies, _, _) = SingleMessageDependencyMediationFactory.Create<StubNonGenericMessage>(
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubNonGenericMessage>(
+            [GroupAttribute.DefaultGroupName],
             typeof(StubNonGenericStreamPostInterceptorsAbortExecution),
             typeof(StubNonGenericStreamExceptionInterceptor),
             typeof(StubNonGenericStreamHandler));
-        
+
         await using var _ = AmbientExecutionContext.CreateScope(StubExecutionContext.Create());
 
         var strategy = new SingleStreamHandlerMediationStrategy<StubNonGenericMessage, string>(
+            new ResultAdapterService(),
             AmbientExecutionContext.Current.CancellationToken
         );
         
@@ -252,12 +270,14 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests(
     public async Task ShouldCatchExecutionAbortedException()
     {
         // arrange
-        var (dependencies, _, _) = SingleMessageDependencyMediationFactory.Create<StubNonGenericMessage>(
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubNonGenericMessage>(
+            [GroupAttribute.DefaultGroupName],
             typeof(StubNonGenericStreamHandlerAbortsExecution));
 
         await using var _ = AmbientExecutionContext.CreateScope(StubExecutionContext.Create());
 
         var strategy = new SingleStreamHandlerMediationStrategy<StubNonGenericMessage, string>(
+            new ResultAdapterService(),
             AmbientExecutionContext.Current.CancellationToken);
 
         var items = new List<string>();
@@ -280,12 +300,15 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests(
     [Trait("Category", "Coverage")]
     public async Task ShouldStopPipelineEarly_OnExecutionAborted()
     {
-        var (dependencies, _, _) = SingleMessageDependencyMediationFactory.Create<StubNonGenericMessage>(
+        // arrange
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubNonGenericMessage>(
+            [GroupAttribute.DefaultGroupName],
             typeof(StubNonGenericStreamHandler));
 
         await using var _ = AmbientExecutionContext.CreateScope(StubExecutionContext.Create());
 
         var strategy = new SingleStreamHandlerMediationStrategy<StubNonGenericMessage, string>(
+            new ResultAdapterService(),
             AmbientExecutionContext.Current.CancellationToken);
 
         // Force executionAborted=true (consume stays true)
@@ -312,13 +335,15 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests(
     public async Task ShouldHaveThrowExceptionWhileYielding()
     {
         // arrange
-        var (dependencies, _, _) = SingleMessageDependencyMediationFactory.Create<StubNonGenericMessage>(
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubNonGenericMessage>(
+            [GroupAttribute.DefaultGroupName],
             typeof(StubNonGenericStreamExceptionInterceptor),
             typeof(StubNonGenericStreamHandlerThrowsException));
-        
+
         await using var _ = AmbientExecutionContext.CreateScope(StubExecutionContext.Create());
 
         var strategy = new SingleStreamHandlerMediationStrategy<StubNonGenericMessage, string>(
+            new ResultAdapterService(),
             AmbientExecutionContext.Current.CancellationToken
         );
         
@@ -355,11 +380,12 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests(
     public async Task ShouldHaveAllResultsYieldedOnPostInterceptorException()
     {
         // arrange
-        var (dependencies, _, _) = SingleMessageDependencyMediationFactory.Create<StubNonGenericMessage>(
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubNonGenericMessage>(
+            [GroupAttribute.DefaultGroupName],
             typeof(StubNonGenericStreamHandler),
             typeof(StubNonGenericStreamPostInterceptorThrowsException),
             typeof(StubNonGenericStreamExceptionInterceptor));
-        
+
         await using var _ = AmbientExecutionContext.CreateScope(StubExecutionContext.Create());
 
 
@@ -371,6 +397,7 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests(
         try
         {
             var strategy = new SingleStreamHandlerMediationStrategy<StubNonGenericMessage, string>(
+                new ResultAdapterService(),
                 AmbientExecutionContext.Current.CancellationToken
             );
             
@@ -397,13 +424,16 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests(
     [Trait("Category", "Coverage")]
     public async Task ShouldIgnoreAbortInPostInterceptor()
     {
-        var (dependencies, _, _) = SingleMessageDependencyMediationFactory.Create<StubNonGenericMessage>(
+        // arrange
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubNonGenericMessage>(
+            [GroupAttribute.DefaultGroupName],
             typeof(StubNonGenericStreamHandler),
             typeof(StubNonGenericStreamPostInterceptorsAbortExecution));
 
         await using var _ = AmbientExecutionContext.CreateScope(StubExecutionContext.Create());
 
         var strategy = new SingleStreamHandlerMediationStrategy<StubNonGenericMessage, string>(
+            new ResultAdapterService(),
             AmbientExecutionContext.Current.CancellationToken);
 
         var items = new List<string>();
@@ -428,21 +458,17 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests(
     [Trait("Category", "Coverage")]
     public async Task ShouldCaptureExceptionFromPostInterceptor()
     {
-        var (dependencies, _, _) = SingleMessageDependencyMediationFactory.Create<StubNonGenericMessage>(
+        // arrange
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubNonGenericMessage>(
+            [GroupAttribute.DefaultGroupName],
             typeof(StubNonGenericStreamHandler),
             typeof(StubNonGenericStreamPostInterceptorThrowsException));
 
-        await using var _ = AmbientExecutionContext.CreateScope(StubExecutionContext.Create());
-
-        var strategy = new SingleStreamHandlerMediationStrategy<StubNonGenericMessage, string>(
-            AmbientExecutionContext.Current.CancellationToken);
-
-
+        var strategy = new SingleStreamHandlerMediationStrategy<StubNonGenericMessage, string>(new ResultAdapterService(),AmbientExecutionContext.Current.CancellationToken);
 
         try
         {
-            await foreach (var __ in strategy.Mediate(
-                               new StubNonGenericMessage(),
+            await foreach (var __ in strategy.Mediate(new StubNonGenericMessage(),
                                dependencies,
                                AmbientExecutionContext.Current))
             { }
@@ -465,20 +491,21 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests(
     [Trait("Category", "Coverage")]
     public async Task ShouldRethrowWhenExceptionInterceptorFails()
     {
-        var (dependencies, _, _) = SingleMessageDependencyMediationFactory.Create<StubNonGenericMessage>(
+        
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubNonGenericMessage>(
+            [GroupAttribute.DefaultGroupName],
             typeof(StubNonGenericStreamHandler),
             typeof(StubNonGenericStreamPostInterceptorThrowsException),   // triggers _unknownException
             typeof(StubNonGenericStreamExceptionInterceptorThrowsException)); // rethrows
 
-     
 
-   
         await using var __ = AmbientExecutionContext.CreateScope(StubExecutionContext.Create());
         Exception? caught = null;
         try
         {
           
             var strategy = new SingleStreamHandlerMediationStrategy<StubNonGenericMessage, string>(
+                new ResultAdapterService(),
                 AmbientExecutionContext.Current.CancellationToken);
             await foreach (var _ in strategy.Mediate(
                                new StubNonGenericMessage(),
@@ -503,13 +530,18 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests(
     [Trait("Category", "Coverage")]
     public async Task ShouldCatchExecutionAbortedInPostInterceptor()
     {
-        var (dependencies, _, _) = SingleMessageDependencyMediationFactory.Create<StubNonGenericMessage>(
+                
+        // arrange
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubNonGenericMessage>(
+            [GroupAttribute.DefaultGroupName],
             typeof(StubNonGenericStreamHandler), 
             typeof(StubNonGenericStreamPostInterceptorsAbortExecution));
+
 
         await using var _ = AmbientExecutionContext.CreateScope(StubExecutionContext.Create());
 
         var strategy = new SingleStreamHandlerMediationStrategy<StubNonGenericMessage, string>(
+            new ResultAdapterService(),
             AmbientExecutionContext.Current.CancellationToken);
 
         // Act + Assert: should NOT bubble out because your catch eats it
@@ -529,14 +561,17 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests(
     [Trait("Category", "Coverage")]
     public async Task ShouldReturnEmptyEnumerableWhenAborted()
     {
+                
         // arrange
-        var (dependencies, _, _) = SingleMessageDependencyMediationFactory.Create<StubNonGenericMessage>(
+        var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubNonGenericMessage>(
+            [GroupAttribute.DefaultGroupName],
             typeof(StubNonGenericStreamHandler), 
             typeof(StubNonGenericStreamPreInterceptorAbortExecution)); // throws ExecutionAbortedException in Pre
 
         await using var _ = AmbientExecutionContext.CreateScope(StubExecutionContext.Create());
 
         var strategy = new SingleStreamHandlerMediationStrategy<StubNonGenericMessage, string>(
+            new ResultAdapterService(),
             AmbientExecutionContext.Current.CancellationToken
         );
 

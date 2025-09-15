@@ -21,9 +21,9 @@ public class MessageMediatorTests
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         // act & assert
         Assert.Throws<ArgumentNullException>(
-            () =>  new MessageMediator(null, null));
+            () =>  new MessageMediator(null, new Core.Abstractions.EventHub.EventHub(),null));
         Assert.Throws<ArgumentNullException>(
-            () => new MessageMediator(registry, null));
+            () => new MessageMediator(registry,  new Core.Abstractions.EventHub.EventHub(),null));
         
     }
 
@@ -37,7 +37,7 @@ public class MessageMediatorTests
         var messageDependencyFactory = new MessageDependenciesFactory(null);
         
         // act
-        var mediator = new MessageMediator(registry, messageDependencyFactory);
+        var mediator = new MessageMediator(registry, new Core.Abstractions.EventHub.EventHub(), messageDependencyFactory);
         
         // assert
         Assert.NotNull(mediator);
@@ -51,7 +51,7 @@ public class MessageMediatorTests
         // arrange 
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         var messageDependencyFactory = new MessageDependenciesFactory(null);
-        var mediator = new MessageMediator(registry, messageDependencyFactory);
+        var mediator = new MessageMediator(registry,  new Core.Abstractions.EventHub.EventHub(),messageDependencyFactory);
 
         // act && assert
         await Assert.ThrowsAsync<ArgumentNullException>(() => 
@@ -85,6 +85,7 @@ public class MessageMediatorTests
         
         var mediator = new MessageMediator(
             registry,
+            new Core.Abstractions.EventHub.EventHub(),
             new MessageDependenciesFactory(null!)
         );
 
@@ -95,7 +96,7 @@ public class MessageMediatorTests
             Items = new Dictionary<object, object?>(),
             MessageResolveStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry)!,
             MessageMediationStrategy = 
-                new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>(),
+                new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>(new ResultAdapterService()),
             Groups = []
         };
 
@@ -126,6 +127,7 @@ public class MessageMediatorTests
         
         var mediator = new MessageMediator(
             registry,
+            new Core.Abstractions.EventHub.EventHub(),
             new MessageDependenciesFactory(null!)
         );
 
@@ -136,7 +138,7 @@ public class MessageMediatorTests
             Items = new Dictionary<object, object?>(),
             MessageResolveStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry)!,
             MessageMediationStrategy = 
-                new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>(),
+                new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>(new ResultAdapterService()),
             Groups = []
         };
 
@@ -168,7 +170,7 @@ public class MessageMediatorTests
             Groups = []
         };
 
-        var mediator = new MessageMediator(registry.Object, new MessageDependenciesFactory(null));
+        var mediator = new MessageMediator(registry.Object, new Core.Abstractions.EventHub.EventHub(), new MessageDependenciesFactory(null));
         
         // act & assert
         await Assert.ThrowsAsync<InvalidOperationException>(() => mediator.Mediate(new StubNonGenericDerivedMessage(), options));
