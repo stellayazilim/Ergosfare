@@ -2,6 +2,8 @@ using System.Runtime.ExceptionServices;
 using Castle.Components.DictionaryAdapter;
 using Ergosfare.Context;
 using Ergosfare.Core.Abstractions;
+using Ergosfare.Core.Abstractions.Events;
+using Ergosfare.Core.Abstractions.Exceptions;
 using Ergosfare.Core.Abstractions.Extensions;
 using Ergosfare.Core.Abstractions.Handlers;
 using Ergosfare.Core.Abstractions.Registry.Descriptors;
@@ -14,6 +16,7 @@ using Ergosfare.Core.Test.__fixtures__;
 using Ergosfare.Core.Test.__stubs__;
 using Ergosfare.Core.Test.__stubs__.Handlers;
 using Ergosfare.Core.Test.Common;
+using ErrorOr;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit.Abstractions;
 using GroupAttribute = Ergosfare.Contracts.Attributes.GroupAttribute;
@@ -429,5 +432,54 @@ public async Task MessageDependenciesExtensionsRunAsyncPostInterceptorsShouldRun
             
          Assert.True(StubStringFinalInterceptor.IsRuned);
     }
-    
+
+
+    [Fact]
+    [Trait("Category", "Coverage")]
+    public async Task RunAsyncExceptionInterceptors_ShouldNotRunFinalInterceptors()
+    {
+        var ctx = ExecutionContextFixture.CreateExecutionContext();
+        
+        var (descriptor, services, dependencies) = 
+            MessageDependencyFixture.CreateMessageDependencies<ResultAdapterFixtures.ResultAdapterMessage>(
+                [GroupAttribute.DefaultGroupName],
+                [
+                    typeof(ResultAdapterFixtures.ResultAdapterErrorOrPostInterceptorReturnException),
+                ]);
+        var message = new ResultAdapterFixtures.ResultAdapterMessage();
+        var resultAdapter = new ResultAdapterFixtures.ErrorOrAdapter();
+        var resultAdapterService = new ResultAdapterService();
+        resultAdapterService.AddAdapter(resultAdapter);
+
+        
+        PipelineEvent.Subscribe<BeginPostInterceptingEvent>(@event =>
+        {   
+            Assert.NotNull( @event.Message);
+        });
+        
+        PipelineEvent.Subscribe<BeginPostInterceptingEvent>(@event =>
+        {   
+            Assert.NotNull( @event.Message);
+        });
+        
+        PipelineEvent.Subscribe<FinishPostInterceptorInvocationEvent>(@event =>
+        {   
+            Assert.NotNull( @event.Message);
+        });
+        PipelineEvent.Subscribe<FinishPostInterceptingWithExceptionEvent>(@event =>
+        {   
+            Assert.Equal(message, @event.Message);
+            Assert.IsType<AdaptedException>(@event.Exception);
+        });
+        
+        
+        await Assert.ThrowsAsync<AdaptedException>(async () =>
+        {
+            await dependencies.RunAsyncPostInterceptors(message,
+                ResultAdapterFixtures.CreateErrorOr("TestResult"), ctx, resultAdapterService);
+        });
+
+
+      
+    }
 }

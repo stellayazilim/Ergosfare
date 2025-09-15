@@ -30,7 +30,7 @@ public class ModuleConfigurationTests
 
     private class TestAdapter: IResultAdapter
     {
-        public bool CanAdapt(in object result)
+        public bool CanAdapt(object result)
         {
             return true;
         }

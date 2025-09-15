@@ -41,9 +41,16 @@ public sealed class ResultAdapterService: IResultAdapterService
     /// <returns>
     /// The extracted <see cref="Exception"/> if found by any adapter; otherwise <c>null</c>.
     /// </returns>
-    public Exception? LookupException(object result)
+    public Exception? LookupException(object? result)
     {
-        var adapter = _resultAdapters.FirstOrDefault(x => x.CanAdapt(result));
-        return adapter is not null && adapter.TryGetException(result, out var exception) ?  exception : null;
+        if (result is null) return null;
+        foreach (var adapter in _resultAdapters)
+        {
+            if (adapter.CanAdapt(result))
+            {
+               return adapter.TryGetException(result, out var exception) ? exception : null;
+            }
+        }
+        return null; // no adapter claimed it
     }
 }

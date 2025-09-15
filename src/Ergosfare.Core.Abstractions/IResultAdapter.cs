@@ -32,7 +32,7 @@ public interface IResultAdapter
    /// <returns>
    /// <c>true</c> if this adapter can process the given result; otherwise, <c>false</c>.
    /// </returns>
-   bool CanAdapt(in object result); 
+   bool CanAdapt(object result); 
    
    
    /// <summary>

@@ -15,16 +15,34 @@ public class ResultAdapterFixtures
 {
 
     public record ResultAdapterMessage : IMessage;
-    
-    public class ResultAdapterErrorOrHandler: IAsyncHandler<ResultAdapterMessage, ErrorOr<string>>
+
+    public static ErrorOr<string> CreateErrorOr(string msg) => msg;
+    public static ErrorOr<string> CreateErrorOfException() => Error.Conflict();
+    public class ResultAdapterErrorOrHandlerReturnException: IAsyncHandler<ResultAdapterMessage, ErrorOr<string>>
     {
-        public Task<ErrorOr<string>> HandleAsync(ResultAdapterMessage message, IExecutionContext context)
+        public async Task<ErrorOr<string>> HandleAsync(ResultAdapterMessage message, IExecutionContext context)
         {
-            var err = Error.Conflict();
-            return Task.FromResult<ErrorOr<string>>(err);
+            await Task.CompletedTask;
+            return Error.Conflict();
         }
     }
     
+    public class ResultAdapterErrorOrHandlerReturnResult: IAsyncHandler<ResultAdapterMessage, ErrorOr<string>>
+    {
+        public Task<ErrorOr<string>> HandleAsync(ResultAdapterMessage message, IExecutionContext context)
+        {
+            return Task.FromResult<ErrorOr<string>>("Hello world");
+        }
+    }
+    public class ResultAdapterErrorOrPostInterceptorReturnException: IAsyncPostInterceptor<ResultAdapterMessage, ErrorOr<string>>
+    {
+        public async Task<object> HandleAsync(ResultAdapterMessage message, ErrorOr<string> messageResult, IExecutionContext context)
+        {
+            await Task.CompletedTask;
+            return Error.Conflict();
+        }
+    }
+
     public class ResultAdapterExceptionInterceptor: IAsyncExceptionInterceptor<ResultAdapterMessage, ErrorOr<string>>
     {
         public static bool IsCalled;
@@ -37,35 +55,19 @@ public class ResultAdapterFixtures
 
     public class ErrorOrAdapter: IResultAdapter
     {
-        public bool CanAdapt(in object result)
+        public bool CanAdapt(object result)
         {
-            return result is  IErrorOr;
-            
+            return result is IErrorOr or Error;
         }
-
+        
         public bool TryGetException(object result, out Exception? exception)
         {
-            exception = null!;
-
-            if (result is not IErrorOr errorOr)
+            exception = null;
+            if (result is not Error errorOr)
                 return false;
 
-            if (!errorOr.IsError)
-                return false;
-
-            var errors = errorOr.Errors;
-            if (errors is null || errors.Count == 0)
-                return false;
-
-            // map ErrorOr.Error -> Exception
-            var exceptions = errors
-                .Select(e => new AdaptedException($"{e.Code}: {e.Description}", result))
-                .ToList();
-
-            exception = exceptions.Count == 1
-                ? exceptions[0]
-                : new AggregateException("Multiple errors occurred", exceptions);
-            
+            // Explicitly check if it's an error state
+            exception = new AdaptedException(errorOr.Description ?? "Unknown error", result);
             return true;
         }
     }
@@ -109,4 +111,7 @@ public class ResultAdapterFixtures
         
         return mediateOptions;
     }
+    
 }
+
+

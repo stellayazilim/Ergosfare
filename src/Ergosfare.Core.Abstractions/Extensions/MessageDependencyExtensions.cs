@@ -130,14 +130,11 @@ public static class MessageDependencyExtensions
                 .Handle(message, output, context) as Task<object>)!;
             FinishPostInterceptorInvocationEvent.Invoke(message, output);
             // check if exception atteched to output
-            if (resultAdapterService is not null)
+            var ex = resultAdapterService?.LookupException(output);
+            if (ex != null)
             {
-                var ex = resultAdapterService.LookupException(output);
-                if (ex is not null)
-                {
-                    FinishPostInterceptingWithExceptionEvent.Invoke(message, output, postInterceptor.Handler.Value.GetType(), ex);
-                    throw ex;
-                }
+                FinishPostInterceptingWithExceptionEvent.Invoke(message, output, postInterceptor.Handler.Value.GetType(), ex);
+                throw ex;
             }
         }
 
