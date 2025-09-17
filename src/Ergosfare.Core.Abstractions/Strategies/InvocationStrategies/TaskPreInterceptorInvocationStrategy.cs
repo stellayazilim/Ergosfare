@@ -1,3 +1,4 @@
+
 using System.Threading.Tasks;
 using Ergosfare.Context;
 using Ergosfare.Core.Abstractions.Handlers;
@@ -21,7 +22,8 @@ namespace Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 /// This ensures monitoring and potential logging of each interceptor execution.
 /// </remarks>
 internal sealed class TaskPreInterceptorInvocationStrategy(
-    IMessageDependencies messageDependencies) : PreInvoker(messageDependencies)
+    IMessageDependencies messageDependencies,
+    IResultAdapterService? resultAdapterService) : PreInvoker(messageDependencies, resultAdapterService)
 
 {
     /// <summary>

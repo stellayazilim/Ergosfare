@@ -20,7 +20,9 @@ namespace Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 /// allowing monitoring and potential logging of each interceptor execution.
 /// </remarks>
 internal sealed class TaskPostInterceptorInvocationStrategy(
-    IMessageDependencies messageDependencies) : PostInvoker(messageDependencies)
+    IMessageDependencies messageDependencies,
+    IResultAdapterService? resultAdapterService) : 
+    PostInvoker(messageDependencies, resultAdapterService)
 {
 
     /// <summary>

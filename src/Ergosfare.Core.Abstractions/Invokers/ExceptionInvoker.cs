@@ -12,8 +12,10 @@ namespace Ergosfare.Core.Abstractions.Invokers;
 /// the captured exception is rethrown. This makes <see cref="ExceptionInvoker"/> 
 /// responsible for exception flow, unlike <see cref="FinalInvoker"/> which only observes exceptions.
 /// </remarks>
-internal abstract class ExceptionInvoker(IMessageDependencies messageDependencies) 
-    : AbstractInvoker(messageDependencies)
+internal abstract class ExceptionInvoker(
+    IMessageDependencies messageDependencies,
+    IResultAdapterService? resultAdapterService) 
+    : AbstractInvoker(messageDependencies,resultAdapterService)
 {
     /// <summary>
     /// Invokes exception interceptors for the given <paramref name="message"/> 

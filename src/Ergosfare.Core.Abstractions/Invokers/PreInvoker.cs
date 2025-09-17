@@ -3,7 +3,10 @@ using Ergosfare.Context;
 namespace Ergosfare.Core.Abstractions.Invokers;
 
 
-internal abstract class PreInvoker(IMessageDependencies messageDependencies): AbstractInvoker(messageDependencies)
+internal abstract class PreInvoker(
+    IMessageDependencies messageDependencies,
+    IResultAdapterService? resultAdapterService): 
+    AbstractInvoker(messageDependencies, resultAdapterService)
 {
    
     /// <summary>

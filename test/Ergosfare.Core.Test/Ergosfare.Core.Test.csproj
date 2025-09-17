@@ -39,4 +39,8 @@
       <ProjectReference Include="..\Ergosfare.Test\Ergosfare.Test.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="Strategies\InvocationStrategies\" />
+    </ItemGroup>
+
 </Project>

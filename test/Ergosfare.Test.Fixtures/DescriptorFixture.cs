@@ -109,7 +109,7 @@ public class DescriptorFixture: IFixture<DescriptorFixture>
     /// Useful for unit testing or quick descriptor generation without maintaining a persistent factory.
     /// </remarks>
     public IHandlerDescriptor CreateDescriptor<THandler>()
-        where THandler : IHandler, new()
+        where THandler :  new()
     {
         return new HandlerDescriptorBuilderFactory().BuildDescriptors(typeof(THandler)).First();
     }

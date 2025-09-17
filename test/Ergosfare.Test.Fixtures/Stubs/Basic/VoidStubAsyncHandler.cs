@@ -23,3 +23,35 @@ public class StubVoidAsyncHandler: IAsyncHandler<StubMessage>
     }
 }
 
+
+public class StubVoidAsyncPreInterceptor: IAsyncPreInterceptor<StubMessage>
+{
+    public Task<object> HandleAsync(StubMessage message, IExecutionContext context)
+    {
+        return Task.FromResult<object>(message);
+    }
+}
+
+public class StubVoidAsyncPostInterceptor: IAsyncPostInterceptor<StubMessage>
+{
+    public Task<object> HandleAsync(StubMessage message, object? result, IExecutionContext context)
+    {
+        return Task.FromResult(result!);
+    }
+}
+
+public class StubVoidAsyncExceptionInterceptor: IAsyncExceptionInterceptor<StubMessage>
+{
+    public Task HandleAsync(StubMessage message, object? messageResult, Exception exception, IExecutionContext context)
+    {
+        return Task.CompletedTask;
+    }
+}
+
+public class StubVoidAsyncFinalInterceptor: IAsyncFinalInterceptor<StubMessage>
+{
+    public Task HandleAsync(StubMessage message, object? result, Exception? exception, IExecutionContext context)
+    {
+        return Task.CompletedTask;
+    }
+}

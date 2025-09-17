@@ -6,8 +6,11 @@ namespace Ergosfare.Core.Abstractions.Invokers;
 /// Provides a common abstract base for all invoker types, ensuring they
 /// have access to shared message dependencies.
 /// </summary>
-internal abstract class AbstractInvoker(IMessageDependencies messageDependencies)
+internal abstract class AbstractInvoker(
+    IMessageDependencies messageDependencies,
+    IResultAdapterService? resultAdapterService)
 {
+    protected IResultAdapterService? ResultAdapterService => resultAdapterService;
     /// <summary>
     /// Gets the total number of pre-interceptors (direct + indirect) for the associated message.
     /// </summary>

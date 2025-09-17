@@ -13,7 +13,8 @@ public class StubStringAsyncHandler : IAsyncHandler<StubMessage, string>
     /// The predefined result returned by this handler.
     /// </summary>
     public const string Result = "Hello world";
-    
+
+
     /// <summary>
     /// Handles a <see cref="StubMessage"/> asynchronously and returns a string result.
     /// </summary>
@@ -24,5 +25,15 @@ public class StubStringAsyncHandler : IAsyncHandler<StubMessage, string>
     {
         await Task.CompletedTask;
         return Result;
+    }
+}
+
+
+public class StubStringAsyncFinalInterceptor : IAsyncFinalInterceptor<StubMessage, string>
+{
+    public const string Result = "Hello world";
+    public Task HandleAsync(StubMessage message, string? result, Exception? exception, IExecutionContext context)
+    {
+        return Task.CompletedTask;
     }
 }

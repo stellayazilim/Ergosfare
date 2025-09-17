@@ -1,143 +1,100 @@
-﻿// using Ergosfare.Contracts.Attributes;
-// using Ergosfare.Core.Abstractions;
-// using Ergosfare.Core.Internal.Builders;
-// using Ergosfare.Core.Internal.Factories;
-// using Ergosfare.Core.Internal.Mediator;
-// using Ergosfare.Core.Internal.Registry.Descriptors;
-// using Ergosfare.Core.Test.__stubs__;
-// using Microsoft.Extensions.DependencyInjection;
-// using Moq;
-// using Xunit.Abstractions;
-//
-// namespace Ergosfare.Core.Test;
-//
-// public class MessageDependenciesTest
-// (ITestOutputHelper testOutputHelper)
-// {
-//
-//     [Fact]
-//     [Trait("Category", "Unit")]
-//     public void MessageDependenciesFactoryShouldCreateMessageDependencies()
-//     {
-//         // arrange 
-//         var serviceCollection = new ServiceCollection().BuildServiceProvider();
-//         var descriptor = new MessageDescriptor(typeof(StubNonGenericMessage));
-//         var messageDependenciesFactory = new MessageDependenciesFactory(serviceCollection);
-//
-//         
-//         
-//         // act
-//         var dependencies = messageDependenciesFactory.Create(typeof(StubNonGenericMessage), descriptor, []);
-//         
-//         // assert 
-//         Assert.NotNull(dependencies);
-//     }
-//
-//
-//     [Fact]
-//     [Trait("Category", "Coverage")]
-//     public void MessageDependenciesShouldGetIndirectHandlers()
-//     {
-//         // arrange
-//         var messgeDependencies = new MessageDependencies(
-//             typeof(IMessage), new MessageDescriptor(typeof(IMessage)), null!, []);
-//         
-//         // act
-//         var indirectHandlers = messgeDependencies.IndirectHandlers;
-//         
-//         // assert
-//         Assert.NotNull(indirectHandlers);
-//         Assert.Empty(indirectHandlers);
-//     }
-//
-//
-//
-//     [Fact]
-//     [Trait("Category", "Coverage")]
-//     public void MessageDependenciesShouldGetHandlerTypeMakeGeneric()
-//     {
-//         // Arrange
-//         var serviceProvider = new ServiceCollection()
-//             .AddTransient<StubGenericHandler<string>>()
-//             .AddTransient<StubGenericPreInterceptor<string>>()
-//             .AddTransient<StubGenericPostInterceptor<string>>()
-//             .AddTransient<StubGenericExceptionInterceptor<string>>()
-//             .AddTransient<StubGenericFinalInterceptor<string>>()
-//             .BuildServiceProvider();
-//
-//         // our generic message type to resolve against
-//        
-//       
-//         
-//
-//         // build descriptor manually
-//         var handlerDescriptor = new MainHandlerDescriptor()
-//         {
-//             Weight = 1,
-//             Groups = [GroupAttribute.DefaultGroupName],
-//             MessageType = typeof(StubGenericMessage<>),
-//             HandlerType = typeof(StubGenericHandler<>),
-//             ResultType = typeof(Task)
-//             
-//         }; 
-//         
-//         var preInterceptorDescriptor = new PreInterceptorDescriptor()
-//         {
-//             Weight = 1,
-//             Groups = [GroupAttribute.DefaultGroupName],
-//             MessageType = typeof(StubGenericMessage<>),
-//             HandlerType = typeof(StubGenericPreInterceptor<>),
-//         }; 
-//
-//
-//         var postInterceptorDescriptor = new PostInterceptorDescriptor()
-//         {
-//             Weight = 1,
-//             Groups = [GroupAttribute.DefaultGroupName],
-//             MessageType = typeof(StubGenericMessage<>),
-//             HandlerType = typeof(StubGenericPostInterceptor<>),
-//             ResultType = typeof(Task)
-//         };
-//
-//
-//         var exceptionInterceptorDescriptor = new ExceptionInterceptorDescriptor()
-//         {
-//             Weight = 1,
-//             Groups = [GroupAttribute.DefaultGroupName],
-//             MessageType = typeof(StubGenericMessage<>),
-//             HandlerType = typeof(StubGenericExceptionInterceptor<>),
-//             ResultType = typeof(Task)
-//         };
-//
-//         var finalInterceptorDescriptor = new FinalInterceptorDescriptor()
-//         {
-//             Weight = 1,
-//             Groups = [GroupAttribute.DefaultGroupName],
-//             MessageType = typeof(StubGenericMessage<>),
-//             HandlerType = typeof(StubGenericFinalInterceptor<>),
-//             ResultType = typeof(Task)
-//         };
-//
-//         var messageDescriptor = new MessageDescriptor(typeof(StubGenericMessage<>));
-//         messageDescriptor.AddDescriptor(handlerDescriptor);
-//         messageDescriptor.AddDescriptor(preInterceptorDescriptor);
-//         messageDescriptor.AddDescriptor(postInterceptorDescriptor);
-//         messageDescriptor.AddDescriptor(exceptionInterceptorDescriptor);
-//         messageDescriptor.AddDescriptor(finalInterceptorDescriptor);
-//         var dependencies = new MessageDependencies(
-//             typeof(StubGenericMessage<string>),
-//             messageDescriptor,
-//             serviceProvider, [GroupAttribute.DefaultGroupName]);
-//
-//
-//         // Assert: should be StubGenericHandler<string>
-//         Assert.Equal(typeof(StubGenericHandler<string>), dependencies.Handlers.First().Handler.Value.GetType());
-//         Assert.Equal(typeof(StubGenericPreInterceptor<string>), dependencies.PreInterceptors.First().Handler.Value.GetType());
-//         Assert.Equal(typeof(StubGenericPostInterceptor<string>), dependencies.PostInterceptors.First().Handler.Value.GetType());
-//         Assert.Equal(typeof(StubGenericExceptionInterceptor<string>),  dependencies.ExceptionInterceptors.First().Handler.Value.GetType());
-//         Assert.Equal(typeof(StubGenericFinalInterceptor<string>),  dependencies.FinalInterceptors.First().Handler.Value.GetType());
-//     }
-//     
+﻿using Ergosfare.Core.Abstractions;
+using Ergosfare.Core.Abstractions.Registry;
+using Ergosfare.Core.Abstractions.Strategies;
+using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
+using Ergosfare.Core.Internal.Factories;
+using Ergosfare.Core.Internal.Mediator;
+using Ergosfare.Core.Internal.Registry.Descriptors;
+using Ergosfare.Test.Fixtures;
+using Ergosfare.Test.Fixtures.Stubs.Basic;
+using Ergosfare.Test.Fixtures.Stubs.Generic;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit.Abstractions;
+// ReSharper disable ConvertToPrimaryConstructor
+
+namespace Ergosfare.Core.Test;
+
+public class MessageDependenciesTest: 
+    IClassFixture<MessageDependencyFixture>, IClassFixture<DescriptorFixture>
+{
+    private readonly ITestOutputHelper _testOutputHelper;
+    private MessageDependencyFixture _messageDependencyFixture;
+    private readonly DescriptorFixture _descriptorFixture;
+    public MessageDependenciesTest(
+        DescriptorFixture descriptorFixture,
+        MessageDependencyFixture messageDependencyFixture,
+        ITestOutputHelper testOutputHelper)
+    {
+        _descriptorFixture = descriptorFixture;
+        _testOutputHelper = testOutputHelper;
+        _messageDependencyFixture = messageDependencyFixture;
+    }
+    
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void MessageDependenciesFactoryShouldCreateMessageDependencies()
+    {
+
+        _messageDependencyFixture = _messageDependencyFixture.New;
+        _messageDependencyFixture.AddServices(sp => sp.AddTransient<StubVoidHandler>());
+        var descriptor = _descriptorFixture.CreateMessageDescriptor<StubMessage>();
+  
+        var messageDependenciesFactory = new MessageDependenciesFactory(_messageDependencyFixture.ServiceProvider);
+        
+        // act
+        var dependencies = messageDependenciesFactory.Create(typeof(StubMessage), descriptor, []);
+        
+        // assert 
+        Assert.NotNull(dependencies);
+        
+        // cleanup
+        _messageDependencyFixture.Dispose();
+    }
+
+
+    [Fact]
+    [Trait("Category", "Coverage")]
+    public void MessageDependenciesShouldGetIndirectHandlers()
+    {
+        // arrange
+        var messgeDependencies = new MessageDependencies(
+            typeof(IMessage), new MessageDescriptor(typeof(IMessage)), null!, []);
+        
+        // act
+        var indirectHandlers = messgeDependencies.IndirectHandlers;
+        
+        // assert
+        Assert.NotNull(indirectHandlers);
+        Assert.Empty(indirectHandlers);
+        
+        _messageDependencyFixture.Dispose();
+    }
+    
+    private class TestHandler: VoidStubGenericHandler<string> {}
+    
+     [Fact]
+     [Trait("Category", "Coverage")]
+     public async Task MessageDependenciesShouldGetHandlerTypeMakeGeneric()
+     {
+         // Arrange
+         
+         var services = new ServiceCollection()
+             .AddErgosfare(options => options.AddCoreModule(b => b
+                 .Register<VoidStubGenericHandler<string>>()))
+             .BuildServiceProvider();
+
+         var mediator = services.GetRequiredService<IMessageMediator>();
+
+         await mediator.Mediate(new StubGenericMessage<string>(), new MediateOptions<StubGenericMessage<string>, Task>()
+         {
+             Groups = ["default"],
+             Items = new Dictionary<object,object?>(),
+             MessageMediationStrategy = new SingleAsyncHandlerMediationStrategy<StubGenericMessage<string>, Task>(null),
+             MessageResolveStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(services.GetRequiredService<IMessageRegistry>()),
+             CancellationToken = CancellationToken.None
+         });
+     }
+     
 //     
 //     [Fact]
 //     [Trait("Category", "Coverage")]
@@ -316,4 +273,4 @@
 //         // Assert
 //         Assert.NotNull( resolvedHandler);
 //     }
-// }
+}

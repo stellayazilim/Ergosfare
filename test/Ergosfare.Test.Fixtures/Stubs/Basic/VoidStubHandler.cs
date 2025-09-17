@@ -1,5 +1,6 @@
 using Ergosfare.Context;
 using Ergosfare.Core.Abstractions.Handlers;
+// ReSharper disable ClassNeverInstantiated.Global
 
 namespace Ergosfare.Test.Fixtures.Stubs.Basic;
 
@@ -48,6 +49,8 @@ public class StubPreInterceptor: IPreInterceptor<StubMessage>
 /// </summary>
 public class StubPostInterceptor: IPostInterceptor<StubMessage, object>
 {
+    
+    public const string Result = "result";
     /// <summary>
     /// Handles the post-processing of a message result.
     /// </summary>
@@ -64,7 +67,7 @@ public class StubPostInterceptor: IPostInterceptor<StubMessage, object>
 
 /// <summary>
 /// A stub implementation of <see cref="IExceptionInterceptor{TMessage, TResult}"/> for <see cref="StubMessage"/>.
-/// Returns <c>null</c> and is used for testing exception interception in handlers.
+/// Returns <c>messageResult</c> and is used for testing exception interception in handlers.
 /// </summary>
 public class StubExceptionInterceptor: IExceptionInterceptor<StubMessage, object>
 {
@@ -78,7 +81,7 @@ public class StubExceptionInterceptor: IExceptionInterceptor<StubMessage, object
     /// <returns>Always returns <c>null</c>.</returns>
     public object Handle(StubMessage message, object? messageResult, Exception exception, IExecutionContext context)
     {
-        return null!;
+        return messageResult!;
     }
 }
 

@@ -1,6 +1,8 @@
 using Ergosfare.Contracts.Attributes;
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.EventHub;
+using Ergosfare.Core.Abstractions.Registry;
+using Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Ergosfare.Core.Abstractions.SignalHub;
 using Ergosfare.Core.Abstractions.Strategies;
 using Ergosfare.Core.Internal.Factories;
@@ -33,7 +35,13 @@ public class MessageDependencyFixture : IFixture<MessageDependencyFixture>
     /// Gets the internal message registry used to track handlers.
     /// </summary>
     internal MessageRegistry Registry { get; set; }
-
+    
+    
+    /// <summary>
+    /// Exposes message registry
+    /// </summary>
+    public IMessageRegistry MessageRegistry => Registry;
+    
     /// <summary>
     /// Gets the service provider built from the registered services.
     /// It is lazy to allow additional services to be registered before first use.
@@ -123,8 +131,8 @@ public class MessageDependencyFixture : IFixture<MessageDependencyFixture>
         var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(Registry);
         var descriptor = resolver.Find(messageType);
         var factory = new MessageDependenciesFactory(ServiceProvider);
-
-        return factory.Create(messageType, descriptor ?? new MessageDescriptor(messageType), Groups);
+        
+        return factory.Create(messageType, descriptor! , Groups);
     }
     
     /// <summary>
@@ -137,10 +145,19 @@ public class MessageDependencyFixture : IFixture<MessageDependencyFixture>
         var resolver = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(Registry);
         var descriptor = resolver.Find(typeof(TMessage));
         var factory = new MessageDependenciesFactory(ServiceProvider);
-
+        
         return factory.Create(typeof(TMessage), descriptor ?? new MessageDescriptor(typeof(TMessage)), Groups);
     }
 
+   
+    public IMessageDependencies CreateDependenciesFromDescriptor<TMessage>(IMessageDescriptor descriptor)
+    {
+        var factory = new MessageDependenciesFactory(ServiceProvider);
+        return factory.Create(typeof(TMessage), descriptor, Groups);
+    }
+
+    
+    
     /// <summary>
     /// Disposes the fixture, including the underlying <see cref="ServiceProvider"/> and resets the <see cref="SignalHubAccessor"/>.
     /// </summary>

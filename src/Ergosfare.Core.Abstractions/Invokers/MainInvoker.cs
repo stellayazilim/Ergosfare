@@ -9,8 +9,10 @@ namespace Ergosfare.Core.Abstractions.Invokers;
 /// Main handlers are responsible for processing the primary logic of a message.
 /// They execute after pre-interceptors and before post-, exception-, or final interceptors.
 /// </remarks>
-internal abstract class MainInvoker(IMessageDependencies messageDependencies) 
-    : AbstractInvoker(messageDependencies)
+internal abstract class MainInvoker(
+    IMessageDependencies messageDependencies,
+    IResultAdapterService resultAdapterService) 
+    : AbstractInvoker(messageDependencies, resultAdapterService)
 {
     /// <summary>
     /// Invokes the main handlers for the specified <paramref name="message"/> 

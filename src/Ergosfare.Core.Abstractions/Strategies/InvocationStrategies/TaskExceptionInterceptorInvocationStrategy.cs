@@ -21,7 +21,8 @@ namespace Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 /// If no exception interceptors are registered, the captured exception is rethrown immediately.
 /// </remarks>
 internal sealed class TaskExceptionInterceptorInvocationStrategy(
-    IMessageDependencies messageDependencies) : ExceptionInvoker(messageDependencies)
+    IMessageDependencies messageDependencies,
+    IResultAdapterService? resultAdapterService) : ExceptionInvoker(messageDependencies, resultAdapterService)
 {
     
     /// <summary>

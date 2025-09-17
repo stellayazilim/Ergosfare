@@ -22,7 +22,8 @@ namespace Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 /// Final interceptors do not rethrow exceptions; they are intended for cleanup, logging, or finalization logic.
 /// </remarks>
 internal sealed class TaskFinalInterceptorInvocationStrategy(
-    IMessageDependencies messageDependencies) : FinalInvoker(messageDependencies)
+    IMessageDependencies messageDependencies,
+    IResultAdapterService? resultAdapterService) : FinalInvoker(messageDependencies, resultAdapterService)
 {
 
     /// <summary>

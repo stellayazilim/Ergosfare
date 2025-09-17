@@ -6,7 +6,10 @@ namespace Ergosfare.Core.Abstractions.Invokers;
 /// Provides an abstract base for invoking post-interceptors after a message
 /// handler has executed.
 /// </summary>
-internal abstract class PostInvoker(IMessageDependencies messageDependencies): AbstractInvoker(messageDependencies)
+internal abstract class PostInvoker(
+    IMessageDependencies messageDependencies,
+    IResultAdapterService? resultAdapterService): 
+    AbstractInvoker(messageDependencies, resultAdapterService)
 {
     /// <summary>
     /// Executes the post-interceptors for the given message and result within

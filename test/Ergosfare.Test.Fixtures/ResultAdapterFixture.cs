@@ -135,6 +135,53 @@ public class ResultAdapterFixtures : IFixture<ResultAdapterFixtures>
         }
     }
 
+    
+    /// <summary>
+    /// A fake adapter that always claims it can adapt and returns a fixed exception.
+    /// Used to verify successful exception lookup.
+    /// </summary>
+    public class AlwaysAdaptAdapter : IResultAdapter
+    {
+        public bool CanAdapt(object result) => true;
+
+        public bool TryGetException(object result, out Exception? exception)
+        {
+            exception = new InvalidOperationException("adapted");
+            return true;
+        }
+    }
+    
+    
+    /// <summary>
+    /// A fake adapter that claims it can adapt but fails to produce an exception.
+    /// Used to test the case where an adapter accepts input but yields no exception.
+    /// </summary>
+    public class NullExceptionAdapter : IResultAdapter
+    {
+        public bool CanAdapt(object result) => true;
+
+        public bool TryGetException(object result, out Exception? exception)
+        {
+            exception = null;
+            return false;
+        }
+    }
+    
+    
+    /// <summary>
+    /// A fake adapter that never claims it can adapt any input.
+    /// Used to verify that unrelated adapters are skipped.
+    /// </summary>
+    public class NeverAdaptAdapter : IResultAdapter
+    {
+        public bool CanAdapt(object result) => false;
+
+        public bool TryGetException(object result, out Exception? exception)
+        {
+            exception = null;
+            return false;
+        }
+    }
     #endregion
 
     #region Fixture Initialization

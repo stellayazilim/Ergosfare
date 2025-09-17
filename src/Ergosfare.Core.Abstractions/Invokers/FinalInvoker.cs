@@ -10,8 +10,10 @@ namespace Ergosfare.Core.Abstractions.Invokers;
 /// Final interceptors run at the very end of the pipeline, after pre-, post-, and exception interceptors.
 /// They are intended for cleanup, logging, or finalization tasks, and do not rethrow exceptions.
 /// </remarks>
-internal abstract class FinalInvoker(IMessageDependencies messageDependencies) 
-    : AbstractInvoker(messageDependencies)
+internal abstract class FinalInvoker(
+    IMessageDependencies messageDependencies, 
+    IResultAdapterService? resultAdapterService) 
+    : AbstractInvoker(messageDependencies, resultAdapterService)
 {
     /// <summary>
     /// Invokes final interceptors for the given <paramref name="message"/>, 

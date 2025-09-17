@@ -4,8 +4,8 @@ using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using Ergosfare.Core.Abstractions.Exceptions;
-using Ergosfare.Core.Abstractions.Extensions;
 using Ergosfare.Context;
+using Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 
 namespace Ergosfare.Core.Abstractions.Strategies;
 
@@ -20,11 +20,11 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
     
 
         
-    // an unknown exception occoured that Ergosfare doesn't recognize through pipeline
-    Exception? _unknownException = null;
+    // an unknown exception occurred that Ergosfare doesn't recognize through pipeline
+    Exception? _unknownException;
         
-    // is excecution aborted at any path of pipeline
-    bool _executionAborted = false;
+    // is execution aborted at any path of pipeline
+    bool _executionAborted;
         
     // async enumerable still consumable, ie all _consumed, exception happened
     bool _consume = true;
@@ -40,7 +40,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         AmbientExecutionContext.Current = executionContext; 
         
         // enumerator to consume
-        var enumerable = ((IAsyncEnumerable<TResult>)messageDependencies
+        var enumerable = ((IAsyncEnumerable<TResult>?)messageDependencies
             .Handlers
             .Single()
             .Handler
@@ -52,9 +52,11 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
 
         try
         {
-            await messageDependencies.RunAsyncPreInterceptors(message, executionContext).ConfigureAwait(false);
+            var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
+            message =  (TMessage)await preInvoker.Invoke(message, executionContext) ;
+            
         }
-        catch (ExecutionAbortedException e)
+        catch (ExecutionAbortedException)
         {
             // aborted early no need to _consume
             _consume = false;
@@ -63,7 +65,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         }
         catch (Exception exception) when (exception is not ExecutionAbortedException)
         {
-            // exception happaned no need to _consume
+            // exception happened no need to _consume
             _consume = false;
             _unknownException = exception;
         }
@@ -83,7 +85,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
                 _consume = await enumerator.MoveNextAsync().ConfigureAwait(false);
                 item = _consume ? enumerator.Current : default;
             }
-            catch (ExecutionAbortedException e)
+            catch (ExecutionAbortedException)
             {
                 _consume = false;
                 _executionAborted = true;
@@ -110,9 +112,13 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         try
         {
             if (_unknownException is null)
-                await messageDependencies.RunAsyncPostInterceptors(message, enumerator, executionContext, resultAdapterService).ConfigureAwait(false);
+            {
+                var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
+                // we can't override result since its chunked
+                await postInvoker.Invoke(message, enumerator, executionContext).ConfigureAwait(false);
+            }
         }
-        catch (ExecutionAbortedException e)
+        catch (ExecutionAbortedException)
         { /*all chunks _consumed no action need*/ }
         catch (Exception exception) when (exception is not ExecutionAbortedException)
         { 
@@ -125,7 +131,9 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         {
             if (_unknownException is not null)
             {
-                await messageDependencies.RunAsyncExceptionInterceptors(
+                var exceptionInvoker = new TaskExceptionInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
+                // we can't override result since its chunked
+                await exceptionInvoker.Invoke(
                     message,
                     enumerator,
                     ExceptionDispatchInfo.Capture(_unknownException),
@@ -140,7 +148,8 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
 
         finally
         {
-            await messageDependencies.RunAsyncFinalInterceptors(message, enumerator, _unknownException, executionContext);
+            var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
+            await finalInvoker.Invoke(message, enumerator, _unknownException, executionContext);
         }
     }
     
