@@ -4,6 +4,7 @@ using Ergosfare.Commands.Abstractions;
 using Ergosfare.Core;
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.EventHub;
+using Ergosfare.Core.Abstractions.SignalHub;
 using Ergosfare.Core.Abstractions.Strategies;
 using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,7 +31,7 @@ public class CommandMediatorTests
         
         var messageMediator = serviceCollection.GetService<IMessageMediator>();
         var mediator = new CommandMediator(
-            new EventHub(),
+            new SignalHub(),
             serviceCollection.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
             new ResultAdapterService(),
             messageMediator!);
@@ -58,7 +59,7 @@ public class CommandMediatorTests
         
         var messageMediator = serviceCollection.GetRequiredService<IMessageMediator>();
         var mediator = new CommandMediator(
-            new EventHub(),
+            new SignalHub(),
             serviceCollection.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
             new ResultAdapterService(),
             messageMediator!);

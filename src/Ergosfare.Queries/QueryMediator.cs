@@ -2,7 +2,7 @@
 using Ergosfare.Core;
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.EventHub;
-using Ergosfare.Core.Abstractions.Events;
+using Ergosfare.Core.Abstractions.SignalHub.Signals;
 using Ergosfare.Core.Abstractions.Strategies;
 using Ergosfare.Queries.Abstractions;
 
@@ -35,7 +35,7 @@ public class QueryMediator(
         CancellationToken cancellationToken = default)
     {
         // Trigger a pipeline event indicating that the query has started processing
-        BeginPipelineEvent.Invoke(query, null);
+        BeginPipelineSignal.Invoke(query, null);
         // Use default settings if none provided
         queryMediationSettings ??= new QueryMediationSettings();
         // Build a mediation strategy specific for single-result queries
@@ -51,7 +51,7 @@ public class QueryMediator(
                 Groups = queryMediationSettings.Filters.Groups
             });
         // Trigger a pipeline event indicating that the query has completed
-        FinishPipelineEvent.Invoke(query, result);
+        FinishPipelineSignal.Invoke(query, result);
         return result;
     }
 
@@ -71,7 +71,7 @@ public class QueryMediator(
         CancellationToken cancellationToken = default)
     {
         // Trigger a pipeline event indicating that streaming has started
-        BeginPipelineEvent.Invoke(query, null);
+        BeginPipelineSignal.Invoke(query, null);
         // Use default settings if none provided
         queryMediationSettings ??= new QueryMediationSettings();
         // Build a mediation strategy for streaming queries
@@ -87,7 +87,7 @@ public class QueryMediator(
                 Groups = queryMediationSettings.Filters.Groups
             });
         // Trigger a pipeline event indicating that streaming has completed
-        FinishPipelineEvent.Invoke(query, result);
+        FinishPipelineSignal.Invoke(query, result);
         return result;
     }
 }

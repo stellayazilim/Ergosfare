@@ -1,31 +1,35 @@
-using Ergosfare.Context;
 using Ergosfare.Core.Abstractions.Handlers;
-using Ergosfare.Core.Internal.Contexts;
-using Ergosfare.Core.Test.__stubs__;
-
+using Ergosfare.Test.Fixtures;
+using Ergosfare.Test.Fixtures.Stubs.Basic;
+// ReSharper disable once ConvertToPrimaryConstructor
 namespace Ergosfare.Core.Test.Abstractions.Handler;
 
-public class IAsyncHandlerImplemantionTests
+
+/// <summary>
+/// Unit tests for asynchronous handlers using basic stubs and <see cref="ExecutionContextFixture"/>.
+/// Demonstrates that <see cref="IAsyncHandler{TMessage}"/> implementations produce <see cref="Task"/> results.
+/// </summary>
+public class AsyncHandlerTests(ExecutionContextFixture executionContextFixture) 
+    :BaseHandlerFixture(executionContextFixture)
 {
+
+    
+    /// <summary>
+    /// Verifies that an <see cref="IAsyncHandler{TMessage}"/> correctly implements the async contract.
+    /// Specifically, <see cref="StubVoidAsyncHandler"/> should return a <see cref="Task"/>.
+    /// </summary>
     [Fact]
     [Trait("Category", "Coverage")]
     public async Task IAsyncHandlersShouldImplement()
-    {
-        
-        var ct = CancellationToken.None;
-        var values = new Dictionary<object, object?>();
-        var ctx = new ErgosfareExecutionContext(values,ct);
-        IHandler handler1 =  new StubNonGenericAsyncHandler();
+    {      
+        // arrange
+        IHandler handler1 =  new StubVoidAsyncHandler();
        
-        await using (AmbientExecutionContext.CreateScope(ctx))
-        {
-
-            var result = handler1.Handle(
-                new StubNonGenericMessage(), AmbientExecutionContext.Current);
-            Assert.NotNull(result); 
-            await Assert.IsType<Task>(result, exactMatch: false);
-            
-        }
-
+        // act
+        var result = handler1.Handle(Message, ExecutionContextFixture.Ctx);
+        
+        // assert
+        Assert.NotNull(result); 
+        await Assert.IsType<Task>(result, exactMatch: false);
     }
 }

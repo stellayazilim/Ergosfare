@@ -21,8 +21,4 @@
     <ItemGroup>
         <InternalsVisibleTo Include="Ergosfare.Core.Extensions.MicrosoftDependencyInjection" />
     </ItemGroup>
-     
-    <ItemGroup>
-      <Folder Include="EventHub\" />
-    </ItemGroup>
 </Project>

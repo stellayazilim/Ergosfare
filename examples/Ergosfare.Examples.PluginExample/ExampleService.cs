@@ -1,4 +1,4 @@
-using Ergosfare.Core.Abstractions.Events;
+using Ergosfare.Core.Abstractions.SignalHub.Signals;
 
 namespace Ergosfare.Examples.PluginExample;
 
@@ -9,10 +9,10 @@ internal class ExampleService :  IDisposable
     public ExampleService()
     {
         // Örnek: BeginPipelineEvent'ina abone oluyoruz
-        _subscription = PipelineEvent.Subscribe<BeginPipelineEvent>(OnPipelineEvent);
+        _subscription = PipelineSignal.Subscribe<BeginPipelineSignal>(OnPipelineEvent);
     }
 
-    private void OnPipelineEvent(PipelineEvent evt)
+    private void OnPipelineEvent(PipelineSignal evt)
     {
         Console.WriteLine($"[ExamplePlugin] Hello World! Event received: {evt.GetType().Name}");
     }

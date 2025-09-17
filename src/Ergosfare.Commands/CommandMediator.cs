@@ -1,14 +1,13 @@
-﻿
-using Ergosfare.Commands.Abstractions;
+﻿using Ergosfare.Commands.Abstractions;
 using Ergosfare.Core.Abstractions;
-using Ergosfare.Core.Abstractions.EventHub;
-using Ergosfare.Core.Abstractions.Events;
+using Ergosfare.Core.Abstractions.SignalHub;
+using Ergosfare.Core.Abstractions.SignalHub.Signals;
 using Ergosfare.Core.Abstractions.Strategies;
 
 namespace Ergosfare.Commands;
 
 public class CommandMediator(
-    IEventHub eventHub,
+    ISignalHub signalHub,
     ActualTypeOrFirstAssignableTypeMessageResolveStrategy messageResolveStrategy,
     IResultAdapterService? resultAdapterService,
     IMessageMediator messageMediator) : ICommandMediator
@@ -17,7 +16,7 @@ public class CommandMediator(
     public Task SendAsync(ICommand commandConstruct, CommandMediationSettings? commandMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
-        BeginPipelineEvent.Invoke(commandConstruct, null);
+        BeginPipelineSignal.Invoke(commandConstruct, null);
         
         commandMediationSettings ??= new CommandMediationSettings();
         var mediationStrategy = new SingleAsyncHandlerMediationStrategy<ICommand>(resultAdapterService);
@@ -31,7 +30,7 @@ public class CommandMediator(
             Groups = commandMediationSettings.Filters.Groups
         };
         var result =  messageMediator.Mediate(commandConstruct, options);
-        FinishPipelineEvent.Invoke(commandConstruct, result);
+        FinishPipelineSignal.Invoke(commandConstruct, result);
         return result;
     }
 

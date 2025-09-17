@@ -1,65 +1,84 @@
 ﻿using System.Collections;
 using Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Ergosfare.Core.Internal;
-using Ergosfare.Core.Test.__stubs__;
+using Ergosfare.Test.Fixtures;
+using Ergosfare.Test.Fixtures.Stubs.Basic;
 
 namespace Ergosfare.Core.Test.Internal;
 
-public class LazyHandlerCollectionTest
+/// <summary>
+/// Unit tests for <see cref="LazyHandlerCollection{THandler, TDescriptor}"/>.
+/// </summary>
+/// <remarks>
+/// These tests verify construction, enumeration, and collection behavior
+/// of <see cref="LazyHandlerCollection{THandler, TDescriptor}"/> using
+/// a test fixture providing lazy handlers.
+/// </remarks>
+public class LazyHandlerCollectionTest(
+    LazyHandlerFixture lazyHandlerFixture) : IClassFixture<LazyHandlerFixture>
 {
-
+    /// <summary>
+    /// Verifies that a <see cref="LazyHandlerCollection{THandler, TDescriptor}"/>
+    /// can be constructed and contains the expected lazy handler.
+    /// </summary>
     [Fact]
     public void LazyHandlerCollectionShouldConstructedTest()
     {
-        // arrange
-        var lazyHandler = StubNonGenericLazyHandler.GetLazyInstance();
-        // act
-        var collection = new LazyHandlerCollection<StubNonGenericHandler,IHandlerDescriptor>(
-            [ lazyHandler  ]);
-        // assert
+        // Arrange: create a single-element lazy handler collection
+        var collection = lazyHandlerFixture.CreateSingleElementLazyHandlerCollection<StubVoidHandler>();
+
+        // Assert: collection is not null, contains exactly one item, and type is correct
         Assert.NotNull(collection);
         Assert.Single(collection);
-        Assert.IsType<LazyHandlerCollection<StubNonGenericHandler,IHandlerDescriptor>>(collection, exactMatch: false);
+        Assert.IsType<LazyHandlerCollection<StubVoidHandler, IHandlerDescriptor>>(collection, exactMatch: false);
     }
 
+    /// <summary>
+    /// Verifies that the generic enumerator of <see cref="LazyHandlerCollection{THandler, TDescriptor}"/>
+    /// enumerates items correctly.
+    /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
     public void LazyHandlerCollectionShouldGetEnumeratorTest()
     {
-        // arrange
-        var lazyHandler = StubNonGenericLazyHandler
-            .GetLazyInstance();
-        var collection = new LazyHandlerCollection<StubNonGenericHandler,IHandlerDescriptor>(
-            [ lazyHandler  ]);
-        // act
+        // Arrange: create a lazy handler
+        var lazyHandler = lazyHandlerFixture.CreateLazyHandler<StubVoidHandler>();
+        var collection = lazyHandlerFixture.CreateLazyHandlerCollection(lazyHandler);
+
+        // Act: iterate using generic enumerator
         var enumerator = collection.GetEnumerator();
-        // assert
-        Assert.NotNull(enumerator);
+
+        // Assert: enumerator returns expected elements and stops correctly
         Assert.True(enumerator.MoveNext());
         Assert.Equal(enumerator.Current, lazyHandler);
         Assert.False(enumerator.MoveNext());
+
+        // Cleanup
         enumerator.Dispose();
-      
     }
-    
-    
+
+    /// <summary>
+    /// Verifies that the non-generic enumerator of <see cref="LazyHandlerCollection{THandler, TDescriptor}"/>
+    /// works correctly.
+    /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
     public void LazyHandlerCollectionShouldGetNonGenericEnumeratorTest()
     {
-        // arrange
-        var lazyHandler = StubNonGenericLazyHandler
-            .GetLazyInstance();
-        var collection = new LazyHandlerCollection<StubNonGenericHandler,IHandlerDescriptor>(
-            [ lazyHandler  ]);
+        // Arrange
+        var collection = lazyHandlerFixture.CreateSingleElementLazyHandlerCollection<StubVoidHandler>();
         var enumerable = (IEnumerable)collection;
-        // act
+
+        // Act
         var enumerator = enumerable.GetEnumerator();
-        // assert
+
+        // Assert
         Assert.NotNull(enumerator);
-        
+
+        // Cleanup
         ((IDisposable)enumerator).Dispose();
     }
 }
+

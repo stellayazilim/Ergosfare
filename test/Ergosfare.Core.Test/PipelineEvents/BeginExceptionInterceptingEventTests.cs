@@ -1,8 +1,8 @@
-using Ergosfare.Core.Abstractions.Events;
+using Ergosfare.Core.Abstractions.SignalHub.Signals;
 
-namespace Ergosfare.Core.Test.PipelineEvents;
+namespace Ergosfare.Core.Test.PipelineSignals;
 
-public class BeginExceptionInterceptingEventTests
+public class BeginExceptionInterceptingSignalTests
 {
     [Fact]
     public void Create_ShouldInitializePropertiesCorrectly()
@@ -15,7 +15,7 @@ public class BeginExceptionInterceptingEventTests
         ushort interceptorCount = 5;
 
         // act
-        var ev = BeginExceptionInterceptingEvent.Create("string", null, exception, interceptorCount);
+        var ev = BeginExceptionInterceptingSignal.Create("string", null, exception, interceptorCount);
 
         // assert
         Assert.Equal(exception, ev.Exception);
@@ -28,7 +28,7 @@ public class BeginExceptionInterceptingEventTests
     {
         // arrange
         var exception = new InvalidOperationException();
-        var ev = BeginExceptionInterceptingEvent.Create("string",null, exception);
+        var ev = BeginExceptionInterceptingSignal.Create("string",null, exception);
 
         // act
         var components = ev.GetEqualityComponents().ToList();

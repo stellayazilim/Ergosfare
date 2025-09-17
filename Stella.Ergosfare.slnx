@@ -34,6 +34,7 @@
     <Project Path="test\Ergosfare.Core.Test\Ergosfare.Core.Test.csproj" Type="Classic C#" />
     <Project Path="test\Ergosfare.Events.Test\Ergosfare.Events.Test.csproj" Type="Classic C#" />
     <Project Path="test\Ergosfare.Queries.Test\Ergosfare.Queries.Test.csproj" Type="Classic C#" />
+    <Project Path="test\Ergosfare.Test.Fixtures\Ergosfare.Test.Fixtures.csproj" Type="Classic C#" />
     <Project Path="test\Ergosfare.Test\Ergosfare.Test.csproj" Type="Classic C#" />
     <File Path="test\Directory.Packages.props" />
     <File Path="coverlet.runsettings" />

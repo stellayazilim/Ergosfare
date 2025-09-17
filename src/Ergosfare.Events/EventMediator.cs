@@ -1,7 +1,7 @@
 ﻿using Ergosfare.Contracts;
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.EventHub;
-using Ergosfare.Core.Abstractions.Events;
+using Ergosfare.Core.Abstractions.SignalHub.Signals;
 using Ergosfare.Core.Abstractions.Strategies;
 using Ergosfare.Events.Abstractions;
 
@@ -32,7 +32,7 @@ public sealed class EventMediator(
                              CancellationToken cancellationToken = default)
     {
         // Trigger the pipeline start event
-        BeginPipelineEvent.Invoke(@event, null);
+        BeginPipelineSignal.Invoke(@event, null);
         // Create a broadcast strategy for sending this event to multiple handlers
         var mediationStrategy = new AsyncBroadcastMediationStrategy<IEvent>(resultAdapterService, eventMediationSettings ??= new EventMediationSettings());
 
@@ -48,7 +48,7 @@ public sealed class EventMediator(
                 Groups = eventMediationSettings.Filters.Groups
             });
         // Trigger the pipeline finish event
-        FinishPipelineEvent.Invoke(@event, null);
+        FinishPipelineSignal.Invoke(@event, null);
     }
 
     
@@ -65,7 +65,7 @@ public sealed class EventMediator(
                                      CancellationToken cancellationToken = default) where TEvent : notnull
     {
         // Trigger the pipeline start event
-        BeginPipelineEvent.Invoke(@event, null);
+        BeginPipelineSignal.Invoke(@event, null);
         // Create a broadcast strategy for this specific event type
         var mediationStrategy = new AsyncBroadcastMediationStrategy<TEvent>(resultAdapterService, eventMediationSettings ??= new EventMediationSettings());
         // Execute the strongly-typed event through the mediator
@@ -80,6 +80,6 @@ public sealed class EventMediator(
                 Groups = eventMediationSettings.Filters.Groups
             });
         // Trigger the pipeline finish event
-        FinishPipelineEvent.Invoke(@event, null);
+        FinishPipelineSignal.Invoke(@event, null);
     }
 }

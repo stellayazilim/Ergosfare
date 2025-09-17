@@ -33,3 +33,6 @@ public interface IAsyncHandler<in TMessage>: IHandler<TMessage, Task>
     /// <returns>A <see cref="Task"/> representing the asynchronous handling operation.</returns>   
     Task HandleAsync(TMessage message, IExecutionContext context);
 }
+
+
+

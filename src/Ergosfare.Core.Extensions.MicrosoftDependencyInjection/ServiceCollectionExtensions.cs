@@ -1,7 +1,7 @@
 ﻿
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.EventHub;
-using Ergosfare.Core.EventHub;
+using Ergosfare.Core.Abstractions.SignalHub;
 using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Registry;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,7 +21,7 @@ public static class ServiceCollectionExtensions
         var messageRegistry = MessageRegistryAccessor.Instance;
 
         // Get the singleton event-hub instance
-        var eventHub = EventHubAccessor.Instance;
+        var eventHub = SignalHubAccessor.Instance;
         // Register it as a singleton in DI
         services.TryAddSingleton(messageRegistry);
         services.TryAddSingleton(eventHub);

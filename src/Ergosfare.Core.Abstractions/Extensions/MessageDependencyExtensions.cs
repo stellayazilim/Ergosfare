@@ -1,10 +1,8 @@
 using System;
-using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using Ergosfare.Context;
-using Ergosfare.Core.Abstractions.EventHub;
-using Ergosfare.Core.Abstractions.Events;
+using Ergosfare.Core.Abstractions.SignalHub.Signals;
 
 namespace Ergosfare.Core.Abstractions.Extensions;
 
@@ -33,10 +31,10 @@ public static class MessageDependencyExtensions
     /// <remarks>
     /// During execution, the following pipeline events are invoked:
     /// <list type="bullet">
-    /// <item><see cref="BeginPreInterceptingEvent"/> before any interceptors run.</item>
-    /// <item><see cref="BeginPreInterceptorInvocationEvent"/> before each individual interceptor is invoked.</item>
-    /// <item><see cref="FinishPreInterceptorInvocationEvent"/> after each individual interceptor has finished.</item>
-    /// <item><see cref="FinishPreInterceptingEvent"/> after all pre-interceptors have completed.</item>
+    /// <item><see cref="BeginPreInterceptingSignal"/> before any interceptors run.</item>
+    /// <item><see cref="BeginPreInterceptorInvocationSignal"/> before each individual interceptor is invoked.</item>
+    /// <item><see cref="FinishPreInterceptorInvocationSignal"/> after each individual interceptor has finished.</item>
+    /// <item><see cref="FinishPreInterceptingSignal"/> after all pre-interceptors have completed.</item>
     /// </list>
     /// This allows subscribers to monitor the progress of the pre-interceptor pipeline.
     /// </remarks>
@@ -44,29 +42,29 @@ public static class MessageDependencyExtensions
     {
         object input = message;
         var total = messageDependencies.IndirectPreInterceptors.Count + messageDependencies.PreInterceptors.Count;
-        BeginPreInterceptingEvent.Invoke(input, null, (ushort)total);
+        BeginPreInterceptingSignal.Invoke(input, null, (ushort)total);
         
         foreach (var preHandler in messageDependencies.IndirectPreInterceptors)
         {
             // pre interceptor begin invocation event
-            BeginPreInterceptorInvocationEvent.Invoke(message, null, preHandler.Handler.Value.GetType());
+            BeginPreInterceptorInvocationSignal.Invoke(message, null, preHandler.Handler.Value.GetType());
             
             // pre interceptor invoked
             input =  await (preHandler.Handler.Value.Handle(input, context) as Task<object>)!;
             
             // finish pre interceptor invocation event
-            FinishPreInterceptorInvocationEvent.Invoke(input, null);
+            FinishPreInterceptorInvocationSignal.Invoke(input, null);
         }
         
         foreach (var preHandler in messageDependencies.PreInterceptors)
         {
             // pre interceptor begin invocation event
-            BeginPreInterceptorInvocationEvent.Invoke(input, null, preHandler.Handler.Value.GetType());
+            BeginPreInterceptorInvocationSignal.Invoke(input, null, preHandler.Handler.Value.GetType());
             input =  await (preHandler.Handler.Value.Handle(input, context) as Task<object>)!;
             // finish pre interceptor invocation event
-            FinishPreInterceptorInvocationEvent.Invoke(input, null);
+            FinishPreInterceptorInvocationSignal.Invoke(input, null);
         }
-        FinishPreInterceptingEvent.Invoke(input, null);
+        FinishPreInterceptingSignal.Invoke(input, null);
         return input;
     }
     
@@ -91,7 +89,7 @@ public static class MessageDependencyExtensions
 /// <param name="resultAdapterService">
 /// Optional service used to detect exceptions embedded in the result object.  
 /// If an exception is found in the result, it is thrown immediately and the corresponding
-/// <see cref="FinishPostInterceptingWithExceptionEvent"/> is invoked.
+/// <see cref="FinishPostInterceptingWithExceptionSignal"/> is invoked.
 /// </param>
 /// <returns>
 /// A <see cref="Task{Object}"/> that produces the final transformed result
@@ -100,11 +98,11 @@ public static class MessageDependencyExtensions
 /// <remarks>
 /// During execution, the following pipeline events are invoked:
 /// <list type="bullet">
-/// <item><see cref="BeginPostInterceptingEvent"/> before any post-interceptors run.</item>
-/// <item><see cref="BeginPostInterceptorInvocationEvent"/> before each individual interceptor is invoked.</item>
-/// <item><see cref="FinishPostInterceptorInvocationEvent"/> after each individual interceptor has finished.</item>
-/// <item><see cref="FinishPostInterceptingWithExceptionEvent"/> if an exception is detected in the result by a <paramref name="resultAdapterService"/>.</item>
-/// <item><see cref="FinishPostInterceptingEvent"/> after all post-interceptors have completed.</item>
+/// <item><see cref="BeginPostInterceptingSignal"/> before any post-interceptors run.</item>
+/// <item><see cref="BeginPostInterceptorInvocationSignal"/> before each individual interceptor is invoked.</item>
+/// <item><see cref="FinishPostInterceptorInvocationSignal"/> after each individual interceptor has finished.</item>
+/// <item><see cref="FinishPostInterceptingWithExceptionSignal"/> if an exception is detected in the result by a <paramref name="resultAdapterService"/>.</item>
+/// <item><see cref="FinishPostInterceptingSignal"/> after all post-interceptors have completed.</item>
 /// </list>
 /// This allows subscribers to monitor the progress of the post-interceptor pipeline and handle exceptions
 /// that are embedded in results without requiring the original handler to throw.
@@ -121,40 +119,42 @@ public static class MessageDependencyExtensions
         // total amaunt of post-interceptor
         var total = messageDependencies.PostInterceptors.Count + messageDependencies.IndirectPostInterceptors.Count;
         
-        BeginPostInterceptingEvent.Invoke(message, messageResult, (ushort)total);
+        BeginPostInterceptingSignal.Invoke(message, messageResult, (ushort)total);
         
         foreach (var postInterceptor in messageDependencies.PostInterceptors)
         {
-            BeginPostInterceptorInvocationEvent.Invoke(message, output, postInterceptor.Handler.Value.GetType());
+            BeginPostInterceptorInvocationSignal.Invoke(message, output, postInterceptor.Handler.Value.GetType());
             output = await (postInterceptor.Handler.Value
                 .Handle(message, output, context) as Task<object>)!;
-            FinishPostInterceptorInvocationEvent.Invoke(message, output);
+            FinishPostInterceptorInvocationSignal.Invoke(message, output);
             // check if exception atteched to output
             var ex = resultAdapterService?.LookupException(output);
             if (ex != null)
             {
-                FinishPostInterceptingWithExceptionEvent.Invoke(message, output, postInterceptor.Handler.Value.GetType(), ex);
+                FinishPostInterceptingWithExceptionSignal.Invoke(message, output, postInterceptor.Handler.Value.GetType(), ex);
                 throw ex;
             }
         }
 
         foreach (var postInterceptor in messageDependencies.IndirectPostInterceptors)
         {
-            BeginPostInterceptorInvocationEvent.Invoke(message, output, postInterceptor.Handler.Value.GetType());
+         
+            
+            BeginPostInterceptorInvocationSignal.Invoke(message, output, postInterceptor.Handler.Value.GetType());
             output = await (postInterceptor.Handler.Value
                 .Handle(message, output, context) as Task<object>)!;
-            FinishPostInterceptorInvocationEvent.Invoke(message, output);
+            FinishPostInterceptorInvocationSignal.Invoke(message, output);
             if (resultAdapterService is not null)
             {
                 var ex = resultAdapterService.LookupException(output);
                 if (ex is not null)
                 {
-                    FinishPostInterceptingWithExceptionEvent.Invoke(message, output, postInterceptor.Handler.Value.GetType(), ex);
+                    FinishPostInterceptingWithExceptionSignal.Invoke(message, output, postInterceptor.Handler.Value.GetType(), ex);
                     throw ex;
                 }
             }
         }
-        FinishPostInterceptingEvent.Invoke(message, output);
+        FinishPostInterceptingSignal.Invoke(message, output);
         return output;
     }
     
@@ -188,9 +188,9 @@ public static class MessageDependencyExtensions
 /// During execution, the following pipeline events are invoked:
 /// <list type="bullet">
 /// <item><see cref="BeginExceptionInterceptingEvent"/> before any exception interceptors run.</item>
-/// <item><see cref="BeginExceptionInterceptorInvocationEvent"/> before each individual interceptor is invoked.</item>
-/// <item><see cref="FinishExceptionInterceptorInvocationEvent"/> after each individual interceptor has finished.</item>
-/// <item><see cref="FinishExceptionInterceptingEvent"/> after all exception interceptors have completed.</item>
+/// <item><see cref="BeginExceptionInterceptorInvocationSignal"/> before each individual interceptor is invoked.</item>
+/// <item><see cref="FinishExceptionInterceptorInvocationSignal"/> after each individual interceptor has finished.</item>
+/// <item><see cref="FinishExceptionInterceptingSignal"/> after all exception interceptors have completed.</item>
 /// </list>
 /// This allows subscribers to monitor the exception handling pipeline and transform the result without throwing
 /// the original exception immediately. If no interceptors exist, the captured exception is rethrown.
@@ -207,12 +207,12 @@ public static class MessageDependencyExtensions
         if (total == 0)
             exceptionDispatchInfo.Throw();
         
-        BeginExceptionInterceptingEvent.Invoke(message, messageResult, exceptionDispatchInfo.SourceException, (ushort)total);
+        BeginExceptionInterceptingSignal.Invoke(message, messageResult, exceptionDispatchInfo.SourceException, (ushort)total);
         var output = messageResult;
         // run direct exception interceptors
         foreach (var errorHandler in messageDependencies.ExceptionInterceptors)
         {
-            BeginExceptionInterceptorInvocationEvent.Invoke(message, output, errorHandler.Handler.Value.GetType(), exceptionDispatchInfo.SourceException);
+            BeginExceptionInterceptorInvocationSignal.Invoke(message, output, errorHandler.Handler.Value.GetType(), exceptionDispatchInfo.SourceException);
             var task = errorHandler.Handler.Value.Handle(
                 message, 
                 output, 
@@ -220,19 +220,19 @@ public static class MessageDependencyExtensions
                 context) as  Task<object>;
 
             if (task != null) output = await task;
-            FinishExceptionInterceptorInvocationEvent.Invoke(message, output,  exceptionDispatchInfo.SourceException);
+            FinishExceptionInterceptorInvocationSignal.Invoke(message, output,  exceptionDispatchInfo.SourceException);
         }
         // run indirect exception interceptors
         foreach (var errorHandler in messageDependencies.IndirectExceptionInterceptors)
         {
             
-            BeginExceptionInterceptorInvocationEvent.Invoke(message, output, errorHandler.Handler.Value.GetType(), exceptionDispatchInfo.SourceException);
+            BeginExceptionInterceptorInvocationSignal.Invoke(message, output, errorHandler.Handler.Value.GetType(), exceptionDispatchInfo.SourceException);
             var task = errorHandler.Handler.Value.Handle(message, output, exceptionDispatchInfo.SourceException, context) as  Task<object>;
             
             if (task != null) output = await task;
-            FinishExceptionInterceptorInvocationEvent.Invoke(message, output,  exceptionDispatchInfo.SourceException);
+            FinishExceptionInterceptorInvocationSignal.Invoke(message, output,  exceptionDispatchInfo.SourceException);
         }
-        FinishExceptionInterceptingEvent.Invoke(message, output,  exceptionDispatchInfo.SourceException);
+        FinishExceptionInterceptingSignal.Invoke(message, output,  exceptionDispatchInfo.SourceException);
         return output;
     }
 
@@ -256,16 +256,16 @@ public static class MessageDependencyExtensions
         // Compute the total number of final interceptors
         var total =  messageDependencies.FinalInterceptors.Count + messageDependencies.IndirectFinalInterceptors.Count;
         // Signal the beginning of the final intercepting stage
-        BeginFinalInterceptingEvent.Invoke(message, messageResult, exception, (ushort)total);
+        BeginFinalInterceptingSignal.Invoke(message, messageResult, exception, (ushort)total);
         // Execute all direct final interceptors
         foreach (var finalHandler in messageDependencies.FinalInterceptors)
         {
             // Signal the start of an individual final interceptor
-            BeginFinalInterceptorInvocationEvent.Invoke(message, messageResult, exception, finalHandler.Handler.Value.GetType());
+            BeginFinalInterceptorInvocationSignal.Invoke(message, messageResult, exception, finalHandler.Handler.Value.GetType());
             // Invoke the interceptor
             await (Task) finalHandler.Handler.Value.Handle(message, messageResult, exception, context);
             // Signal completion of this interceptor
-            FinishFinalInterceptorInvocationEvent.Invoke(message, messageResult);
+            FinishFinalInterceptorInvocationSignal.Invoke(message, messageResult);
         }
         
 
@@ -273,14 +273,14 @@ public static class MessageDependencyExtensions
         foreach (var finalHandler in messageDependencies.IndirectFinalInterceptors)
         {
             // Signal the start of an individual final interceptor
-            BeginFinalInterceptorInvocationEvent.Invoke(message, messageResult, exception, finalHandler.Handler.Value.GetType());
+            BeginFinalInterceptorInvocationSignal.Invoke(message, messageResult, exception, finalHandler.Handler.Value.GetType());
             // Invoke the interceptor
             await (Task) finalHandler.Handler.Value.Handle(message, messageResult, exception,  context);
             // Signal completion of this interceptor
-            FinishFinalInterceptorInvocationEvent.Invoke(message, messageResult);
+            FinishFinalInterceptorInvocationSignal.Invoke(message, messageResult);
 
         }
         // Signal completion of the entire final interception stage
-        FinishFinalInterceptingEvent.Invoke(message, messageResult);
+        FinishFinalInterceptingSignal.Invoke(message, messageResult);
     }
 }
