@@ -224,7 +224,7 @@ public class SignalHubFixture : IFixture<SignalHubFixture>, IAsyncDisposable
     /// A stub implementation of <see cref="ISubscription{T}"/> that holds a strong reference to the action.
     /// Always alive and immediately invokes the action when called.
     /// </summary>
-    /// <typeparam name="T">The type of <see cref="HubEvent"/> handled.</typeparam>
+    /// <typeparam name="T">The type of <see cref="Signal"/> handled.</typeparam>
     public sealed class StubStrongSubscription<T> : ISubscription<T> where T : Signal
     {
         /// <summary>
