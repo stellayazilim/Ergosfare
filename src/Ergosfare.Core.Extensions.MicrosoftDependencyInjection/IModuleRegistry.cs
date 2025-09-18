@@ -8,4 +8,6 @@ public interface IModuleRegistry
     /// <param name="module">The module to register.</param>
     /// <returns>The instance of the module registry for method chaining.</returns>
     IModuleRegistry Register(IModule module);
+
+    IModuleRegistry ConfigureResultAdapters(Action<ResultAdapterBuilder> builder);
 }

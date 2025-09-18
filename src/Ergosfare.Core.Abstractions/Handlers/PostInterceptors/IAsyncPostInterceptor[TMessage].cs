@@ -34,5 +34,5 @@ public interface IAsyncPostInterceptor<in TMessage>
     /// </param>
     /// <param name="context">The current execution context.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-    Task HandleAsync(TMessage message, object? _, IExecutionContext context);
+    Task<object> HandleAsync(TMessage message, object? _, IExecutionContext context);
 }

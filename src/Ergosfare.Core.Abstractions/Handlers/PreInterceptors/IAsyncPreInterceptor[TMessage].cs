@@ -21,9 +21,7 @@ public interface IAsyncPreInterceptor<in TMessage>:
 {
     /// <inheritdoc cref="IPreInterceptor{TMessage}.Handle" />
     object IPreInterceptor<TMessage>.Handle(
-        TMessage message,  IExecutionContext context) => HandleAsync(
-            message, 
-            context);
+        TMessage message,  IExecutionContext context) => HandleAsync(message, context);
     
     
     /// <summary>

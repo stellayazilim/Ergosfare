@@ -1,3 +1,4 @@
+
 using Ergosfare.Context;
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Exceptions;
@@ -6,7 +7,7 @@ using Ergosfare.Core.Abstractions.Strategies;
 using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Mediator;
 using Ergosfare.Core.Internal.Registry;
-using Ergosfare.Core.Test.__stubs__;
+using Ergosfare.Test.Fixtures.Stubs.Basic;
 using Moq;
 
 namespace Ergosfare.Core.Test;
@@ -21,9 +22,9 @@ public class MessageMediatorTests
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         // act & assert
         Assert.Throws<ArgumentNullException>(
-            () =>  new MessageMediator(null, null));
+            () =>  new MessageMediator(null, new Core.Abstractions.SignalHub.SignalHub(),null));
         Assert.Throws<ArgumentNullException>(
-            () => new MessageMediator(registry, null));
+            () => new MessageMediator(registry,  new Core.Abstractions.SignalHub.SignalHub(),null));
         
     }
 
@@ -37,7 +38,7 @@ public class MessageMediatorTests
         var messageDependencyFactory = new MessageDependenciesFactory(null);
         
         // act
-        var mediator = new MessageMediator(registry, messageDependencyFactory);
+        var mediator = new MessageMediator(registry, new Core.Abstractions.SignalHub.SignalHub(), messageDependencyFactory);
         
         // assert
         Assert.NotNull(mediator);
@@ -51,13 +52,13 @@ public class MessageMediatorTests
         // arrange 
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         var messageDependencyFactory = new MessageDependenciesFactory(null);
-        var mediator = new MessageMediator(registry, messageDependencyFactory);
+        var mediator = new MessageMediator(registry,  new Core.Abstractions.SignalHub.SignalHub(),messageDependencyFactory);
 
         // act && assert
         await Assert.ThrowsAsync<ArgumentNullException>(() => 
             mediator
-                .Mediate<StubNonGenericMessage, Task>(
-                    new StubNonGenericMessage(), null));
+                .Mediate<StubMessage, Task>(
+                    new StubMessage(), null));
    
     }
     
@@ -72,30 +73,31 @@ public class MessageMediatorTests
         
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         
-        registry.Register(typeof(StubNonGenericHandler));
-        registry.Register(typeof(StubNonGenericPreInterceptor));
-        registry.Register(typeof(StubNonGenericPreInterceptor2));
-        registry.Register(typeof(StubNonGenericDerivedPreInterceptor));
-        registry.Register(typeof(StubNonGenericDerivedPreInterceptor2));
-        registry.Register(typeof(StubNonGenericPostInterceptor));
-        registry.Register(typeof(StubNonGenericPostInterceptor2));
-        registry.Register(typeof(StubNonGenericDerivedPostInterceptor));
-        registry.Register(typeof(StubNonGenericDerivedPostInterceptor2));
+        registry.Register(typeof(StubVoidHandler));
+        registry.Register(typeof(StubPreInterceptor));
+        //registry.Register(typeof(StubIndirectInterceptor));
+        //registry.Register(typeof(StubNonGenericDerivedPreInterceptor));
+        //registry.Register(typeof(StubNonGenericDerivedPreInterceptor2));
+        registry.Register(typeof(StubPostInterceptor));
+        //registry.Register(typeof(StubNonGenericPostInterceptor2));
+        //registry.Register(typeof(StubNonGenericDerivedPostInterceptor));
+        //registry.Register(typeof(StubNonGenericDerivedPostInterceptor2));
         
         
         var mediator = new MessageMediator(
             registry,
+            new Core.Abstractions.SignalHub.SignalHub(),
             new MessageDependenciesFactory(null!)
         );
 
-        var message = new StubNonGenericMessage();
-        var options = new MediateOptions<StubNonGenericMessage, Task>
+        var message = new StubMessage();
+        var options = new MediateOptions<StubMessage, Task>
         {
             CancellationToken = CancellationToken.None,
             Items = new Dictionary<object, object?>(),
             MessageResolveStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry)!,
             MessageMediationStrategy = 
-                new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>(),
+                new SingleAsyncHandlerMediationStrategy<StubMessage>(new ResultAdapterService()),
             Groups = []
         };
 
@@ -126,23 +128,24 @@ public class MessageMediatorTests
         
         var mediator = new MessageMediator(
             registry,
+            new Core.Abstractions.SignalHub.SignalHub(),
             new MessageDependenciesFactory(null!)
         );
 
-        var options = new MediateOptions<StubNonGenericMessage, Task>
+        var options = new MediateOptions<StubMessage, Task>
         {
             RegisterPlainMessagesOnSpot = false,
             CancellationToken = CancellationToken.None,
             Items = new Dictionary<object, object?>(),
             MessageResolveStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry)!,
             MessageMediationStrategy = 
-                new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>(),
+                new SingleAsyncHandlerMediationStrategy<StubMessage>(new ResultAdapterService()),
             Groups = []
         };
 
         // Act & assert
         await Assert.ThrowsAsync<NoHandlerFoundException>(() => mediator
-            .Mediate(new StubNonGenericDerivedMessage(), options));
+            .Mediate(new StubIndirectMessage(), options));
         
     }
 
@@ -155,11 +158,11 @@ public class MessageMediatorTests
         // Arrange
         var registry = new Mock<IMessageRegistry>();
         var mediationstrategy = new Mock<IMessageMediationStrategy<
-            StubNonGenericMessage, Task>>();
+            StubMessage, Task>>();
         
         var messageResolveStrategy = new Mock<IMessageResolveStrategy>();
         
-        var options = new MediateOptions<StubNonGenericMessage, Task>
+        var options = new MediateOptions<StubMessage, Task>
         {
             MessageResolveStrategy = messageResolveStrategy.Object,
             MessageMediationStrategy = mediationstrategy.Object,
@@ -168,9 +171,9 @@ public class MessageMediatorTests
             Groups = []
         };
 
-        var mediator = new MessageMediator(registry.Object, new MessageDependenciesFactory(null));
+        var mediator = new MessageMediator(registry.Object, new Core.Abstractions.SignalHub.SignalHub(), new MessageDependenciesFactory(null));
         
         // act & assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() => mediator.Mediate(new StubNonGenericDerivedMessage(), options));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => mediator.Mediate(new StubIndirectMessage(), options));
     }
 }

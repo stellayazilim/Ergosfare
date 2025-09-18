@@ -2,6 +2,16 @@
 
 namespace Ergosfare.Core.Internal.Registry.Descriptors;
 
+
+/// <summary>
+/// Represents a descriptor for a specific message type, holding all associated handlers 
+/// and interceptors (pre, main, post, exception, and final).
+/// </summary>
+/// <remarks>
+/// This class categorizes descriptors into direct and indirect collections:
+/// - Direct descriptors match the message type exactly.
+/// - Indirect descriptors match assignable message types (base types or interfaces).
+/// </remarks>
 internal class MessageDescriptor(Type messageType) : IMessageDescriptor
 {
 
@@ -25,7 +35,15 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
     private readonly List<IFinalInterceptorDescriptor> _finalInterceptors = new();
     private readonly List<IFinalInterceptorDescriptor> _indirectFinalInterceptors = new();
     
+    
+    /// <summary>
+    /// Gets the message type associated with this descriptor.
+    /// </summary>
     public Type MessageType { get; } = messageType;
+    
+    /// <summary>
+    /// Gets a value indicating whether the message type is generic.
+    /// </summary>
     public bool IsGeneric { get; } = messageType.IsGenericType;
 
     // pre interceptor
@@ -48,6 +66,11 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
     // filan interceptors
     public IReadOnlyCollection<IFinalInterceptorDescriptor> FinalInterceptors => _finalInterceptors;
     public IReadOnlyCollection<IFinalInterceptorDescriptor> IndirectFinalInterceptors => _indirectFinalInterceptors;
+    
+    /// <summary>
+    /// Adds multiple handler descriptors to this message descriptor.
+    /// </summary>
+    /// <param name="descriptors">The collection of descriptors to add.</param>
     public void AddDescriptors(IEnumerable<IHandlerDescriptor> descriptors)
     {
         
@@ -58,7 +81,12 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
     }
     
     
-    
+    /// <summary>
+    /// Adds a single handler descriptor to this message descriptor.
+    /// Direct or indirect placement depends on whether the descriptor's
+    /// <see cref="IHandlerDescriptor.MessageType"/> exactly matches or is assignable to the message type.
+    /// </summary>
+    /// <param name="descriptor">The descriptor to add.</param>
     public void AddDescriptor(IHandlerDescriptor descriptor)
     {
         if (MessageType == descriptor.MessageType)
@@ -105,6 +133,4 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
             }
         }
     }
-    
-    
 }

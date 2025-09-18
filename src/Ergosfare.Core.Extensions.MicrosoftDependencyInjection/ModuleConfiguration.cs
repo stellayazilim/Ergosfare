@@ -1,4 +1,5 @@
-﻿using Ergosfare.Core.Abstractions.Registry;
+﻿using Ergosfare.Core.Abstractions;
+using Ergosfare.Core.Abstractions.Registry;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -9,4 +10,5 @@ internal class ModuleConfiguration(IServiceCollection services, IMessageRegistry
     public IServiceCollection Services { get; } = services;
 
     public IMessageRegistry MessageRegistry { get; } = messageRegistry;
+    
 }

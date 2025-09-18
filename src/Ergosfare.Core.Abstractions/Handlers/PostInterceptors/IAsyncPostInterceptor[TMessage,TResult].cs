@@ -26,7 +26,7 @@ public interface IAsyncPostInterceptor<in TMessage, in TResult>
     /// <inheritdoc cref="IPostInterceptor{TMessage, TResult}.Handle"/>
     object IPostInterceptor<TMessage, TResult>.Handle(
         TMessage message, 
-        TResult messageResult, 
+        TResult? messageResult, 
         IExecutionContext context)
     {
         return HandleAsync(message,  messageResult, AmbientExecutionContext.Current);
@@ -43,5 +43,6 @@ public interface IAsyncPostInterceptor<in TMessage, in TResult>
     /// A <see cref="Task{Object}"/> representing the asynchronous operation.
     /// The returned object should represent the modified result to continue through the pipeline.
     /// </returns>
-    Task<object> HandleAsync(TMessage message, TResult messageResult, IExecutionContext context);
+    Task<object> HandleAsync(TMessage message, TResult? messageResult, IExecutionContext context);
 }
+

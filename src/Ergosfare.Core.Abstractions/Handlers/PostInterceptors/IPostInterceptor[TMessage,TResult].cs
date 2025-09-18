@@ -23,10 +23,10 @@ public interface IPostInterceptor<in TMessage,in TResult>
 {
 
     /// <inheritdoc cref="IPostInterceptor.Handle"/>
-    object IPostInterceptor.Handle(object message, object messageResult, IExecutionContext context)
+    object IPostInterceptor.Handle(object message, object? messageResult, IExecutionContext context)
     {
-        return Handle((TMessage) message, (TResult) messageResult, AmbientExecutionContext.Current);
+        return Handle((TMessage) message, (TResult?) messageResult, context);
     }
 
-    object Handle(TMessage message, TResult messageResult, IExecutionContext context);
+    object Handle(TMessage message, TResult? messageResult, IExecutionContext context);
 }

@@ -33,4 +33,8 @@
       <ProjectReference Include="..\..\src\Ergosfare.Core\Ergosfare.Core.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="__fixtures__\" />
+    </ItemGroup>
+
 </Project>

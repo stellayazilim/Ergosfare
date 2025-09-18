@@ -187,8 +187,8 @@ internal sealed class MessageRegistry(
 
         // Check if the message type is already registered in the messages list
         var existingMessage = _messages.FirstOrDefault(
-                d => d.MessageType == messageType
-            );
+            d => d.MessageType == messageType
+        );
 
         // _messages içinde aynı tip zaten varsa kayıt yapılmaz.
         if (existingMessage != null)
@@ -198,8 +198,8 @@ internal sealed class MessageRegistry(
 
         // Also check if it's in the newMessages list awaiting processing
         var isNewMessage = _newMessages.FirstOrDefault(
-                d => d.MessageType == messageType
-            );
+            d => d.MessageType == messageType
+        );
 
         if (isNewMessage != null) return;
     

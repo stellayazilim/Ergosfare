@@ -1,67 +1,96 @@
 ﻿using System.Collections;
 using System.Reflection;
-using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Registry;
 using Ergosfare.Core.Internal.Registry.Descriptors;
-using Ergosfare.Core.Test.__stubs__;
-//using Telerik.JustMock;
+using Ergosfare.Test.Fixtures;
+using Ergosfare.Test.Fixtures.Stubs.Basic;
 using Xunit.Abstractions;
 
 namespace Ergosfare.Core.Test;
 
-public class MessageRegistryTests
+
+/// <summary>
+/// Unit tests for <see cref="MessageRegistry"/> using <see cref="MessageDependencyFixture"/>.
+/// Covers message registration, duplicate handling, enumeration, and filtering of framework types.
+/// </summary>
+public class MessageRegistryTests: IClassFixture<MessageDependencyFixture>
 {
     private readonly ITestOutputHelper _testOutputHelper;
-
-    public MessageRegistryTests(ITestOutputHelper testOutputHelper)
+    private MessageDependencyFixture _messageDependencyFixture;
+    
+    /// <summary>
+    /// Initializes a new instance of <see cref="MessageRegistryTests"/> with the provided fixture and test output helper.
+    /// </summary>
+    /// <param name="messageDependencyFixture">The fixture providing the <see cref="MessageRegistry"/> instance.</param>
+    /// <param name="testOutputHelper">The test output helper for logging.</param>
+    public MessageRegistryTests(
+        MessageDependencyFixture messageDependencyFixture,
+        ITestOutputHelper testOutputHelper)
     {
+        _messageDependencyFixture = messageDependencyFixture;
         _testOutputHelper = testOutputHelper;
     }
 
-    
+    /// <summary>
+    /// Verifies that <see cref="MessageRegistry.Register(Type)"/> correctly registers a single message type and its handler.
+    /// </summary>
     [Fact]
+    [Trait("Category", "Coverage")]
     public void ShouldMessageRegistryRegisterMessages()
     {
         // arrange 
-        var messageRegistry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
-
-
+        _messageDependencyFixture = _messageDependencyFixture.New;
+        var messageRegistry = _messageDependencyFixture.MessageRegistry;
 
         // act
-        //messageRegistry.Register(typeof(TestMessageRegistryMessage));
-        messageRegistry.Register(typeof(StubNonGenericHandler));
+        messageRegistry.Register(typeof(StubMessage));
+        messageRegistry.Register(typeof(StubVoidHandler));
         // assert
         Assert.Single(messageRegistry);
-        Assert.True(typeof(StubNonGenericMessage)
+        Assert.True(typeof(StubMessage)
             .IsAssignableFrom(messageRegistry.First().MessageType));
-        
-        
         // assert
-        //Assert.True(messageRegistry.First().Handlers.First().MessageType == typeof(TestMessageRegistryMessage));
+        Assert.True(messageRegistry.First().Handlers.First().MessageType == typeof(StubMessage));
+        _messageDependencyFixture.Dispose();
     }
     
+    
+    /// <summary>
+    /// Verifies that multiple message types can be registered and duplicate handling works as expected.
+    /// </summary>
     [Fact]
+    [Trait("Category", "Coverage")]
     public void ShouldMessageRegistryRegisterMultipleMessages()
     {
         // arrange 
-        var messageRegistry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
+        _messageDependencyFixture = _messageDependencyFixture.New;
+        var messageRegistry = _messageDependencyFixture.MessageRegistry;
 
         // act
-        messageRegistry.Register(typeof(StubNonGenericHandler)); 
-        messageRegistry.Register(typeof(StubNonGenericHandler)); 
-        messageRegistry.Register(typeof(StubNonGenericHandler2));
+        messageRegistry.Register(typeof(StubVoidHandler)); 
+        messageRegistry.Register(typeof(StubVoidHandler)); 
+        messageRegistry.Register(typeof(StubStringHandler));
    
         // assert
         Assert.Single(messageRegistry);
         
+        // cleanup
+        _messageDependencyFixture.Dispose();
+        
     }
 
+    
+    /// <summary>
+    /// Ensures that <see cref="MessageRegistry.GetEnumerator"/> returns a functional enumerator for iteration.
+    /// </summary>
     [Fact]
+    [Trait("Category", "Coverage")]
     public void MessageRegistryShouldHaveGetEnumerator()
     {
-        // arrange
-        var messageRegistry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
-        messageRegistry.Register(typeof(StubNonGenericHandler)); 
+        // arrange 
+        _messageDependencyFixture = _messageDependencyFixture.New;
+        var messageRegistry = _messageDependencyFixture.MessageRegistry;
+        messageRegistry.Register(typeof(StubVoidHandler)); 
         
         // act
         var enumerator = messageRegistry.GetEnumerator();
@@ -71,19 +100,25 @@ public class MessageRegistryTests
         
         // cleanup
         enumerator.Dispose();
+        _messageDependencyFixture.Dispose();
     }
     
     
+    /// <summary>
+    /// Ensures that the non-generic enumerator of <see cref="MessageRegistry"/> works correctly.
+    /// </summary>
     [Fact]
+    [Trait("Category", "Coverage")]
     public void MessageRegistryNonGenericGetEnumeratorShouldReturnsEnumerator()
     {
-        // Arrange
-        var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
-        registry.Register(typeof(StubNonGenericHandler)); 
-        registry.Register(typeof(StubNonGenericHandler2));
+        // arrange 
+        _messageDependencyFixture = _messageDependencyFixture.New;
+        var messageRegistry = _messageDependencyFixture.MessageRegistry;
+        messageRegistry.Register(typeof(StubVoidHandler)); 
+        messageRegistry.Register(typeof(StubStringHandler));
 
         // Act
-        IEnumerable enumerable = (IEnumerable)registry;
+        IEnumerable enumerable = messageRegistry;
         var enumerator = enumerable.GetEnumerator();
 
         // Assert
@@ -91,116 +126,179 @@ public class MessageRegistryTests
         
         // cleanup
         ((IDisposable)enumerator).Dispose();
+        _messageDependencyFixture.Dispose();
     }
     
-    
+    /// <summary>
+    /// Verifies that registered messages are correctly processed and appear in the registry.
+    /// </summary>
     [Fact]
+    [Trait("Category", "Coverage")]
     public void MessageRegistryShouldProcessMessageTypes()
     {
-        // Arrange
-        var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
+        // arrange 
+        _messageDependencyFixture = _messageDependencyFixture.New;
+        var messageRegistry = _messageDependencyFixture.MessageRegistry;
         
         // Act
-        registry.Register(typeof(StubNonGenericMessage)); 
+        messageRegistry.Register(typeof(StubVoidHandler)); 
 
         // Assert
-        Assert.Single(registry);
-        Assert.True(registry.First().MessageType == typeof(StubNonGenericMessage));
+        Assert.Single(messageRegistry);
+        Assert.True(messageRegistry.First().MessageType == typeof(StubMessage));
+        
+        
+        // cleanup
+        _messageDependencyFixture.Dispose();
     }
 
     
     
+    /// <summary>
+    /// Ensures that framework types such as <see cref="System.Console"/> are ignored during registration.
+    /// </summary>
     [Fact]
+    [Trait("Category", "Coverage")]
     public void MessageRegistryShouldIgnoreFrameworkTypes()
     {
-        // Arrange
-        var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
+        // arrange 
+        _messageDependencyFixture = _messageDependencyFixture.New;
+        var messageRegistry = _messageDependencyFixture.MessageRegistry;
         
         // Act
-        registry.Register(typeof(System.Console)); 
+        messageRegistry.Register(typeof(System.Console)); 
 
         // Assert
-        Assert.Empty(registry);
+        Assert.Empty(messageRegistry);
+        
+        // cleanup 
+        _messageDependencyFixture.Dispose();
     }
     
     
     
-
+    /// <summary>
+    /// Verifies that registering duplicate messages while still in the new messages queue is ignored.
+    /// </summary>
     [Fact]
+    [Trait("Category", "Coverage")]
     public void Register_ShouldIgnoreDuplicateMessagesInNewMessages()
     {
-        // Arrange
-        var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
+        // arrange 
+        _messageDependencyFixture = _messageDependencyFixture.New;
+        var messageRegistry = _messageDependencyFixture.MessageRegistry;
 
         // Act - register the first message (goes to _newMessages initially)
-        registry.Register(typeof(StubNonGenericMessage));
+        messageRegistry.Register(typeof(StubMessage));
 
         // Act - immediately register the same type again
-        registry.Register(typeof(StubNonGenericMessage));
+        messageRegistry.Register(typeof(StubMessage));
 
         
         var field = typeof(MessageRegistry)
             .GetField("_newMessages", BindingFlags.NonPublic | BindingFlags.Instance);
-        var newMessages = (List<MessageDescriptor>)field?.GetValue(registry)!;
+        var newMessages = (List<MessageDescriptor>)field?.GetValue(messageRegistry)!;
         // Assert
         // The second registration should be ignored because the type is still in _newMessages
         Assert.Empty(newMessages);
         
+        // cleanup
+        _messageDependencyFixture.Dispose();
     }
     
     
-    
+    /// <summary>
+    /// Verifies that duplicate messages are ignored across both the new messages queue and already registered messages.
+    /// </summary>
     [Fact]
+    [Trait("Category", "Coverage")]
     public void Register_ShouldIgnoreDuplicatesInNewMessagesAndMessages()
     {
-        // Arrange
-        var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
+        // arrange 
+        _messageDependencyFixture = _messageDependencyFixture.New;
+        var messageRegistry = _messageDependencyFixture.MessageRegistry;
 
         // Act 1: Register a message (goes to _newMessages first)
-        registry.Register(typeof(StubNonGenericMessage));
+        messageRegistry.Register(typeof(StubMessage));
 
         // Act 2: Register the same type again while still in _newMessages
-        registry.Register(typeof(StubNonGenericMessage));
+        messageRegistry.Register(typeof(StubMessage));
 
         // Assert 1: Only one message should be in the registry
-        Assert.Single(registry);
+        Assert.Single(messageRegistry);
 
         // Act 3: Commit the message (simulate finishing processing _newMessages)
         // Depending on your implementation, calling Register on a new type moves _newMessages into _messages
-        registry.Register(typeof(StubNonGenericMessage2));
+        messageRegistry.Register(typeof(StubIndirectMessage));
 
         // Act 4: Try registering the first message again (already in _messages)
-        registry.Register(typeof(StubNonGenericMessage));
+        messageRegistry.Register(typeof(StubMessage));
 
         // Assert 2: Still only one copy of the first message
-        Assert.Equal(2, registry.Count); // total: first message + second message
+        Assert.Equal(2, messageRegistry.Count); // total: first message + second message
+        
+        // cleanup
+        _messageDependencyFixture.Dispose();
     }
     
-    
+    /// <summary>
+    /// Verifies that messages already in the new messages queue are skipped when attempting to register them again.
+    /// </summary>
     [Fact]
+    [Trait("Category", "Coverage")]
     public void Register_ShouldSkipMessageIfAlreadyInNewMessages()
     {
-        // Arrange
-        var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
-        registry.Register(typeof(StubNonGenericMessage2));
+        // arrange 
+        _messageDependencyFixture = _messageDependencyFixture.New;
+        var messageRegistry = _messageDependencyFixture.MessageRegistry;
+        messageRegistry.Register(typeof(StubMessage));
 
-        
-
-        
         // Act 4: Try registering the first message again (already in _messages)
-    
-        registry.Register(typeof(StubNonGenericDerivedMessage));
+        messageRegistry.Register(typeof(StubIndirectMessage));
         
         var newMessagesField = typeof(MessageRegistry)
             .GetField("_newMessages", BindingFlags.NonPublic | BindingFlags.Instance);
-        var newMessagesList = (List<MessageDescriptor>)newMessagesField?.GetValue(registry)!;
+        var newMessagesList = (List<MessageDescriptor>)newMessagesField?.GetValue(messageRegistry)!;
        
-        newMessagesList!.Add(new MessageDescriptor(typeof(StubNonGenericMessage)));
-        registry.Register(typeof(StubNonGenericMessage));
+        newMessagesList!.Add(new MessageDescriptor(typeof(StubMessage)));
+        messageRegistry.Register(typeof(StubMessage));
         Assert.DoesNotContain(
             newMessagesList,
-            d => d.MessageType == typeof(StubNonGenericDerivedMessage)
+            d => d.MessageType == typeof(StubIndirectMessage)
         );
     }
     
+    
+    
+    /// <summary>
+    /// Verifies that registering a message that is already in the _newMessages queue
+    /// does not add a duplicate.
+    /// This covers the branch using FirstOrDefault to detect duplicates.
+    /// </summary>
+    [Fact]
+    public void Register_ShouldNotDuplicateMessageIfAlreadyInNewMessages()
+    {
+        // arrange 
+        _messageDependencyFixture = _messageDependencyFixture.New;
+        var registry = _messageDependencyFixture.MessageRegistry;
+
+        var newMessagesField = typeof(MessageRegistry)
+            .GetField("_newMessages", BindingFlags.NonPublic | BindingFlags.Instance);
+        var newMessages = (List<MessageDescriptor>)newMessagesField!.GetValue(registry)!;
+        var descriptor = new MessageDescriptor(typeof(StubMessage));
+        newMessages.Add(descriptor);
+
+        // Use reflection to invoke the private RegisterMessage method
+        var registerMessageMethod = typeof(MessageRegistry)
+            .GetMethod("RegisterMessage", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+        // Act: call RegisterMessage with the same message type
+        registerMessageMethod.Invoke(registry, new object?[] { typeof(StubMessage) });
+
+        // Assert: _newMessages should still contain only the original descriptor (no duplicate)
+        Assert.Single(newMessages);
+        Assert.Equal(typeof(StubMessage), newMessages[0].MessageType);
+
+        _messageDependencyFixture.Dispose();
+    }
 }   

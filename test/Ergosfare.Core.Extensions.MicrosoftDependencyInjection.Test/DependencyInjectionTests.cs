@@ -33,7 +33,7 @@ public class DependencyInjectionTests
         var options = new MediateOptions<Message, Task>
         {
             MessageResolveStrategy = serviceProvider.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
-            MessageMediationStrategy = new SingleAsyncHandlerMediationStrategy<Message>(),
+            MessageMediationStrategy = new SingleAsyncHandlerMediationStrategy<Message>(new ResultAdapterService()),
             CancellationToken = default,
             Groups = []
         };

@@ -1,36 +1,52 @@
 ﻿using Ergosfare.Contracts.Attributes;
 using Ergosfare.Core.Abstractions;
-using Ergosfare.Core.Internal.Builders;
 using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Mediator;
 using Ergosfare.Core.Internal.Registry.Descriptors;
-using Ergosfare.Core.Test.__stubs__;
+using Ergosfare.Test.Fixtures;
+using Ergosfare.Test.Fixtures.Stubs.Basic;
+using Ergosfare.Test.Fixtures.Stubs.Generic;
 using Microsoft.Extensions.DependencyInjection;
-using Moq;
 using Xunit.Abstractions;
+// ReSharper disable ConvertToPrimaryConstructor
 
 namespace Ergosfare.Core.Test;
 
-public class MessageDependenciesTest
-(ITestOutputHelper testOutputHelper)
+public class MessageDependenciesTest: 
+    IClassFixture<MessageDependencyFixture>, IClassFixture<DescriptorFixture>
 {
-
+    private readonly ITestOutputHelper _testOutputHelper;
+    private MessageDependencyFixture _messageDependencyFixture;
+    private readonly DescriptorFixture _descriptorFixture;
+    public MessageDependenciesTest(
+        DescriptorFixture descriptorFixture,
+        MessageDependencyFixture messageDependencyFixture,
+        ITestOutputHelper testOutputHelper)
+    {
+        _descriptorFixture = descriptorFixture;
+        _testOutputHelper = testOutputHelper;
+        _messageDependencyFixture = messageDependencyFixture;
+    }
+    
     [Fact]
     [Trait("Category", "Unit")]
     public void MessageDependenciesFactoryShouldCreateMessageDependencies()
     {
-        // arrange 
-        var serviceCollection = new ServiceCollection().BuildServiceProvider();
-        var descriptor = new MessageDescriptor(typeof(StubNonGenericMessage));
-        var messageDependenciesFactory = new MessageDependenciesFactory(serviceCollection);
 
-        
+        _messageDependencyFixture = _messageDependencyFixture.New;
+        _messageDependencyFixture.AddServices(sp => sp.AddTransient<StubVoidHandler>());
+        var descriptor = _descriptorFixture.CreateMessageDescriptor<StubMessage>();
+  
+        var messageDependenciesFactory = new MessageDependenciesFactory(_messageDependencyFixture.ServiceProvider);
         
         // act
-        var dependencies = messageDependenciesFactory.Create(typeof(StubNonGenericMessage), descriptor, []);
+        var dependencies = messageDependenciesFactory.Create(typeof(StubMessage), descriptor, []);
         
         // assert 
         Assert.NotNull(dependencies);
+        
+        // cleanup
+        _messageDependencyFixture.Dispose();
     }
 
 
@@ -48,21 +64,24 @@ public class MessageDependenciesTest
         // assert
         Assert.NotNull(indirectHandlers);
         Assert.Empty(indirectHandlers);
+        
+        _messageDependencyFixture.Dispose();
     }
-
-
-
-    [Fact]
-    [Trait("Category", "Coverage")]
-    public void MessageDependenciesShouldGetHandlerTypeMakeGeneric()
-    {
-        // Arrange
+    
+    private class TestHandler: VoidStubGenericHandler<string> {}
+    
+     [Fact]
+     [Trait("Category", "Coverage")]
+     public async Task MessageDependenciesShouldGetHandlerTypeMakeGeneric()
+     {
+         // Arrange
+         // Arrange
         var serviceProvider = new ServiceCollection()
-            .AddTransient<StubGenericHandler<string>>()
-            .AddTransient<StubGenericPreInterceptor<string>>()
-            .AddTransient<StubGenericPostInterceptor<string>>()
-            .AddTransient<StubGenericExceptionInterceptor<string>>()
-            .AddTransient<StubGenericFinalInterceptor<string>>()
+            .AddTransient<VoidStubGenericHandler<string>>()
+            .AddTransient<VoidStubGenericPreInterceptor<string>>()
+            .AddTransient<VoidStubGenericPostInterceptor<string>>()
+            .AddTransient<VoidStubGenericExceptionInterceptor<string>>()
+            .AddTransient<VoidStubGenericFinalInterceptor<string>>()
             .BuildServiceProvider();
 
         // our generic message type to resolve against
@@ -76,7 +95,7 @@ public class MessageDependenciesTest
             Weight = 1,
             Groups = [GroupAttribute.DefaultGroupName],
             MessageType = typeof(StubGenericMessage<>),
-            HandlerType = typeof(StubGenericHandler<>),
+            HandlerType = typeof(VoidStubGenericHandler<>),
             ResultType = typeof(Task)
             
         }; 
@@ -86,35 +105,35 @@ public class MessageDependenciesTest
             Weight = 1,
             Groups = [GroupAttribute.DefaultGroupName],
             MessageType = typeof(StubGenericMessage<>),
-            HandlerType = typeof(StubGenericPreInterceptor<>),
+            HandlerType = typeof(VoidStubGenericPreInterceptor<>),
         }; 
-
+        
 
         var postInterceptorDescriptor = new PostInterceptorDescriptor()
         {
             Weight = 1,
             Groups = [GroupAttribute.DefaultGroupName],
             MessageType = typeof(StubGenericMessage<>),
-            HandlerType = typeof(StubGenericPostInterceptor<>),
+            HandlerType = typeof(VoidStubGenericPostInterceptor<>),
             ResultType = typeof(Task)
         };
-
-
+        
+        
         var exceptionInterceptorDescriptor = new ExceptionInterceptorDescriptor()
         {
             Weight = 1,
             Groups = [GroupAttribute.DefaultGroupName],
             MessageType = typeof(StubGenericMessage<>),
-            HandlerType = typeof(StubGenericExceptionInterceptor<>),
+            HandlerType = typeof(VoidStubGenericExceptionInterceptor<>),
             ResultType = typeof(Task)
         };
-
+        
         var finalInterceptorDescriptor = new FinalInterceptorDescriptor()
         {
             Weight = 1,
             Groups = [GroupAttribute.DefaultGroupName],
             MessageType = typeof(StubGenericMessage<>),
-            HandlerType = typeof(StubGenericFinalInterceptor<>),
+            HandlerType = typeof(VoidStubGenericFinalInterceptor<>),
             ResultType = typeof(Task)
         };
 
@@ -131,102 +150,102 @@ public class MessageDependenciesTest
 
 
         // Assert: should be StubGenericHandler<string>
-        Assert.Equal(typeof(StubGenericHandler<string>), dependencies.Handlers.First().Handler.Value.GetType());
-        Assert.Equal(typeof(StubGenericPreInterceptor<string>), dependencies.PreInterceptors.First().Handler.Value.GetType());
-        Assert.Equal(typeof(StubGenericPostInterceptor<string>), dependencies.PostInterceptors.First().Handler.Value.GetType());
-        Assert.Equal(typeof(StubGenericExceptionInterceptor<string>),  dependencies.ExceptionInterceptors.First().Handler.Value.GetType());
-        Assert.Equal(typeof(StubGenericFinalInterceptor<string>),  dependencies.FinalInterceptors.First().Handler.Value.GetType());
-    }
-    
-    
-    [Fact]
-    [Trait("Category", "Coverage")]
-    public void MessageDependenciesShouldGetIndirectHandlerType()
-    {
-        // Arrange
-        var serviceProvider = new ServiceCollection()
-            .AddTransient<StubNonGenericHandler>()
-            .AddTransient<StubNonGenericPreInterceptor>()
-            .AddTransient<StubNonGenericPostInterceptor>()
-            .AddTransient<StubNonGenericExceptionInterceptor>()
-            .AddTransient<StubNonGenericFinalInterceptor>()
-            .BuildServiceProvider();
+        Assert.Equal(typeof(VoidStubGenericHandler<string>), dependencies.Handlers.First().Handler.Value.GetType());
+        Assert.Equal(typeof(VoidStubGenericPreInterceptor<string>), dependencies.PreInterceptors.First().Handler.Value.GetType());
+        Assert.Equal(typeof(VoidStubGenericPostInterceptor<string>), dependencies.PostInterceptors.First().Handler.Value.GetType());
+        Assert.Equal(typeof(VoidStubGenericExceptionInterceptor<string>),  dependencies.ExceptionInterceptors.First().Handler.Value.GetType());
+        Assert.Equal(typeof(VoidStubGenericFinalInterceptor<string>),  dependencies.FinalInterceptors.First().Handler.Value.GetType());
+     }
+     
+     
+     [Fact]
+     [Trait("Category", "Coverage")]
+     public void MessageDependenciesShouldGetIndirectHandlerType()
+     {
+         // Arrange
+         var serviceProvider = new ServiceCollection()
+             .AddTransient<StubVoidHandler>()
+             .AddTransient<StubPreInterceptor>()
+             .AddTransient<StubPostInterceptor>()
+             .AddTransient<StubExceptionInterceptor>()
+             .AddTransient<StubFinalInterceptor>()
+             .BuildServiceProvider();
 
-        // our generic message type to resolve against
+         // our generic message type to resolve against
 
 
-        var messageType = typeof(StubNonGenericDerivedMessage);
-        var indirectMessageType = typeof(StubNonGenericMessage);
-        // build descriptor manually
-        var handlerDescriptor = new MainHandlerDescriptor()
-        {
-            Weight = 1,
-            Groups = [GroupAttribute.DefaultGroupName],
-            MessageType = indirectMessageType,
-            HandlerType = typeof(StubNonGenericHandler),
-            ResultType = typeof(Task)
-            
-        }; 
+         var messageType = typeof(StubIndirectMessage);
+         var indirectMessageType = typeof(StubMessage);
+         // build descriptor manually
+         var handlerDescriptor = new MainHandlerDescriptor()
+         {
+             Weight = 1,
+             Groups = [GroupAttribute.DefaultGroupName],
+             MessageType = indirectMessageType,
+             HandlerType = typeof(StubVoidHandler),
+             ResultType = typeof(Task)
+             
+         }; 
+         
+         var preInterceptorDescriptor = new PreInterceptorDescriptor()
+         {
+             Weight = 1,
+             Groups = [GroupAttribute.DefaultGroupName],
+             MessageType = indirectMessageType,
+             HandlerType = typeof(StubPreInterceptor),
+         }; 
+
+
+         var postInterceptorDescriptor = new PostInterceptorDescriptor()
+         {
+             Weight = 1,
+             Groups = [GroupAttribute.DefaultGroupName],
+             MessageType = indirectMessageType,
+             HandlerType = typeof(StubPostInterceptor),
+             ResultType = typeof(Task)
+         };
+
+
+         var exceptionInterceptorDescriptor = new ExceptionInterceptorDescriptor()
+         {
+             Weight = 1,
+             Groups = [GroupAttribute.DefaultGroupName],
+             MessageType = indirectMessageType,
+             HandlerType = typeof(StubExceptionInterceptor),
+             ResultType = typeof(Task)
+         };
+
+         var finalInterceptorDescriptor = new FinalInterceptorDescriptor()
+         {
+             Weight = 1,
+             Groups = [GroupAttribute.DefaultGroupName],
+             MessageType = indirectMessageType,
+             HandlerType = typeof(StubFinalInterceptor),
+             ResultType = typeof(Task)
+         };
+         
+         var messageDescriptor = new MessageDescriptor(messageType);
+         messageDescriptor.AddDescriptor(handlerDescriptor);
+         messageDescriptor.AddDescriptor(preInterceptorDescriptor);
+         messageDescriptor.AddDescriptor(postInterceptorDescriptor);
+         messageDescriptor.AddDescriptor(exceptionInterceptorDescriptor);
+         messageDescriptor.AddDescriptor(finalInterceptorDescriptor);
+         
+         var dependencies = new MessageDependencies(
+             messageType,
+             messageDescriptor,
+             serviceProvider,
+             [GroupAttribute.DefaultGroupName]);
+
+         Assert.True(messageType.IsAssignableTo(handlerDescriptor.MessageType));
+         Assert.Equal(typeof(StubIndirectMessage),messageDescriptor.MessageType);
         
-        var preInterceptorDescriptor = new PreInterceptorDescriptor()
-        {
-            Weight = 1,
-            Groups = [GroupAttribute.DefaultGroupName],
-            MessageType = indirectMessageType,
-            HandlerType = typeof(StubNonGenericPreInterceptor),
-        }; 
-
-
-        var postInterceptorDescriptor = new PostInterceptorDescriptor()
-        {
-            Weight = 1,
-            Groups = [GroupAttribute.DefaultGroupName],
-            MessageType = indirectMessageType,
-            HandlerType = typeof(StubNonGenericPostInterceptor),
-            ResultType = typeof(Task)
-        };
-
-
-        var exceptionInterceptorDescriptor = new ExceptionInterceptorDescriptor()
-        {
-            Weight = 1,
-            Groups = [GroupAttribute.DefaultGroupName],
-            MessageType = indirectMessageType,
-            HandlerType = typeof(StubNonGenericExceptionInterceptor),
-            ResultType = typeof(Task)
-        };
-
-        var finalInterceptorDescriptor = new FinalInterceptorDescriptor()
-        {
-            Weight = 1,
-            Groups = [GroupAttribute.DefaultGroupName],
-            MessageType = indirectMessageType,
-            HandlerType = typeof(StubNonGenericFinalInterceptor),
-            ResultType = typeof(Task)
-        };
-        
-        var messageDescriptor = new MessageDescriptor(messageType);
-        messageDescriptor.AddDescriptor(handlerDescriptor);
-        messageDescriptor.AddDescriptor(preInterceptorDescriptor);
-        messageDescriptor.AddDescriptor(postInterceptorDescriptor);
-        messageDescriptor.AddDescriptor(exceptionInterceptorDescriptor);
-        messageDescriptor.AddDescriptor(finalInterceptorDescriptor);
-        
-        var dependencies = new MessageDependencies(
-            messageType,
-            messageDescriptor,
-            serviceProvider,
-            [GroupAttribute.DefaultGroupName]);
-
-        Assert.True(messageType.IsAssignableTo(handlerDescriptor.MessageType));
-        Assert.Equal(typeof(StubNonGenericDerivedMessage),messageDescriptor.MessageType);
-        // Assert: should be StubGenericHandler<string>
-        Assert.Equal(typeof(StubNonGenericHandler), dependencies.IndirectHandlers.First().Handler.Value.GetType());
-        Assert.Equal(typeof(StubNonGenericPreInterceptor), dependencies.IndirectPreInterceptors.First().Handler.Value.GetType());
-        Assert.Equal(typeof(StubNonGenericPostInterceptor), dependencies.IndirectPostInterceptors.First().Handler.Value.GetType());
-        Assert.Equal(typeof(StubNonGenericExceptionInterceptor), dependencies.IndirectExceptionInterceptors.First().Handler.Value.GetType());
-        Assert.Equal(typeof(StubNonGenericFinalInterceptor), dependencies.IndirectFinalInterceptors.First().Handler.Value.GetType());
-    }
+         Assert.Equal(typeof(StubVoidHandler), dependencies.IndirectHandlers.First().Handler.Value.GetType());
+         Assert.Equal(typeof(StubPreInterceptor), dependencies.IndirectPreInterceptors.First().Handler.Value.GetType());
+         Assert.Equal(typeof(StubPostInterceptor), dependencies.IndirectPostInterceptors.First().Handler.Value.GetType());
+         Assert.Equal(typeof(StubExceptionInterceptor), dependencies.IndirectExceptionInterceptors.First().Handler.Value.GetType());
+         Assert.Equal(typeof(StubFinalInterceptor), dependencies.IndirectFinalInterceptors.First().Handler.Value.GetType());
+     }
     
     [Fact]
     [Trait("Category", "Coverage")]
@@ -234,34 +253,34 @@ public class MessageDependenciesTest
     {
         // Arrange
         var serviceProvider = new ServiceCollection()
-            .AddTransient<StubNonGenericHandler>()
-            .AddTransient<StubNonGenericPreInterceptor>()
-            .AddTransient<StubNonGenericPostInterceptor>()
-            .AddTransient<StubNonGenericExceptionInterceptor>()
-            .AddTransient<StubNonGenericFinalInterceptor>()
+            .AddTransient<StubVoidHandler>()
+            .AddTransient<StubPreInterceptor>()
+            .AddTransient<StubPostInterceptor>()
+            .AddTransient<StubExceptionInterceptor>()
+            .AddTransient<StubFinalInterceptor>()
             .BuildServiceProvider();
         var descriptorFactory = new HandlerDescriptorBuilderFactory();
 
-        var descriptor = new MessageDescriptor(typeof(StubNonGenericMessage));
+        var descriptor = new MessageDescriptor(typeof(StubMessage));
 
         var mainHandlerDescriptor = descriptorFactory.BuildDescriptors(
-                typeof(StubNonGenericHandler)
+                typeof(StubVoidHandler)
             );
 
         var preHandlerDescriptor = descriptorFactory.BuildDescriptors(
-            typeof(StubNonGenericPreInterceptor)
+            typeof(StubPreInterceptor)
         );
 
         var postHandlerDescriptor = descriptorFactory.BuildDescriptors(
-            typeof(StubNonGenericPostInterceptor)
+            typeof(StubPostInterceptor)
             );
 
         var exceptionHandlerDescriptor = descriptorFactory.BuildDescriptors(
-            typeof(StubNonGenericExceptionInterceptor)
+            typeof(StubExceptionInterceptor)
             );
 
         var finalInterceptorDescriptor = descriptorFactory.BuildDescriptors(
-            typeof(StubNonGenericFinalInterceptor));
+            typeof(StubFinalInterceptor));
         descriptor.AddDescriptors(mainHandlerDescriptor);
         descriptor.AddDescriptors(preHandlerDescriptor);
         descriptor.AddDescriptors(postHandlerDescriptor);
@@ -269,51 +288,51 @@ public class MessageDependenciesTest
         descriptor.AddDescriptors(finalInterceptorDescriptor);
         // Act
         var dependencies = new MessageDependencies(
-            typeof(StubNonGenericMessage),
+            typeof(StubMessage),
             descriptor,
             serviceProvider, [GroupAttribute.DefaultGroupName]);
 
         // Assert: should be StubGenericHandler<string>
-        Assert.Equal(typeof(StubNonGenericHandler), dependencies.Handlers.First().Descriptor.HandlerType);
-        Assert.Equal(typeof(StubNonGenericPreInterceptor), dependencies.PreInterceptors.First().Descriptor.HandlerType);
-        Assert.Equal(typeof(StubNonGenericPostInterceptor), dependencies.PostInterceptors.First().Descriptor.HandlerType);
-        Assert.Equal(typeof(StubNonGenericExceptionInterceptor), dependencies.ExceptionInterceptors.First().Descriptor.HandlerType);
-//        Assert.Equal(typeof(StubNonGenericFinalInterceptor), dependencies.FinalInterceptors.First().Descriptor.HandlerType);
+        Assert.Equal(typeof(StubVoidHandler), dependencies.Handlers.First().Descriptor.HandlerType);
+        Assert.Equal(typeof(StubPreInterceptor), dependencies.PreInterceptors.First().Descriptor.HandlerType);
+        Assert.Equal(typeof(StubPostInterceptor), dependencies.PostInterceptors.First().Descriptor.HandlerType);
+        Assert.Equal(typeof(StubExceptionInterceptor), dependencies.ExceptionInterceptors.First().Descriptor.HandlerType);
+        Assert.Equal(typeof(StubFinalInterceptor), dependencies.FinalInterceptors.First().Descriptor.HandlerType);
     }   
     
-    
-    [Fact]
-    public void MessageDependenciesShouldResolveHandlerInstance()
-    {
-        // Arrange
-        var serviceProvider = new Mock<IServiceProvider>();
+     
+     [Fact]
+     public void MessageDependenciesShouldResolveHandlerInstance()
+     {
+         // Arrange
+         var serviceProvider = new ServiceCollection()
+             .AddTransient(typeof(VoidStubGenericHandler<>))
+             .BuildServiceProvider();
 
-        var messageType = typeof(StubGenericMessage<string>);
-        var handlerType = typeof(StubGenericHandler<string>);
+         var messageType = typeof(StubGenericMessage<string>);
+         var handlerType = typeof(VoidStubGenericHandler<string>);
 
-        // register fake handler in service provider
-        var handlerInstance = new StubGenericHandler<string>();
-        serviceProvider
-            .Setup(sp => sp.GetService(handlerType))
-            .Returns(handlerInstance);
+         // register fake handler in service provider
+         var handlerInstance = new VoidStubGenericHandler<string>();
+        
 
-        var handlerDescriptor =
-            new HandlerDescriptorBuilderFactory()
-                .BuildDescriptors(typeof(StubGenericHandler<string>))
-                .First();
+         var handlerDescriptor =
+             new HandlerDescriptorBuilderFactory()
+                 .BuildDescriptors(typeof(VoidStubGenericHandler<string>))
+                 .First();
 
-        var messageDescriptor = new MessageDescriptor(messageType);
-        messageDescriptor.AddDescriptor(handlerDescriptor);
+         var messageDescriptor = new MessageDescriptor(messageType);
+         messageDescriptor.AddDescriptor(handlerDescriptor);
 
-        var deps = new MessageDependencies(
-            messageType,
-            messageDescriptor,
-            serviceProvider.Object, []);
+         var deps = new MessageDependencies(
+             messageType,
+             messageDescriptor,
+             serviceProvider, []);
 
-        // Act
-        var resolvedHandler = deps.Handlers.First().Handler;
+         // Act
+         var resolvedHandler = deps.Handlers.First().Handler;
 
-        // Assert
-        Assert.NotNull( resolvedHandler);
-    }
+         // Assert
+         Assert.NotNull( resolvedHandler);
+     }
 }

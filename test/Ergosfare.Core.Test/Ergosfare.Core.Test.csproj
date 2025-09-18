@@ -16,6 +16,7 @@
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
+        <PackageReference Include="ErrorOr" Version="2.0.1" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.8" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1"/>
         <PackageReference Include="MockMe" Version="1.1.2" />
@@ -34,6 +35,7 @@
     <ItemGroup>
       <ProjectReference Include="..\..\src\Ergosfare.Core.Extensions.MicrosoftDependencyInjection\Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj" />
       <ProjectReference Include="..\..\src\Ergosfare.Core\Ergosfare.Core.csproj" />
+      <ProjectReference Include="..\Ergosfare.Test.Fixtures\Ergosfare.Test.Fixtures.csproj" />
       <ProjectReference Include="..\Ergosfare.Test\Ergosfare.Test.csproj" />
     </ItemGroup>
 
