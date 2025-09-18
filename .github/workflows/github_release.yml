@@ -78,7 +78,8 @@ jobs:
             ./src/Ergosfare.Commands.Extensions.MicrosoftDependencyInjection/Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj \
             ./src/Ergosfare.Events/Ergosfare.Events.csproj \
             ./src/Ergosfare.Events.Abstractions/Ergosfare.Events.Abstractions.csproj \
-            ./src/Ergosfare.Events.Extensions.MicrosoftDependencyInjection/Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj
+            ./src/Ergosfare.Events.Extensions.MicrosoftDependencyInjection/Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj \
+            ./test/Ergsfare.Test.Fixtures/Ergsfare.Test.Fixtures.csproj
           do
             dotnet pack $proj -c Release -o ./nupkg-github /p:Version=${{ env.VERSION }} /p:IncludeSymbols=true /p:IncludeSource=true --no-build
           done
