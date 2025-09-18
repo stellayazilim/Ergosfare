@@ -17,7 +17,7 @@ public class ProxySignalTests
     /// Reference to a hub instance cast as <see cref="IHasProxySignals"/>.
     /// Used for accessing proxy event properties in the tests.
     /// </summary>
-    private readonly IHasProxySignals _hub = (IHasProxySignals)new SignalHubFixture().Hub;
+    private readonly IHasProxySignals _hub = (IHasProxySignals)new SignalFixture().Hub;
 
     /// <summary>
     /// List of all proxy event property names to test.

@@ -14,7 +14,7 @@ namespace Ergosfare.Test.Fixtures;
 /// exception handling, and final interceptors. Each method produces a strongly-typed event for testing purposes.
 /// The fixture ensures a clean <see cref="SignalHubAccessor"/> state before and after tests.
 /// </remarks>
-public class SignalHubFixture : IFixture<SignalHubFixture>, IAsyncDisposable
+public class SignalFixture : IFixture<SignalFixture>, IAsyncDisposable
 {
     private bool _disposed;
 
@@ -25,18 +25,18 @@ public class SignalHubFixture : IFixture<SignalHubFixture>, IAsyncDisposable
     public ISignalHub Hub => SignalHubAccessor.Instance;
     
     /// <summary>
-    /// Initializes a new instance of <see cref="SignalHubFixture"/> and resets the <see cref="SignalHubAccessor"/>.
+    /// Initializes a new instance of <see cref="SignalFixture"/> and resets the <see cref="SignalHubAccessor"/>.
     /// </summary>
     // ReSharper disable once MemberCanBePrivate.Global
-    public SignalHubFixture()
+    public SignalFixture()
     {
         SignalHubAccessor.ResetInstance();
     }
 
     /// <summary>
-    /// Returns a new instance of <see cref="SignalHubFixture"/> for fluent usage.
+    /// Returns a new instance of <see cref="SignalFixture"/> for fluent usage.
     /// </summary>
-    public SignalHubFixture New => new();
+    public SignalFixture New => new();
 
     /// <summary>
     /// No-op method for compatibility with <see cref="IFixture{T}"/>. 
@@ -44,7 +44,7 @@ public class SignalHubFixture : IFixture<SignalHubFixture>, IAsyncDisposable
     /// </summary>
     /// <param name="configure">Unused service configuration delegate.</param>
     /// <returns>The current fixture instance.</returns>
-    public SignalHubFixture AddServices(Action<IServiceCollection> configure) => this;
+    public SignalFixture AddServices(Action<IServiceCollection> configure) => this;
 
     /// <summary>
     /// Always null, because this fixture does not provide DI services.
@@ -271,7 +271,7 @@ public class SignalHubFixture : IFixture<SignalHubFixture>, IAsyncDisposable
     }
     
     /// <summary>
-    /// Disposes the <see cref="SignalHubFixture"/> instance,
+    /// Disposes the <see cref="SignalFixture"/> instance,
     /// ensuring that the <see cref="SignalHubAccessor"/> is reset to a clean state.
     /// This helps maintain test isolation between different test classes or runs.
     /// </summary>
@@ -281,6 +281,50 @@ public class SignalHubFixture : IFixture<SignalHubFixture>, IAsyncDisposable
         SignalHubAccessor.ResetInstance();
         _disposed = true;
     }
+    
+    /// <summary>
+    /// A stub implementation of <see cref="Signal"/> used for testing purposes.
+    /// Provides two simple equality components (<see cref="Value1"/> and <see cref="Value2"/>).
+    /// </summary>
+    public class StubSignal: Signal
+    {
+        
+        /// <summary>
+        /// Gets or sets the first test value used as part of the equality comparison.
+        /// </summary>
+        public required int Value1 { get; init; }
+        
+        /// <summary>
+        /// Gets or sets the second test value used as part of the equality comparison.
+        /// </summary>
+        public required string Value2 { get; init; }
+        
+        
+        /// <summary>
+        /// Provides the equality components for this stub signal.
+        /// Includes <see cref="Value1"/> and <see cref="Value2"/>.
+        /// </summary>
+        /// <returns>
+        /// An <see cref="IEnumerable{Object}"/> containing the values that define equality.
+        /// </returns>
+        public override IEnumerable<object> GetEqualityComponents()
+        {
+            yield return Value1;
+            yield return Value2;
+        }
+    }
+    
+    
+    
+    /// <summary>
+    /// Creates a new <see cref="StubSignal"/> with the given test values.
+    /// Useful for simplifying signal creation in tests.
+    /// </summary>
+    /// <param name="v1">The integer value used as the first equality component.</param>
+    /// <param name="v2">The string value used as the second equality component.</param>
+    /// <returns>A new instance of <see cref="StubSignal"/> initialized with the specified values.</returns>
+    public StubSignal CreateSignal(int v1, string v2) => new ()  { Value1 = v1, Value2 = v2 };
+
 
     /// <summary>
     /// Asynchronously disposes the fixture. Internally calls <see cref="Dispose"/>.

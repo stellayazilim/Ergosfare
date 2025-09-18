@@ -37,3 +37,12 @@ public class StubStringAsyncFinalInterceptor : IAsyncFinalInterceptor<StubMessag
         return Task.CompletedTask;
     }
 }
+
+
+public class StubStringAsyncExceptionInterceptorModifiesResult : IAsyncExceptionInterceptor<StubMessage, string>
+{
+    public Task<object> HandleAsync(StubMessage message, string? result, Exception exception, IExecutionContext context)
+    {
+        return Task.FromResult<object>("modified result");
+    }
+}

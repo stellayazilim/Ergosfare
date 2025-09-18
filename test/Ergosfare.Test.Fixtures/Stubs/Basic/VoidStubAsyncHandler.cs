@@ -55,3 +55,10 @@ public class StubVoidAsyncFinalInterceptor: IAsyncFinalInterceptor<StubMessage>
         return Task.CompletedTask;
     }
 }
+public class StubVoidIndirectAsyncFinalInterceptor: IAsyncFinalInterceptor<StubIndirectMessage>
+{
+    public Task HandleAsync(StubIndirectMessage message, object? result, Exception? exception, IExecutionContext context)
+    {
+        return Task.CompletedTask;
+    }
+}

@@ -21,12 +21,15 @@ public class PipelineSignalTests: IAsyncLifetime
         () => BeginHandlingSignal.Invoke(Message, Result),
         () => BeginHandlerInvocationSignal.Invoke(Message, Result, typeof(string)),
         () => FinishHandlerInvocationSignal.Invoke(Message, Result, typeof(string)),
-
-        () => BeginPostInterceptingSignal.Invoke(Message, Result, 3),
-        () => FinishPostInterceptingSignal.Invoke(Message, Result),
+        () => FinishHandlingWithExceptionSignal.Invoke(Message, Result,  Exception),
         () => FinishHandlingSignal.Invoke(Message, Result),
+        
+        
+        () => BeginPostInterceptingSignal.Invoke(Message, Result, 3),
+        () => BeginPostInterceptorInvocationSignal.Invoke(Message, Result, typeof(string)),
         () => FinishPostInterceptorInvocationSignal.Invoke(Message, Result),
         () => FinishPostInterceptingWithExceptionSignal.Invoke(Message, Result, typeof(string), Exception),
+        () => FinishPostInterceptingSignal.Invoke(Message, Result),
 
         () => BeginExceptionInterceptingSignal.Invoke(Message, Result, Exception, 4),
         () => FinishExceptionInterceptingSignal.Invoke(Message, Result, Exception),

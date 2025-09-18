@@ -45,3 +45,4 @@ public interface IAsyncPostInterceptor<in TMessage, in TResult>
     /// </returns>
     Task<object> HandleAsync(TMessage message, TResult? messageResult, IExecutionContext context);
 }
+

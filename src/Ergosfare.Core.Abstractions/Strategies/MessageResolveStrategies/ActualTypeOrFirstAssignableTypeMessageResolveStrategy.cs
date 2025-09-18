@@ -40,4 +40,7 @@ public sealed class ActualTypeOrFirstAssignableTypeMessageResolveStrategy(IMessa
 
         return descriptor;
     }
+    
+    
+    
 }

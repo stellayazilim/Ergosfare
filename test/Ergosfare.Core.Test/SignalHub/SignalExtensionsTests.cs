@@ -1,13 +1,11 @@
-using Ergosfare.Core.Abstractions.EventHub;
 using Ergosfare.Core.Abstractions.SignalHub.Signals;
 using Ergosfare.Core.Extensions;
-using Ergosfare.Core.Test.SignalHub;
 using Ergosfare.Test.Fixtures;
 
-namespace Ergosfare.Core.Test.EventHub;
+namespace Ergosfare.Core.Test.SignalHub;
 
 /// <summary>
-/// Unit tests for <see cref="HubEvent"/> extension methods.
+/// Unit tests for <see cref="SignalHub"/> extension methods.
 /// </summary>
 /// <remarks>
 /// These tests validate that hub events published through their
@@ -16,7 +14,7 @@ namespace Ergosfare.Core.Test.EventHub;
 /// and extension helpers behave as expected.
 /// </remarks>
 public class SignalExtensionsTests(
-    SignalHubFixture signalHubFixture) : BaseSignalFixture(signalHubFixture)
+    SignalFixture signalHubFixture) : BaseSignalFixture(signalHubFixture)
 {
     
     /// <summary>

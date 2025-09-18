@@ -1,3 +1,4 @@
+using System;
 using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using Ergosfare.Context;
@@ -24,6 +25,8 @@ internal sealed class TaskExceptionInterceptorInvocationStrategy(
     IMessageDependencies messageDependencies,
     IResultAdapterService? resultAdapterService) : ExceptionInvoker(messageDependencies, resultAdapterService)
 {
+
+
     
     /// <summary>
     /// Invokes a collection of exception interceptors in sequence.
@@ -46,10 +49,11 @@ internal sealed class TaskExceptionInterceptorInvocationStrategy(
         {
             var handler = interceptor.Handler.Value;
             BeginExceptionInterceptorInvocationSignal.Invoke(message, result, handler.GetType(), dispatchInfo.SourceException);
-            result = await (Task<object?>)handler.Handle(message, result, dispatchInfo.SourceException, executionContext);
+            var objectResult = handler.Handle(message, result, dispatchInfo.SourceException, executionContext);
+            result = await ConvertTask(objectResult);
             FinishPreInterceptorInvocationSignal.Invoke(message, result);
         }
-        return result;
+        return await Task.FromResult(result);
     }
     
     

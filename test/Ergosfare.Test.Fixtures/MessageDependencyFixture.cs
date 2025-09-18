@@ -9,6 +9,7 @@ using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Registry;
 using Ergosfare.Core.Internal.Registry.Descriptors;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Ergosfare.Test.Fixtures;
 
@@ -113,7 +114,7 @@ public class MessageDependencyFixture : IFixture<MessageDependencyFixture>
         foreach (var handler in handlerTypes)
         {
             Registry.Register(handler);
-            _services.AddTransient(handler); // allow handlers automatically registered
+            _services.TryAddTransient(handler); // allow handlers automatically registered
 
         }
 

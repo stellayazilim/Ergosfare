@@ -1,7 +1,9 @@
 using Ergosfare.Contracts.Attributes;
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Handlers;
+using Ergosfare.Core.Abstractions.Registry;
 using Ergosfare.Core.Abstractions.Registry.Descriptors;
+using Ergosfare.Core.Abstractions.Strategies;
 using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Registry.Descriptors;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,16 +18,49 @@ namespace Ergosfare.Test.Fixtures;
 /// </summary>
 public class DescriptorFixture: IFixture<DescriptorFixture>
 {
-
+    private bool _disposed;
     private ushort _weight;
     private readonly List<string> _group = [GroupAttribute.DefaultGroupName];
+    
+    /// <summary>
+    /// Gets or sets the message MessageRegistry used to provide a message registry
+    /// for descriptor creation.
+    /// </summary>
+    public IMessageRegistry? MessageRegistry { get; private set; }
     
     /// <summary>
     /// Gets the current list of groups assigned to created descriptors.
     /// </summary>
     public IReadOnlyList<string> Group => _group.AsReadOnly();
 
-    
+    /// <summary>
+    /// Sets the message dependency fixture to be used by this descriptor fixture.
+    /// </summary>
+    /// <param name="registry">The <see cref="MessageRegistry"/> instance to set.</param>
+    /// <returns>The current <see cref="DescriptorFixture"/> instance to allow fluent configuration.</returns>
+    public DescriptorFixture SetMessageRegistry(IMessageRegistry registry)
+    {
+        MessageRegistry = registry;
+        return this;
+    }
+
+    /// <summary>
+    /// Creates a message descriptor for the specified message type using the configured
+    /// message registry from the <see cref="MessageDependencyFixture"/>.
+    /// </summary>
+    /// <param name="messageType">The type of the message for which to create a descriptor.</param>
+    /// <returns>An <see cref="IMessageDescriptor"/> instance if a descriptor is found; otherwise, <c>null</c>.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if the <see cref="MessageDependencyFixture"/> has not been set before calling this method.
+    /// </exception>
+    public IMessageDescriptor? GetDescriptorFromRegistry(Type messageType)
+    {
+        var strategy =
+            new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(MessageRegistry!);
+
+        return strategy.Find(messageType);
+    }
+      
     /// <summary>
     /// Adds one or more groups to the descriptor configuration.
     /// </summary>
@@ -202,7 +237,15 @@ public class DescriptorFixture: IFixture<DescriptorFixture>
     
     /// <inheritdoc/>
     public ServiceProvider ServiceProvider { get; } = null!;
-    
+
     /// <inheritdoc/>
-    public void Dispose() { /* nothing to dispose */ }
+    public void Dispose()
+    {
+        if (_disposed) return;
+        MessageRegistry = null;
+        _weight = 0;
+        _group.Clear();
+        _group.Add(GroupAttribute.DefaultGroupName);
+        _disposed = true;
+    }
 }

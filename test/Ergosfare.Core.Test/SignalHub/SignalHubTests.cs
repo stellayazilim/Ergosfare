@@ -9,11 +9,11 @@ namespace Ergosfare.Core.Test.SignalHub;
 
 
 /// <summary>
-/// Unit tests for <see cref="EventHub"/> subscriptions, publishing, and pipeline events.
+/// Unit tests for <see cref="SignalHub"/> subscriptions, publishing, and pipeline events.
 /// Covers weak and strong subscription behavior, publish/unsubscribe logic, 
 /// and operator-based proxy events.
 /// </summary>
-public class SignalHubTests(SignalHubFixture signalHubFixture) : BaseSignalFixture(signalHubFixture)
+public class SignalHubTests(SignalFixture signalHubFixture) : BaseSignalFixture(signalHubFixture)
 {
     /// <summary>
     /// Verifies that subscribing to an event type registers the subscription internally.
@@ -114,7 +114,7 @@ public class SignalHubTests(SignalHubFixture signalHubFixture) : BaseSignalFixtu
         SignalHubFixture = SignalHubFixture.New;
 
         // Arrange: use stub weak reference to simulate collected target
-        var stubWeak = new SignalHubFixture.StubWeakSubscription<Action<BeginPipelineSignal>>(null, isAlive: false);
+        var stubWeak = new SignalFixture.StubWeakSubscription<Action<BeginPipelineSignal>>(null, isAlive: false);
         stubWeak.TryGetTarget(out var target);
         var weakSub = new WeakSubscription<BeginPipelineSignal>(target!);
 
@@ -264,7 +264,7 @@ public class SignalHubTests(SignalHubFixture signalHubFixture) : BaseSignalFixtu
     {
         // Arrange: simulate a collected target with stub weak reference
         var handler = (BeginPipelineSignal signal) => { };
-        var stubWeak = new SignalHubFixture.StubWeakSubscription<Action<BeginPipelineSignal>>(null, isAlive: false);
+        var stubWeak = new SignalFixture.StubWeakSubscription<Action<BeginPipelineSignal>>(null, isAlive: false);
 
         stubWeak.TryGetTarget(out var target);
         var weakSub = new WeakSubscription<BeginPipelineSignal>(target!);
