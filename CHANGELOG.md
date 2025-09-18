@@ -1,3 +1,113 @@
+
+## v0.1.0e – First minor release –  2025-18-09
+
+### Final Interceptors
+
+* Introduced new interfaces:
+
+    * `IFinalInterceptor`, `IAsyncFinalInterceptor<TMessage, TResult>` for generic/non-generic messages.
+    * `ICommandFinalInterceptor`, `IQueryFinalInterceptor`, `IEventFinalInterceptor` for higher-level modules.
+* Final interceptors now run at the end of the pipeline (in `finally`), enabling cleanup and logging scenarios.
+* Support for nullable message results and exceptions passed into final interceptors.
+
+### Pre- & Post-Interceptors
+
+* **Pre-Interceptors**:
+
+    * Added support for both direct and indirect pre-interceptors.
+    * Can mutate messages and return a new one.
+    * Emit detailed events (`BeginPreIntercepting`, `FinishPreInterceptorInvocation`, etc.).
+
+* **Post-Interceptors**:
+
+    * Added support for both direct and indirect post-interceptors.
+    * Can mutate results before returning to the caller.
+    * Integrated `IResultAdapterService` to detect embedded exceptions in results.
+    * Emit events for normal execution and exception-like results (`FinishPostInterceptingWithException`).
+
+### ⚡ Exception Interceptors
+
+* Support for direct and indirect exception interceptors.
+* Emit begin/finish events for each interceptor.
+* Full support for nullable `messageResult`.
+* Rethrows exceptions if no interceptors are registered.
+
+### Unified Pipeline Events
+
+* Refactored **EventHub → SignalHub**, and renamed `HubEvent → Signal` for clarity.
+* Introduced `PipelineEvent` base class (with `Message` and nullable `Result`).
+* Standardized event naming:
+
+    * Pre: `BeginPreInterceptingEvent`, `FinishPreInterceptorInvocationEvent`, …
+    * Post: `BeginPostInterceptingEvent`, `FinishPostInterceptorInvocationEvent`, …
+    * Exception: `BeginExceptionInterceptingEvent`, `FinishExceptionInterceptorInvocationEvent`
+    * Final: `BeginFinalInterceptingEvent`, `FinishFinalInterceptorInvocationEvent`
+* Events carry metadata (interceptor type, exception, total count).
+* Unified equality comparison for better test coverage.
+
+### Result Adapter
+
+* Added `IResultAdapter` and `IResultAdapterService`:
+
+    * Detect exceptions inside result objects (e.g., `ErrorOr`).
+    * Allow exception interceptors to run without throwing original result types.
+* Integrated with post-interceptors and mediators for consistent handling.
+
+### Mediators
+
+* `QueryMediator` and `EventMediator` updated to raise pipeline events.
+* Integrated `IResultAdapterService` into mediation strategies (`SingleAsyncHandlerMediationStrategy`, `AsyncBroadcastMediationStrategy`).
+* Improved async flow and nullability handling.
+
+###  Execution Strategies & Handler Invokers
+
+* Refactored pipeline execution strategies with final interceptor support.
+* Introduced **Handler Invokers**:
+
+    * Type-safe replacement for `MessageDependencyExtensions`.
+    * Unified mechanism for invoking handlers and interceptors.
+    * Integrated seamlessly with signals.
+
+### Centralized Test Fixtures
+
+* Added new `Ergosfare.Test.Fixtures` assembly.
+* Common fixtures consolidated for reuse across test classes.
+* Introduced categorized stubs and stub factories to reduce inline stubs.
+* Improved maintainability, readability, and pluggability of test suite.
+* Achieved **95%+ coverage** with fixture-based test design.
+
+
+### Fixes & Refactors
+
+* Cleaned up pipeline flow with consistent async/await handling.
+* Removed `MessageDependencyExtensions` in favor of handler invokers.
+* Unified naming across signals and interceptors.
+* Simplified exception interception without reflection/dynamic.
+
+
+### Benefits
+
+* Final interceptors enable safe cleanup and logging.
+* Pre- and post-interceptors can mutate messages and results consistently.
+* Exception handling is safer, with result-based error detection via adapters.
+* Unified event/signal system improves observability and debugging.
+* Stronger modularity for command, query, and event pipelines.
+* Centralized, reusable test infrastructure.
+* Easier to maintain, extend, and test pipelines.
+
+### Tests
+
+* Fixture-based tests for:
+
+    * `ErrorOr` adapter support.
+    * Exception interception (direct/indirect).
+    * Post-interceptor result exceptions.
+* Updated tests for signal structure, handler invokers, and fixtures.
+* Achieved consistent **95%+ coverage**.
+
+___
+
+
 ## v0.0.16e – IHasProxyEvents 2025-11-09
 ### **Added**
 - IHasProxyEvents interface, contains all known proxy events
