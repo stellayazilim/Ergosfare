@@ -78,11 +78,17 @@ jobs:
             ./src/Ergosfare.Commands.Extensions.MicrosoftDependencyInjection/Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj \
             ./src/Ergosfare.Events/Ergosfare.Events.csproj \
             ./src/Ergosfare.Events.Abstractions/Ergosfare.Events.Abstractions.csproj \
-            ./src/Ergosfare.Events.Extensions.MicrosoftDependencyInjection/Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj \
-            ./test/Ergosfare.Test.Fixtures/Ergosfare.Test.Fixtures.csproj
+            ./src/Ergosfare.Events.Extensions.MicrosoftDependencyInjection/Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj 
           do
             dotnet pack $proj -c Release -o ./nupkg-github /p:Version=${{ env.VERSION }} /p:IncludeSymbols=true /p:IncludeSource=true --no-build
-          done
+          done 
+          dotnet pack ./test/Ergosfare.Test.Fixtures/Ergosfare.Test.Fixtures.csproj \
+            -c Release \
+            -o ./nupkg-github \
+            /p:Version=${{ env.VERSION }} \
+            /p:IncludeSymbols=true \
+            /p:IncludeSource=true \
+            --no-build
 
       # 6️⃣ Push packages to GitHub Packages
       - name: Push packages to GitHub Packages
