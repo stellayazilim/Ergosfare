@@ -42,9 +42,9 @@ public class StubVoidAsyncPostInterceptor: IAsyncPostInterceptor<StubMessage>
 
 public class StubVoidAsyncExceptionInterceptor: IAsyncExceptionInterceptor<StubMessage>
 {
-    public Task HandleAsync(StubMessage message, object? messageResult, Exception exception, IExecutionContext context)
+    public Task<object> HandleAsync(StubMessage message, object? messageResult, Exception exception, IExecutionContext context)
     {
-        return Task.CompletedTask;
+        return Task.FromResult<object>(messageResult!);
     }
 }
 

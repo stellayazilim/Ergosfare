@@ -80,6 +80,6 @@ public sealed class EventMediator(
                 Groups = eventMediationSettings.Filters.Groups
             });
         // Trigger the pipeline finish event
-        FinishPipelineSignal.Invoke(@event, null);
+        //FinishPipelineSignal.Invoke(@event, null);
     }
 }

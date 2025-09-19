@@ -9,6 +9,26 @@ using Ergosfare.Events.Abstractions;
 
 namespace Ergosfare.Events;
 
+
+/// <summary>
+/// Represents a mediation strategy that broadcasts a message asynchronously
+/// to all registered handlers of the specified <typeparamref name="TMessage"/>.
+/// </summary>
+/// <typeparam name="TMessage">The type of message being mediated.</typeparam>
+/// <remarks>
+/// <para>
+/// This strategy ensures that:
+/// <list type="bullet">
+///   <item><description>All handlers for the message are invoked sequentially.</description></item>
+///   <item><description>Pre-, post-, exception-, and final-interceptors are executed in the correct order.</description></item>
+///   <item><description>Exceptions are captured and passed to the configured exception interceptors.</description></item>
+/// </list>
+/// </para>
+/// <para>
+/// Since this strategy is intended for event broadcasting, results are not adapted
+/// (unlike request/response message patterns).
+/// </para>
+/// </remarks>
 public sealed class AsyncBroadcastMediationStrategy<TMessage>(
     IResultAdapterService? resultAdapterService,
     EventMediationSettings settings)
@@ -69,6 +89,13 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
         }
     }
 
+    
+    /// <summary>
+    /// Publishes the message sequentially to all resolved handlers.
+    /// </summary>
+    /// <param name="message">The message being handled.</param>
+    /// <param name="handlers">The collection of handlers resolved for this message.</param>
+    /// <param name="context">The execution context for this mediation pipeline.</param>
     private async Task PublishSequentially(TMessage message, IEnumerable<ILazyHandler<IHandler, IMainHandlerDescriptor>> handlers, IExecutionContext context)
     {
         foreach (var lazyHandler in handlers)
