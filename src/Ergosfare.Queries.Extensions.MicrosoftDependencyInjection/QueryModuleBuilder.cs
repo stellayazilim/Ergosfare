@@ -1,5 +1,4 @@
 ﻿using System.Reflection;
-using Ergosfare.Contracts;
 using Ergosfare.Core.Abstractions.Registry;
 using Ergosfare.Queries.Abstractions;
 
