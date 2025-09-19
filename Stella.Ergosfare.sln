@@ -52,6 +52,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Queries.Test", "t
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Events.Test", "test\Ergosfare.Events.Test\Ergosfare.Events.Test.csproj", "{8CE83FDB-E9E4-486C-B29A-C8B2BD888CB2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Test.Fixtures", "test\Ergosfare.Test.Fixtures\Ergosfare.Test.Fixtures.csproj", "{C09E796E-3EB2-4E32-9030-7A1C6188A3B8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -142,6 +144,10 @@ Global
 		{8CE83FDB-E9E4-486C-B29A-C8B2BD888CB2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8CE83FDB-E9E4-486C-B29A-C8B2BD888CB2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8CE83FDB-E9E4-486C-B29A-C8B2BD888CB2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C09E796E-3EB2-4E32-9030-7A1C6188A3B8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C09E796E-3EB2-4E32-9030-7A1C6188A3B8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C09E796E-3EB2-4E32-9030-7A1C6188A3B8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C09E796E-3EB2-4E32-9030-7A1C6188A3B8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{92583D3B-AB44-4F13-B218-7DEA5B685D84} = {320B785E-A957-4E34-B748-6DA688B8D4A2}
@@ -165,5 +171,6 @@ Global
 		{4082A690-C019-42D9-A2A8-267E6FCB8164} = {16B49E79-4E96-4B52-BE26-462273E444E0}
 		{42FCC2CD-43FF-4469-A307-9DF8688993F3} = {16B49E79-4E96-4B52-BE26-462273E444E0}
 		{8CE83FDB-E9E4-486C-B29A-C8B2BD888CB2} = {16B49E79-4E96-4B52-BE26-462273E444E0}
+		{C09E796E-3EB2-4E32-9030-7A1C6188A3B8} = {16B49E79-4E96-4B52-BE26-462273E444E0}
 	EndGlobalSection
 EndGlobal
