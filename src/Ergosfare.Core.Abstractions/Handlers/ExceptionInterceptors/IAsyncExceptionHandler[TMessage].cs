@@ -26,7 +26,7 @@ public interface IAsyncExceptionInterceptor<in TMessage>: IExceptionInterceptor<
             Exception exception, 
             IExecutionContext context)
     {
-        return HandleAsync(
+        return  HandleAsync(
             message, 
             messageResult, 
             exception, context);
@@ -44,7 +44,7 @@ public interface IAsyncExceptionInterceptor<in TMessage>: IExceptionInterceptor<
     /// A <see cref="Task"/> representing the asynchronous operation.
     /// The result of the message may be modified and will continue through the pipeline.
     /// </returns>
-    Task HandleAsync(
+    Task<object> HandleAsync(
         TMessage message, 
         object? messageResult, 
         Exception exception, 

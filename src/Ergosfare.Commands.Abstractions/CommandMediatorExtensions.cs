@@ -1,5 +1,3 @@
-using Ergosfare.Contracts;
-
 namespace Ergosfare.Commands.Abstractions;
 
 public static class CommandMediatorExtensions

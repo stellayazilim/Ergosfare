@@ -11,11 +11,26 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
+/// <summary>
+/// Represents a central registry for application modules.
+/// Handles registration, initialization, and handler discovery for all modules.
+/// </summary>
 public class ModuleRegistry(IServiceCollection services, IMessageRegistry messageRegistry, IResultAdapterService resultAdapterService)
     : IModuleRegistry
 {
+    
+    /// <summary>
+    /// Stores the collection of registered modules.
+    /// Uses a <see cref="HashSet{T}"/> to enforce uniqueness and prevent duplicates.
+    /// </summary>
     private readonly HashSet<IModule> _modules = new();
 
+    
+    /// <summary>
+    /// Registers a module with the registry.
+    /// </summary>
+    /// <param name="module">The module to register.</param>
+    /// <returns>The current <see cref="IModuleRegistry"/> instance for fluent chaining.</returns>
     public IModuleRegistry Register(IModule module)
     {
         _modules.Add(module);
@@ -23,7 +38,8 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
     }
     
     /// <summary>
-    ///     Initializes the registered modules and their components.
+    /// Initializes all registered modules, sets up their configurations,
+    /// and registers all required handlers and services with the DI container.
     /// </summary>
     public void Initialize()
     {
@@ -47,7 +63,10 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
     }
     
     
-    
+    /// <summary>
+    /// Collects and registers all handler types defined in the given message descriptor.
+    /// </summary>
+    /// <param name="descriptor">The message descriptor containing handler metadata.</param>
     private void RegisterHandlersFromDescriptor(IMessageDescriptor descriptor)
     {
         // Use a local HashSet to avoid redundant registrations within the same descriptor
@@ -76,12 +95,26 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
         }
     }
 
+    /// <summary>
+    /// Configures the result adapter pipeline using the provided builder action.
+    /// </summary>
+    /// <param name="builder">
+    /// An action that configures the <see cref="ResultAdapterBuilder"/> 
+    /// with custom adapters.
+    /// </param>
+    /// <returns>The current <see cref="IModuleRegistry"/> instance for fluent chaining.</returns>
     public IModuleRegistry ConfigureResultAdapters(Action<ResultAdapterBuilder> builder)
     {
         builder(new ResultAdapterBuilder(resultAdapterService));
         return this;
     }
 
+    
+    /// <summary>
+    /// Adds all handler types from the specified descriptors into the given set.
+    /// </summary>
+    /// <param name="descriptors">A collection of handler descriptors.</param>
+    /// <param name="handlerTypes">The set into which handler types are added.</param>
     private static void CollectHandlerTypes(IEnumerable<IHandlerDescriptor> descriptors, HashSet<Type> handlerTypes)
     {
         foreach (var descriptor in descriptors)

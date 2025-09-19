@@ -11,9 +11,13 @@ namespace Ergosfare.Core.Abstractions.Handlers;
 /// <typeparam name="TMessage">The type of message being processed. Must be non-nullable.</typeparam>
 /// <typeparam name="TResult">The type of the result for the message. Must be non-nullable.</typeparam>
 public interface IAsyncExceptionInterceptor<in TMessage, in TResult>: 
-    IExceptionInterceptor<TMessage, TResult> where TMessage : notnull
+    IExceptionInterceptor<TMessage, TResult> 
+    where TMessage : notnull
+    where TResult : notnull
 {
-    /// <inheritdoc cref="IExceptionInterceptor{TMessage, TResult}.Handle"/>
+    /// <inheritdoc>
+    ///     <cref>IExceptionInterceptor{TMessage, TResult}.Handle</cref>
+    /// </inheritdoc>
     object IExceptionInterceptor<TMessage, TResult>.Handle(
         TMessage message,
         TResult? result,

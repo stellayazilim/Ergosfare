@@ -1,7 +1,5 @@
 ﻿
 
-using Ergosfare.Contracts;
-
 namespace Ergosfare.Commands.Abstractions;
 /// <summary>
 ///     Represents the mediator interface for sending commands within the application.

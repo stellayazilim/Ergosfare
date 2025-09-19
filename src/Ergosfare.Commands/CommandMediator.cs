@@ -6,13 +6,20 @@ using Ergosfare.Core.Abstractions.Strategies;
 
 namespace Ergosfare.Commands;
 
+/// <summary>
+/// Mediates command messages through the configured pipeline, including signal dispatching,
+/// mediation strategies, and optional result adaptation.
+/// </summary>
 public class CommandMediator(
     ISignalHub signalHub,
     ActualTypeOrFirstAssignableTypeMessageResolveStrategy messageResolveStrategy,
     IResultAdapterService? resultAdapterService,
     IMessageMediator messageMediator) : ICommandMediator
 {
-    
+    /// <summary>
+    /// Mediates command messages through the configured pipeline, including signal dispatching,
+    /// mediation strategies, and optional result adaptation.
+    /// </summary>
     public Task SendAsync(ICommand commandConstruct, CommandMediationSettings? commandMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
@@ -34,7 +41,14 @@ public class CommandMediator(
         return result;
     }
 
-
+    /// <summary>
+    /// Sends a typed command asynchronously and returns a strongly typed result.
+    /// </summary>
+    /// <typeparam name="TResult">The expected result type of the command.</typeparam>
+    /// <param name="commandConstruct">The command to send.</param>
+    /// <param name="commandMediationSettings">Optional settings for command mediation, such as filtering or additional items.</param>
+    /// <param name="cancellationToken">Cancellation token for aborting the operation.</param>
+    /// <returns>A <see cref="Task{TResult}"/> representing the asynchronous operation and containing the command result.</returns>
 
     public Task<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct,
         CommandMediationSettings? commandMediationSettings = null,

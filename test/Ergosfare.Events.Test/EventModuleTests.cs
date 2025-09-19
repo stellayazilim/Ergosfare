@@ -25,7 +25,7 @@ public class EventModuleTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task ShouldRegisterEventModule()
+    public void ShouldRegisterEventModule()
     {
         var serviceCollection = new ServiceCollection()
 
@@ -50,7 +50,7 @@ public class EventModuleTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task ShouldNotRegisterNonEventsToEventModule()
+    public void ShouldNotRegisterNonEventsToEventModule()
     {
         var serviceCollection = new ServiceCollection();
 

@@ -4,17 +4,16 @@ namespace Ergosfare.Core.Abstractions.Handlers;
 
 
 /// <summary>
-/// Represents a post-interceptor for a specific message and result type, executing after the main handler has processed the message.
+/// Represents a post-interceptor in the message pipeline that executes after the message handler
+/// has produced a result. Allows observing or modifying the result.
 /// </summary>
-/// <typeparam name="TMessage">The type of the message being handled.</typeparam>
-/// <typeparam name="TResult">The type of the result produced by the main handler.</typeparam>
+/// <typeparam name="TMessage">The type of message this interceptor handles. Must be non-nullable.</typeparam>
+/// <typeparam name="TResult">The type of result produced by the handler. Must be non-nullable.</typeparam>
 /// <remarks>
-/// This interface allows inspecting, modifying, or replacing the result of a message after it has been processed by its main handler.
-/// The <see cref="Handle"/> method returns <see cref="object"/> to remain compatible with runtime-typed pipelines, 
-/// while the generic parameters provide compile-time context for IntelliSense and safer casting.
-/// 
-/// Implementers should ensure that the returned object matches the expected <typeparamref name="TResult"/> type, 
-/// otherwise an exception may be thrown at runtime.
+/// This interface extends the non-generic <see cref="IPostInterceptor"/> and casts the untyped inputs
+/// to the specified generic types for type-safe handling in implementations.
+/// Post-interceptors are invoked after the main handler has run and can modify or inspect the result
+/// before it continues through the pipeline.
 /// </remarks>
 public interface IPostInterceptor<in TMessage,in TResult>
     : IPostInterceptor 
@@ -28,5 +27,13 @@ public interface IPostInterceptor<in TMessage,in TResult>
         return Handle((TMessage) message, (TResult?) messageResult, context);
     }
 
+    /// <summary>
+    /// Handles the message and its result in a type-safe manner after the main handler execution.
+    /// </summary>
+    /// <param name="message">The message that was processed.</param>
+    /// <param name="messageResult">The result produced by the handler. May be null if no result.</param>
+    /// <param name="context">The current execution context.</param>
+    /// <returns>An <see cref="object"/> representing the potentially modified result. 
+    /// The returned object will continue through the pipeline.</returns>
     object Handle(TMessage message, TResult? messageResult, IExecutionContext context);
 }

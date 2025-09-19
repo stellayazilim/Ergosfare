@@ -4,6 +4,12 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
+
+/// <summary>
+/// Represents the configuration context for a module.
+/// Provides access to the service collection and message registry
+/// associated with the module during setup.
+/// </summary>
 public interface IModuleConfiguration
 {
     /// <summary>
