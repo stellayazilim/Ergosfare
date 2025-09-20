@@ -14,7 +14,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\src\Ergosfare.Context\Ergosfare.Context.csproj" />
       <ProjectReference Include="..\..\src\Ergosfare.Core.Abstractions\Ergosfare.Core.Abstractions.csproj" />
       <ProjectReference Include="..\..\src\Ergosfare.Core\Ergosfare.Core.csproj" />
     </ItemGroup>

@@ -8,8 +8,4 @@
         <LangVersion>13</LangVersion>
     </PropertyGroup>
 
-    <ItemGroup>
-      <ProjectReference Include="..\Ergosfare.Context\Ergosfare.Context.csproj" />
-    </ItemGroup>
-
 </Project>

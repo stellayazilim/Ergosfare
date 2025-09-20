@@ -12,7 +12,6 @@
       <ProjectReference Include="..\Ergosfare.Commands.Abstractions\Ergosfare.Commands.Abstractions.csproj" />
       <ProjectReference Include="..\Ergosfare.Commands.Extensions.MicrosoftDependencyInjection\Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj" />
       <ProjectReference Include="..\Ergosfare.Commands\Ergosfare.Commands.csproj" />
-      <ProjectReference Include="..\Ergosfare.Context\Ergosfare.Context.csproj" />
       <ProjectReference Include="..\Ergosfare.Contracts\Ergosfare.Contracts.csproj" />
       <ProjectReference Include="..\Ergosfare.Core.Abstractions\Ergosfare.Core.Abstractions.csproj" />
       <ProjectReference Include="..\Ergosfare.Core.Extensions.MicrosoftDependencyInjection\Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj" />
