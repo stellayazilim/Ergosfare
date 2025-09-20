@@ -11,25 +11,6 @@ namespace Ergosfare.Test.Fixtures;
 /// Provides a dedicated execution context fixture for tests, implementing <see cref="IFixture{ExecutionContextFixture}"/> and <see cref="IAsyncDisposable"/>.
 /// This fixture allows creating isolated execution scopes and exposes a default ambient context.
 /// </summary>
-/// <example>
-/// <code>
-/// // Create a new fixture
-/// var fixture = new ExecutionContextFixture();
-///
-/// // Use a scoped context
-/// await using (var scope = fixture.CreateScope())
-/// {
-///     var ctx = AmbientExecutionContext.Current;
-///     // perform operations within the scope
-/// }
-///
-/// // Create a completely new, empty context
-/// var emptyContext = fixture.CreateContext();
-///
-/// // Get a fresh fixture instance for per-test isolation
-/// var newFixture = fixture.New;
-/// </code>
-/// </example>
 /// <remarks>
 /// <para>
 /// Use <see cref="CreateScope"/> when you want to temporarily replace the ambient execution context

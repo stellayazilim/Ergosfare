@@ -1,6 +1,5 @@
 using Ergosfare.Command.Test.__stubs__;
 using Ergosfare.Commands.Abstractions;
-using Ergosfare.Context;
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Handlers;
 using Ergosfare.Core.Internal.Contexts;
@@ -31,7 +30,7 @@ public class CommandPreInterceptorTResultTResultTests
         /// <returns>
         /// A <see cref="Task{TResult}"/> containing the same <paramref name="command"/> instance.
         /// </returns>
-        public Task<StubNonGenericCommand?> HandleAsync(StubNonGenericCommand? command, IExecutionContext context)
+        public Task<StubNonGenericCommand> HandleAsync(StubNonGenericCommand command, IExecutionContext context)
         {
             return Task.FromResult(command);
         }

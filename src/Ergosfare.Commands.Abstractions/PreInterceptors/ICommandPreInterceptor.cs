@@ -3,7 +3,7 @@ using Ergosfare.Core.Abstractions.Handlers;
 namespace Ergosfare.Commands.Abstractions;
 
 
-// <summary>
+/// <summary>
 /// Represents a pre-interceptor for commands that is invoked before the command
 /// enters the pipeline. Can be used to modify the command or perform preparatory actions.
 /// </summary>

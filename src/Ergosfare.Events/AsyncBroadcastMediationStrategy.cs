@@ -1,5 +1,4 @@
 using System.Runtime.ExceptionServices;
-using Ergosfare.Context;
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Exceptions;
 using Ergosfare.Core.Abstractions.Handlers;

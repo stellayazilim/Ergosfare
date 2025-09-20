@@ -1,5 +1,4 @@
-﻿using Ergosfare.Core.Abstractions;
-using Ergosfare.Core.Abstractions.Registry;
+﻿using Ergosfare.Core.Abstractions.Registry;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -21,6 +20,4 @@ public interface IModuleConfiguration
     ///     Gets the message registry associated with the module configuration.
     /// </summary>
     IMessageRegistry MessageRegistry { get; }
-    
-    
 }

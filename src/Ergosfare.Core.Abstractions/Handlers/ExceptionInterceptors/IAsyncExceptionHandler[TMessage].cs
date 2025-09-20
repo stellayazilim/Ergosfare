@@ -1,7 +1,5 @@
 using System;
-using System.Threading;
 using System.Threading.Tasks;
-using Ergosfare.Context;
 
 namespace Ergosfare.Core.Abstractions.Handlers;
 
@@ -18,7 +16,7 @@ namespace Ergosfare.Core.Abstractions.Handlers;
 public interface IAsyncExceptionInterceptor<in TMessage>: IExceptionInterceptor<TMessage, object>
     where TMessage : notnull
 {
-    /// <inheritdoc cref="IExceptionInterceptor{TMessage, TResult}.Handle"/>
+    /// <inheritdoc cref="IExceptionInterceptor{TMessage, TResult}"/>
     object IExceptionInterceptor<TMessage, object>
         .Handle(
             TMessage message, 

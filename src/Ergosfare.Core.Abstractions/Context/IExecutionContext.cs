@@ -4,6 +4,10 @@ using System.Threading;
 
 namespace Ergosfare.Core.Abstractions;
 
+/// <summary>
+/// Represents the  execution context for message handling and mediation.
+/// Provides access to contextual information such as cancellation tokens and arbitrary items.
+/// </summary>
 public interface IExecutionContext
 {
 

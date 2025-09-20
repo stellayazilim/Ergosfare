@@ -1,7 +1,6 @@
 using System.Reflection;
 using Ergosfare.Core.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
-using Xunit.Sdk;
 
 namespace Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test;
 
@@ -66,7 +65,7 @@ public class ModuleConfigurationTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public void ShoulldAddMessageAdapter()
+    public void ShouldAddMessageAdapter()
     {
         var serviceProvier = new ServiceCollection()
             .AddErgosfare(options =>
@@ -90,7 +89,7 @@ public class ModuleConfigurationTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public void ShoulldAddMessageAdapterFromAssembly()
+    public void ShouldAddMessageAdapterFromAssembly()
     {
         var serviceProvier = new ServiceCollection()
             .AddErgosfare(options => options

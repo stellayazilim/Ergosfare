@@ -18,7 +18,7 @@ public class CommandMediationSettingsTests
     /// <summary>
     /// Tests the <see cref="CommandMediationSettings"/> initialization and verifies
     /// that the <see cref="CommandMediationSettings.Items"/> dictionary and
-    /// <see cref="CommandMediationSettings.Filters.Groups"/> list are correctly populated.
+    /// <see cref="CommandMediationSettings.CommandMediationFilters.Groups"/> list are correctly populated.
     /// </summary>
     /// <remarks>
     /// This is a unit test marked with the "Unit" and "Coverage" traits for categorization.

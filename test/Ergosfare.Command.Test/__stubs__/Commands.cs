@@ -7,7 +7,6 @@ namespace Ergosfare.Command.Test.__stubs__;
 /// A stub command used for testing non-generic command handlers.
 /// Implements <see cref="ICommand"/>.
 /// </summary>
-[Obsolete("Use TestCommand instead.")]
 public record StubNonGenericCommand: ICommand;
 
 

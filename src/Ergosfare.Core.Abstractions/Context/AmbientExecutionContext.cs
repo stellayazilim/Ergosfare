@@ -4,8 +4,16 @@ using System.Threading.Tasks;
 using Ergosfare.Core.Abstractions.Exceptions;
 namespace Ergosfare.Core.Abstractions;
 
+/// <summary>
+/// Provides access to the ambient <see cref="IExecutionContext"/> for the current asynchronous control flow.
+/// </summary>
 public static class AmbientExecutionContext
 {
+    
+    /// <summary>
+    /// Stores the <see cref="IExecutionContext"/> for the current asynchronous control flow.
+    /// This ensures that the execution context flows correctly across async/await boundaries.
+    /// </summary>
     private static readonly AsyncLocal<IExecutionContext> ExecutionContextLocal = new ();
     
     

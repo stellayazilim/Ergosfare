@@ -1,15 +1,20 @@
-
-
 using Ergosfare.Core.Abstractions.Handlers;
 using Ergosfare.Test.Fixtures;
 using Ergosfare.Test.Fixtures.Stubs.Basic;
 
 namespace Ergosfare.Core.Test.Interceptors;
 
+
+/// <summary>
+/// Contains unit tests for <see cref="IPreInterceptor"/> implementations,
+/// verifying that the Handle method correctly returns a <see cref="Task"/> and produces the expected result.
+/// </summary>
 public class PreInterceptorTests
 {
-    
-    
+    /// <summary>
+    /// Tests that a pre-interceptor returns a non-null <see cref="Task{object}"/> 
+    /// and that the
+    /// </summary>
     [Fact]
     [Trait("Category", "Coverage")]
     [Trait("Category", "Unit")]

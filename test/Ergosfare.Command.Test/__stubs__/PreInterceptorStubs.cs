@@ -14,7 +14,9 @@ namespace Ergosfare.Command.Test.__stubs__;
 [Group("group1")]
 [Weight(2)]
 
+#pragma warning disable CS0618 // Type or member is obsolete
 public class StubCommandPreInterceptor1: ICommandPreInterceptor<StubNonGenericCommand>
+#pragma warning restore CS0618 // Type or member is obsolete
 {
     /// <summary>
     /// Indicates whether the interceptor has been called.
@@ -28,7 +30,9 @@ public class StubCommandPreInterceptor1: ICommandPreInterceptor<StubNonGenericCo
     /// <param name="message">The command being intercepted.</param>
     /// <param name="context">The execution context for the pipeline.</param>
     /// <returns>The original command as an <see cref="object"/>.</returns>
+#pragma warning disable CS0618 // Type or member is obsolete
     public virtual Task<object> HandleAsync(StubNonGenericCommand message, IExecutionContext context)
+#pragma warning restore CS0618 // Type or member is obsolete
     {
         HasCalled = true;
         return Task.FromResult<object>(message);
@@ -41,7 +45,9 @@ public class StubCommandPreInterceptor1: ICommandPreInterceptor<StubNonGenericCo
 /// </summary>
 [Group("group1", "group2")]
 [Weight(1)]
+#pragma warning disable CS0618 // Type or member is obsolete
 public class StubCommandPreInterceptor2: ICommandPreInterceptor<StubNonGenericCommand>
+#pragma warning restore CS0618 // Type or member is obsolete
 {
     /// <summary>
     /// Indicates whether the interceptor has been called.
@@ -55,7 +61,9 @@ public class StubCommandPreInterceptor2: ICommandPreInterceptor<StubNonGenericCo
     /// <param name="message">The command being intercepted.</param>
     /// <param name="context">The execution context for the pipeline.</param>
     /// <returns>The original command as an <see cref="object"/>.</returns>
+#pragma warning disable CS0618 // Type or member is obsolete
     public virtual Task<object>  HandleAsync(StubNonGenericCommand message, IExecutionContext context)
+#pragma warning restore CS0618 // Type or member is obsolete
     {
         HasCalled = true;
         return Task.FromResult<object>(message);

@@ -1,6 +1,4 @@
-﻿using Ergosfare.Contracts;
-
-namespace Ergosfare.Events.Abstractions;
+﻿namespace Ergosfare.Events.Abstractions;
 
 /// <summary>
 ///     Represents the mediator interface for publishing events within the application.

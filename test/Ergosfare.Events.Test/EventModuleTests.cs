@@ -1,6 +1,4 @@
 ﻿using System.Reflection;
-using Ergosfare.Context;
-using Ergosfare.Contracts;
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Handlers;
 using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;

@@ -1,8 +1,8 @@
-using Ergosfare.Context;
-
 namespace Ergosfare.Core.Abstractions.Invokers;
 
-
+/// <summary>
+///     Represents a base class for invoking pre-interceptors before handling a message.
+/// </summary>
 internal abstract class PreInvoker(
     IMessageDependencies messageDependencies,
     IResultAdapterService? resultAdapterService): 

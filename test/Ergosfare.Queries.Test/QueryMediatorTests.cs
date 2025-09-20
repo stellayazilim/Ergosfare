@@ -1,9 +1,7 @@
 ﻿using Ergosfare.Core;
 using Ergosfare.Core.Abstractions;
-using Ergosfare.Core.Abstractions.EventHub;
 using Ergosfare.Core.Abstractions.Strategies;
 using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
-using Ergosfare.Queries.Abstractions;
 using Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
 using Ergosfare.Queries.Test.__stubs__;
 using Microsoft.Extensions.DependencyInjection;

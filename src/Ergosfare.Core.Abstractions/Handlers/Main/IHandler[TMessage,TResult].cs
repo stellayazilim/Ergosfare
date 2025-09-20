@@ -1,7 +1,4 @@
-﻿
-using Ergosfare.Context;
-
-namespace Ergosfare.Core.Abstractions.Handlers;
+﻿namespace Ergosfare.Core.Abstractions.Handlers;
 
 
 /// <summary>

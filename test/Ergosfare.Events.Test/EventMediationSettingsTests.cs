@@ -31,10 +31,10 @@ public class EventMediationSettingsTests
         };
         
         
-        Func<Type, bool> Predicate = _ => false;
+        Func<Type, bool> predicate = _ => false;
         
-        settings.Filters.HandlerPredicate = Predicate;
-        Assert.Equal(Predicate, settings.Filters.HandlerPredicate);
+        settings.Filters.HandlerPredicate = predicate;
+        Assert.Equal(predicate, settings.Filters.HandlerPredicate);
         Assert.Equal("value", settings.Items["Key"]);
         Assert.Equal(["Tag1", "Tag2"], settings.Filters.Groups);
     }

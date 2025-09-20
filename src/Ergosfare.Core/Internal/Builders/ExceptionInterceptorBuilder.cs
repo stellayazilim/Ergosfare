@@ -7,13 +7,26 @@ using Ergosfare.Core.Internal.Registry.Descriptors;
 
 namespace Ergosfare.Core.Internal.Builders;
 
+/// <summary>
+/// Builds <see cref="ExceptionInterceptorDescriptor"/> instances for types implementing <see cref="IExceptionInterceptor"/>.
+/// </summary>
 public class ExceptionInterceptorDescriptorBuilder: IHandlerDescriptorBuilder
 {
+    /// <summary>
+    /// Determines whether the specified type implements <see cref="IExceptionInterceptor"/>.
+    /// </summary>
+    /// <param name="type">The type to evaluate.</param>
+    /// <returns><c>true</c> if the type implements <see cref="IExceptionInterceptor"/>; otherwise, <c>false</c>.</returns>
     public bool CanBuild(Type type)
     {
         return type.IsAssignableTo(typeof(IExceptionInterceptor));
     }
 
+    /// <summary>
+    /// Builds one or more <see cref="ExceptionInterceptorDescriptor"/> instances for the given handler type.
+    /// </summary>
+    /// <param name="handlerType">The handler type from which to build descriptors.</param>
+    /// <returns>A collection of <see cref="ExceptionInterceptorDescriptor"/> instances representing the handler.</returns>
     public IEnumerable<IHandlerDescriptor> Build(Type handlerType)
     {
         var interfaces = handlerType.GetInterfacesEqualTo(typeof( IExceptionInterceptor<,>));

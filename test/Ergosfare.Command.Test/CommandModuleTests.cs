@@ -2,7 +2,6 @@
 using Ergosfare.Command.Test.__stubs__;
 using Ergosfare.Commands.Abstractions;
 using Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
-using Ergosfare.Context;
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Handlers;
 using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;

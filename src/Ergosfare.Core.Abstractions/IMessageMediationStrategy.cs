@@ -1,6 +1,4 @@
-﻿
-using Ergosfare.Context;
-namespace Ergosfare.Core.Abstractions;
+﻿namespace Ergosfare.Core.Abstractions;
 
 /// <summary>
 ///     Defines a strategy for mediating messages of a specific type and producing results of a specific type.

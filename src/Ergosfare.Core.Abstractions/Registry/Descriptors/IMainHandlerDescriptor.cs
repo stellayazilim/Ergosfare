@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Ergosfare.Core.Abstractions.Registry.Descriptors;
+﻿namespace Ergosfare.Core.Abstractions.Registry.Descriptors;
 
 
 /// <summary>

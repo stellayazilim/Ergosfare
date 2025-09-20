@@ -41,6 +41,6 @@ public interface IEventPostInterceptor : IEvent, IAsyncPostInterceptor<IEvent>
     /// </param>
     /// <param name="executionContext">The execution context for the current mediation pipeline.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous post-processing operation.</returns>
-    new Task HandleAsync(IEvent @event, Task? result, IExecutionContext executionContext);
+    Task HandleAsync(IEvent @event, Task? result, IExecutionContext executionContext);
 
 }
