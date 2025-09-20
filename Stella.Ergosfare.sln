@@ -30,8 +30,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Queries.Extension
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Contracts", "src\Ergosfare.Contracts\Ergosfare.Contracts.csproj", "{98455811-A58F-481B-8C1A-9B36212CC33E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Context", "src\Ergosfare.Context\Ergosfare.Context.csproj", "{6C45B10A-EC07-4831-9F67-17241B722691}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Events", "src\Ergosfare.Events\Ergosfare.Events.csproj", "{412B73FD-4A22-428C-A7AE-A0D684517BBD}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ergosfare.Events.Abstractions", "src\Ergosfare.Events.Abstractions\Ergosfare.Events.Abstractions.csproj", "{5062300F-7E7E-4DA7-85B6-5CAABC098781}"
