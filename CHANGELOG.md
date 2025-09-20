@@ -1,3 +1,16 @@
+## v0.1.3e '2025-9-20'
+
+### Changed
+- Dropped `Ergosfare.Context` package.
+- Moved `IExecutionContext` and `AmbientExecutionContext` to `Core.Abstractions.Context`.
+- Moved all execution context exceptions to `Ergosfare.Core.Abstractions/Exceptions`.
+- Updated namespaces throughout the codebase due to context package removal.
+- Added XML documentation for moved types and related classes.
+
+### Notes
+- This refactor is a chore to enable pipeline snapshot support.
+
+
 ## v0.1.2e '2025-9-20'
 
 ### **Added ambient data methods to `IExecutionContext`**
