@@ -26,8 +26,6 @@ namespace Ergosfare.Core.Test.SignalHub;
 public class SignalTests(
     SignalFixture signalFixture) : BaseSignalFixture(signalFixture)
 {
-    
-
     [Fact]
     [Trait("Category", "Coverage")]
     public void Timestamp_ShouldBeCloseToUtcNow()

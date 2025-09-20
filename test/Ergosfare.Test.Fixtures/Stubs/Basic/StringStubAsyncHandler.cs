@@ -1,4 +1,4 @@
-using Ergosfare.Context;
+using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Handlers;
 
 namespace Ergosfare.Test.Fixtures.Stubs.Basic;
@@ -28,19 +28,47 @@ public class StubStringAsyncHandler : IAsyncHandler<StubMessage, string>
     }
 }
 
-
+/// <summary>
+/// A stub implementation of <see cref="IAsyncFinalInterceptor{TMessage, TResult}"/> 
+/// for <see cref="StubMessage"/> that produces a string result.
+/// </summary>
 public class StubStringAsyncFinalInterceptor : IAsyncFinalInterceptor<StubMessage, string>
 {
+    /// <summary>
+    /// A constant string representing a sample result.
+    /// </summary>
     public const string Result = "Hello world";
+    
+    
+    /// <summary>
+    /// Handles the final interception of a <see cref="StubMessage"/> with a string result.
+    /// </summary>
+    /// <param name="message">The message being processed.</param>
+    /// <param name="result">The result of the message handling, if any.</param>
+    /// <param name="exception">Any exception thrown during handling, if any.</param>
+    /// <param name="context">The current execution context.</param>
+    /// <returns>A completed task.</returns>
     public Task HandleAsync(StubMessage message, string? result, Exception? exception, IExecutionContext context)
     {
         return Task.CompletedTask;
     }
 }
 
-
+/// <summary>
+/// A stub implementation of <see cref="IAsyncExceptionInterceptor{TMessage, TResult}"/> 
+/// for <see cref="StubMessage"/> that modifies the result when an exception occurs.
+/// </summary>
 public class StubStringAsyncExceptionInterceptorModifiesResult : IAsyncExceptionInterceptor<StubMessage, string>
 {
+    /// <summary>
+    /// Handles an exception that occurred during processing of a <see cref="StubMessage"/> 
+    /// and returns a modified result.
+    /// </summary>
+    /// <param name="message">The message being processed.</param>
+    /// <param name="result">The original result of the message handling, if any.</param>
+    /// <param name="exception">The exception that occurred during handling.</param>
+    /// <param name="context">The current execution context.</param>
+    /// <returns>A task that completes with the modified result.</returns>
     public Task<object> HandleAsync(StubMessage message, string? result, Exception exception, IExecutionContext context)
     {
         return Task.FromResult<object>("modified result");

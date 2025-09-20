@@ -1,7 +1,19 @@
-﻿namespace Ergosfare.Context;
+﻿using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Ergosfare.Core.Abstractions.Exceptions;
+namespace Ergosfare.Core.Abstractions;
 
+/// <summary>
+/// Provides access to the ambient <see cref="IExecutionContext"/> for the current asynchronous control flow.
+/// </summary>
 public static class AmbientExecutionContext
 {
+    
+    /// <summary>
+    /// Stores the <see cref="IExecutionContext"/> for the current asynchronous control flow.
+    /// This ensures that the execution context flows correctly across async/await boundaries.
+    /// </summary>
     private static readonly AsyncLocal<IExecutionContext> ExecutionContextLocal = new ();
     
     
@@ -75,7 +87,7 @@ public static class AmbientExecutionContext
     ///     Represents a scope for an execution context that automatically restores the previous context when disposed.
     /// </summary>
     /// <remarks>
-    ///     This class implements both <see cref="IDisposable" /> and <see cref="IAsyncDisposable" /> to support
+    ///     This class implements both <see cref="IAsyncDisposable" /> and <see cref="IDisposable" /> to support
     ///     both synchronous and asynchronous usage patterns. When the scope is disposed, the previous execution
     ///     context (if any) is restored.
     /// </remarks>

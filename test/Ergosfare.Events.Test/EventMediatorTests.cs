@@ -1,6 +1,3 @@
-
-
-
 using System.Reflection;
 using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Ergosfare.Events.Abstractions;
@@ -9,8 +6,16 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Ergosfare.Events.Test;
 
+/// <summary>
+/// Contains unit tests for <see cref="IEventMediator"/>, 
+/// ensuring that events are published correctly through the mediator.
+/// </summary>
 public class EventMediatorTests
 {
+    /// <summary>
+    /// Tests that <see cref="IEventMediator.PublishAsync"/> correctly publishes a <see cref="StubNonGenericEvent"/>
+    /// both with default and custom group settings.
+    /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Event", "Coverage")]
@@ -22,10 +27,7 @@ public class EventMediatorTests
                     e => e.RegisterFromAssembly(Assembly.GetExecutingAssembly())
                     ))
             .BuildServiceProvider();
-        
-        
         var mediator = services.GetRequiredService<IEventMediator>();
-
         await mediator.PublishAsync(new StubNonGenericEvent(), CancellationToken.None);
         await mediator.PublishAsync(new StubNonGenericEvent(), ["*"],  CancellationToken.None);
     }

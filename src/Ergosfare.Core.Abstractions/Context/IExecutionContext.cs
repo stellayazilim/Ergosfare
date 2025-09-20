@@ -1,16 +1,13 @@
-﻿namespace Ergosfare.Context;
+using System;
+using System.Collections.Generic;
+using System.Threading;
+
+namespace Ergosfare.Core.Abstractions;
 
 /// <summary>
-///     Represents the execution context for a specific operation or task.
+/// Represents the  execution context for message handling and mediation.
+/// Provides access to contextual information such as cancellation tokens and arbitrary items.
 /// </summary>
-/// <remarks>
-///     The execution context provides access to information and services that are relevant to the current
-///     execution, such as cancellation tokens, shared data, and tags for filtering handlers.
-///     It also provides a mechanism for aborting the execution and setting a result.
-///     The execution context is typically created at the beginning of a mediation operation and is
-///     available throughout the entire mediation pipeline, including pre-handlers, main handlers,
-///     post-handlers, and error handlers.
-/// </remarks>
 public interface IExecutionContext
 {
 
@@ -97,7 +94,4 @@ public interface IExecutionContext
     ///     a message result must be provided to satisfy the result type requirement.
     /// </remarks>
     void Abort(object? messageResult = null);
-    
-    
-    
 }

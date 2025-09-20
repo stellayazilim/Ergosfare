@@ -1,10 +1,11 @@
-﻿using Ergosfare.Context;
+﻿using Ergosfare.Core.Abstractions;
+using Ergosfare.Core.Abstractions.Exceptions;
 
 namespace Ergosfare.Core.Internal.Contexts;
 
 
 /// <summary>
-/// <inheritdoc cref="Context.IExecutionContext"/>
+/// <inheritdoc cref="IExecutionContext"/>
 /// </summary>
 internal sealed class ErgosfareExecutionContext( IDictionary<object, object?> items, CancellationToken cancellationToken)
     : IExecutionContext

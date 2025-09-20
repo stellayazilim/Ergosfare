@@ -1,5 +1,4 @@
 ﻿using System;
-using Ergosfare.Core.Abstractions.Registry;
 using Ergosfare.Core.Abstractions.Registry.Descriptors;
 
 namespace Ergosfare.Core.Abstractions;
@@ -10,7 +9,6 @@ public interface IMessageResolveStrategy
     ///     Finds a message descriptor for the specified message type from the message registry.
     /// </summary>
     /// <param name="messageType">The type of the message to find a descriptor for.</param>
-    /// <param name="messageRegistry">The message registry to search in.</param>
     /// <returns>
     ///     The message descriptor if found; otherwise, <c>null</c>.
     /// </returns>

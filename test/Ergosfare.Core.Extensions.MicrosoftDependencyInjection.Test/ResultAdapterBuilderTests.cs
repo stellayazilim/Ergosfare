@@ -1,12 +1,8 @@
 using Ergosfare.Core.Abstractions;
+using System.Reflection;
 
 namespace Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test;
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using Xunit;
 
 /// <summary>
 /// Unit tests for <see cref="ResultAdapterBuilder"/>.

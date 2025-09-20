@@ -1,4 +1,6 @@
-﻿namespace Ergosfare.Context;
+﻿using System;
+
+namespace Ergosfare.Core.Abstractions.Exceptions;
 
 
 /// <summary>

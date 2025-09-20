@@ -70,7 +70,6 @@ jobs:
           for proj in \
           ./src/Ergosfare/Ergosfare.csproj \
           ./src/Ergosfare.Contracts/Ergosfare.Contracts.csproj \
-          ./src/Ergosfare.Context/Ergosfare.Context.csproj \
           ./src/Ergosfare.Core/Ergosfare.Core.csproj \
           ./src/Ergosfare.Core.Abstractions/Ergosfare.Core.Abstractions.csproj \
           ./src/Ergosfare.Core.Extensions.MicrosoftDependencyInjection/Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj \

@@ -1,4 +1,3 @@
-using Ergosfare.Contracts.Attributes;
 using Ergosfare.Core.Abstractions.Handlers;
 using Ergosfare.Core.Internal.Builders;
 using Ergosfare.Core.Internal.Registry.Descriptors;

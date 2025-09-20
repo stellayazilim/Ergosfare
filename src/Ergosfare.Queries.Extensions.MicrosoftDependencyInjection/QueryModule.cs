@@ -1,5 +1,4 @@
-﻿
-using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
+﻿using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Ergosfare.Queries.Abstractions;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 

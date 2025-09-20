@@ -1,6 +1,4 @@
-﻿using Ergosfare.Contracts;
-
-namespace Ergosfare.Events.Abstractions;
+﻿namespace Ergosfare.Events.Abstractions;
 
 
 /// <summary>

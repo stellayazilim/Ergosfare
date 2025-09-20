@@ -2,6 +2,9 @@
 
 namespace Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 
+/// <summary>
+/// Provides extension methods for the <see cref="ModuleRegistry"/> type to simplify module registration.
+/// </summary>
 public static class ModuleRegistryExtensions
 {
     /// <summary>

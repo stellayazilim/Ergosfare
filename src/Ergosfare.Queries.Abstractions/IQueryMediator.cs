@@ -1,5 +1,4 @@
-﻿using Ergosfare.Contracts;
-using Ergosfare.Core.Abstractions;
+﻿using Ergosfare.Core.Abstractions;
 
 namespace Ergosfare.Queries.Abstractions;
 

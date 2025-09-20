@@ -4,6 +4,10 @@ namespace Ergosfare.Core.Test.PipelineSignals;
 
 public class BeginExceptionInterceptingSignalTests
 {
+    /// <summary>
+    /// Unit tests for <see cref="BeginExceptionInterceptingSignal"/> class,
+    /// verifying proper initialization and equality component behavior.
+    /// </summary>
     [Fact]
     public void Create_ShouldInitializePropertiesCorrectly()
     {
@@ -23,6 +27,10 @@ public class BeginExceptionInterceptingSignalTests
         Assert.True(ev.Timestamp <= DateTime.UtcNow); // optional timestamp check
     }
 
+    /// <summary>
+    /// Ensures that <see cref="BeginExceptionInterceptingSignal.GetEqualityComponents"/>
+    /// includes all expected properties for equality comparison.
+    /// </summary>
     [Fact]
     public void GetEqualityComponents_ShouldIncludeAllProperties()
     {

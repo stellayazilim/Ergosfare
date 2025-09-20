@@ -1,3 +1,1 @@
-﻿global using Ergosfare.Contracts;
-
-[assembly: CollectionBehavior(DisableTestParallelization = true)]
+﻿[assembly: CollectionBehavior(DisableTestParallelization = true)]

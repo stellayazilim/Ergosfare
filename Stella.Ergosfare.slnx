@@ -16,7 +16,6 @@
     <Project Path="src\Ergosfare.Commands.Abstractions\Ergosfare.Commands.Abstractions.csproj" Type="Classic C#" />
     <Project Path="src\Ergosfare.Commands.Extensions.MicrosoftDependencyInjection\Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj" Type="Classic C#" />
     <Project Path="src\Ergosfare.Commands\Ergosfare.Commands.csproj" Type="Classic C#" />
-    <Project Path="src\Ergosfare.Context\Ergosfare.Context.csproj" Type="Classic C#" />
     <Project Path="src\Ergosfare.Contracts\Ergosfare.Contracts.csproj" Type="Classic C#" />
     <Project Path="src\Ergosfare.Core.Abstractions\Ergosfare.Core.Abstractions.csproj" Type="Classic C#" />
     <Project Path="src\Ergosfare.Core.Extensions.MicrosoftDependencyInjection\Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj" Type="Classic C#" />

@@ -1,4 +1,5 @@
-using Ergosfare.Context;
+using Ergosfare.Core.Abstractions;
+using Ergosfare.Core.Abstractions.Exceptions;
 using Ergosfare.Core.Internal.Contexts;
 using Ergosfare.Test.Fixtures;
 
@@ -40,7 +41,7 @@ public class ExecutionContextTests
     }
     
     /// <summary>
-    /// Verifies that <see cref="NoExecutionContextException"/> has the expected default message.
+    /// Verifies that <see cref="Context.NoExecutionContextException"/> has the expected default message.
     /// </summary>
     [Fact]
     [Trait("Category", "Unit")]

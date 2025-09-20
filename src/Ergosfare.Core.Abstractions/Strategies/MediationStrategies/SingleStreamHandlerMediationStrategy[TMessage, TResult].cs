@@ -4,21 +4,23 @@ using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using Ergosfare.Core.Abstractions.Exceptions;
-using Ergosfare.Context;
 using Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 
 namespace Ergosfare.Core.Abstractions.Strategies;
 
 
+/// <summary>
+/// Implements a mediation strategy for a single asynchronous streaming handler.
+/// Ensures that only one handler is executed for the message, invokes pre- and post-interceptors,
+/// handles exceptions, and applies final interceptors. Supports chunked streaming results with optional result adaptation.
+/// </summary>
+/// <typeparam name="TMessage">The type of the message being handled.</typeparam>
+/// <typeparam name="TResult">The type of the elements returned by the asynchronous stream.</typeparam>
 public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>( 
     IResultAdapterService? resultAdapterService,
     CancellationToken cancellationToken) : IMessageMediationStrategy<TMessage, IAsyncEnumerable<TResult>>
     where TMessage : notnull
 {
-    
-    private readonly CancellationToken _cancellationToken = cancellationToken;
-    
-
         
     // an unknown exception occurred that Ergosfare doesn't recognize through pipeline
     Exception? _unknownException;
@@ -29,6 +31,18 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
     // async enumerable still consumable, ie all _consumed, exception happened
     bool _consume = true;
     
+    
+    /// <summary>
+    /// Mediates the message by invoking the streaming handler along with pre-, post-, exception-, and final interceptors.
+    /// Supports chunked streaming results with early abortion or exception handling.
+    /// </summary>
+    /// <param name="message">The message to be handled.</param>
+    /// <param name="messageDependencies">The dependencies of the message, including the registered handlers and interceptors.</param>
+    /// <param name="executionContext">The current execution context.</param>
+    /// <returns>
+    /// An <see cref="IAsyncEnumerable{TResult}"/> representing the asynchronous stream of results produced by the handler.
+    /// </returns>
+    /// <exception cref="MultipleHandlerFoundException">Thrown if more than one handler is registered for the message.</exception>
     public async IAsyncEnumerable<TResult> Mediate(TMessage message, IMessageDependencies messageDependencies,
         IExecutionContext executionContext)
     {
@@ -73,12 +87,9 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
      
 
         enumerable ??= Empty<TResult>();
-        await using var enumerator = enumerable.GetAsyncEnumerator(_cancellationToken);
-        
-        
+        await using var enumerator = enumerable.GetAsyncEnumerator(cancellationToken);
         while (_consume)
         {
-
             TResult? item = default;
             try
             {
@@ -96,19 +107,13 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
                 _consume = false;
                 _unknownException = exception;
             }
-
-
             if (item is not null && _consume && _unknownException is null && !_executionAborted)
                 yield return item;
-
             if (!_consume || _unknownException is not null)
                 break; // exit loop to run post-interceptors
-
             if (_executionAborted)
                 yield break; // stop pipeline early
         }
-
-
         try
         {
             if (_unknownException is null)
@@ -124,9 +129,6 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         { 
             _unknownException = exception;
         }
-
-
-
         try
         {
             if (_unknownException is not null)
@@ -138,14 +140,12 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
                     enumerator,
                     ExceptionDispatchInfo.Capture(_unknownException),
                     executionContext).ConfigureAwait(false);
-
             }
         }
         catch (Exception e) when (e is not ExecutionAbortedException)
         {
             throw;
         }
-
         finally
         {
             var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
@@ -154,7 +154,15 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
     }
     
     
-
+    /// <summary>
+    /// Returns an empty asynchronous sequence of type <typeparamref name="T"/>.
+    /// </summary>
+    /// <typeparam name="T">The type of elements in the sequence.</typeparam>
+    /// <returns>An <see cref="IAsyncEnumerable{T}"/> that contains no elements.</returns>
+    /// <remarks>
+    /// This method is used internally to provide an empty async enumerable when no data is available,
+    /// avoiding null checks for asynchronous iteration.
+    /// </remarks>
     #pragma warning disable CS1998 
     private static async IAsyncEnumerable<T> Empty<T>()
     #pragma warning restore 

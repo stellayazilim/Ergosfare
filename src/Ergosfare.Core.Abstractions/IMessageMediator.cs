@@ -1,6 +1,4 @@
-﻿
-
-namespace Ergosfare.Core.Abstractions;
+﻿namespace Ergosfare.Core.Abstractions;
 
 
 /// <summary>
