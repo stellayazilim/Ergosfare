@@ -1,3 +1,20 @@
+## v0.1.2e
+
+### **Added ambient data methods to `IExecutionContext`**
+
+* `Set(string key, object item)` – Sets ambient data to share across the pipeline.
+* `T Get<T>(string key)` – Retrieves ambient data by key.
+* `bool Has(string key)` – Checks if a specific ambient data item exists.
+* `bool TryGet<T>(string key, out T item)` – Attempts to retrieve ambient data; returns `true` if the item exists.
+
+> **Note:** These methods are now part of the `IExecutionContext` API, allowing handlers and interceptors to store and access pipeline-level data.
+
+
+## v0.1.1e
+
+### **Added Ergosfare.Test.Fixtures**
+Includes various useful tools, helpers and stubs for test authors, mainly for Ergosfare internals and Plugin developers
+
 
 ## v0.1.0e – First minor release –  2025-18-09
 
