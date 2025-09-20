@@ -1,6 +1,6 @@
 ## v0.1.3e '2025-9-20'
 ### Breaking Changes
-- `IExecutionContext` and `AmbientExecutionContext` are now under `Ergosfare.Core.Abstractions.Context` namespace.  
+- `IExecutionContext` and `AmbientExecutionContext` are now under `Ergosfare.Core.Abstractions` namespace.  
   Update any using statements and references in dependent projects.
 ### Changed
 - Dropped `Ergosfare.Context` package.
