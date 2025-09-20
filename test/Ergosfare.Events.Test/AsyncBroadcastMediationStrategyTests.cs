@@ -13,9 +13,17 @@ using Xunit.Abstractions;
 
 namespace Ergosfare.Events.Test;
 
+/// <summary>
+/// Contains unit tests for <see cref="EventMediator"/> using <c>AsyncBroadcastMediationStrategy</c>,
+/// validating handler execution and exception handling behavior.
+/// </summary>
 public class AsyncBroadcastMediationStrategyTests
 (ITestOutputHelper  testOutputHelper)
 {
+    /// <summary>
+    /// Tests that <see cref="EventMediator.PublishAsync"/> throws an exception
+    /// when <c>ThrowIfNoHandlerFound</c> is set to true and no handler is found.
+    /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
@@ -24,19 +32,15 @@ public class AsyncBroadcastMediationStrategyTests
         var services = new ServiceCollection().BuildServiceProvider();
         var messageRegistry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         messageRegistry.Register(typeof(StubNonGenericEvent));
-
         var messageMediator = new MessageMediator(
-            
                 messageRegistry,
                 new SignalHub(),
                 new MessageDependenciesFactory(services));
-        
         var mediator = new EventMediator(
             new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(messageRegistry),
             new ResultAdapterService(),
             messageMediator
             );
-
         Exception? exception = null;
         try
         {
@@ -54,7 +58,11 @@ public class AsyncBroadcastMediationStrategyTests
         Assert.NotNull(exception);
          
     }
-
+    
+    /// <summary>
+    /// Tests that <see cref="EventMediator.PublishAsync"/> does not throw an exception
+    /// when <c>ThrowIfNoHandlerFound</c> is false and no handler is found.
+    /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
@@ -63,18 +71,15 @@ public class AsyncBroadcastMediationStrategyTests
         var services = new ServiceCollection().BuildServiceProvider();
         var messageRegistry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         messageRegistry.Register(typeof(StubNonGenericEvent));
-
         var messageMediator = new MessageMediator(
             messageRegistry,
             new SignalHub(),
             new MessageDependenciesFactory(services));
-        
         var mediator = new EventMediator(
             new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(messageRegistry),
             new ResultAdapterService(),
             messageMediator
         );
-
         Exception? exception = null;
         try
         {
@@ -82,7 +87,6 @@ public class AsyncBroadcastMediationStrategyTests
             {
                 ThrowIfNoHandlerFound = false
             });
-
         }
         catch (Exception ex)
         {
@@ -92,6 +96,9 @@ public class AsyncBroadcastMediationStrategyTests
          
     }
 
+    /// <summary>
+    /// Tests that <see cref="EventMediator.PublishAsync"/> correctly runs registered handlers.
+    /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
@@ -103,14 +110,15 @@ public class AsyncBroadcastMediationStrategyTests
                 builder.AddEventModule(x => { x.RegisterFromAssembly(Assembly.GetExecutingAssembly()); });
             })
             .BuildServiceProvider();
-
         var mediator = services.GetRequiredService<IPublisher>();
         var handler = services.GetRequiredService<StubNonGenericEventHandler1>();
         var result =  mediator.PublishAsync(new StubNonGenericEvent());
-
         Assert.NotNull(result);
     }
 
+    /// <summary>
+    /// Tests that exceptions are correctly intercepted when a handler throws during <see cref="EventMediator.PublishAsync"/>.
+    /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
@@ -125,10 +133,7 @@ public class AsyncBroadcastMediationStrategyTests
                 });
             })
             .BuildServiceProvider();
-
         var mediator = services.GetRequiredService<IPublisher>();
-
-   
         await mediator.PublishAsync(new StubNonGenericEventThrows());
         Assert.True(StubNonGenericEventHandlerThrows.IsRuned);
         Assert.True(StubNonGenericEventExceptionInterceptor.IsRuned);

@@ -1,14 +1,22 @@
-﻿
-
-using System.Reflection;
+﻿using System.Reflection;
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Strategies;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test;
 
+/// <summary>
+/// Contains unit tests to verify that Ergosfare dependency injection
+/// and message mediation are correctly configured.
+/// </summary>
 public class DependencyInjectionTests
 {
+    
+    /// <summary>
+    /// Tests that the Ergosfare DI container correctly registers core modules,
+    /// including message handlers, and that the <see cref="IMessageMediator"/>
+    /// can mediate a <see cref="Message"/> without returning null.
+    /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
@@ -25,11 +33,7 @@ public class DependencyInjectionTests
                 });
             })
             .BuildServiceProvider();
-
         var mediator = serviceProvider.GetRequiredService<IMessageMediator>();
-
-
-        
         var options = new MediateOptions<Message, Task>
         {
             MessageResolveStrategy = serviceProvider.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
@@ -37,10 +41,7 @@ public class DependencyInjectionTests
             CancellationToken = default,
             Groups = []
         };
-        
         var result = mediator.Mediate(new  Message(), options);
-        
         Assert.NotNull(result);
-        
     }
 }

@@ -1,4 +1,4 @@
-using Ergosfare.Context;
+using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Handlers;
 // ReSharper disable ClassNeverInstantiated.Global
 

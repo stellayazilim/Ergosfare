@@ -1,4 +1,8 @@
-﻿namespace Ergosfare.Context;
+﻿using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Ergosfare.Core.Abstractions.Exceptions;
+namespace Ergosfare.Core.Abstractions;
 
 public static class AmbientExecutionContext
 {
@@ -75,7 +79,7 @@ public static class AmbientExecutionContext
     ///     Represents a scope for an execution context that automatically restores the previous context when disposed.
     /// </summary>
     /// <remarks>
-    ///     This class implements both <see cref="IDisposable" /> and <see cref="IAsyncDisposable" /> to support
+    ///     This class implements both <see cref="IAsyncDisposable" /> and <see cref="IDisposable" /> to support
     ///     both synchronous and asynchronous usage patterns. When the scope is disposed, the previous execution
     ///     context (if any) is restored.
     /// </remarks>

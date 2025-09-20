@@ -1,6 +1,5 @@
 using Ergosfare.Contracts.Attributes;
 using Ergosfare.Core.Abstractions;
-using Ergosfare.Core.Abstractions.EventHub;
 using Ergosfare.Core.Abstractions.Registry;
 using Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Ergosfare.Core.Abstractions.SignalHub;
@@ -171,6 +170,4 @@ public class MessageDependencyFixture : IFixture<MessageDependencyFixture>
         SignalHubAccessor.ResetInstance();
         _disposed = true;
     }
-
-
 }

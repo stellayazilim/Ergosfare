@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using Ergosfare.Command.Test.__stubs__;
 using Ergosfare.Commands.Abstractions;
 using Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Ergosfare.Context;
@@ -9,17 +10,35 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Ergosfare.Command.Test;
 
+
+/// <summary>
+/// Contains unit tests for command module registration in Ergosfare,
+/// verifying that commands are registered correctly and non-command handlers are rejected.
+/// </summary>
 public class CommandModuleTests
 {
-    
+    /// <summary>
+    /// A stub handler that is not a command handler.
+    /// Used to verify that non-command handlers cannot be registered in the command module.
+    /// </summary>
     private class NonCommandHandler: IHandler<IMessage, Task>
     {
+        /// <summary>
+        /// Handles a message asynchronously.
+        /// </summary>
+        /// <param name="message">The message to handle.</param>
+        /// <param name="context">The execution context.</param>
+        /// <returns>A completed <see cref="Task"/>.</returns>
         public Task Handle(IMessage message, IExecutionContext context)
         {
             return Task.CompletedTask;
         }
     }
     
+    /// <summary>
+    /// Tests that a command module can register commands, including from assemblies,
+    /// and that the command mediator can send commands and receive results.
+    /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
@@ -32,13 +51,9 @@ public class CommandModuleTests
                     .RegisterFromAssembly(Assembly.GetExecutingAssembly()
                     )
             )).BuildServiceProvider();
-
-
         var mediator = serviceCollection.GetRequiredService<ICommandMediator>();
-
         var result = mediator.SendAsync(new TestCommand());
         var stringResult = mediator.SendAsync<string>(new TestCommandStringResult());
-        
         
         Assert.NotNull(result);
         Assert.NotNull(stringResult);
@@ -46,21 +61,21 @@ public class CommandModuleTests
         
     }
 
+    /// <summary>
+    /// Tests that attempting to register a non-command handler in a command module
+    /// throws a <see cref="NotSupportedException"/>.
+    /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
     public void  ShouldNotRegisterNonCommandsToCommandModule()
     {
         var serviceCollection = new ServiceCollection();
-
         Assert.Throws<NotSupportedException>(() =>
         {
-
             serviceCollection.AddErgosfare(x => 
                 x.AddCommandModule(c =>
                 c.Register(typeof(NonCommandHandler)))).BuildServiceProvider();
         });
-
-
     }
 }

@@ -1,4 +1,4 @@
-using Ergosfare.Context;
+using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Internal.Contexts;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -37,7 +37,7 @@ namespace Ergosfare.Test.Fixtures;
 /// </para>
 /// <para>
 /// Use <see cref="CreateContext"/> when you need a completely isolated <see cref="IExecutionContext"/>
-/// that is independent from the fixture’s default context and has no pre-existing state.
+/// that is independent of the fixture’s default context and has no pre-existing state.
 /// </para>
 /// <para>
 /// Access <see cref="New"/> when you need a fresh fixture instance for per-test isolation,

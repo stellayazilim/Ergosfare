@@ -1,4 +1,5 @@
-using Ergosfare.Context;
+using Ergosfare.Core.Abstractions;
+using Ergosfare.Core.Abstractions.Exceptions;
 using Ergosfare.Test.Fixtures;
 // ReSharper disable ConvertToPrimaryConstructor
 

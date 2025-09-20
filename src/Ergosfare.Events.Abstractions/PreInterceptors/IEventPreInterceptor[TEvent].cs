@@ -1,4 +1,3 @@
-using Ergosfare.Context;
 using Ergosfare.Core.Abstractions.Handlers;
 
 namespace Ergosfare.Events.Abstractions;

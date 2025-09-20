@@ -2,9 +2,17 @@ using Ergosfare.Events.Abstractions;
 
 namespace Ergosfare.Events.Test;
 
+/// <summary>
+/// Contains unit tests for <see cref="EventMediationSettings"/>, 
+/// validating that handler filters and settings are properly set and retrieved.
+/// </summary>
 public class EventMediationSettingsTests
 {
-
+    
+    /// <summary>
+    /// Tests that the <see cref="EventMediationSettings.Filters.HandlerPredicate"/> 
+    /// and other properties can be correctly set and retrieved.
+    /// </summary>
     [Fact]
     [Trait("TestCategory", "unit")]
     public void ShouldHandlerPredicateSet()

@@ -2,8 +2,16 @@ using Ergosfare.Queries.Abstractions;
 
 namespace Ergosfare.Queries.Test;
 
+/// <summary>
+/// Contains unit tests for <see cref="QueryMediationSettings"/>,
+/// verifying that items and filter groups are correctly configured.
+/// </summary>
 public class QueryMediationSettingsTests
 {
+    /// <summary>
+    /// An instance of <see cref="QueryMediationSettings"/> used for testing.
+    /// Initialized with sample items and filter groups.
+    /// </summary>
     private readonly QueryMediationSettings _queryMediationSettings
         = new QueryMediationSettings()
         {
@@ -14,6 +22,10 @@ public class QueryMediationSettingsTests
             Filters = { Groups = ["Tag1", "Tag2"]}
         };
 
+    /// <summary>
+    /// Tests that <see cref="QueryMediationSettings"/> is initialized correctly
+    /// with the expected items and filter groups.
+    /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
