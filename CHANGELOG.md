@@ -1,5 +1,22 @@
+## v0.1.2e '2025-9-20'
 
-## v0.1.0e – First minor release –  2025-18-09
+### **Added ambient data methods to `IExecutionContext`**
+
+* `Set(string key, object item)` – Sets ambient data to share across the pipeline.
+* `T Get<T>(string key)` – Retrieves ambient data by key.
+* `bool Has(string key)` – Checks if a specific ambient data item exists.
+* `bool TryGet<T>(string key, out T item)` – Attempts to retrieve ambient data; returns `true` if the item exists.
+
+> **Note:** These methods are now part of the `IExecutionContext` API, allowing handlers and interceptors to store and access pipeline-level data.
+
+
+## v0.1.1e  '2025-9-18'
+
+### **Added Ergosfare.Test.Fixtures**
+Includes various useful tools, helpers and stubs for test authors, mainly for Ergosfare internals and Plugin developers
+
+
+## v0.1.0e – First minor release –  '2025-09-18'
 
 ### Final Interceptors
 
@@ -108,13 +125,13 @@
 ___
 
 
-## v0.0.16e – IHasProxyEvents 2025-11-09
+## v0.0.16e – IHasProxyEvents '2025-09-11'
 ### **Added**
 - IHasProxyEvents interface, contains all known proxy events
 - EventHub now implements IHasProxyEvents
 - Now known pipeline events subscrible with += and unsubscrible with -= syntax from EventHub
 
-## v0.0.15e – Pipeline Event System Refactor & Coverage 2025-03-09
+## v0.0.15e – Pipeline Event System Refactor & Coverage '2025-09-03'
 
 ### **Added**
 
@@ -202,9 +219,9 @@ Subscribe to predefined events using += and unsubscribe using -= syntax for clea
 
 * Users can create their own events implementing HubEvent for custom plugin scenarios.
 ___
-## v0.0.13e - Republish of v0.0.12e - 2025-09-03
+## v0.0.13e - Republish of v0.0.12e - '2025-09-03'
 - no changes
-## v0.0.12e - EventHub - 2025-09-03
+## v0.0.12e - EventHub - '2025-09-03'
 
 ## **New Features**
 
@@ -233,7 +250,7 @@ ___
 ---
 
 
-## v0.0.11e - Refactor - 2025-09-01
+## v0.0.11e - Refactor - '2025-09-01'
 
 ### Changed
 
@@ -254,7 +271,7 @@ ___
 
 
 
-## v0.0.10e - 2025-09-01
+## v0.0.10e - '2025-09-01'
 
 ### Changed
 - **Handlers & Interceptors**: Removed `CancellationToken` parameters from all contracts.  
@@ -271,7 +288,7 @@ ___
 
 
 
-## v0.0.9e - 2025-8-31 -  Pipeline flow fixes
+## v0.0.9e - '2025-8-31' -  Pipeline flow fixes
 
 
 ### Changed
