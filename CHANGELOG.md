@@ -1,11 +1,16 @@
 ## v0.1.3e '2025-9-20'
-
+### Breaking Changes
+- `IExecutionContext` and `AmbientExecutionContext` are now under `Ergosfare.Core.Abstractions.Context` namespace.  
+  Update any using statements and references in dependent projects.
 ### Changed
 - Dropped `Ergosfare.Context` package.
+- `Stella.Ergosfare.Context` package is no longer distributed.
 - Moved `IExecutionContext` and `AmbientExecutionContext` to `Core.Abstractions.Context`.
-- Moved all execution context exceptions to `Ergosfare.Core.Abstractions/Exceptions`.
-- Updated namespaces throughout the codebase due to context package removal.
-- Added XML documentation for moved types and related classes.
+- All execution context exceptions moved to `Ergosfare.Core.Abstractions/Exceptions`.
+- Updated namespaces across the codebase to reflect context package removal.
+- Added XML documentation for context-related types and handlers.
+- CI workflows updated to skip building and distributing `Ergosfare.Context` package.
+- Internal chore to support pipeline snapshot functionality.
 
 ### Notes
 - This refactor is a chore to enable pipeline snapshot support.
