@@ -7,7 +7,7 @@ namespace Ergosfare.Core.Internal.Contexts;
 /// <summary>
 /// <inheritdoc cref="IExecutionContext"/>
 /// </summary>
-internal sealed class ErgosfareExecutionContext( IDictionary<object, object?> items, CancellationToken cancellationToken)
+internal sealed class ErgosfareExecutionContext(IPipelineCheckpoint? checkpoint, object message, IDictionary<object, object?>? items, CancellationToken cancellationToken)
     : IExecutionContext
 {
 
@@ -22,16 +22,70 @@ internal sealed class ErgosfareExecutionContext( IDictionary<object, object?> it
     /// Gets a dictionary of arbitrary key-value pairs stored in the execution context.
     /// This can be used to share data between different handlers, interceptors, or other pipeline components.
     /// </summary>
-    public IDictionary<object, object?> Items { get; } = items;
-    
+    public IDictionary<object, object?> Items { get; } = items ?? new Dictionary<object, object?>();
+
+    public Type? CurrentHandlerType { get; set; } 
     
     /// <summary>
     /// Gets or sets the result produced by the message or query being processed in this execution context.
     /// For events, this may be <c>null</c>, while for commands or queries it may hold the returned value.
     /// </summary>
-    public object? MessageResult { get; set; }
+    public object? Result { get; set; }
 
-    
+    /// <summary>
+    /// The message being processed in the current execution context.
+    /// </summary>
+    public object Message { get; set;  } = message;
+
+    /// <summary>
+    /// The current execution status of the pipeline.
+    /// Defaults to <see cref="PipelineStatus.Begin"/>.
+    /// </summary>
+    public PipelineStatus Status { get; set; } = PipelineStatus.Begin;
+
+    /// <summary>
+    /// The top-level checkpoint of the pipeline, if any.
+    /// </summary>
+    public IPipelineCheckpoint? Checkpoint { get; init; } = checkpoint;
+
+    /// <summary>
+    /// Attempts to retry the current step or checkpoint.
+    /// Throws <see cref="NotImplementedException"/> until implemented.
+    /// </summary>
+    public void Retry()
+    {
+        throw new NotImplementedException();
+    }
+
+    /// <summary>
+    /// Indicates whether the current step or checkpoint can be retried.
+    /// </summary>
+    public bool CanRetry => Checkpoint is not null && Status == PipelineStatus.Failed;
+
+    /// <summary>
+    /// Indicates whether the pipeline can continue execution from the current paused state.
+    /// </summary>
+    public bool CanContinue => Checkpoint is not null && Status == PipelineStatus.Paused;
+
+    /// <summary>
+    /// Continues execution of the pipeline from the current paused state.
+    /// Throws <see cref="NotImplementedException"/> until implemented.
+    /// </summary>
+    public void Continue()
+    {
+        throw new NotImplementedException();
+    }
+
+    /// <summary>
+    /// Pauses execution of the pipeline at the current point.
+    /// Throws <see cref="NotImplementedException"/> until implemented.
+    /// </summary>
+    public void Pause()
+    {
+        throw new NotImplementedException();
+    }
+
+
     /// <summary>
     /// Stores an item in the execution context under the specified key.
     /// If an item with the same key already exists, it will be overwritten.
@@ -100,7 +154,7 @@ internal sealed class ErgosfareExecutionContext( IDictionary<object, object?> it
     /// <param name="messageResult"></param>
     public void Abort(object? messageResult = null)
     {
-        MessageResult = messageResult;
+        Result = messageResult;
         throw new ExecutionAbortedException();
         
     }

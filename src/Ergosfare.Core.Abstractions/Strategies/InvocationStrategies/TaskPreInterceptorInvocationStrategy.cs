@@ -40,8 +40,23 @@ internal sealed class TaskPreInterceptorInvocationStrategy(
        
         foreach (var interceptor in interceptors)
         {
+         
             var handler = interceptor.Handler.Value;
+            
+            
+            var checkpoint = new PipelineCheckpoint(
+                handler.GetType().Name,
+                message,
+                null,
+                handler.GetType(),
+                executionContext.Checkpoint,
+                []
+            );
+
+            executionContext.Checkpoint?.Children.Add(checkpoint);
+            
             BeginPreInterceptorInvocationSignal.Invoke(message, null, handler.GetType());
+            
             message = await (Task<object>)handler.Handle(message,  executionContext);
             FinishPreInterceptorInvocationSignal.Invoke(message, null);
         }

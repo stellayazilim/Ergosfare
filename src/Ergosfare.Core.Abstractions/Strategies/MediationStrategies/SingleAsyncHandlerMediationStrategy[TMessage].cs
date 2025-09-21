@@ -42,8 +42,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
     /// </remarks>
     public async Task Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context)
     {
-        
-        
+
         if (messageDependencies.Handlers.Count > 1)
         {
             throw new MultipleHandlerFoundException(typeof(TMessage), messageDependencies.Handlers.Count);
@@ -55,8 +54,18 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
         {
             var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
             message = (TMessage) await preInvoker.Invoke(message, context);
-            result = (Task)messageDependencies.Handlers.Single().Handler.Value.Handle(message, context);
+
+            var handler = messageDependencies.Handlers.Single().Handler.Value;
+          
+            // main handler checkpoint
+            var checkpoint = new PipelineCheckpoint(handler.GetType().Name, message, null, handler.GetType(), context.Checkpoint, []);
+            context.Checkpoint?.Children.Add(checkpoint);
+            
+            result =  (Task)handler.Handle(message, context);
             await result;
+
+            context.Message = message;
+            context.Result = result;
             
             var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
             var invokedPostResult =  (Task?) await postInvoker.Invoke(message, result, context);

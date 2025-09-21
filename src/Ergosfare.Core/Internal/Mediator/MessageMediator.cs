@@ -65,10 +65,24 @@ internal sealed class MessageMediator(
         
     
         ArgumentNullException.ThrowIfNull(options);
+
+        var checkpoint =  new PipelineCheckpoint(
+            PipelineCheckpoint.Root,
+            message,
+            null,
+            typeof(TMessage),
+            null,
+            []);
+        
+
         // Create a new execution context for the current scope
-        
-        
-        var executionContext = new ErgosfareExecutionContext(options.Items, options.CancellationToken);
+        var executionContext = new ErgosfareExecutionContext(checkpoint, message, options.Items, options.CancellationToken)
+        {
+            Result = null,
+            Message = message,
+            Status = PipelineStatus.Begin,
+            CurrentHandlerType = typeof(TMessage)
+        };
         
         
         // Use a scope to manage the execution context

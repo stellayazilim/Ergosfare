@@ -72,13 +72,13 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
         }
         catch (ExecutionAbortedException) 
         {
-            if (context.MessageResult is null)
+            if (context.Result is null)
             {
                 throw new InvalidOperationException(
                     $"A Message result of type '{typeof(TResult).Name}' is required when the execution is aborted as this message has a specific result.");
             }
 
-            return await Task.FromResult((TResult)context.MessageResult);
+            return await Task.FromResult((TResult)context.Result);
 
         }
         catch (Exception e) when (e is not ExecutionAbortedException)

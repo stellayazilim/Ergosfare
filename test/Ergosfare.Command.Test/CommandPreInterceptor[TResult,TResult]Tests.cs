@@ -50,7 +50,7 @@ public class CommandPreInterceptorTResultTResultTests
         IAsyncPreInterceptor<StubNonGenericCommand> interceptor = new TestCommandTResultTResultPreInterceptor();
         
         // act
-        var result = await interceptor.HandleAsync(new StubNonGenericCommand(), new ErgosfareExecutionContext(null, default));
+        var result = await interceptor.HandleAsync(new StubNonGenericCommand(), new ErgosfareExecutionContext(null,null,null, default));
         
         // asssert
         Assert.IsType<StubNonGenericCommand>(result);
