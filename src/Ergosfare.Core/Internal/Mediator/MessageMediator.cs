@@ -65,14 +65,10 @@ internal sealed class MessageMediator(
         
     
         ArgumentNullException.ThrowIfNull(options);
-        // Create a new execution context for the current scope
         
-        
-        var executionContext = new ErgosfareExecutionContext(options.Items, options.CancellationToken);
-        
-        
+
         // Use a scope to manage the execution context
-        using var _ = AmbientExecutionContext.CreateScope(executionContext);
+        using var _ = AmbientExecutionContext.CreateScope(new ErgosfareExecutionContext([], message, options.Items, options.CancellationToken));
         // Get the actual type of the message
         var messageType = message.GetType();
         
@@ -100,6 +96,26 @@ internal sealed class MessageMediator(
         var messageDependencies = _messageDependenciesFactory.Create(messageType, descriptor, options.Groups);
 
         // Mediate the message using the specified strategy
-        return  options.MessageMediationStrategy.Mediate(message, messageDependencies, AmbientExecutionContext.Current);
+        // natural pipeline execution with fresh context
+        try
+        {
+            
+            return options.MessageMediationStrategy.Mediate(message, messageDependencies,
+                AmbientExecutionContext.Current);
+        }
+        catch (ExecutionRetryRequestedException exception) 
+        {   
+            // The exception indicates the user requested a retry via Retry()
+            // Note: the AmbientExecutionContext already contains any checkpoints/snapshots from the previous attempt
+
+            // Check if retry is allowed:
+            // - options.Retry is null → no retry limit specified → do not retry
+            // - exception.Counter exceeds allowed retries → stop retrying
+            if (options.Retry is null || options.Retry > exception.Counter) throw;
+            
+            // ctx still valid
+            var ctx = AmbientExecutionContext.Current;
+            return options.MessageMediationStrategy.Mediate((TMessage)ctx.Message, messageDependencies, ctx);
+        }
     }
 }

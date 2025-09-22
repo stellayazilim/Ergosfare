@@ -1,5 +1,7 @@
 using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Handlers;
+using Ergosfare.Core.Internal.Contexts;
+
 // ReSharper disable ClassNeverInstantiated.Global
 
 namespace Ergosfare.Test.Fixtures.Stubs.Basic;
@@ -38,6 +40,37 @@ public class StubVoidHandlerThrows : IHandler<StubMessage, object>
         throw new Exception("Stub exception");
     }
 }
+
+
+public class StubVoidHandlerThrowsWithSnapshot(
+    ISnapshotService snapshotService) : 
+    IAsyncHandler<StubMessage>
+{
+    public static bool FirstCheckpointRun;
+    public static bool SecondCheckpointRun;
+
+    /// <summary>
+    /// Handles a <see cref="StubMessage"/> synchronously.
+    /// This implementation does nothing and returns <c>null</c>.
+    /// </summary>
+    /// <param name="message">The message to handle.</param>
+    /// <param name="context">The execution context.</param>
+    /// <returns>Always returns <c>null</c>, since no result is produced.</returns>
+    // root checkpoint here, entire method body
+    public async Task HandleAsync(StubMessage message, IExecutionContext context)
+    {
+        var result = await snapshotService.Snapshot("test", new Snapshot<bool>(async () => {
+            FirstCheckpointRun = true;
+            await Task.CompletedTask;
+            //throw new Exception("Stub exception");
+
+            return true;
+        }));
+        
+       
+    }
+}
+
 
 public class StubVoidIndirectHandler: IHandler<StubIndirectMessage, Task>
 {
@@ -94,6 +127,8 @@ public class StubPostInterceptor: IPostInterceptor<StubMessage, object>
 /// </summary>
 public class StubExceptionInterceptor: IExceptionInterceptor<StubMessage, object>
 {
+    public static object Result;
+    public static bool IsCalled;
     /// <summary>
     /// Handles an exception raised during message handling.
     /// </summary>
@@ -104,7 +139,9 @@ public class StubExceptionInterceptor: IExceptionInterceptor<StubMessage, object
     /// <returns>Always returns <c>null</c>.</returns>
     public object Handle(StubMessage message, object? messageResult, Exception exception, IExecutionContext context)
     {
-        return messageResult!;
+        IsCalled = true;
+        Result = messageResult;
+        return Task.FromResult(messageResult);
     }
 }
 

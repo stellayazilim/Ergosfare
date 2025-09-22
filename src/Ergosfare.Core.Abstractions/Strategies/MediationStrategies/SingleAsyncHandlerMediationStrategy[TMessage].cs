@@ -42,8 +42,11 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
     /// </remarks>
     public async Task Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context)
     {
-        
-        
+        if (messageDependencies is null)
+        {
+            throw new ArgumentNullException(nameof(messageDependencies));
+        }
+
         if (messageDependencies.Handlers.Count > 1)
         {
             throw new MultipleHandlerFoundException(typeof(TMessage), messageDependencies.Handlers.Count);
@@ -55,8 +58,37 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
         {
             var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
             message = (TMessage) await preInvoker.Invoke(message, context);
-            result = (Task)messageDependencies.Handlers.Single().Handler.Value.Handle(message, context);
-            await result;
+
+            var handler = messageDependencies.Handlers.Single().Handler.Value;
+
+            if (handler is null)
+            {
+                throw new InvalidOperationException(
+                    $"Handler for {typeof(TMessage).Name} is not of the expected type.");
+            }
+            
+            var checkpoint = context.Checkpoints.FirstOrDefault(x => x.HandlerType == handler.GetType());
+
+            
+            // main handler checkpoint, check if checkpoint exist for handler type
+            if (checkpoint is null)
+            {
+                checkpoint = new PipelineCheckpoint(handler.GetType().Name, message, null, handler.GetType(), null, []);
+                context.Checkpoints.Add(checkpoint);
+            }
+
+            if (!checkpoint.Success)
+            {
+                result =  (Task)handler.Handle(message, context);
+                await result;
+                // set checkpoint success since code reached here
+                ((PipelineCheckpoint)checkpoint).Success = true;
+                       
+                context.Message = message;
+                context.Result = result;
+            }
+            else result = (Task)checkpoint.Result!;
+     
             
             var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
             var invokedPostResult =  (Task?) await postInvoker.Invoke(message, result, context);
@@ -76,5 +108,6 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
             await finalInvoker.Invoke(message, result, exception, context);
         }
+        
     }
 }

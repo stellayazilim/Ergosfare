@@ -40,4 +40,8 @@ public interface IHasProxySignals
     
     /// <summary>Pipeline finish event.</summary>
     public ProxySignal<FinishPipelineSignal> FinishPipelineSignal { get; }
+    
+    
+    /// snapshot signals
+    public ProxySignal<PipelineRetrySignal>  PipelineRetrySignal { get; }
 }

@@ -1,3 +1,44 @@
+
+## v0.2.0e – '2025-9-22'
+
+### Features & Improvements
+
+#### Snapshot & Checkpointing
+* Introduced `PipelineCheckpoint` to track `Message`, `Result`, and `Success` for partial or full pipeline snapshotting.
+* Pre- and post-interceptors updated to support snapshot-aware execution.
+* Streaming and synchronous handlers can skip already completed checkpoints.
+* Provides scoped caching within handlers; allows optional manual persistence by consumers.
+#### Retry Mechanism
+
+* Added `ErgosfareExecutionContext.RetryCount` to track retry attempts.
+* `Retry()` publishes `PipelineRetrySignal` and throws `ExecutionRetryRequestedException`.
+* `MessageMediator` refactored to catch retry requests and re-mediate with preserved context.
+* MediateOptions support retry limits via `Retry` property.
+#### Streaming Mediation Improvements
+
+* `SingleStreamHandlerMediationStrategy` fixed to ensure **pre-interceptors execute before the main handler**.
+* Partial snapshotting after streaming completes successfully.
+
+#### Internal Changes
+
+* Added `ExecutionRetryRequestedException` class.
+* Added internal setters for `PipelineCheckpoint.Message` and `Result`.
+* All mediation strategies refactored for snapshot support.
+* Pre- and post-invokers refactored for snapshot compatibility.
+
+#### Fixes & Minor Adjustments
+
+* Streaming strategy bug fixed: pre-interceptors now run correctly before streaming handler execution.
+
+#### Notes
+
+* This will be the last **major/minor premature release** (`0.2.0e`).
+* Only **patch releases** will follow in this branch.
+* The next full release will be **stable v1.0.0**.
+* Consumers can leverage checkpoints for caching or manual persistence in fire-and-forget pipelines.
+
+
+
 ## v0.1.3e '2025-9-20'
 ### Breaking Changes
 - `IExecutionContext` and `AmbientExecutionContext` are now under `Ergosfare.Core.Abstractions` namespace.  

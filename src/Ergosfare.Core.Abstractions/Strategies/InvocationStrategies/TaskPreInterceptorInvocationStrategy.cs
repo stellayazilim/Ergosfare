@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Threading.Tasks;
 using Ergosfare.Core.Abstractions.Handlers;
 using Ergosfare.Core.Abstractions.Invokers;
@@ -25,25 +26,69 @@ internal sealed class TaskPreInterceptorInvocationStrategy(
 
 {
     /// <summary>
-    /// Invokes a collection of pre-interceptors in sequence.
+    /// Invokes a collection of pre-interceptors in sequence, respecting checkpoint state.
+    /// Only interceptors that have not yet successfully executed are invoked; previously 
+    /// completed interceptors will reuse their snapshotted message.
     /// </summary>
-    /// <param name="interceptors">The collection of pre-interceptors to execute.</param>
-    /// <param name="message">The message being processed, which may be transformed by interceptors.</param>
-    /// <param name="executionContext">The execution context for the current pipeline invocation.</param>
+    /// <param name="interceptors">
+    /// The collection of pre-interceptors to execute. Each interceptor may transform the message.
+    /// </param>
+    /// <param name="message">
+    /// The message being processed, which may be modified by the interceptors. The final 
+    /// returned message reflects all transformations applied by the executed interceptors.
+    /// </param>
+    /// <param name="context">
+    /// The current execution context containing checkpoints, message state, and other pipeline metadata.
+    /// </param>
     /// <returns>
-    /// A <see cref="Task{Object}"/> representing the asynchronous operation.
-    /// The task result contains the transformed message after all interceptors in the collection have executed.
+    /// A <see cref="Task{Object}"/> representing the asynchronous operation. The result contains 
+    /// the transformed message after executing all applicable interceptors, skipping any that have 
+    /// already succeeded according to their checkpoint.
     /// </returns>
     private async Task<object> InvokePostInterceptorCollection(
-        ILazyHandlerCollection<IPreInterceptor,IPreInterceptorDescriptor> interceptors,  object message, IExecutionContext executionContext)
+        ILazyHandlerCollection<IPreInterceptor,IPreInterceptorDescriptor> interceptors,  object message, IExecutionContext context)
     {
        
         foreach (var interceptor in interceptors)
         {
             var handler = interceptor.Handler.Value;
-            BeginPreInterceptorInvocationSignal.Invoke(message, null, handler.GetType());
-            message = await (Task<object>)handler.Handle(message,  executionContext);
-            FinishPreInterceptorInvocationSignal.Invoke(message, null);
+            
+            // Try to find an existing checkpoint for this interceptor
+            var checkpoint = context.Checkpoints?.FirstOrDefault(x => x.HandlerType == handler.GetType());
+
+
+            if (checkpoint is null)
+            {
+                checkpoint = new PipelineCheckpoint(
+                    handler.GetType().Name,   // checkpoint ID
+                    message,                  // input message
+                    null,                     // result placeholder
+                    handler.GetType(),        // handler type
+                    null,                     // parent checkpoint
+                    []                        // sub-checkpoints
+                );
+                context.Checkpoints?.Add(checkpoint);
+            }
+            if (!checkpoint.Success)
+            {
+                // Signal: beginning of pre-interceptor execution
+                BeginPreInterceptorInvocationSignal.Invoke(message, null, handler.GetType());
+
+                // Execute interceptor handler and await result
+                message = await (Task<object>)handler.Handle(message, context);
+
+                // Mark checkpoint as successful
+                ((PipelineCheckpoint)checkpoint).Success = true;
+                ((PipelineCheckpoint)checkpoint).Message = message;
+
+                // Update the context message to the latest result
+                context.Message = message;
+
+                // Signal: end of pre-interceptor execution
+                FinishPreInterceptorInvocationSignal.Invoke(message, null);
+            }
+            // Step already succeeded → reuse checkpointed message
+            else message = checkpoint.Message;
         }
         return message;
     }

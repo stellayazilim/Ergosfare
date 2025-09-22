@@ -44,31 +44,53 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
     /// </returns>
     /// <exception cref="MultipleHandlerFoundException">Thrown if more than one handler is registered for the message.</exception>
     public async IAsyncEnumerable<TResult> Mediate(TMessage message, IMessageDependencies messageDependencies,
-        IExecutionContext executionContext)
+        IExecutionContext context)
     {
         if (messageDependencies.Handlers.Count > 1)
         {
             throw new MultipleHandlerFoundException(typeof(TMessage), messageDependencies.Handlers.Count);
         }
         
-        AmbientExecutionContext.Current = executionContext; 
-        
-        // enumerator to consume
-        var enumerable = ((IAsyncEnumerable<TResult>?)messageDependencies
+        AmbientExecutionContext.Current = context;
+        var handler = messageDependencies
             .Handlers
             .Single()
             .Handler
-            .Value
-            .Handle(message, executionContext));
-
+            .Value;
         
-        // run pre interceptors
+        
+        if (handler is null)
+        {
+            throw new InvalidOperationException(
+                $"Handler for {typeof(TMessage).Name} is not of the expected type.");
+        }
+        
+        var checkpoint = context.Checkpoints.FirstOrDefault(x => x.HandlerType == handler.GetType());
+        
+        if (checkpoint is null)
+        {
+            checkpoint = new PipelineCheckpoint(handler.GetType().Name, message, null, handler.GetType(), null, []);
+            context.Checkpoints.Add(checkpoint);
+        }
+        
+        
+        // enumerator to consume
+        IAsyncEnumerable<TResult>? enumerable = null;
 
         try
         {
+            // run pre interceptors
             var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
-            message =  (TMessage)await preInvoker.Invoke(message, executionContext) ;
-            
+            message =  (TMessage)await preInvoker.Invoke(message, context) ;
+
+
+
+            if (!checkpoint.Success)
+            {
+                enumerable = (IAsyncEnumerable<TResult>?)handler.Handle(message, context);
+            }
+            else enumerable = (IAsyncEnumerable<TResult>?)checkpoint.Result;
+
         }
         catch (ExecutionAbortedException)
         {
@@ -110,7 +132,12 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
             if (item is not null && _consume && _unknownException is null && !_executionAborted)
                 yield return item;
             if (!_consume || _unknownException is not null)
+            {
+                (checkpoint as PipelineCheckpoint)!.Result = enumerable;
+                (checkpoint as PipelineCheckpoint)!.Success = true;
                 break; // exit loop to run post-interceptors
+            }
+
             if (_executionAborted)
                 yield break; // stop pipeline early
         }
@@ -120,7 +147,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
             {
                 var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
                 // we can't override result since its chunked
-                await postInvoker.Invoke(message, enumerator, executionContext).ConfigureAwait(false);
+                await postInvoker.Invoke(message, enumerator, context).ConfigureAwait(false);
             }
         }
         catch (ExecutionAbortedException)
@@ -139,7 +166,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
                     message,
                     enumerator,
                     ExceptionDispatchInfo.Capture(_unknownException),
-                    executionContext).ConfigureAwait(false);
+                    context).ConfigureAwait(false);
             }
         }
         catch (Exception e) when (e is not ExecutionAbortedException)
@@ -149,7 +176,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         finally
         {
             var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
-            await finalInvoker.Invoke(message, enumerator, _unknownException, executionContext);
+            await finalInvoker.Invoke(message, enumerator, _unknownException, context);
         }
     }
     

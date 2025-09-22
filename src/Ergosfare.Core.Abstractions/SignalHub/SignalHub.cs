@@ -44,6 +44,8 @@ public class SignalHub : ISignalHub, IHasProxySignals
         FinishExceptionInterceptingSignal = new ProxySignal<FinishExceptionInterceptingSignal>(this);
 
         FinishPipelineSignal = new ProxySignal<FinishPipelineSignal>(this);
+        
+        PipelineRetrySignal = new ProxySignal<PipelineRetrySignal>(this);
     }
 
     /// <summary>
@@ -125,4 +127,7 @@ public class SignalHub : ISignalHub, IHasProxySignals
     public ProxySignal<FinishExceptionInterceptingSignal> FinishExceptionInterceptingSignal { get; }
 
     public ProxySignal<FinishPipelineSignal> FinishPipelineSignal { get; }
+    
+    
+    public ProxySignal<PipelineRetrySignal> PipelineRetrySignal { get; }
 }

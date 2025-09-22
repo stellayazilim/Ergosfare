@@ -1,5 +1,7 @@
 ﻿using Ergosfare.Core.Abstractions;
+using Ergosfare.Core.Abstractions.Registry;
 using Ergosfare.Core.Abstractions.SignalHub;
+using Ergosfare.Core.Internal.Contexts;
 using Ergosfare.Core.Internal.Factories;
 using Ergosfare.Core.Internal.Registry;
 using Microsoft.Extensions.DependencyInjection;
@@ -51,6 +53,7 @@ public static class ServiceCollectionExtensions
         var resultAdapterService = new ResultAdapterService();
         services.TryAddSingleton<IResultAdapterService>(resultAdapterService);
         services.TryAddTransient<HandlerDescriptorBuilderFactory>();
+        services.TryAddScoped<ISnapshotService, SnapshotService>();
         // Get the singleton registry instance
         var messageRegistry = MessageRegistryAccessor.Instance;
 
