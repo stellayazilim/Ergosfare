@@ -10,13 +10,25 @@ namespace Ergosfare.Core.Internal.Contexts;
 /// <inheritdoc cref="IExecutionContext"/>
 /// </summary>
 internal sealed class ErgosfareExecutionContext(
-    List<IPipelineCheckpoint>? checkpoints, object message, IDictionary<object, object?>? items, CancellationToken cancellationToken)
+    List<IPipelineCheckpoint>? checkpoints, 
+    object message, 
+    IDictionary<object, object?>? items, CancellationToken cancellationToken)
     : IExecutionContext
 {
 
 
+    /// <summary>
+    /// Tracks the number of times <see cref="Retry"/> has been invoked
+    /// for this execution context. Incremented each time a retry is requested.
+    /// </summary>
+    private byte _retryCounter = 0;
     
     
+    /// <summary>
+    /// Gets the total number of retries that have been requested so far
+    /// for this execution context.
+    /// </summary>
+    public byte RetryCount => _retryCounter;
     
     /// <summary>
     /// Gets the <see cref="CancellationToken"/> associated with the current execution context.
@@ -68,6 +80,9 @@ internal sealed class ErgosfareExecutionContext(
 
         // emit the signal
         SignalHubAccessor.Instance.Publish(signal);
+
+        throw new ExecutionRetryRequestedException(_retryCounter++);
+
     }
 
     /// <summary>

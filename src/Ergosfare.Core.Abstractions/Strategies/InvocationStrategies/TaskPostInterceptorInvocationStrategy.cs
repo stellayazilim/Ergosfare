@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Threading.Tasks;
 using Ergosfare.Core.Abstractions.Handlers;
 using Ergosfare.Core.Abstractions.Invokers;
@@ -25,25 +26,72 @@ internal sealed class TaskPostInterceptorInvocationStrategy(
 {
 
     /// <summary>
-    /// Invokes a collection of post-interceptors in sequence.
+    /// Invokes a collection of post-interceptors in sequence, respecting checkpoint state.
+    /// Only interceptors that have not yet successfully executed are invoked; previously 
+    /// completed interceptors will reuse their checkpointed result.
     /// </summary>
-    /// <param name="interceptors">The collection of post-interceptors to execute.</param>
-    /// <param name="message">The message being processed, which is provided to each interceptor.</param>
-    /// <param name="result">The current result of the message handling, which may be transformed by interceptors.</param>
-    /// <param name="executionContext">The execution context for the current pipeline invocation.</param>
+    /// <param name="interceptors">
+    /// The collection of post-interceptors to execute. Each interceptor may transform the result.
+    /// </param>
+    /// <param name="message">
+    /// The message being processed, which may be used by each interceptor.
+    /// </param>
+    /// <param name="result">
+    /// The current result of message handling. The final returned result reflects all transformations
+    /// applied by the executed interceptors.
+    /// </param>
+    /// <param name="context">
+    /// The execution context containing checkpoints, message state, and other pipeline metadata.
+    /// </param>
     /// <returns>
-    /// A <see cref="Task{Object}"/> representing the asynchronous operation.
-    /// The task result contains the transformed result after all interceptors in the collection have executed.
+    /// A <see cref="Task{Object}"/> representing the asynchronous operation. The result contains 
+    /// the transformed result after executing all applicable post-interceptors, skipping any that 
+    /// have already succeeded according to their checkpoint.
     /// </returns>
     private async Task<object?> InvokePostInterceptorCollection(
-        ILazyHandlerCollection<IPostInterceptor,IPostInterceptorDescriptor> interceptors,  object message, object? result,  IExecutionContext executionContext)
+        ILazyHandlerCollection<IPostInterceptor,IPostInterceptorDescriptor> interceptors,  object message, object? result,  IExecutionContext context)
     {
         foreach (var interceptor in interceptors)
         {
             var handler = interceptor.Handler.Value;
-            BeginPostInterceptorInvocationSignal.Invoke(message, result, handler.GetType());
-            result = await (Task<object?>)handler.Handle(message, result, executionContext);
-            FinishPostInterceptorInvocationSignal.Invoke(message, result);
+            
+            // Try to find an existing checkpoint for this interceptor
+            var checkpoint = context.Checkpoints?.FirstOrDefault(x => x.HandlerType == handler.GetType());
+            
+            
+            if (checkpoint is null)
+            {
+                checkpoint = new PipelineCheckpoint(
+                    handler.GetType().Name,   // checkpoint ID
+                    message,                  // input message
+                    null,                     // result placeholder
+                    handler.GetType(),        // handler type
+                    null,                     // parent checkpoint
+                    []                        // sub-checkpoints
+                );
+                context.Checkpoints?.Add(checkpoint);
+            }
+
+
+            if (!checkpoint.Success)
+            {
+                // Signal: beginning of pre-interceptor execution
+                BeginPreInterceptorInvocationSignal.Invoke(message, null, handler.GetType());
+                
+                // Execute interceptor handler and await result
+                result = await (Task<object?>)handler.Handle(message, result, context);
+                
+                // Mark checkpoint as successful
+                ((PipelineCheckpoint)checkpoint).Success = true;
+                ((PipelineCheckpoint)checkpoint).Result = result;
+                // Update the context result to the latest result
+                context.Result = result;
+                
+                // Signal: end of pre-interceptor execution
+                FinishPreInterceptorInvocationSignal.Invoke(message, null);
+            }
+
+            else result = checkpoint.Result;
         }
         return result;
     }
@@ -54,16 +102,16 @@ internal sealed class TaskPostInterceptorInvocationStrategy(
     /// </summary>
     /// <param name="message">The message being processed.</param>
     /// <param name="result">The current result of the message handling, which may be transformed by post-interceptors.</param>
-    /// <param name="executionContext">The execution context for the current pipeline invocation.</param>
+    /// <param name="context">The execution context for the current pipeline invocation.</param>
     /// <returns>
     /// A <see cref="Task{Object}"/> representing the asynchronous operation.
     /// The task result contains the transformed result after all post-interceptors have executed.
     /// </returns>
-    public override async Task<object?> Invoke(object message, object? result, IExecutionContext executionContext)
+    public override async Task<object?> Invoke(object message, object? result, IExecutionContext context)
     {
         BeginPostInterceptingSignal.Invoke(message, result, PostInterceptorCount);
-        result = await InvokePostInterceptorCollection(MessageDependencies.PostInterceptors,message, result, executionContext);
-        result = await InvokePostInterceptorCollection(MessageDependencies.IndirectPostInterceptors, message, result, executionContext);
+        result = await InvokePostInterceptorCollection(MessageDependencies.PostInterceptors,message, result, context);
+        result = await InvokePostInterceptorCollection(MessageDependencies.IndirectPostInterceptors, message, result, context);
         FinishPostInterceptingSignal.Invoke(message, result);
         return result;
     }

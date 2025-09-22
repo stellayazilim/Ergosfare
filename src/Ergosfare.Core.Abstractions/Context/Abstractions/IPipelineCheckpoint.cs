@@ -10,6 +10,9 @@ namespace Ergosfare.Core.Abstractions;
 /// </summary>
 public interface IPipelineCheckpoint
 {
+    
+    bool Success { get; }
+    
     /// <summary>
     /// Unique identifier of this checkpoint.
     /// </summary>

@@ -14,11 +14,6 @@ public class PipelineCheckpoint : IPipelineCheckpoint
     public bool Success { get; set; }
     
     /// <summary>
-    /// Represents root checkpoint id
-    /// </summary>
-    public const string Root = "root";
-    
-    /// <summary>
     /// Unique identifier of this checkpoint.
     /// </summary>
     public string Id { get; }
@@ -26,12 +21,12 @@ public class PipelineCheckpoint : IPipelineCheckpoint
     /// <summary>
     /// The message being processed at this checkpoint.
     /// </summary>
-    public object Message { get; }
+    public object Message { get; internal set; }
 
     /// <summary>
     /// The result of processing at this checkpoint, if any.
     /// </summary>
-    public object? Result { get; }
+    public object? Result { get; internal set; }
 
     /// <summary>
     /// The type of the handler that executed this checkpoint.

@@ -11,6 +11,10 @@ namespace Ergosfare.Core.Abstractions;
 public sealed class MediateOptions<TMessage, TResult> 
     where TMessage : notnull
 {
+    
+    
+    public byte? Retry {  get; init; }
+    
     /// <summary>
     /// Gets or sets the groups to which the message belongs.
     /// </summary>
