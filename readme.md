@@ -6,7 +6,7 @@
 [![NuGet](https://img.shields.io/nuget/v/Stella.Ergosfare.svg)](https://www.nuget.org/packages/Stella.Ergosfare)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/stellayazilim/ergosfare/coverage_tests.yml?label=tests)
-[![Coverage](./.badges/main/coverage.svg)](./coverage/coverage.cobertura.xml)
+![Coverage](https://github.com/stellayazilim/Ergosfare/blob/badges/.badges/main/coverage.svg)
 
 ---
 
