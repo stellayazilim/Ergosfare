@@ -76,12 +76,10 @@ public interface IExecutionContext
     /// </summary>
     PipelineStatus Status { get; internal set; }
     
-    internal Type? CurrentHandlerType { get; }
-
     /// <summary>
     /// The current top-level checkpoint for this execution, if snapshots are enabled.
     /// </summary>
-    public IPipelineCheckpoint? Checkpoint { get; }
+    internal List<IPipelineCheckpoint> Checkpoints { get; }
 
     /// <summary>
     /// Attempts to retry the current step or checkpoint.

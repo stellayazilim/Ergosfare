@@ -49,16 +49,18 @@ internal sealed class TaskPreInterceptorInvocationStrategy(
                 message,
                 null,
                 handler.GetType(),
-                executionContext.Checkpoint,
+                null,
                 []
             );
 
-            executionContext.Checkpoint?.Children.Add(checkpoint);
+            executionContext.Checkpoints?.Add(checkpoint);
             
             BeginPreInterceptorInvocationSignal.Invoke(message, null, handler.GetType());
             
             message = await (Task<object>)handler.Handle(message,  executionContext);
             FinishPreInterceptorInvocationSignal.Invoke(message, null);
+            
+            checkpoint.Success = true;
         }
         return message;
     }

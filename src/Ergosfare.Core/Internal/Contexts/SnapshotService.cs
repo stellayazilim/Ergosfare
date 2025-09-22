@@ -42,9 +42,8 @@ public class SnapshotService: ISnapshotService
     /// </returns>
     public Task<TResult> Snapshot<TResult>(string name, ISnapshot<TResult> snapshot)
     {
-        var ctx = AmbientExecutionContext.Current;
-        var checkpoint = ctx.Checkpoint?
-            .Children
+        var ctx = (ErgosfareExecutionContext)AmbientExecutionContext.Current;
+        var checkpoint = ctx.Checkpoints
             .LastOrDefault();
         var existing = checkpoint?.Children.Find(x => x.Id == name);
         if (existing is not null) 
@@ -58,6 +57,7 @@ public class SnapshotService: ISnapshotService
             ctx.CurrentHandlerType!,
             checkpoint,
             []);
+        childCheckpoint.Success = true;
         checkpoint?.Children.Add(childCheckpoint);
         return Task.FromResult(snapshot.Result);
     }

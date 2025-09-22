@@ -62,8 +62,12 @@ public class StubVoidHandlerThrowsWithSnapshot(
         var result = await snapshotService.Snapshot("test", new Snapshot<bool>(async () => {
             FirstCheckpointRun = true;
             await Task.CompletedTask;
-            return FirstCheckpointRun;
+            //throw new Exception("Stub exception");
+
+            return true;
         }));
+        
+       
     }
 }
 
@@ -123,6 +127,8 @@ public class StubPostInterceptor: IPostInterceptor<StubMessage, object>
 /// </summary>
 public class StubExceptionInterceptor: IExceptionInterceptor<StubMessage, object>
 {
+    public static object Result;
+    public static bool IsCalled;
     /// <summary>
     /// Handles an exception raised during message handling.
     /// </summary>
@@ -133,7 +139,9 @@ public class StubExceptionInterceptor: IExceptionInterceptor<StubMessage, object
     /// <returns>Always returns <c>null</c>.</returns>
     public object Handle(StubMessage message, object? messageResult, Exception exception, IExecutionContext context)
     {
-        return messageResult!;
+        IsCalled = true;
+        Result = messageResult;
+        return Task.FromResult(messageResult);
     }
 }
 

@@ -11,6 +11,8 @@ namespace Ergosfare.Core.Abstractions;
 public class PipelineCheckpoint : IPipelineCheckpoint
 {
 
+    public bool Success { get; set; }
+    
     /// <summary>
     /// Represents root checkpoint id
     /// </summary>

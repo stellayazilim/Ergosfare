@@ -58,12 +58,15 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             var handler = messageDependencies.Handlers.Single().Handler.Value;
           
             // main handler checkpoint
-            var checkpoint = new PipelineCheckpoint(handler.GetType().Name, message, null, handler.GetType(), context.Checkpoint, []);
-            context.Checkpoint?.Children.Add(checkpoint);
+            var checkpoint = new PipelineCheckpoint(handler.GetType().Name, message, null, handler.GetType(), null, []);
+            context.Checkpoints.Add(checkpoint);
             
             result =  (Task)handler.Handle(message, context);
             await result;
-
+            
+            // set checkpoint success since code reached here
+            checkpoint.Success = true;
+            
             context.Message = message;
             context.Result = result;
             
@@ -84,6 +87,9 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
         {
             var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
             await finalInvoker.Invoke(message, result, exception, context);
+
+           
         }
+        
     }
 }

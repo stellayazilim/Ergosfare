@@ -4,10 +4,11 @@ using Ergosfare.Core.Abstractions.Strategies;
 using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Ergosfare.Test.Fixtures.Stubs.Basic;
 using Microsoft.Extensions.DependencyInjection;
+using Xunit.Abstractions;
 
 namespace Ergosfare.Core.Test.Snapshot;
 
-public class SnapshotHandlerTests
+public class SnapshotHandlerTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public async Task SnapshotHandlerShouldTakeSnapshot()
@@ -27,6 +28,7 @@ public class SnapshotHandlerTests
             MessageResolveStrategy = reslveStrategy,
             MessageMediationStrategy = new SingleAsyncHandlerMediationStrategy<StubMessage>(new ResultAdapterService())
         });
+        
 
         Assert.NotNull(new ());
     }

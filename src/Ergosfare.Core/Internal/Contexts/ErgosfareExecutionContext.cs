@@ -1,5 +1,7 @@
 ﻿using Ergosfare.Core.Abstractions;
 using Ergosfare.Core.Abstractions.Exceptions;
+using Ergosfare.Core.Abstractions.SignalHub;
+using Ergosfare.Core.Abstractions.SignalHub.Signals;
 
 namespace Ergosfare.Core.Internal.Contexts;
 
@@ -7,10 +9,15 @@ namespace Ergosfare.Core.Internal.Contexts;
 /// <summary>
 /// <inheritdoc cref="IExecutionContext"/>
 /// </summary>
-internal sealed class ErgosfareExecutionContext(IPipelineCheckpoint? checkpoint, object message, IDictionary<object, object?>? items, CancellationToken cancellationToken)
+internal sealed class ErgosfareExecutionContext(
+    List<IPipelineCheckpoint>? checkpoints, object message, IDictionary<object, object?>? items, CancellationToken cancellationToken)
     : IExecutionContext
 {
 
+
+    
+    
+    
     /// <summary>
     /// Gets the <see cref="CancellationToken"/> associated with the current execution context.
     /// This token can be used to observe cancellation requests and propagate them to handlers or interceptors.
@@ -44,28 +51,34 @@ internal sealed class ErgosfareExecutionContext(IPipelineCheckpoint? checkpoint,
     public PipelineStatus Status { get; set; } = PipelineStatus.Begin;
 
     /// <summary>
-    /// The top-level checkpoint of the pipeline, if any.
+    /// The collection of checkpoints of the pipeline, if any.
     /// </summary>
-    public IPipelineCheckpoint? Checkpoint { get; init; } = checkpoint;
+    public List<IPipelineCheckpoint> Checkpoints { get;  } = checkpoints;
 
     /// <summary>
-    /// Attempts to retry the current step or checkpoint.
-    /// Throws <see cref="NotImplementedException"/> until implemented.
+    /// Publishes a <see cref="PipelineRetrySignal"/> containing the current 
+    /// <c>message</c>, <c>Result</c>, and <c>checkpoints</c>.
+    /// Consumers subscribed to this signal can decide how to restart the 
+    /// pipeline, replay steps, or resume execution from captured checkpoints.
     /// </summary>
     public void Retry()
     {
-        throw new NotImplementedException();
+        // create retry signal
+        var signal = new PipelineRetrySignal(message, Result, checkpoints);
+
+        // emit the signal
+        SignalHubAccessor.Instance.Publish(signal);
     }
 
     /// <summary>
     /// Indicates whether the current step or checkpoint can be retried.
     /// </summary>
-    public bool CanRetry => Checkpoint is not null && Status == PipelineStatus.Failed;
+    public bool CanRetry => Checkpoints.Count > 0 && Status == PipelineStatus.Failed;
 
     /// <summary>
     /// Indicates whether the pipeline can continue execution from the current paused state.
     /// </summary>
-    public bool CanContinue => Checkpoint is not null && Status == PipelineStatus.Paused;
+    public bool CanContinue => Checkpoints.Count > 0 && Status == PipelineStatus.Paused;
 
     /// <summary>
     /// Continues execution of the pipeline from the current paused state.
