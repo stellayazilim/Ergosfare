@@ -89,13 +89,6 @@ jobs:
             echo "Packing $proj"
             dotnet pack "$proj" -c Release -o ./nupkg-release /p:Version=${{ env.VERSION }} --no-build
           done
-      
-      
-      - name: Pack test fixtures (only GitHub, not NuGet)
-        run: |
-          dotnet pack ./test/Ergosfare.Test.Fixtures/Ergosfare.Test.Fixtures.csproj \
-            -c Release -o ./nupkg-github /p:Version=${{ env.VERSION }} \
-            /p:IncludeSymbols=true /p:IncludeSource=true --no-build
 
       - name: Push packages to NuGet (only stable)
         if: ${{ !contains(env.VERSION, '-') }}
@@ -107,6 +100,14 @@ jobs:
               --skip-duplicate
           done
 
+      # Optional fixture packaging for GitHub only
+      - name: Pack test fixtures (GitHub only)
+        run: |
+          dotnet pack ./test/Ergosfare.Test.Fixtures/Ergosfare.Test.Fixtures.csproj \
+            -c Release -o ./nupkg-github /p:Version=${{ env.VERSION }} \
+            /p:IncludeSymbols=true /p:IncludeSource=true --no-build
+
+      # Create GitHub Release (WITHOUT attaching .nupkg)
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
@@ -114,14 +115,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload NuGet packages
-        uses: softprops/action-gh-release@v1
-        with:
-          files: ./nupkg-release/*.nupkg
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload fixture packages (always)
+      # Optionally: Upload fixtures only (not main packages)
+      - name: Upload test fixtures (optional)
+        if: always()
         uses: softprops/action-gh-release@v1
         with:
           files: ./nupkg-github/*.nupkg
