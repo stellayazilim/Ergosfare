@@ -61,52 +61,6 @@ public interface IExecutionContext
     IDictionary<object, object?> Items { get; }
 
     /// <summary>
-    /// The result of the message mediation.
-    /// Can be set by handlers to provide a result for the mediation operation.
-    /// </summary>
-    internal object? Result { get; set; }
-
-    /// <summary>
-    /// The message currently being processed in this execution context.
-    /// </summary>
-    internal object Message { get; set; }
-
-    /// <summary>
-    /// The current execution status of the pipeline.
-    /// </summary>
-    PipelineStatus Status { get; internal set; }
-    
-    /// <summary>
-    /// The current top-level checkpoint for this execution, if snapshots are enabled.
-    /// </summary>
-    internal List<IPipelineCheckpoint> Checkpoints { get; }
-
-    /// <summary>
-    /// Attempts to retry the current step or checkpoint.
-    /// </summary>
-    void Retry();
-
-    /// <summary>
-    /// Indicates whether the current step or checkpoint can be retried.
-    /// </summary>
-    bool CanRetry { get; }
-
-    /// <summary>
-    /// Indicates whether the pipeline can continue execution from the current state.
-    /// </summary>
-    bool CanContinue { get; }
-
-    /// <summary>
-    /// Continues execution of the pipeline from the current state.
-    /// </summary>
-    void Continue();
-
-    /// <summary>
-    /// Pauses execution of the pipeline at the current point.
-    /// </summary>
-    void Pause();
-
-    /// <summary>
     /// Aborts the execution of the current mediation operation.
     /// </summary>
     /// <param name="messageResult">

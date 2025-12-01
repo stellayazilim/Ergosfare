@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0-windows</TargetFramework>
+        <Nullable>enable</Nullable>
+        <UseWPF>true</UseWPF>
+        <ImplicitUsings>enable</ImplicitUsings>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0-rc.1.25451.107" />
+      <PackageReference Include="Stella.Ergosfare" Version="0.2.0-e" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\SMacro.Core\SMacro.Core.csproj" />
+    </ItemGroup>
+
+</Project>

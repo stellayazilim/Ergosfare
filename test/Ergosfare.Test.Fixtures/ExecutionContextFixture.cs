@@ -29,7 +29,7 @@ public class ExecutionContextFixture : IAsyncDisposable, IFixture<ExecutionConte
 {
     private bool _disposed;
     private readonly IExecutionContext _executionContext = 
-        new ErgosfareExecutionContext(null,null!, new Dictionary<object, object?>(), CancellationToken.None);
+        new ErgosfareExecutionContext( new Dictionary<object, object?>(), CancellationToken.None);
    
 
     
@@ -73,8 +73,6 @@ public class ExecutionContextFixture : IAsyncDisposable, IFixture<ExecutionConte
     public IAsyncDisposable CreateScope()
     {
         var scopedCtx = new ErgosfareExecutionContext(
-            null, 
-            null, 
             new Dictionary<object, object?>(),
             _executionContext.CancellationToken);
         
@@ -121,7 +119,7 @@ public class ExecutionContextFixture : IAsyncDisposable, IFixture<ExecutionConte
     /// </summary>
     /// <returns>A new instance of <see cref="ErgosfareExecutionContext"/> with no ambient state.</returns>
     public IExecutionContext CreateContext() =>
-        new ErgosfareExecutionContext(null,null,  new Dictionary<object, object?>(), CancellationToken.None);
+        new ErgosfareExecutionContext(  new Dictionary<object, object?>(), CancellationToken.None);
 
     /// <summary>
     /// Disposes the fixture, resetting the ambient context if it matches the fixture's default context.
