@@ -3,7 +3,7 @@ name: GitHubPackagesRelease
 on:
   push:
     tags:
-      - '*'  # Trigger on any tag, e.g., v0.1.0e
+      - 'v*'
   workflow_dispatch:
     inputs:
       branch:
@@ -11,82 +11,90 @@ on:
         required: true
         default: 'main'
       tag:
-        description: 'Tag name for release (must include e)'
+        description: 'Version tag (must start with v)'
         required: true
 
 jobs:
   release:
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
-    runs-on: ubuntu-latest
+
     steps:
-      # 1️⃣ Checkout
+      - name: Resolve branch
+        run: |
+          if [ -n "${{ github.event.inputs.branch }}" ]; then
+            echo "branch=${{ github.event.inputs.branch }}" >> $GITHUB_ENV
+          else
+            echo "branch=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+          fi
+
       - uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.inputs.branch }}
+          ref: ${{ env.branch }}
 
-      # 2️⃣ Setup .NET
       - uses: actions/setup-dotnet@v3
         with:
           dotnet-version: '9.0.x'
 
-      # 3️⃣ Restore & Build
-      - run: dotnet restore ./Stella.Ergosfare.sln
-      - run: dotnet build ./Stella.Ergosfare.sln -c Release
-
-      # 4️⃣ Set NuGet version
-      - name: Set NuGet version
-        id: set_version
+      - name: Set version
         run: |
-          # Determine tag
           if [ -n "${{ github.event.inputs.tag }}" ]; then
             TAG_NAME="${{ github.event.inputs.tag }}"
           else
             TAG_NAME=${GITHUB_REF#refs/tags/}
           fi
-          
-          # Strip leading 'v'
-          BASE_VERSION=${TAG_NAME#v}
-          
-          # Convert *.*.*e to *.*.*-e
-          if [[ "$BASE_VERSION" == *e ]]; then
-            VERSION="${BASE_VERSION%e}-e"
-          else
-            VERSION="$BASE_VERSION"
-          fi
-          
+
+          VERSION=${TAG_NAME#v}
           echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "Tag: $TAG_NAME"
-          echo "NuGet version: $VERSION"
+          echo "Using version: $VERSION"
 
-      # 5️⃣ Pack source projects
-      - name: Pack source projects
+      - name: Validate release type
         run: |
-          for proj in \
-            ./src/Ergosfare/Ergosfare.csproj \
-            ./src/Ergosfare.Contracts/Ergosfare.Contracts.csproj \
-            ./src/Ergosfare.Core/Ergosfare.Core.csproj \
-            ./src/Ergosfare.Core.Abstractions/Ergosfare.Core.Abstractions.csproj \
-            ./src/Ergosfare.Core.Extensions.MicrosoftDependencyInjection/Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj \
-            ./src/Ergosfare.Queries/Ergosfare.Queries.csproj \
-            ./src/Ergosfare.Queries.Abstractions/Ergosfare.Queries.Abstractions.csproj \
-            ./src/Ergosfare.Queries.Extensions.MicrosoftDependencyInjection/Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.csproj \
-            ./src/Ergosfare.Commands/Ergosfare.Commands.csproj \
-            ./src/Ergosfare.Commands.Abstractions/Ergosfare.Commands.Abstractions.csproj \
-            ./src/Ergosfare.Commands.Extensions.MicrosoftDependencyInjection/Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj \
-            ./src/Ergosfare.Events/Ergosfare.Events.csproj \
-            ./src/Ergosfare.Events.Abstractions/Ergosfare.Events.Abstractions.csproj \
-            ./src/Ergosfare.Events.Extensions.MicrosoftDependencyInjection/Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj 
-          do
-            dotnet pack $proj -c Release -o ./nupkg-github /p:Version=${{ env.VERSION }} /p:IncludeSymbols=true /p:IncludeSource=true --no-build
-          done 
+          if [[ "${{ env.branch }}" == "main" ]] && [[ "$VERSION" == *-* ]]; then
+            echo "❌ RC tag from main branch is not allowed" && exit 1
+          fi
+          if [[ "${{ env.branch }}" =~ rc[0-9]+ ]] && [[ "$VERSION" != *-* ]]; then
+            echo "❌ Stable tag from RC branch is not allowed" && exit 1
+          fi
+          echo "✔ GitHub release validation passed"
 
-      - name: pack fixtures
-        run: dotnet pack ./test/Ergosfare.Test.Fixtures/Ergosfare.Test.Fixtures.csproj -c Release -o ./nupkg-github /p:Version=${{ env.VERSION }} /p:IncludeSymbols=true /p:IncludeSource=true --no-build
-      
-      
-      # 6️⃣ Push packages to GitHub Packages
+      - name: Restore & Build
+        run: |
+          dotnet restore ./Stella.Ergosfare.sln
+          dotnet build ./Stella.Ergosfare.sln -c Release
+
+      - name: Pack all GitHub packages
+        run: |
+          projects=(
+            ./src/Ergosfare/Ergosfare.csproj
+            ./src/Ergosfare.Contracts/Ergosfare.Contracts.csproj
+            ./src/Ergosfare.Core/Ergosfare.Core.csproj
+            ./src/Ergosfare.Core.Abstractions/Ergosfare.Core.Abstractions.csproj
+            ./src/Ergosfare.Core.Extensions.MicrosoftDependencyInjection/Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj
+            ./src/Ergosfare.Queries/Ergosfare.Queries.csproj
+            ./src/Ergosfare.Queries.Abstractions/Ergosfare.Queries.Abstractions.csproj
+            ./src/Ergosfare.Queries.Extensions.MicrosoftDependencyInjection/Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.csproj
+            ./src/Ergosfare.Commands/Ergosfare.Commands.csproj
+            ./src/Ergosfare.Commands.Abstractions/Ergosfare.Commands.Abstractions.csproj
+            ./src/Ergosfare.Commands.Extensions.MicrosoftDependencyInjection/Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj
+            ./src/Ergosfare.Events/Ergosfare.Events.csproj
+            ./src/Ergosfare.Events.Abstractions/Ergosfare.Events.Abstractions.csproj
+            ./src/Ergosfare.Events.Extensions.MicrosoftDependencyInjection/Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj
+          )
+
+          for proj in "${projects[@]}"; do
+            echo "Packing $proj"
+            dotnet pack "$proj" -c Release -o ./nupkg-github /p:Version=${{ env.VERSION }} /p:IncludeSymbols=true /p:IncludeSource=true --no-build
+          done
+
+      - name: Pack fixtures (GitHub only)
+        run: |
+          dotnet pack ./test/Ergosfare.Test.Fixtures/Ergosfare.Test.Fixtures.csproj \
+            -c Release -o ./nupkg-github /p:Version=${{ env.VERSION }} \
+            /p:IncludeSymbols=true /p:IncludeSource=true --no-build
+
       - name: Push packages to GitHub Packages
         run: |
           for pkg in ./nupkg-github/*.nupkg; do
@@ -96,11 +104,10 @@ jobs:
               --skip-duplicate
           done
 
-      # 7️⃣ Create GitHub Release and attach packages
-      - name: Create GitHub Release
+      - name: Create GitHub Release (with pkg attachments)
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.event.inputs.tag }}
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           files: ./nupkg-github/*.nupkg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
