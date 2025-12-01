@@ -67,28 +67,8 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
                     $"Handler for {typeof(TMessage).Name} is not of the expected type.");
             }
             
-            var checkpoint = context.Checkpoints.FirstOrDefault(x => x.HandlerType == handler.GetType());
-
-            
-            // main handler checkpoint, check if checkpoint exist for handler type
-            if (checkpoint is null)
-            {
-                checkpoint = new PipelineCheckpoint(handler.GetType().Name, message, null, handler.GetType(), null, []);
-                context.Checkpoints.Add(checkpoint);
-            }
-
-            if (!checkpoint.Success)
-            {
-                result =  (Task)handler.Handle(message, context);
-                await result;
-                // set checkpoint success since code reached here
-                ((PipelineCheckpoint)checkpoint).Success = true;
-                       
-                context.Message = message;
-                context.Result = result;
-            }
-            else result = (Task)checkpoint.Result!;
-     
+            result =  (Task)handler.Handle(message, context);
+            await result;
             
             var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
             var invokedPostResult =  (Task?) await postInvoker.Invoke(message, result, context);

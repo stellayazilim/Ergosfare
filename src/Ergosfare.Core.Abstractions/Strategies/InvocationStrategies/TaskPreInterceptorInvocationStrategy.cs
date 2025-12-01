@@ -52,43 +52,16 @@ internal sealed class TaskPreInterceptorInvocationStrategy(
         foreach (var interceptor in interceptors)
         {
             var handler = interceptor.Handler.Value;
-            
-            // Try to find an existing checkpoint for this interceptor
-            var checkpoint = context.Checkpoints?.FirstOrDefault(x => x.HandlerType == handler.GetType());
+         
+            BeginPreInterceptorInvocationSignal.Invoke(message, null, handler.GetType());
 
+            // Execute interceptor handler and await result
+            message = await (Task<object>)handler.Handle(message, context);
 
-            if (checkpoint is null)
-            {
-                checkpoint = new PipelineCheckpoint(
-                    handler.GetType().Name,   // checkpoint ID
-                    message,                  // input message
-                    null,                     // result placeholder
-                    handler.GetType(),        // handler type
-                    null,                     // parent checkpoint
-                    []                        // sub-checkpoints
-                );
-                context.Checkpoints?.Add(checkpoint);
-            }
-            if (!checkpoint.Success)
-            {
-                // Signal: beginning of pre-interceptor execution
-                BeginPreInterceptorInvocationSignal.Invoke(message, null, handler.GetType());
+            // Signal: end of pre-interceptor execution
+            FinishPreInterceptorInvocationSignal.Invoke(message, null);
+   
 
-                // Execute interceptor handler and await result
-                message = await (Task<object>)handler.Handle(message, context);
-
-                // Mark checkpoint as successful
-                ((PipelineCheckpoint)checkpoint).Success = true;
-                ((PipelineCheckpoint)checkpoint).Message = message;
-
-                // Update the context message to the latest result
-                context.Message = message;
-
-                // Signal: end of pre-interceptor execution
-                FinishPreInterceptorInvocationSignal.Invoke(message, null);
-            }
-            // Step already succeeded → reuse checkpointed message
-            else message = checkpoint.Message;
         }
         return message;
     }

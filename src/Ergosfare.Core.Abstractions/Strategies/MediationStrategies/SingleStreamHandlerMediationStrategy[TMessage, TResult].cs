@@ -65,13 +65,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
                 $"Handler for {typeof(TMessage).Name} is not of the expected type.");
         }
         
-        var checkpoint = context.Checkpoints.FirstOrDefault(x => x.HandlerType == handler.GetType());
-        
-        if (checkpoint is null)
-        {
-            checkpoint = new PipelineCheckpoint(handler.GetType().Name, message, null, handler.GetType(), null, []);
-            context.Checkpoints.Add(checkpoint);
-        }
+
         
         
         // enumerator to consume
@@ -85,11 +79,8 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
 
 
 
-            if (!checkpoint.Success)
-            {
-                enumerable = (IAsyncEnumerable<TResult>?)handler.Handle(message, context);
-            }
-            else enumerable = (IAsyncEnumerable<TResult>?)checkpoint.Result;
+            enumerable = (IAsyncEnumerable<TResult>?)handler.Handle(message, context);
+           
 
         }
         catch (ExecutionAbortedException)
@@ -133,8 +124,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
                 yield return item;
             if (!_consume || _unknownException is not null)
             {
-                (checkpoint as PipelineCheckpoint)!.Result = enumerable;
-                (checkpoint as PipelineCheckpoint)!.Success = true;
+          
                 break; // exit loop to run post-interceptors
             }
 

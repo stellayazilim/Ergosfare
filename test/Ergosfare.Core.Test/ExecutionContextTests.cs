@@ -26,7 +26,7 @@ public class ExecutionContextTests
         var items = new Dictionary<object, object?>();
         
         // arrange & act: create a new execution context
-        var ctx = new ErgosfareExecutionContext(null,null,  items, token);
+        var ctx = new ErgosfareExecutionContext( items, token);
         
         // modify dictionary after construction (should still reference the same instance)
         items.Add("foo", "bar");
@@ -35,7 +35,6 @@ public class ExecutionContextTests
         Assert.Throws<ExecutionAbortedException>(() => ctx.Abort("baz"));
         Assert.Equal(token, ctx.CancellationToken);
         Assert.Equal(items, ctx.Items);
-        Assert.Equal("baz", ctx.Result);
         
         
     }

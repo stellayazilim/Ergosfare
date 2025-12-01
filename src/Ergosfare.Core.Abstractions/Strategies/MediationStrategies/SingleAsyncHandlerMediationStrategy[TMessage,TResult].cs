@@ -78,48 +78,24 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
                     $"Handler for {typeof(TMessage).Name} is not of the expected type.");
             }
             
-            // get checkpoint for handler, if exist
-            var checkpoint = context.Checkpoints.FirstOrDefault(x => x.HandlerType == handler.GetType());
-
-            // main handler checkpoint, check if checkpoint exist for handler type
-            if (checkpoint is null)
-            {
-                checkpoint = new PipelineCheckpoint(handler.GetType().Name, message, null, handler.GetType(), null, []);
-                context.Checkpoints.Add(checkpoint);
-            } 
+    
+            result = await (Task<TResult>)handler.Handle(message, context);
             
-            if (!checkpoint.Success)
+            if (resultAdapterService is not null)
             {
-                result = await (Task<TResult>)handler.Handle(message, context);
-                
-                if (resultAdapterService is not null)
-                {
-                    var ex = resultAdapterService.LookupException(result);
-                    if (ex is not null) throw ex;
-                }
-                
-                ((PipelineCheckpoint)checkpoint).Success = true;
-                
-                context.Message = message;
-                context.Result = result;
+                var ex = resultAdapterService.LookupException(result);
+                if (ex is not null) throw ex;
             }
-            else result = (TResult)checkpoint.Result!;
+    
 
             var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
             
             var postResult = (TResult?)await postInvoker.Invoke(message, result, context);
             result = postResult is null ? result : postResult;
         }
-        catch (ExecutionAbortedException) 
+        catch (ExecutionAbortedException)
         {
-            if (context.Result is null)
-            {
-                throw new InvalidOperationException(
-                    $"A Message result of type '{typeof(TResult).Name}' is required when the execution is aborted as this message has a specific result.");
-            }
-
-            return await Task.FromResult((TResult)context.Result);
-
+            throw;
         }
         catch (Exception e) when (e is not ExecutionAbortedException)
         {

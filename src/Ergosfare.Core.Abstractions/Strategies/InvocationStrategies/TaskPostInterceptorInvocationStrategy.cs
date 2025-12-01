@@ -54,44 +54,18 @@ internal sealed class TaskPostInterceptorInvocationStrategy(
         foreach (var interceptor in interceptors)
         {
             var handler = interceptor.Handler.Value;
-            
-            // Try to find an existing checkpoint for this interceptor
-            var checkpoint = context.Checkpoints?.FirstOrDefault(x => x.HandlerType == handler.GetType());
-            
-            
-            if (checkpoint is null)
-            {
-                checkpoint = new PipelineCheckpoint(
-                    handler.GetType().Name,   // checkpoint ID
-                    message,                  // input message
-                    null,                     // result placeholder
-                    handler.GetType(),        // handler type
-                    null,                     // parent checkpoint
-                    []                        // sub-checkpoints
-                );
-                context.Checkpoints?.Add(checkpoint);
-            }
+     
 
 
-            if (!checkpoint.Success)
-            {
-                // Signal: beginning of pre-interceptor execution
-                BeginPreInterceptorInvocationSignal.Invoke(message, null, handler.GetType());
+            // Signal: beginning of pre-interceptor execution
+            BeginPreInterceptorInvocationSignal.Invoke(message, null, handler.GetType());
                 
-                // Execute interceptor handler and await result
-                result = await (Task<object?>)handler.Handle(message, result, context);
-                
-                // Mark checkpoint as successful
-                ((PipelineCheckpoint)checkpoint).Success = true;
-                ((PipelineCheckpoint)checkpoint).Result = result;
-                // Update the context result to the latest result
-                context.Result = result;
-                
-                // Signal: end of pre-interceptor execution
-                FinishPreInterceptorInvocationSignal.Invoke(message, null);
-            }
-
-            else result = checkpoint.Result;
+            // Execute interceptor handler and await result
+            result = await (Task<object?>)handler.Handle(message, result, context);
+            
+            // Signal: end of pre-interceptor execution
+            FinishPreInterceptorInvocationSignal.Invoke(message, null);
+  
         }
         return result;
     }

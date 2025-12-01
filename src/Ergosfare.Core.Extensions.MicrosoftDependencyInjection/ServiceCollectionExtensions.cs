@@ -53,7 +53,6 @@ public static class ServiceCollectionExtensions
         var resultAdapterService = new ResultAdapterService();
         services.TryAddSingleton<IResultAdapterService>(resultAdapterService);
         services.TryAddTransient<HandlerDescriptorBuilderFactory>();
-        services.TryAddScoped<ISnapshotService, SnapshotService>();
         // Get the singleton registry instance
         var messageRegistry = MessageRegistryAccessor.Instance;
 
