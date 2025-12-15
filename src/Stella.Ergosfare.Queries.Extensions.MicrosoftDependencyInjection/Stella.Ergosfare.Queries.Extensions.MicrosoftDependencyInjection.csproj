@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <PackageId>Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection</PackageId>
+        <IsPackable>true</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Stella.Ergosfare.Contracts\Stella.Ergosfare.Contracts.csproj" />
+      <ProjectReference Include="..\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj" />
+      <ProjectReference Include="..\Stella.Ergosfare.Queries.Abstractions\Stella.Ergosfare.Queries.Abstractions.csproj" />
+      <ProjectReference Include="..\Stella.Ergosfare.Queries\Stella.Ergosfare.Queries.csproj" />
+      <ProjectReference Include="..\Stella.Ergosfare.Queries.Abstractions\Stella.Ergosfare.Queries.Abstractions.csproj" />
+      <ProjectReference Include="..\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj" />
+      <ProjectReference Include="..\Stella.Ergosfare.Queries\Stella.Ergosfare.Queries.csproj" />
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,12 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <PackageId>Stella.Ergosfare.Queries.Abstractions</PackageId>
+        <IsPackable>true</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Stella.Ergosfare.Contracts\Stella.Ergosfare.Contracts.csproj" />
+      <ProjectReference Include="..\Stella.Ergosfare.Core.Abstractions\Stella.Ergosfare.Core.Abstractions.csproj" />
+    </ItemGroup>
+
+</Project>

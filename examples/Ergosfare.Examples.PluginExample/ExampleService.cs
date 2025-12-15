@@ -1,4 +1,4 @@
-using Ergosfare.Core.Abstractions.SignalHub.Signals;
+using Stella.Ergosfare.Core.Abstractions.SignalHub.Signals;
 
 namespace Ergosfare.Examples.PluginExample;
 

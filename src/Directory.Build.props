@@ -1,4 +1,5 @@
-﻿<Project>
+<Project>
+    <Import Project="../Directory.Build.props" />
     <ItemGroup>
         <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
             <_Parameter1>$(MSBuildProjectName).Test</_Parameter1>

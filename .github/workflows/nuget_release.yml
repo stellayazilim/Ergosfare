@@ -19,7 +19,9 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        dotnet-version: [9.0.x, 10.0.x]   # .NET 9 ve 10
     steps:
       - name: Determine branch
         id: resolve_branch
@@ -28,7 +30,6 @@ jobs:
             echo "branch=${{ github.event.inputs.branch }}" >> $GITHUB_ENV
           else
             echo "branch=${GITHUB_REF_NAME}" >> $GITHUB_ENV
-          fi
 
       - uses: actions/checkout@v3
         with:
@@ -36,7 +37,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: ${{ matrix.dotnet-version }}
 
       - name: Set version
         run: |
@@ -61,28 +62,28 @@ jobs:
           echo "✔ Release validation passed"
 
       - name: Restore
-        run: dotnet restore ./Stella.Ergosfare.sln
+        run: dotnet restore ./Stella.Ergosfare.slnx
 
       - name: Build
-        run: dotnet build ./Stella.Ergosfare.sln -c Release
+        run: dotnet build ./Stella.Ergosfare.slnx -c Release
 
       - name: Pack source libraries
         run: |
           projects=(
-            ./src/Ergosfare/Ergosfare.csproj
-            ./src/Ergosfare.Contracts/Ergosfare.Contracts.csproj
-            ./src/Ergosfare.Core/Ergosfare.Core.csproj
-            ./src/Ergosfare.Core.Abstractions/Ergosfare.Core.Abstractions.csproj
-            ./src/Ergosfare.Core.Extensions.MicrosoftDependencyInjection/Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj
-            ./src/Ergosfare.Queries/Ergosfare.Queries.csproj
-            ./src/Ergosfare.Queries.Abstractions/Ergosfare.Queries.Abstractions.csproj
-            ./src/Ergosfare.Queries.Extensions.MicrosoftDependencyInjection/Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.csproj
-            ./src/Ergosfare.Commands/Ergosfare.Commands.csproj
-            ./src/Ergosfare.Commands.Abstractions/Ergosfare.Commands.Abstractions.csproj
-            ./src/Ergosfare.Commands.Extensions.MicrosoftDependencyInjection/Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj
-            ./src/Ergosfare.Events/Ergosfare.Events.csproj
-            ./src/Ergosfare.Events.Abstractions/Ergosfare.Events.Abstractions.csproj
-            ./src/Ergosfare.Events.Extensions.MicrosoftDependencyInjection/Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj
+            ./src/Stella.Ergosfare/Stella.Ergosfare.csproj
+            ./src/Stella.Ergosfare.Contracts/Stella.Ergosfare.Contracts.csproj
+            ./src/Stella.Ergosfare.Core/Stella.Ergosfare.Core.csproj
+            ./src/Stella.Ergosfare.Core.Abstractions/Stella.Ergosfare.Core.Abstractions.csproj
+            ./src/Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection/Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj
+            ./src/Stella.Ergosfare.Queries/Stella.Ergosfare.Queries.csproj
+            ./src/Stella.Ergosfare.Queries.Abstractions/Stella.Ergosfare.Queries.Abstractions.csproj
+            ./src/Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection/Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.csproj
+            ./src/Stella.Ergosfare.Commands/Stella.Ergosfare.Commands.csproj
+            ./src/Stella.Ergosfare.Commands.Abstractions/Stella.Ergosfare.Commands.Abstractions.csproj
+            ./src/Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection/Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj
+            ./src/Stella.Ergosfare.Events/Stella.Ergosfare.Events.csproj
+            ./src/Stella.Ergosfare.Events.Abstractions/Stella.Ergosfare.Events.Abstractions.csproj
+            ./src/Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection/Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj
           )
 
           for proj in "${projects[@]}"; do
@@ -90,24 +91,26 @@ jobs:
             dotnet pack "$proj" -c Release -o ./nupkg-release /p:Version=${{ env.VERSION }} --no-build
           done
 
+      - name: Authenticate with NuGet
+        uses: NuGet/setup-nuget@v1
+        with:
+          nuget-api-key: ${{ secrets.NUGET_API_KEY }}
+
       - name: Push packages to NuGet (only stable)
         if: ${{ !contains(env.VERSION, '-') }}
         run: |
           for pkg in ./nupkg-release/*.nupkg; do
             dotnet nuget push "$pkg" \
-              --api-key ${{ secrets.NUGET_API_KEY }} \
               --source https://api.nuget.org/v3/index.json \
               --skip-duplicate
           done
 
-      # Optional fixture packaging for GitHub only
       - name: Pack test fixtures (GitHub only)
         run: |
-          dotnet pack ./test/Ergosfare.Test.Fixtures/Ergosfare.Test.Fixtures.csproj \
+          dotnet pack ./test/Stella.Ergosfare.Test.Fixtures/Stella.Ergosfare.Test.Fixtures.csproj \
             -c Release -o ./nupkg-github /p:Version=${{ env.VERSION }} \
             /p:IncludeSymbols=true /p:IncludeSource=true --no-build
 
-      # Create GitHub Release (WITHOUT attaching .nupkg)
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
@@ -115,7 +118,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Optionally: Upload fixtures only (not main packages)
       - name: Upload test fixtures (optional)
         if: always()
         uses: softprops/action-gh-release@v1

@@ -4,7 +4,7 @@
     <Project Path="docs\Ergosfare.Docs.njsproj" />
   </Folder>
   <Folder Name="/Examples/">
-    <Project Path="examples\Ergosfare.Examples.PluginExample\Ergosfare.Examples.PluginExample.csproj" Type="Classic C#" />
+    <Project Path="examples\Ergosfare.Examples.PluginExample\Ergosfare.Examples.PluginExample.csproj" />
   </Folder>
   <Folder Name="/RepositoryItems/">
     <File Path="readme.md" />
@@ -13,31 +13,32 @@
     <File Path="SECURITY.md" />
   </Folder>
   <Folder Name="/src/">
-    <Project Path="src\Ergosfare.Commands.Abstractions\Ergosfare.Commands.Abstractions.csproj" Type="Classic C#" />
-    <Project Path="src\Ergosfare.Commands.Extensions.MicrosoftDependencyInjection\Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj" Type="Classic C#" />
-    <Project Path="src\Ergosfare.Commands\Ergosfare.Commands.csproj" Type="Classic C#" />
-    <Project Path="src\Ergosfare.Contracts\Ergosfare.Contracts.csproj" Type="Classic C#" />
-    <Project Path="src\Ergosfare.Core.Abstractions\Ergosfare.Core.Abstractions.csproj" Type="Classic C#" />
-    <Project Path="src\Ergosfare.Core.Extensions.MicrosoftDependencyInjection\Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj" Type="Classic C#" />
-    <Project Path="src\Ergosfare.Core\Ergosfare.Core.csproj" Type="Classic C#" />
-    <Project Path="src\Ergosfare.Events.Abstractions\Ergosfare.Events.Abstractions.csproj" Type="Classic C#" />
-    <Project Path="src\Ergosfare.Events.Extensions.MicrosoftDependencyInjection\Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj" Type="Classic C#" />
-    <Project Path="src\Ergosfare.Events\Ergosfare.Events.csproj" Type="Classic C#" />
-    <Project Path="src\Ergosfare.Queries.Abstractions\Ergosfare.Queries.Abstractions.csproj" Type="Classic C#" />
-    <Project Path="src\Ergosfare.Queries.Extensions.MicrosoftDependencyInjection\Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.csproj" Type="Classic C#" />
-    <Project Path="src\Ergosfare.Queries\Ergosfare.Queries.csproj" Type="Classic C#" />
-    <Project Path="src\Ergosfare\Ergosfare.csproj" Type="Classic C#" />
+    <File Path="src\Directory.Build.props" />
+    <Project Path="src\Stella.Ergosfare.Commands.Abstractions\Stella.Ergosfare.Commands.Abstractions.csproj" />
+    <Project Path="src\Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj" />
+    <Project Path="src\Stella.Ergosfare.Commands\Stella.Ergosfare.Commands.csproj" />
+    <Project Path="src\Stella.Ergosfare.Contracts\Stella.Ergosfare.Contracts.csproj" />
+    <Project Path="src\Stella.Ergosfare.Core.Abstractions\Stella.Ergosfare.Core.Abstractions.csproj" />
+    <Project Path="src\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj" />
+    <Project Path="src\Stella.Ergosfare.Core\Stella.Ergosfare.Core.csproj" />
+    <Project Path="src\Stella.Ergosfare.Events.Abstractions\Stella.Ergosfare.Events.Abstractions.csproj" />
+    <Project Path="src\Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj" />
+    <Project Path="src\Stella.Ergosfare.Events\Stella.Ergosfare.Events.csproj" />
+    <Project Path="src\Stella.Ergosfare.Queries.Abstractions\Stella.Ergosfare.Queries.Abstractions.csproj" />
+    <Project Path="src\Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.csproj" />
+    <Project Path="src\Stella.Ergosfare.Queries\Stella.Ergosfare.Queries.csproj" />
+    <Project Path="src\Stella.Ergosfare\Stella.Ergosfare.csproj" />
   </Folder>
   <Folder Name="/test/">
-    <Project Path="test\Ergosfare.Command.Test\Ergosfare.Command.Test.csproj" Type="Classic C#" />
-    <Project Path="test\Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test\Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test.csproj" Type="Classic C#" />
-    <Project Path="test\Ergosfare.Core.Test\Ergosfare.Core.Test.csproj" Type="Classic C#" />
-    <Project Path="test\Ergosfare.Events.Test\Ergosfare.Events.Test.csproj" Type="Classic C#" />
-    <Project Path="test\Ergosfare.Queries.Test\Ergosfare.Queries.Test.csproj" Type="Classic C#" />
-    <Project Path="test\Ergosfare.Test.Fixtures\Ergosfare.Test.Fixtures.csproj" Type="Classic C#" />
-    <Project Path="test\Ergosfare.Test\Ergosfare.Test.csproj" Type="Classic C#" />
     <File Path="test\Directory.Packages.props" />
     <File Path="coverlet.runsettings" />
+    <Project Path="test\Stella.Ergosfare.Command.Test\Stella.Ergosfare.Command.Test.csproj" />
+    <Project Path="test\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test.csproj" />
+    <Project Path="test\Stella.Ergosfare.Core.Test\Stella.Ergosfare.Core.Test.csproj" />
+    <Project Path="test\Stella.Ergosfare.Events.Test\Stella.Ergosfare.Events.Test.csproj" />
+    <Project Path="test\Stella.Ergosfare.Queries.Test\Stella.Ergosfare.Queries.Test.csproj" />
+    <Project Path="test\Stella.Ergosfare.Test.Fixtures\Stella.Ergosfare.Test.Fixtures.csproj" />
+    <Project Path="test\Stella.Ergosfare.Test\Stella.Ergosfare.Test.csproj" />
   </Folder>
   <Folder Name="/workflows/">
     <File Path=".github\workflows\coverage_tests.yml" />

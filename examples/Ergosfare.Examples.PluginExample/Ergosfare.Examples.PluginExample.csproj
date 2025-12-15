@@ -8,10 +8,10 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\src\Ergosfare.Contracts\Ergosfare.Contracts.csproj" />
-      <ProjectReference Include="..\..\src\Ergosfare.Core.Abstractions\Ergosfare.Core.Abstractions.csproj" />
-      <ProjectReference Include="..\..\src\Ergosfare.Core.Extensions.MicrosoftDependencyInjection\Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj" />
-      <ProjectReference Include="..\..\src\Ergosfare.Core\Ergosfare.Core.csproj" />
+      <ProjectReference Include="..\..\src\Stella.Ergosfare.Contracts\Stella.Ergosfare.Contracts.csproj" />
+      <ProjectReference Include="..\..\src\Stella.Ergosfare.Core.Abstractions\Stella.Ergosfare.Core.Abstractions.csproj" />
+      <ProjectReference Include="..\..\src\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj" />
+      <ProjectReference Include="..\..\src\Stella.Ergosfare.Core\Stella.Ergosfare.Core.csproj" />
     </ItemGroup>
 
 </Project>

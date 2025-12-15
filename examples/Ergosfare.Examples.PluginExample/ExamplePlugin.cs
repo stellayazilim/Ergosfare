@@ -1,4 +1,4 @@
-﻿using Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
+﻿using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Ergosfare.Examples.PluginExample;

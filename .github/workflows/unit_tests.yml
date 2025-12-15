@@ -2,26 +2,33 @@ name: UnitTests
 permissions:
   contents: read
 on:
-  push: 
+  push:
     branches:
       - "*"
-  pull_request: 
+  pull_request:
     branches:
       - main
 
 jobs:
   unit-tests:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dotnet-version: [ 9.0.x, 10.0.x ]   # .NET 9 ve 10
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
-        
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
-        with: 
-          dotnet-version: '9.0.x'
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+
       - name: Restore Dependencies
-        run: dotnet restore Stella.Ergosfare.sln
-        
+        run: dotnet restore Stella.Ergosfare.slnx
+
       - name: Run Unit Tests
-        run: dotnet test Stella.Ergosfare.sln   --logger "trx;LogFileName=unit-tests.trx" --filter "Category=Unit"
+        run: |
+          dotnet test Stella.Ergosfare.slnx \
+            --logger "trx;LogFileName=unit-tests.trx" \
+            --filter "Category=Unit"
