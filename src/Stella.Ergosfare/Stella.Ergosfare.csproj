@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <PackageId>Stella.Ergosfare</PackageId>
+        <IsPackable>true</IsPackable>
+    </PropertyGroup>
+    
+    <ItemGroup>
+      <ProjectReference Include="..\Stella.Ergosfare.Commands.Abstractions\Stella.Ergosfare.Commands.Abstractions.csproj" />
+      <ProjectReference Include="..\Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj" />
+      <ProjectReference Include="..\Stella.Ergosfare.Commands\Stella.Ergosfare.Commands.csproj" />
+      <ProjectReference Include="..\Stella.Ergosfare.Contracts\Stella.Ergosfare.Contracts.csproj" />
+      <ProjectReference Include="..\Stella.Ergosfare.Core.Abstractions\Stella.Ergosfare.Core.Abstractions.csproj" />
+      <ProjectReference Include="..\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj" />
+      <ProjectReference Include="..\Stella.Ergosfare.Core\Stella.Ergosfare.Core.csproj" />
+      <ProjectReference Include="..\Stella.Ergosfare.Events.Abstractions\Stella.Ergosfare.Events.Abstractions.csproj" />
+      <ProjectReference Include="..\Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj" />
+      <ProjectReference Include="..\Stella.Ergosfare.Events\Stella.Ergosfare.Events.csproj" />
+      <ProjectReference Include="..\Stella.Ergosfare.Queries.Abstractions\Stella.Ergosfare.Queries.Abstractions.csproj" />
+      <ProjectReference Include="..\Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.csproj" />
+      <ProjectReference Include="..\Stella.Ergosfare.Queries\Stella.Ergosfare.Queries.csproj" />
+    </ItemGroup>
+
+</Project>
