@@ -31,6 +31,7 @@ jobs:
             echo "branch=${{ github.event.inputs.branch }}" >> $GITHUB_ENV
           else
             echo "branch=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+          fi
 
       - uses: actions/checkout@v3
         with:
