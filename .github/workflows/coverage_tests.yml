@@ -7,7 +7,7 @@ on:
       - 'main'
     paths-ignore:
       - '.badges/chore_workflows/coverage.svg'
-  pull_request: 
+  pull_request:
     branches:
       - '*'
     paths-ignore:
@@ -16,7 +16,9 @@ on:
 jobs:
   Coverage:
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        dotnet-version: [9.0.x, 10.0.x]   # .NET 9 ve 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -24,25 +26,25 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: ${{ matrix.dotnet-version }}
 
       - name: Install Coverlet global tool
         run: dotnet tool install --global coverlet.console
 
       - name: Restore dependencies
-        run: dotnet restore Stella.Ergosfare.sln
+        run: dotnet restore Stella.Ergosfare.slnx
 
       - name: Run Unit & Coverage Tests
         shell: bash
         run: |
-          dotnet test Stella.Ergosfare.sln --settings coverlet.runsettings /p:CoverletOutput=./.coverage/coverage.cobertura.xml /p:MergeWith=""  --logger "trx;LogFileName=TestResults.trx"
+          dotnet test Stella.Ergosfare.slnx --settings coverlet.runsettings /p:CoverletOutput=./.coverage/coverage.cobertura.xml /p:MergeWith=""  --logger "trx;LogFileName=TestResults.trx"
 
       - name: Install Report Generator
-        run:  dotnet tool install --global dotnet-reportgenerator-globaltool
-      
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool
+
       - name: Merge coverage reports
-        run:  reportgenerator -reports:./**/coverage.cobertura.xml -targetdir:./.coverage -reporttypes:Cobertura
         shell: bash
+        run: reportgenerator -reports:./**/coverage.cobertura.xml -targetdir:./.coverage -reporttypes:Cobertura
 
       - name: Fail if coverage < 90%
         shell: bash
@@ -54,14 +56,12 @@ jobs:
             echo "Coverage $COVERAGE% is below 90%!"
             exit 1
           fi
-        
+
       - uses: action-badges/create-orphan-branch@0.1.1
         with:
           branch-name: badges
+
       - name: Generate coverage badge
         uses: action-badges/cobertura-coverage-xml-badges@0.3.1
         with:
           coverage-file-name: ./.coverage/Cobertura.xml
-          file-name: coverage.svg
-          badge-branch: badges   # 🔥 always use badges branch
-          github-token: ${{ secrets.GITHUB_TOKEN }}
