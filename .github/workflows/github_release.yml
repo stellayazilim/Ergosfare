@@ -32,7 +32,7 @@ jobs:
           else
             echo "branch=${GITHUB_REF_NAME}" >> $GITHUB_ENV
           fi
-
+      
       - uses: actions/checkout@v3
         with:
           ref: ${{ env.branch }}
