@@ -5,7 +5,7 @@ permissions:
 on:
   push:
     tags:
-      - 'v*'    # Tüm v ile başlayan tagler
+      - 'v*'
   workflow_dispatch:
     inputs:
       branch:
@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        dotnet-version: [9.0.x, 10.0.x]   # .NET 9 ve 10
+        dotnet-version: [9.0.x, 10.0.x]
     steps:
       - name: Determine branch
         id: resolve_branch
@@ -30,6 +30,7 @@ jobs:
             echo "branch=${{ github.event.inputs.branch }}" >> $GITHUB_ENV
           else
             echo "branch=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+          fi
 
       - uses: actions/checkout@v3
         with:
@@ -44,10 +45,10 @@ jobs:
           if [ -n "${{ github.event.inputs.tag }}" ]; then
             TAG_NAME="${{ github.event.inputs.tag }}"
           else
-            TAG_NAME=${GITHUB_REF#refs/tags/}
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
           fi
 
-          VERSION=${TAG_NAME#v}
+          VERSION="${TAG_NAME#v}"
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "Resolved version: $VERSION"
 
@@ -102,6 +103,7 @@ jobs:
           for pkg in ./nupkg-release/*.nupkg; do
             dotnet nuget push "$pkg" \
               --source https://api.nuget.org/v3/index.json \
+              --api-key ${{ secrets.NUGET_API_KEY }} \
               --skip-duplicate
           done
 
@@ -111,15 +113,7 @@ jobs:
             -c Release -o ./nupkg-github /p:Version=${{ env.VERSION }} \
             /p:IncludeSymbols=true /p:IncludeSource=true --no-build
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.ref_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload test fixtures (optional)
-        if: always()
+      - name: Create GitHub Release with fixtures
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
