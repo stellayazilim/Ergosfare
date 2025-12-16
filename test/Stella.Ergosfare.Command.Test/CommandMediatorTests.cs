@@ -1,7 +1,6 @@
 ﻿using Stella.Ergosfare.Commands;
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.SignalHub;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,7 +40,6 @@ public class CommandMediatorTests
 
         var messageMediator = serviceCollection.GetService<IMessageMediator>();
         var mediator = new CommandMediator(
-            new SignalHub(),
             serviceCollection.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
             new ResultAdapterService(),
             messageMediator!);
@@ -75,7 +73,6 @@ public class CommandMediatorTests
 
         var messageMediator = serviceCollection.GetRequiredService<IMessageMediator>();
         var mediator = new CommandMediator(
-            new SignalHub(),
             serviceCollection.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
             new ResultAdapterService(),
             messageMediator!);

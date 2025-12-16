@@ -1,4 +1,48 @@
 
+
+## v1.0.1 – '2025-12-16'
+
+### Features & Improvements
+
+#### .NET 10 & Native AOT Support
+
+* Full support for **.NET 10** across all projects and test fixtures.
+* Native AOT builds now use **monetization strategy** instead of reflection for descriptor construction, improving startup performance and compatibility.
+* Simplified handler descriptor building for AOT scenarios.
+
+#### Pipeline & Handler Updates
+
+* Obsolete **pre-handlers** have been removed.
+* Post-handler invocation now correctly handles nullable results.
+* Streaming and synchronous pipelines updated for improved compatibility with snapshot-less execution.
+* Minor internal adjustments to handler and interceptor execution flow for stability.
+
+#### Project & Namespace Updates
+
+* Solution structure migrated to **.slnx** format for faster load times and improved IDE integration.
+* Namespaces reorganized for better modularity and clarity.
+* Snapshot mechanism fully removed; not part of compatibility policy.
+
+### Bug Fixes
+
+* Fixed bug where post-handlers incorrectly returned nullable results.
+* Fixed minor issues in streaming and synchronous pipeline execution.
+* Adjusted internal mediator strategies for improved consistency.
+
+### Internal Changes
+
+* Refactored mediation strategies to better handle .NET 10 and native AOT.
+* Removed obsolete pipeline snapshot features.
+* Updated test fixtures to align with current pipeline and handler changes.
+
+### Notes
+
+* This is a **patch release**, intended to improve compatibility and stability for v1.0.0 consumers.
+* Pipeline and message mediation behavior remains fully backward compatible.
+* Snapshot persistence and checkpoint features are now fully deprecated and removed.
+* Consumers can continue using caching and manual persistence mechanisms where applicable.
+
+
 ## v0.2.0e – '2025-9-22'
 
 ### Features & Improvements

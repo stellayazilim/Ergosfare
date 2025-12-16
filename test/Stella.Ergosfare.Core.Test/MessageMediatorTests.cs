@@ -29,9 +29,9 @@ public class MessageMediatorTests
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         // act & assert
         Assert.Throws<ArgumentNullException>(
-            () =>  new MessageMediator(null, new Stella.Ergosfare.Core.Abstractions.SignalHub.SignalHub(),null));
+            () =>  new MessageMediator(null, null));
         Assert.Throws<ArgumentNullException>(
-            () => new MessageMediator(registry,  new Stella.Ergosfare.Core.Abstractions.SignalHub.SignalHub(),null));
+            () => new MessageMediator(registry, null));
     }
 
     /// <summary>
@@ -45,7 +45,7 @@ public class MessageMediatorTests
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         var messageDependencyFactory = new MessageDependenciesFactory(null);
         // act
-        var mediator = new MessageMediator(registry, new Stella.Ergosfare.Core.Abstractions.SignalHub.SignalHub(), messageDependencyFactory);
+        var mediator = new MessageMediator(registry, messageDependencyFactory);
         // assert
         Assert.NotNull(mediator);
     }
@@ -61,7 +61,7 @@ public class MessageMediatorTests
         // arrange 
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         var messageDependencyFactory = new MessageDependenciesFactory(null);
-        var mediator = new MessageMediator(registry,  new Stella.Ergosfare.Core.Abstractions.SignalHub.SignalHub(),messageDependencyFactory);
+        var mediator = new MessageMediator(registry,messageDependencyFactory);
         // act && assert
         await Assert.ThrowsAsync<ArgumentNullException>(() => 
             mediator
@@ -91,7 +91,6 @@ public class MessageMediatorTests
         //registry.Register(typeof(StubNonGenericDerivedPostInterceptor2));
         var mediator = new MessageMediator(
             registry,
-            new Stella.Ergosfare.Core.Abstractions.SignalHub.SignalHub(),
             new MessageDependenciesFactory(null!)
         );
         var message = new StubMessage();
@@ -131,7 +130,6 @@ public class MessageMediatorTests
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         var mediator = new MessageMediator(
             registry,
-            new Stella.Ergosfare.Core.Abstractions.SignalHub.SignalHub(),
             new MessageDependenciesFactory(null!)
         );
         var options = new MediateOptions<StubMessage, Task>
@@ -171,7 +169,7 @@ public class MessageMediatorTests
             CancellationToken = CancellationToken.None,
             Groups = []
         };
-        var mediator = new MessageMediator(registry.Object, new Stella.Ergosfare.Core.Abstractions.SignalHub.SignalHub(), new MessageDependenciesFactory(null));
+        var mediator = new MessageMediator(registry.Object, new MessageDependenciesFactory(null));
         // act & assert
         await Assert.ThrowsAsync<InvalidOperationException>(() => mediator.Mediate(new StubIndirectMessage(), options));
     }

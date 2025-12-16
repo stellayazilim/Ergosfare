@@ -42,35 +42,6 @@ public class StubVoidHandlerThrows : IHandler<StubMessage, object>
 }
 
 
-public class StubVoidHandlerThrowsWithSnapshot(
-    ISnapshotService snapshotService) : 
-    IAsyncHandler<StubMessage>
-{
-    public static bool FirstCheckpointRun;
-    public static bool SecondCheckpointRun;
-
-    /// <summary>
-    /// Handles a <see cref="StubMessage"/> synchronously.
-    /// This implementation does nothing and returns <c>null</c>.
-    /// </summary>
-    /// <param name="message">The message to handle.</param>
-    /// <param name="context">The execution context.</param>
-    /// <returns>Always returns <c>null</c>, since no result is produced.</returns>
-    // root checkpoint here, entire method body
-    public async Task HandleAsync(StubMessage message, IExecutionContext context)
-    {
-        var result = await snapshotService.Snapshot("test", new Snapshot<bool>(async () => {
-            FirstCheckpointRun = true;
-            await Task.CompletedTask;
-            //throw new Exception("Stub exception");
-
-            return true;
-        }));
-        
-       
-    }
-}
-
 
 public class StubVoidIndirectHandler: IHandler<StubIndirectMessage, Task>
 {

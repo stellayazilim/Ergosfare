@@ -3,9 +3,6 @@
     <Project Path="changelog\Ergosfare.Changelog.njsproj" />
     <Project Path="docs\Ergosfare.Docs.njsproj" />
   </Folder>
-  <Folder Name="/Examples/">
-    <Project Path="examples\Ergosfare.Examples.PluginExample\Ergosfare.Examples.PluginExample.csproj" />
-  </Folder>
   <Folder Name="/RepositoryItems/">
     <File Path="readme.md" />
     <File Path="CHANGELOG.md" />

@@ -1,9 +1,7 @@
-﻿using System.Runtime.CompilerServices;
-using Stella.Ergosfare.Core.Abstractions;
+﻿using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Abstractions.Registry;
-using Stella.Ergosfare.Core.Abstractions.SignalHub;
 using Stella.Ergosfare.Core.Internal.Contexts;
 
 namespace Stella.Ergosfare.Core.Internal.Mediator;
@@ -22,7 +20,6 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 internal sealed class MessageMediator(
     IMessageRegistry messageRegistry,
-    ISignalHub  signalHub,
     IMessageDependenciesFactory messageDependenciesFactory)
     : IMessageMediator
 {
