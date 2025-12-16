@@ -1,6 +1,5 @@
 ﻿using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Registry;
-using Stella.Ergosfare.Core.Abstractions.SignalHub;
 using Stella.Ergosfare.Core.Internal.Factories;
 using Stella.Ergosfare.Core.Internal.Registry;
 using Microsoft.Extensions.DependencyInjection;
@@ -56,10 +55,8 @@ public static class ServiceCollectionExtensions
         var messageRegistry = MessageRegistryAccessor.Instance;
 
         // Get the singleton event-hub instance
-        var eventHub = SignalHubAccessor.Instance;
         // Register it as a singleton in DI
         services.TryAddSingleton(messageRegistry);
-        services.TryAddSingleton(eventHub);
 
         // Create module registry with the shared message registry
         var ergosfareBuilder = new ModuleRegistry(services, messageRegistry, resultAdapterService);

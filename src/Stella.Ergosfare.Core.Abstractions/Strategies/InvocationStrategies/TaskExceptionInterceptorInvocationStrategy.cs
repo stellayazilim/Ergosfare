@@ -1,9 +1,7 @@
 using System.Runtime.ExceptionServices;
-using System.Threading.Tasks;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Invokers;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
-using Stella.Ergosfare.Core.Abstractions.SignalHub.Signals;
 
 namespace Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 
@@ -46,10 +44,8 @@ internal sealed class TaskExceptionInterceptorInvocationStrategy(
         foreach (var interceptor in interceptors)
         {
             var handler = interceptor.Handler.Value;
-            BeginExceptionInterceptorInvocationSignal.Invoke(message, result, handler.GetType(), dispatchInfo.SourceException);
             var objectResult = handler.Handle(message, result, dispatchInfo.SourceException, executionContext);
             result = await ConvertTask(objectResult);
-            FinishPreInterceptorInvocationSignal.Invoke(message, result);
         }
         return await Task.FromResult(result);
     }
@@ -72,12 +68,10 @@ internal sealed class TaskExceptionInterceptorInvocationStrategy(
     {
         if (ExceptionInterceptorCount == 0) exceptionDispatchInfo.Throw();
         
-        BeginExceptionInterceptingSignal.Invoke(message, result, exceptionDispatchInfo.SourceException, ExceptionInterceptorCount);
         result = await InvokeExceptionInterceptorCollection(
             MessageDependencies.ExceptionInterceptors, message, result, exceptionDispatchInfo, executionContext);
         result = await InvokeExceptionInterceptorCollection(
             MessageDependencies.IndirectExceptionInterceptors, message, result, exceptionDispatchInfo, executionContext);
-        FinishExceptionInterceptingSignal.Invoke(message, result, exceptionDispatchInfo.SourceException);
         
         return result;
     }

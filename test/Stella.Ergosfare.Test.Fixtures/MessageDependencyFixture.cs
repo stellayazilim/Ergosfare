@@ -2,7 +2,6 @@
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Registry;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
-using Stella.Ergosfare.Core.Abstractions.SignalHub;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Internal.Factories;
 using Stella.Ergosfare.Core.Internal.Registry;
@@ -167,8 +166,6 @@ public class MessageDependencyFixture : IFixture<MessageDependencyFixture>
         if (_disposed) return;
         if (_lazyProvider.IsValueCreated)
             ServiceProvider.Dispose();
-
-        SignalHubAccessor.ResetInstance();
         _disposed = true;
     }
 }

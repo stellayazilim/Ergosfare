@@ -1,6 +1,5 @@
 ﻿using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.SignalHub.Signals;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Queries.Abstractions;
 
@@ -32,8 +31,6 @@ public class QueryMediator(
     public Task<TResult> QueryAsync<TResult>(IQuery<TResult> query, QueryMediationSettings? queryMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
-        // Trigger a pipeline event indicating that the query has started processing
-        BeginPipelineSignal.Invoke(query, null);
         // Use default settings if none provided
         queryMediationSettings ??= new QueryMediationSettings();
         // Build a mediation strategy specific for single-result queries
@@ -48,8 +45,6 @@ public class QueryMediator(
                 Items = queryMediationSettings.Items,
                 Groups = queryMediationSettings.Filters.Groups
             });
-        // Trigger a pipeline event indicating that the query has completed
-        FinishPipelineSignal.Invoke(query, result);
         return result;
     }
 
@@ -68,8 +63,6 @@ public class QueryMediator(
     public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, QueryMediationSettings? queryMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
-        // Trigger a pipeline event indicating that streaming has started
-        BeginPipelineSignal.Invoke(query, null);
         // Use default settings if none provided
         queryMediationSettings ??= new QueryMediationSettings();
         // Build a mediation strategy for streaming queries
@@ -84,8 +77,6 @@ public class QueryMediator(
                 Items = queryMediationSettings.Items,
                 Groups = queryMediationSettings.Filters.Groups
             });
-        // Trigger a pipeline event indicating that streaming has completed
-        FinishPipelineSignal.Invoke(query, result);
         return result;
     }
 }

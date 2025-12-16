@@ -1,9 +1,7 @@
-using System;
-using System.Threading.Tasks;
+
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Invokers;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
-using Stella.Ergosfare.Core.Abstractions.SignalHub.Signals;
 
 namespace Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 
@@ -43,14 +41,8 @@ internal sealed class TaskFinalInterceptorInvocationStrategy(
             // resolve handler lazily
             var handler = interceptor.Handler.Value;
             
-            // Signal before interceptor execution
-            BeginFinalInterceptorInvocationSignal.Invoke(message, result, exception, handler.GetType());
-            
             // Execute interceptor
             await (Task) handler.Handle(message, result, exception, executionContext);
-            
-            // Signal after interceptor execution
-            FinishFinalInterceptorInvocationSignal.Invoke(message, result);
         }
     }
     
@@ -65,8 +57,6 @@ internal sealed class TaskFinalInterceptorInvocationStrategy(
     /// <returns>A <see cref="Task"/> representing the asynchronous operation of executing all final interceptors.</returns>
     public override async Task Invoke(object message, object? result, Exception? exception, IExecutionContext executionContext)
     {
-        // Signal start of final interceptor pipeline
-        BeginFinalInterceptingSignal.Invoke(message, result, exception, FinalInterceptorCount);
         
         // Run direct final interceptors
         await InvokeFinalInterceptorCollection(
@@ -76,7 +66,5 @@ internal sealed class TaskFinalInterceptorInvocationStrategy(
         await InvokeFinalInterceptorCollection(
             MessageDependencies.IndirectFinalInterceptors, message, result, exception, executionContext);
         
-        // Signal completion of final interceptor pipeline
-        FinishFinalInterceptingSignal.Invoke(message, result);
     }
 }

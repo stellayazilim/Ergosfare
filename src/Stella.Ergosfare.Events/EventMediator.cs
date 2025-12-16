@@ -1,5 +1,4 @@
 ﻿using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.SignalHub.Signals;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Events.Abstractions;
 
@@ -29,8 +28,6 @@ public sealed class EventMediator(
                              EventMediationSettings? eventMediationSettings = null,
                              CancellationToken cancellationToken = default)
     {
-        // Trigger the pipeline start event
-        BeginPipelineSignal.Invoke(@event, null);
         // Create a broadcast strategy for sending this event to multiple handlers
         var mediationStrategy = new AsyncBroadcastMediationStrategy<IEvent>(resultAdapterService, eventMediationSettings ??= new EventMediationSettings());
 
@@ -45,8 +42,6 @@ public sealed class EventMediator(
                 Items = eventMediationSettings.Items,
                 Groups = eventMediationSettings.Filters.Groups
             });
-        // Trigger the pipeline finish event
-        FinishPipelineSignal.Invoke(@event, null);
     }
 
     
@@ -62,8 +57,6 @@ public sealed class EventMediator(
                                      EventMediationSettings? eventMediationSettings = null,
                                      CancellationToken cancellationToken = default) where TEvent : notnull
     {
-        // Trigger the pipeline start event
-        BeginPipelineSignal.Invoke(@event, null);
         // Create a broadcast strategy for this specific event type
         var mediationStrategy = new AsyncBroadcastMediationStrategy<TEvent>(resultAdapterService, eventMediationSettings ??= new EventMediationSettings());
         // Execute the strongly-typed event through the mediator

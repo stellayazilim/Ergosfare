@@ -1,6 +1,5 @@
 using System.Reflection;
 using Stella.Ergosfare.Core;
-using Stella.Ergosfare.Core.Abstractions.SignalHub;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Internal.Factories;
@@ -34,7 +33,6 @@ public class AsyncBroadcastMediationStrategyTests
         messageRegistry.Register(typeof(StubNonGenericEvent));
         var messageMediator = new MessageMediator(
                 messageRegistry,
-                new SignalHub(),
                 new MessageDependenciesFactory(services));
         var mediator = new EventMediator(
             new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(messageRegistry),
@@ -73,7 +71,6 @@ public class AsyncBroadcastMediationStrategyTests
         messageRegistry.Register(typeof(StubNonGenericEvent));
         var messageMediator = new MessageMediator(
             messageRegistry,
-            new SignalHub(),
             new MessageDependenciesFactory(services));
         var mediator = new EventMediator(
             new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(messageRegistry),

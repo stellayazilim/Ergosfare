@@ -1,7 +1,5 @@
 ﻿using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.SignalHub;
-using Stella.Ergosfare.Core.Abstractions.SignalHub.Signals;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 
 namespace Stella.Ergosfare.Commands;
@@ -11,7 +9,6 @@ namespace Stella.Ergosfare.Commands;
 /// mediation strategies, and optional result adaptation.
 /// </summary>
 public class CommandMediator(
-    ISignalHub signalHub,
     ActualTypeOrFirstAssignableTypeMessageResolveStrategy messageResolveStrategy,
     IResultAdapterService? resultAdapterService,
     IMessageMediator messageMediator) : ICommandMediator
@@ -23,7 +20,6 @@ public class CommandMediator(
     public Task SendAsync(ICommand commandConstruct, CommandMediationSettings? commandMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
-        BeginPipelineSignal.Invoke(commandConstruct, null);
         
         commandMediationSettings ??= new CommandMediationSettings();
         var mediationStrategy = new SingleAsyncHandlerMediationStrategy<ICommand>(resultAdapterService);
@@ -37,7 +33,6 @@ public class CommandMediator(
             Groups = commandMediationSettings.Filters.Groups
         };
         var result =  messageMediator.Mediate(commandConstruct, options);
-        FinishPipelineSignal.Invoke(commandConstruct, result);
         return result;
     }
 

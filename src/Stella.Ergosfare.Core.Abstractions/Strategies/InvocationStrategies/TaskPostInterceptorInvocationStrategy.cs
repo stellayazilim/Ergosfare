@@ -1,9 +1,7 @@
-using System.Linq;
-using System.Threading.Tasks;
+
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Invokers;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
-using Stella.Ergosfare.Core.Abstractions.SignalHub.Signals;
 
 namespace Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 
@@ -57,8 +55,6 @@ internal sealed class TaskPostInterceptorInvocationStrategy(
      
 
 
-            // Signal: beginning of pre-interceptor execution
-            BeginPreInterceptorInvocationSignal.Invoke(message, null, handler.GetType());
                 
             // Execute interceptor handler and await result
             result = await (Task<object?>)handler.Handle(message, result, context);
@@ -66,9 +62,6 @@ internal sealed class TaskPostInterceptorInvocationStrategy(
             var ex = resultAdapterService?.LookupException(result);
             
             if (ex != null) throw ex;
-            
-            // Signal: end of pre-interceptor execution
-            FinishPreInterceptorInvocationSignal.Invoke(message, null);
   
         }
         return result;
@@ -87,10 +80,8 @@ internal sealed class TaskPostInterceptorInvocationStrategy(
     /// </returns>
     public override async Task<object?> Invoke(object message, object? result,  IExecutionContext context)
     {
-        BeginPostInterceptingSignal.Invoke(message, result, PostInterceptorCount);
         result = await InvokePostInterceptorCollection(MessageDependencies.PostInterceptors,message, result, context);
         result = await InvokePostInterceptorCollection(MessageDependencies.IndirectPostInterceptors, message, result, context);
-        FinishPostInterceptingSignal.Invoke(message, result);
         return result;
     }
 }
