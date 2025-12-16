@@ -17,13 +17,14 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    environment: publish
     strategy:
       matrix:
         dotnet-version: [ 9.0.x, 10.0.x ]   # .NET 9 ve 10
     permissions:
       contents: write
       packages: write
-
+      id-token: write
     steps:
       - name: Resolve branch
         run: |
