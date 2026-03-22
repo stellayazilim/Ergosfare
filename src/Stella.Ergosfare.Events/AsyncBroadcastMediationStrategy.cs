@@ -95,7 +95,7 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
     {
         foreach (var lazyHandler in handlers)
         {
-            var handleTask = (Task)lazyHandler.Handler.Value.Handle(message, context);
+            var handleTask = (Task)lazyHandler.Handler.Handle(message, context);
 
             await handleTask;
         }

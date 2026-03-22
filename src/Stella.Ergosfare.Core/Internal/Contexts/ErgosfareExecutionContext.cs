@@ -11,7 +11,7 @@ internal sealed class ErgosfareExecutionContext(
     IDictionary<object, object?>? items, CancellationToken cancellationToken)
     : IExecutionContext
 {
-
+    private static readonly Dictionary<object, object?> EmptyItems = [];
 
     /// <summary>
     /// Gets the <see cref="CancellationToken"/> associated with the current execution context.
@@ -24,7 +24,7 @@ internal sealed class ErgosfareExecutionContext(
     /// Gets a dictionary of arbitrary key-value pairs stored in the execution context.
     /// This can be used to share data between different handlers, interceptors, or other pipeline components.
     /// </summary>
-    public IDictionary<object, object?> Items { get; } = items ?? new Dictionary<object, object?>();
+    public IDictionary<object, object?> Items { get; } = items ?? EmptyItems;
 
     /// <summary>
     /// Stores an item in the execution context under the specified key.

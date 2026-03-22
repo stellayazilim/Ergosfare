@@ -67,6 +67,14 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
     public IReadOnlyCollection<IFinalInterceptorDescriptor> FinalInterceptors => _finalInterceptors;
     public IReadOnlyCollection<IFinalInterceptorDescriptor> IndirectFinalInterceptors => _indirectFinalInterceptors;
 
+    public bool HasInterceptors =>
+        _preInterceptors.Count > 0 || _indirectPreInterceptors.Count > 0 ||
+        _postInterceptors.Count > 0 || _indirectPostInterceptors.Count > 0 ||
+        _exceptionInterceptors.Count > 0 || _indirectExceptionInterceptors.Count > 0 ||
+        _finalInterceptors.Count > 0 || _indirectFinalInterceptors.Count > 0;
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, HandlerDescriptorCache> _groupCache = new();
+
     private bool _isDirty = false;
     
     /// <summary>
@@ -156,7 +164,77 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
         SortList(_indirectExceptionInterceptors);
         SortList(_finalInterceptors);
         SortList(_indirectFinalInterceptors);
+        _groupCache.Clear();
         _isDirty = false;
+    }
+
+    internal HandlerDescriptorCache GetCachedDescriptors(IEnumerable<string> groups)
+    {
+        var groupKey = string.Join('|', groups.OrderBy(g => g));
+        return _groupCache.GetOrAdd(groupKey, _ => BuildCache(groups));
+    }
+
+    private HandlerDescriptorCache BuildCache(IEnumerable<string> groups)
+    {
+        var groupList = groups.ToList();
+        return new HandlerDescriptorCache
+        {
+            PreInterceptors = FilterByGroup(_preInterceptors, groupList),
+            IndirectPreInterceptors = FilterByGroup(_indirectPreInterceptors, groupList),
+            Handlers = FilterByGroup(_handlers, groupList),
+            IndirectHandlers = FilterByGroup(_indirectHandlers, groupList),
+            PostInterceptors = FilterByGroup(_postInterceptors, groupList),
+            IndirectPostInterceptors = FilterByGroup(_indirectPostInterceptors, groupList),
+            ExceptionInterceptors = FilterByGroup(_exceptionInterceptors, groupList),
+            IndirectExceptionInterceptors = FilterByGroup(_indirectExceptionInterceptors, groupList),
+            FinalInterceptors = FilterByGroup(_finalInterceptors, groupList),
+            IndirectFinalInterceptors = FilterByGroup(_indirectFinalInterceptors, groupList)
+        };
+    }
+
+    private static TDescriptor[] FilterByGroup<TDescriptor>(List<TDescriptor> descriptors, List<string> groups) where TDescriptor : IHandlerDescriptor
+    {
+        var result = new List<TDescriptor>(descriptors.Count);
+        foreach (var d in descriptors)
+        {
+            if (IsInGroup(d.Groups, groups))
+            {
+                result.Add(d);
+            }
+        }
+        return result.ToArray();
+    }
+
+    private static bool IsInGroup(IReadOnlyCollection<string> handlerGroups, List<string> groups)
+    {
+        foreach (var g in groups)
+        {
+            foreach (var hg in handlerGroups)
+            {
+                if (g == hg) return true;
+            }
+        }
+        return false;
+    }
+
+    internal class HandlerDescriptorCache
+    {
+        public required IPreInterceptorDescriptor[] PreInterceptors { get; init; }
+        public required IPreInterceptorDescriptor[] IndirectPreInterceptors { get; init; }
+        public required IMainHandlerDescriptor[] Handlers { get; init; }
+        public required IMainHandlerDescriptor[] IndirectHandlers { get; init; }
+        public required IPostInterceptorDescriptor[] PostInterceptors { get; init; }
+        public required IPostInterceptorDescriptor[] IndirectPostInterceptors { get; init; }
+        public required IExceptionInterceptorDescriptor[] ExceptionInterceptors { get; init; }
+        public required IExceptionInterceptorDescriptor[] IndirectExceptionInterceptors { get; init; }
+        public required IFinalInterceptorDescriptor[] FinalInterceptors { get; init; }
+        public required IFinalInterceptorDescriptor[] IndirectFinalInterceptors { get; init; }
+
+        public bool HasInterceptors =>
+            PreInterceptors.Length > 0 || IndirectPreInterceptors.Length > 0 ||
+            PostInterceptors.Length > 0 || IndirectPostInterceptors.Length > 0 ||
+            ExceptionInterceptors.Length > 0 || IndirectExceptionInterceptors.Length > 0 ||
+            FinalInterceptors.Length > 0 || IndirectFinalInterceptors.Length > 0;
     }
 
     private static void SortList<T>(List<T> list) where T : IHandlerDescriptor

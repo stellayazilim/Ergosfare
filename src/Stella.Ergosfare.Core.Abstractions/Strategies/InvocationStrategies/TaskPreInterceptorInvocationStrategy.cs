@@ -28,7 +28,7 @@ internal static class TaskPreInterceptorInvocationStrategy
        
         foreach (var interceptor in interceptors)
         {
-            var handler = interceptor.Handler.Value;
+            var handler = interceptor.Handler;
             var result = handler.Handle(message, context);
             var awaitedResult = await TaskInvocationHelper.AwaitResult(result);
             if (awaitedResult != null)
@@ -42,7 +42,17 @@ internal static class TaskPreInterceptorInvocationStrategy
     /// <summary>
     /// Executes all pre-interceptors (direct and indirect) for the specified message.
     /// </summary>
-    public static async Task<object> Invoke(IMessageDependencies messageDependencies, object message, IExecutionContext executionContext)
+    public static Task<object> Invoke(IMessageDependencies messageDependencies, object message, IExecutionContext executionContext)
+    {
+        if (messageDependencies.PreInterceptors.Count == 0 && messageDependencies.IndirectPreInterceptors.Count == 0)
+        {
+            return Task.FromResult(message);
+        }
+
+        return InvokeInternal(messageDependencies, message, executionContext);
+    }
+
+    private static async Task<object> InvokeInternal(IMessageDependencies messageDependencies, object message, IExecutionContext executionContext)
     {
         if (messageDependencies.PreInterceptors.Count > 0)
             message = await InvokeCollection(messageDependencies.PreInterceptors ,message, executionContext);

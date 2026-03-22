@@ -61,18 +61,13 @@ internal sealed class MessageMediator(
     /// </remarks>
     public TResult Mediate<TMessage, TResult>(TMessage message, MediateOptions<TMessage, TResult> options) where TMessage : notnull
     {
-        
-    
         ArgumentNullException.ThrowIfNull(options);
         
-
-        // Use a scope to manage the execution context
-        using var _ = AmbientExecutionContext.CreateScope(new ErgosfareExecutionContext( options.Items, options.CancellationToken));
-        // Get the actual type of the message
+        var context = new ErgosfareExecutionContext(options.Items, options.CancellationToken);
+        using var scope = AmbientExecutionContext.CreateScope(context);
+        
         var messageType = message.GetType();
-        
         var descriptor = options.MessageResolveStrategy.Find(messageType);
-        
         
         if (descriptor is null)
         {
@@ -82,7 +77,6 @@ internal sealed class MessageMediator(
             }
 
             _messageRegistry.Register(messageType);
-
             descriptor = options.MessageResolveStrategy.Find(messageType);
         }
 
@@ -91,12 +85,8 @@ internal sealed class MessageMediator(
             throw new InvalidOperationException($"No descriptor found for message type {messageType} with specified resolve strategy.");
         }
 
-        // Resolve the dependencies in lazy mode
         var messageDependencies = _messageDependenciesFactory.Create(messageType, descriptor, options.Groups);
 
-        // Mediate the message using the specified strategy
-        // natural pipeline execution with fresh context
-        return options.MessageMediationStrategy.Mediate(message, messageDependencies,
-            AmbientExecutionContext.Current);
+        return options.MessageMediationStrategy.Mediate(message, messageDependencies, context);
     }
 }

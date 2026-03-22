@@ -6,12 +6,12 @@ namespace Stella.Ergosfare.Core.Abstractions;
 /// </summary>
 /// <typeparam name="THandler">The type of the handler.</typeparam>
 /// <typeparam name="TDescriptor">The type of the handler descriptor.</typeparam>
-public interface ILazyHandler<THandler, out TDescriptor>
+public interface ILazyHandler<out THandler, out TDescriptor>
 {
     /// <summary>
     /// Gets the lazily initialized handler instance.
     /// </summary>
-    public  Lazy<THandler> Handler { get; }
+    public THandler Handler { get; }
     
     /// <summary>
     /// Gets the descriptor associated with the handler.

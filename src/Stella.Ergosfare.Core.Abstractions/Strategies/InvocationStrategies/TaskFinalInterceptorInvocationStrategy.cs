@@ -25,13 +25,23 @@ internal static class TaskFinalInterceptorInvocationStrategy
     {
         foreach (var interceptor in interceptors)
         {
-            var handler = interceptor.Handler.Value;
+            var handler = interceptor.Handler;
             var handleResult = handler.Handle(message, result, exception, executionContext);
             await TaskInvocationHelper.AwaitResult(handleResult);
         }
     }
     
-    public static async Task Invoke(IMessageDependencies messageDependencies, object message, object? result, Exception? exception, IExecutionContext executionContext)
+    public static Task Invoke(IMessageDependencies messageDependencies, object message, object? result, Exception? exception, IExecutionContext executionContext)
+    {
+        if (messageDependencies.FinalInterceptors.Count == 0 && messageDependencies.IndirectFinalInterceptors.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        return InvokeInternal(messageDependencies, message, result, exception, executionContext);
+    }
+
+    private static async Task InvokeInternal(IMessageDependencies messageDependencies, object message, object? result, Exception? exception, IExecutionContext executionContext)
     {
         if (messageDependencies.FinalInterceptors.Count > 0)
             await InvokeCollection(

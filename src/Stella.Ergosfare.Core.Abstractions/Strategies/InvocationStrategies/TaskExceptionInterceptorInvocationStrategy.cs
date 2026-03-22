@@ -24,7 +24,7 @@ internal static class TaskExceptionInterceptorInvocationStrategy
     {
         foreach (var interceptor in interceptors)
         {
-            var handler = interceptor.Handler.Value;
+            var handler = interceptor.Handler;
             var handleResult = handler.Handle(message, result, dispatchInfo.SourceException, executionContext);
             var awaitedResult = await TaskInvocationHelper.AwaitResult(handleResult);
             result = awaitedResult ?? result;
@@ -32,12 +32,20 @@ internal static class TaskExceptionInterceptorInvocationStrategy
         return result;
     }
     
-    public static async Task<object?> Invoke(IMessageDependencies messageDependencies, object message, object? result, ExceptionDispatchInfo exceptionDispatchInfo,
+    public static Task<object?> Invoke(IMessageDependencies messageDependencies, object message, object? result, ExceptionDispatchInfo exceptionDispatchInfo,
         IExecutionContext executionContext)
     {
         if (messageDependencies.ExceptionInterceptors.Count == 0 && messageDependencies.IndirectExceptionInterceptors.Count == 0)
+        {
             exceptionDispatchInfo.Throw();
+            return Task.FromResult(result);
+        }
 
+        return InvokeInternal(messageDependencies, message, result, exceptionDispatchInfo, executionContext);
+    }
+
+    private static async Task<object?> InvokeInternal(IMessageDependencies messageDependencies, object message, object? result, ExceptionDispatchInfo exceptionDispatchInfo, IExecutionContext executionContext)
+    {
         if (messageDependencies.ExceptionInterceptors.Count > 0)
             result = await InvokeCollection(
                 messageDependencies.ExceptionInterceptors, message, result, exceptionDispatchInfo, executionContext);

@@ -26,6 +26,11 @@ public interface IMessageDescriptor: IHasMessageType
     bool IsGeneric { get; }
 
     /// <summary>
+    /// Gets a value indicating whether this message type has any interceptors.
+    /// </summary>
+    bool HasInterceptors { get; }
+
+    /// <summary>
     /// Gets the main handlers for the message type.
     /// </summary>
     IReadOnlyCollection<IMainHandlerDescriptor> Handlers  { get; }

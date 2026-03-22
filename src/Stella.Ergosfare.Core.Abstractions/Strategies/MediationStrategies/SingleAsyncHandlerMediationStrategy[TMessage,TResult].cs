@@ -51,7 +51,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
     /// <item>Checkpoints and snapshots ensure that retries, partial execution, or snapshot-based replay work seamlessly.</item>
     /// </list>
     /// </remarks>
-    public async Task<TResult> Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context)
+    public Task<TResult> Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context)
     {
         if (messageDependencies is null)
         {
@@ -61,28 +61,60 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
         {
             throw new MultipleHandlerFoundException(typeof(TMessage), messageDependencies.Handlers.Count);
         }
-            
+
+        // Fast path: No interceptors
+        if (!messageDependencies.HasInterceptors)
+        {
+            IHandler? handler;
+            if (messageDependencies.Handlers is SingleLazyHandlerCollection<IHandler, IMainHandlerDescriptor> single)
+            {
+                handler = single.SingleHandler.Handler;
+            }
+            else
+            {
+                handler = messageDependencies.Handlers.Single().Handler;
+            }
+
+            if (handler is null)
+            {
+                throw new InvalidOperationException($"Handler for {typeof(TMessage).Name} is not of the expected type.");
+            }
+
+            var task = (Task<TResult>)handler.Handle(message, context);
+            if (resultAdapterService == null) return task;
+
+            return MediateWithResultAdapterOnly(task);
+        }
+
+        return MediateFull(message, messageDependencies, context);
+    }
+
+    private async Task<TResult> MediateWithResultAdapterOnly(Task<TResult> task)
+    {
+        var result = await task;
+        var ex = resultAdapterService?.LookupException(result);
+        if (ex is not null) throw ex;
+        return result;
+    }
+
+    private async Task<TResult> MediateFull(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context)
+    {
         TResult result = default!;
         Exception? exception = null;
         try
         {
             message = (TMessage) await TaskPreInterceptorInvocationStrategy.Invoke(messageDependencies, message, context);
 
-            var handler = messageDependencies.Handlers.Single().Handler.Value;
-
-            
+            var handler = messageDependencies.Handlers.Single().Handler;
             if (handler is null)
             {
-                throw new InvalidOperationException(
-                    $"Handler for {typeof(TMessage).Name} is not of the expected type.");
+                throw new InvalidOperationException($"Handler for {typeof(TMessage).Name} is not of the expected type.");
             }
             
-    
             result = await (Task<TResult>)handler.Handle(message, context);
             
             var ex = resultAdapterService?.LookupException(result);
             if (ex is not null) throw ex;
-    
 
             var postResult = (TResult?)await TaskPostInterceptorInvocationStrategy.Invoke(messageDependencies, resultAdapterService, message, result, context);
             result = postResult is null ? result : postResult;
@@ -103,7 +135,6 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
                 context);
             
             result = exceptionResult is null ? result : exceptionResult;
-            
         }
         finally
         {

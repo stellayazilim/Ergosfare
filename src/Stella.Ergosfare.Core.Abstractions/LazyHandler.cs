@@ -1,4 +1,5 @@
 ﻿using System;
+using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 
 namespace Stella.Ergosfare.Core.Abstractions;
 
@@ -13,6 +14,7 @@ namespace Stella.Ergosfare.Core.Abstractions;
 ///     by deferring the creation of handler instances until they are actually needed.
 /// </remarks>
 public struct LazyHandler<THandler, TDescriptor>: ILazyHandler<THandler, TDescriptor>
+    where TDescriptor : IHandlerDescriptor
 {
     /// <summary>
     ///     Gets or initializes the lazily initialized handler.
@@ -20,7 +22,9 @@ public struct LazyHandler<THandler, TDescriptor>: ILazyHandler<THandler, TDescri
     /// <remarks>
     ///     The handler is created only when its Value property is accessed for the first time.
     /// </remarks>
-    public required Lazy<THandler> Handler { get; init; }
+    public required Lazy<THandler> LazyHandlerInstance { get; init; }
+
+    public THandler Handler => LazyHandlerInstance.Value;
 
     /// <summary>
     ///     Gets or initializes the descriptor associated with the handler.

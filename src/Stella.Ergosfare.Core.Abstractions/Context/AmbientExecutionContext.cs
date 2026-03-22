@@ -92,10 +92,9 @@ public static class AmbientExecutionContext
     ///     both synchronous and asynchronous usage patterns. When the scope is disposed, the previous execution
     ///     context (if any) is restored.
     /// </remarks>
-    public sealed class ExecutionContextScope : IDisposable, IAsyncDisposable
+    public readonly struct ExecutionContextScope : IDisposable, IAsyncDisposable
     {
         private readonly IExecutionContext? _previousContext;
-        private bool _disposed;
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="ExecutionContextScope" /> class.
@@ -122,11 +121,8 @@ public static class AmbientExecutionContext
         /// </summary>
         public void Dispose()
         {
-            if (_disposed) return;
-
             // This assignment is safe because ExecutionContextLocal.Value accepts nullable values
             ExecutionContextLocal.Value = _previousContext!;
-            _disposed = true;
         }
     }
 }

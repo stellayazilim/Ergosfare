@@ -40,7 +40,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
     ///     If an exception occurs during any stage, the appropriate error handlers are executed.
     ///     If a <see cref="ExecutionAbortedException" /> is caught, the mediation process is aborted without error.
     /// </remarks>
-    public async Task Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context)
+    public Task Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context)
     {
         if (messageDependencies is null)
         {
@@ -52,29 +52,60 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             throw new MultipleHandlerFoundException(typeof(TMessage), messageDependencies.Handlers.Count);
         }
 
+        // Fast path: No interceptors
+        if (!messageDependencies.HasInterceptors)
+        {
+            IHandler? handler;
+            if (messageDependencies.Handlers is SingleLazyHandlerCollection<IHandler, IMainHandlerDescriptor> single)
+            {
+                handler = single.SingleHandler.Handler;
+            }
+            else
+            {
+                handler = messageDependencies.Handlers.Single().Handler;
+            }
+
+            if (handler is null)
+            {
+                throw new InvalidOperationException($"Handler for {typeof(TMessage).Name} is not of the expected type.");
+            }
+
+            var task = (Task)handler.Handle(message, context);
+            if (resultAdapterService == null) return task;
+
+            return MediateWithResultAdapterOnly(task);
+        }
+
+        return MediateFull(message, messageDependencies, context);
+    }
+
+    private async Task MediateWithResultAdapterOnly(Task task)
+    {
+        await task;
+        var ex = resultAdapterService?.LookupException(task);
+        if (ex is not null) throw ex;
+    }
+
+    private async Task MediateFull(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context)
+    {
         Task? result = null;
         Exception? exception = null;
         try
         {
             message = (TMessage) await TaskPreInterceptorInvocationStrategy.Invoke(messageDependencies, message, context);
 
-            var handler = messageDependencies.Handlers.Single().Handler.Value;
-
+            var handler = messageDependencies.Handlers.Single().Handler;
             if (handler is null)
             {
-                throw new InvalidOperationException(
-                    $"Handler for {typeof(TMessage).Name} is not of the expected type.");
+                throw new InvalidOperationException($"Handler for {typeof(TMessage).Name} is not of the expected type.");
             }
             
             result =  (Task)handler.Handle(message, context);
             await result;
 
             var ex = resultAdapterService?.LookupException(result);
+            if (ex != null) throw ex;
 
-            if (ex != null)
-            {
-                throw ex;
-            }
             var invokedPostResult =  (Task?) await TaskPostInterceptorInvocationStrategy.Invoke(messageDependencies, resultAdapterService, message, result, context);
             result = invokedPostResult ?? result;
         }
@@ -84,12 +115,10 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             var invokedResult = (Task?) await TaskExceptionInterceptorInvocationStrategy.Invoke(messageDependencies, message, result, ExceptionDispatchInfo.Capture(e),
                 context);
             result = invokedResult ?? result;
-
         }
         finally
         {
             await TaskFinalInterceptorInvocationStrategy.Invoke(messageDependencies, message, result, exception, context);
         }
-        
     }
 }

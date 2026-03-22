@@ -24,7 +24,7 @@ internal static class TaskPostInterceptorInvocationStrategy
     {
         foreach (var interceptor in interceptors)
         {
-            var handler = interceptor.Handler.Value;
+            var handler = interceptor.Handler;
             var handleResult = handler.Handle(message, result, context);
             var awaitedResult = await TaskInvocationHelper.AwaitResult(handleResult);
 
@@ -36,7 +36,17 @@ internal static class TaskPostInterceptorInvocationStrategy
         return result;
     }
     
-    public static async Task<object?> Invoke(IMessageDependencies messageDependencies, IResultAdapterService? resultAdapterService, object message, object? result,  IExecutionContext context)
+    public static Task<object?> Invoke(IMessageDependencies messageDependencies, IResultAdapterService? resultAdapterService, object message, object? result,  IExecutionContext context)
+    {
+        if (messageDependencies.PostInterceptors.Count == 0 && messageDependencies.IndirectPostInterceptors.Count == 0)
+        {
+            return Task.FromResult(result);
+        }
+
+        return InvokeInternal(resultAdapterService, messageDependencies, message, result, context);
+    }
+
+    private static async Task<object?> InvokeInternal(IResultAdapterService? resultAdapterService, IMessageDependencies messageDependencies, object message, object? result, IExecutionContext context)
     {
         if (messageDependencies.PostInterceptors.Count > 0)
             result = await InvokeCollection(resultAdapterService, messageDependencies.PostInterceptors, message, result, context);

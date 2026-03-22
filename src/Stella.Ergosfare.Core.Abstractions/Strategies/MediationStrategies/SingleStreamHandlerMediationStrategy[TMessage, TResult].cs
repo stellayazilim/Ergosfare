@@ -55,8 +55,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         var handler = messageDependencies
             .Handlers
             .Single()
-            .Handler
-            .Value;
+            .Handler;
         
         
         if (handler is null)

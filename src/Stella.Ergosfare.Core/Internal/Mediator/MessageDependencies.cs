@@ -23,129 +23,63 @@ internal sealed class MessageDependencies : IMessageDependencies
     private static readonly string[] DefaultGroupArray = [ GroupAttribute.DefaultGroupName ];
 
     private readonly Type _messageType;
+    private readonly IServiceProvider _serviceProvider;
+    private readonly Stella.Ergosfare.Core.Internal.Registry.Descriptors.MessageDescriptor.HandlerDescriptorCache _cached;
+
+    public bool HasInterceptors => _cached.HasInterceptors;
     
-    private readonly IEnumerable<string> _groups;
+    private ILazyHandlerCollection<IPreInterceptor, IPreInterceptorDescriptor>? _preInterceptors;
+    public ILazyHandlerCollection<IPreInterceptor, IPreInterceptorDescriptor> PreInterceptors =>
+        _preInterceptors ??= ResolveHandlers(_cached.PreInterceptors, t => (IPreInterceptor)_serviceProvider.GetRequiredService(t));
     
+    private ILazyHandlerCollection<IPreInterceptor, IPreInterceptorDescriptor>? _indirectPreInterceptors;
+    public ILazyHandlerCollection<IPreInterceptor, IPreInterceptorDescriptor> IndirectPreInterceptors =>
+        _indirectPreInterceptors ??= ResolveHandlers(_cached.IndirectPreInterceptors, t => (IPreInterceptor)_serviceProvider.GetRequiredService(t));
     
-    /// <summary>
-    /// Gets the lazy collection of pre-interceptors for the message.
-    /// </summary>
-    public ILazyHandlerCollection<IPreInterceptor, IPreInterceptorDescriptor> PreInterceptors { get; }
+    private ILazyHandlerCollection<IHandler, IMainHandlerDescriptor>? _handlers;
+    public ILazyHandlerCollection<IHandler, IMainHandlerDescriptor> Handlers =>
+        _handlers ??= ResolveHandlers(_cached.Handlers, t => (IHandler)_serviceProvider.GetRequiredService(t));
     
-    /// <summary>
-    /// Gets the lazy collection of indirect pre-interceptors for the message.
-    /// </summary>
-    public ILazyHandlerCollection<IPreInterceptor, IPreInterceptorDescriptor> IndirectPreInterceptors { get; }
+    private ILazyHandlerCollection<IHandler, IMainHandlerDescriptor>? _indirectHandlers;
+    public ILazyHandlerCollection<IHandler, IMainHandlerDescriptor> IndirectHandlers =>
+        _indirectHandlers ??= ResolveHandlers(_cached.IndirectHandlers, t => (IHandler)_serviceProvider.GetRequiredService(t));
     
-    /// <summary>
-    /// Gets the lazy collection of main handlers for the message.
-    /// </summary>
-    public ILazyHandlerCollection<IHandler, IMainHandlerDescriptor> Handlers { get; }
+    private ILazyHandlerCollection<IPostInterceptor, IPostInterceptorDescriptor>? _postInterceptors;
+    public ILazyHandlerCollection<IPostInterceptor, IPostInterceptorDescriptor> PostInterceptors =>
+        _postInterceptors ??= ResolveHandlers(_cached.PostInterceptors, t => (IPostInterceptor)_serviceProvider.GetRequiredService(t));
     
-    /// <summary>
-    /// Gets the lazy collection of indirect main handlers for the message.
-    /// </summary>
-    public ILazyHandlerCollection<IHandler, IMainHandlerDescriptor> IndirectHandlers { get; }
-    
-    /// <summary>
-    /// Gets the lazy collection of post-interceptors for the message.
-    /// </summary>
-    public ILazyHandlerCollection<IPostInterceptor, IPostInterceptorDescriptor> PostInterceptors { get; }
-    
-    /// <summary>
-    /// Gets the lazy collection of indirect post-interceptors for the message.
-    /// </summary>
-    public ILazyHandlerCollection<IPostInterceptor, IPostInterceptorDescriptor> IndirectPostInterceptors { get; }
+    private ILazyHandlerCollection<IPostInterceptor, IPostInterceptorDescriptor>? _indirectPostInterceptors;
+    public ILazyHandlerCollection<IPostInterceptor, IPostInterceptorDescriptor> IndirectPostInterceptors =>
+        _indirectPostInterceptors ??= ResolveHandlers(_cached.IndirectPostInterceptors, t => (IPostInterceptor)_serviceProvider.GetRequiredService(t));
   
-    /// <summary>
-    /// Gets the lazy collection of exception interceptors for the message.
-    /// </summary>
-    public ILazyHandlerCollection<IExceptionInterceptor, IExceptionInterceptorDescriptor> ExceptionInterceptors { get; }
+    private ILazyHandlerCollection<IExceptionInterceptor, IExceptionInterceptorDescriptor>? _exceptionInterceptors;
+    public ILazyHandlerCollection<IExceptionInterceptor, IExceptionInterceptorDescriptor> ExceptionInterceptors =>
+        _exceptionInterceptors ??= ResolveHandlers(_cached.ExceptionInterceptors, t => (IExceptionInterceptor)_serviceProvider.GetRequiredService(t));
     
-    /// <summary>
-    /// Gets the lazy collection of indirect exception interceptors for the message.
-    /// </summary>
-    public ILazyHandlerCollection<IExceptionInterceptor, IExceptionInterceptorDescriptor> IndirectExceptionInterceptors { get; }
+    private ILazyHandlerCollection<IExceptionInterceptor, IExceptionInterceptorDescriptor>? _indirectExceptionInterceptors;
+    public ILazyHandlerCollection<IExceptionInterceptor, IExceptionInterceptorDescriptor> IndirectExceptionInterceptors =>
+        _indirectExceptionInterceptors ??= ResolveHandlers(_cached.IndirectExceptionInterceptors, t => (IExceptionInterceptor)_serviceProvider.GetRequiredService(t));
     
-    /// <summary>
-    /// Gets the lazy collection of final interceptors for the message.
-    /// </summary>
-    public ILazyHandlerCollection<IFinalInterceptor, IFinalInterceptorDescriptor> FinalInterceptors { get; }
+    private ILazyHandlerCollection<IFinalInterceptor, IFinalInterceptorDescriptor>? _finalInterceptors;
+    public ILazyHandlerCollection<IFinalInterceptor, IFinalInterceptorDescriptor> FinalInterceptors =>
+        _finalInterceptors ??= ResolveHandlers(_cached.FinalInterceptors, t => (IFinalInterceptor)_serviceProvider.GetRequiredService(t));
     
-    /// <summary>
-    /// Gets the lazy collection of indirect final interceptors for the message.
-    /// </summary>
-    public ILazyHandlerCollection<IFinalInterceptor, IFinalInterceptorDescriptor> IndirectFinalInterceptors { get; }
+    private ILazyHandlerCollection<IFinalInterceptor, IFinalInterceptorDescriptor>? _indirectFinalInterceptors;
+    public ILazyHandlerCollection<IFinalInterceptor, IFinalInterceptorDescriptor> IndirectFinalInterceptors =>
+        _indirectFinalInterceptors ??= ResolveHandlers(_cached.IndirectFinalInterceptors, t => (IFinalInterceptor)_serviceProvider.GetRequiredService(t));
   
-    /// <summary>
-    /// Initializes a new instance of <see cref="MessageDependencies"/> for the given message type,
-    /// descriptor, service provider, and groups.
-    /// </summary>
-    /// <param name="messageType">The type of the message for which dependencies are resolved.</param>
-    /// <param name="descriptor">The message descriptor providing handler metadata.</param>
-    /// <param name="serviceProvider">The service provider used to resolve handler instances.</param>
-    /// <param name="groups">The groups to filter handlers by; if none provided, the default group is used.</param>
     public MessageDependencies(Type messageType,
         IMessageDescriptor descriptor,
         IServiceProvider serviceProvider,
         IEnumerable<string> groups)
     {
         _messageType = messageType;
-        
-        if (groups is string[] groupsArray)
-        {
-            _groups = groupsArray.Length == 0 ? DefaultGroupArray : groupsArray;
-        }
-        else
-        {
-            var groupNames = groups.ToList();
-            _groups = groupNames.Count == 0 ? DefaultGroupArray : groupNames;
-        }
+        _serviceProvider = serviceProvider;
 
-        // resolve pre-interceptors
-        PreInterceptors = ResolveHandlers(
-            descriptor.PreInterceptors, 
-            handlerType => (IPreInterceptor) serviceProvider.GetRequiredService(handlerType));
-        
-        // resolve indirect pre-interceptors
-        IndirectPreInterceptors = ResolveHandlers(
-            descriptor.IndirectPreInterceptors, 
-            handlerType => (IPreInterceptor) serviceProvider.GetRequiredService(handlerType));
-        
-        // resolve main handlers
-        Handlers = ResolveHandlers(descriptor.Handlers, handlerType => (IHandler) serviceProvider.GetRequiredService(handlerType));
-        
-        // resolve indirect main handlers
-        IndirectHandlers = ResolveHandlers(descriptor.IndirectHandlers, handlerType => (IHandler) serviceProvider.GetRequiredService(handlerType));
+        var groupList = groups as IReadOnlyCollection<string> ?? groups.ToList();
+        if (groupList.Count == 0) groupList = DefaultGroupArray;
 
-        // resolve post-interceptors
-        PostInterceptors = ResolveHandlers(
-            descriptor.PostInterceptors,
-            handlerType => (IPostInterceptor)  serviceProvider.GetRequiredService(handlerType));
-        // resolve indirect post-interceptors
-        IndirectPostInterceptors = ResolveHandlers(
-            descriptor.IndirectPostInterceptors,
-            handlerType => (IPostInterceptor)  serviceProvider.GetRequiredService(handlerType));
-        
-        // resolve exception-interceptors
-        ExceptionInterceptors = ResolveHandlers(
-            descriptor.ExceptionInterceptors,
-            handlerType => (IExceptionInterceptor)  serviceProvider.GetRequiredService(handlerType)
-            );
-        // resolve indirect exception-interceptors
-        IndirectExceptionInterceptors = ResolveHandlers(
-            descriptor.IndirectExceptionInterceptors,
-            handlerType => (IExceptionInterceptor)  serviceProvider.GetRequiredService(handlerType));
-        
-        // resolve final-interceptors
-        FinalInterceptors = ResolveHandlers(
-            descriptor.FinalInterceptors,
-            handlerType => (IFinalInterceptor)  serviceProvider.GetRequiredService(handlerType));
-        
-        // resolve indirect final-interceptors
-        IndirectFinalInterceptors = ResolveHandlers(
-            descriptor.IndirectFinalInterceptors,
-            handlerType => (IFinalInterceptor)  serviceProvider.GetRequiredService(handlerType));
+        _cached = ((Stella.Ergosfare.Core.Internal.Registry.Descriptors.MessageDescriptor)descriptor).GetCachedDescriptors(groupList);
     }
 
     
@@ -159,43 +93,36 @@ internal sealed class MessageDependencies : IMessageDependencies
     /// <param name="resolveFunc">The function to create handler instances from a type.</param>
     /// <returns>A lazy read-only collection of handlers and their descriptors.</returns>
     private ILazyHandlerCollection<THandler, TDescriptor> ResolveHandlers<THandler, TDescriptor>(
-            IEnumerable<TDescriptor> descriptors, 
+            TDescriptor[] descriptors,
             Func<Type, THandler> resolveFunc ) where TDescriptor : IHandlerDescriptor
     {
-        List<ILazyHandler<THandler, TDescriptor>>? resultList = null;
-
-        foreach (var d in descriptors)
-        {
-            if (IsInGroup(d.Groups))
-            {
-                resultList ??= new List<ILazyHandler<THandler, TDescriptor>>();
-                resultList.Add(new LazyHandler<THandler, TDescriptor>
-                {
-                    Handler = new Lazy<THandler>(() => resolveFunc(GetHandlerType(d))),
-                    Descriptor = d
-                });
-            }
-        }
-
-        if (resultList == null)
+        if (descriptors.Length == 0)
         {
             return EmptyLazyHandlerCollection<THandler, TDescriptor>.Instance;
         }
 
-        return resultList.ToLazyReadOnlyCollection();
-    }
-
-    private bool IsInGroup(IReadOnlyCollection<string> handlerGroups)
-    {
-        // Optimized group matching
-        foreach (var g in _groups)
+        if (descriptors.Length == 1)
         {
-            foreach (var hg in handlerGroups)
+            var d = descriptors[0];
+            return new SingleLazyHandlerCollection<THandler, TDescriptor>(new LazyHandler<THandler, TDescriptor>
             {
-                if (g == hg) return true;
-            }
+                LazyHandlerInstance = new Lazy<THandler>(() => resolveFunc(GetHandlerType(d))),
+                Descriptor = d
+            });
         }
-        return false;
+
+        var resultList = new List<ILazyHandler<THandler, TDescriptor>>(descriptors.Length);
+
+        foreach (var d in descriptors)
+        {
+            resultList.Add(new LazyHandler<THandler, TDescriptor>
+            {
+                LazyHandlerInstance = new Lazy<THandler>(() => resolveFunc(GetHandlerType(d))),
+                Descriptor = d
+            });
+        }
+
+        return resultList.ToLazyReadOnlyCollection();
     }
 
     private static class EmptyLazyHandlerCollection<THandler, TDescriptor> where TDescriptor : IHandlerDescriptor

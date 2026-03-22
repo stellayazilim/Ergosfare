@@ -9,6 +9,11 @@ namespace Stella.Ergosfare.Core.Abstractions;
 public interface IMessageDependencies
 {
     /// <summary>
+    /// Gets a value indicating whether this message has any interceptors (pre, post, exception, or final).
+    /// </summary>
+    bool HasInterceptors { get; }
+
+    /// <summary>
     /// Gets the main handlers for the message.
     /// </summary>
     ILazyHandlerCollection<IHandler, IMainHandlerDescriptor> Handlers { get; } 
