@@ -9,7 +9,7 @@ namespace Stella.Ergosfare.Core.Abstractions;
 public interface ILazyHandler<out THandler, out TDescriptor>
 {
     /// <summary>
-    /// Gets the lazily initialized handler instance.
+    /// Gets the handler instance.
     /// </summary>
     public THandler Handler { get; }
     

@@ -168,10 +168,30 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
         _isDirty = false;
     }
 
+    private const string DefaultGroupKey = "__default__";
+
     internal HandlerDescriptorCache GetCachedDescriptors(IEnumerable<string> groups)
     {
-        var groupKey = string.Join('|', groups.OrderBy(g => g));
-        return _groupCache.GetOrAdd(groupKey, _ => BuildCache(groups));
+        // Performance optimization for the common case: single group
+        string? singleGroup = null;
+        if (groups is string[] { Length: 1 } arr) singleGroup = arr[0];
+        else if (groups is List<string> { Count: 1 } list) singleGroup = list[0];
+        else if (groups is IReadOnlyList<string> { Count: 1 } roList) singleGroup = roList[0];
+
+        if (singleGroup != null)
+        {
+            if (singleGroup == Stella.Ergosfare.Contracts.Attributes.GroupAttribute.DefaultGroupName)
+            {
+                return _groupCache.GetOrAdd(DefaultGroupKey, _ => BuildCache(groups));
+            }
+            return _groupCache.GetOrAdd(singleGroup, _ => BuildCache(groups));
+        }
+
+        // For multiple groups, we still need a combined key.
+        // We order them to ensure consistency regardless of input order.
+        var orderedGroups = groups.OrderBy(g => g).ToList();
+        var groupKey = string.Join('|', orderedGroups);
+        return _groupCache.GetOrAdd(groupKey, _ => BuildCache(orderedGroups));
     }
 
     private HandlerDescriptorCache BuildCache(IEnumerable<string> groups)

@@ -52,11 +52,31 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         }
         
         AmbientExecutionContext.Current = context;
-        var handler = messageDependencies
-            .Handlers
-            .Single()
-            .Handler;
-        
+
+        // Fast path: No interceptors
+        if (!messageDependencies.HasInterceptors)
+        {
+            var handlers = messageDependencies.Handlers;
+            if (handlers.Count == 0)
+            {
+                throw new InvalidOperationException($"No handler found for {typeof(TMessage).Name}.");
+            }
+
+            var h = handlers[0].Handler;
+            if (h is null)
+            {
+                throw new InvalidOperationException($"Handler for {typeof(TMessage).Name} is not of the expected type.");
+            }
+
+            var stream = (IAsyncEnumerable<TResult>)h.Handle(message, context);
+            await foreach (var item in stream.WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                yield return item;
+            }
+            yield break;
+        }
+
+        var handler = messageDependencies.Handlers[0].Handler;
         
         if (handler is null)
         {

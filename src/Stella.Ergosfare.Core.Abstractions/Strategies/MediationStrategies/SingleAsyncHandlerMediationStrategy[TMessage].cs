@@ -57,16 +57,13 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
         // Fast path: No interceptors
         if (!messageDependencies.HasInterceptors)
         {
-            IHandler? handler;
-            if (messageDependencies.Handlers is SingleLazyHandlerCollection<IHandler, IMainHandlerDescriptor> single)
+            var handlers = messageDependencies.Handlers;
+            if (handlers.Count == 0)
             {
-                handler = single.SingleHandler.Handler;
-            }
-            else
-            {
-                handler = messageDependencies.Handlers.Single().Handler;
+                throw new InvalidOperationException($"No handler found for {typeof(TMessage).Name}.");
             }
 
+            var handler = handlers[0].Handler;
             if (handler is null)
             {
                 throw new InvalidOperationException($"Handler for {typeof(TMessage).Name} is not of the expected type.");
@@ -96,7 +93,8 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
         {
             message = (TMessage) await TaskPreInterceptorInvocationStrategy.Invoke(messageDependencies, message, context);
 
-            var handler = messageDependencies.Handlers.Single().Handler;
+            var handlers = messageDependencies.Handlers;
+            var handler = handlers.Count > 0 ? handlers[0].Handler : null;
             if (handler is null)
             {
                 throw new InvalidOperationException($"Handler for {typeof(TMessage).Name} is not of the expected type.");

@@ -15,5 +15,5 @@ namespace Stella.Ergosfare.Core.Abstractions;
 ///     allows for efficient handling of large numbers of handlers by creating handler instances
 ///     only when they are actually needed.
 /// </remarks>
-public interface ILazyHandlerCollection<THandler, out TDescriptor> : IReadOnlyCollection<ILazyHandler<THandler, TDescriptor>>
+public interface ILazyHandlerCollection<THandler, out TDescriptor> : IReadOnlyList<ILazyHandler<THandler, TDescriptor>>
     where TDescriptor : IHandlerDescriptor;

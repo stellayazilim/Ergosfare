@@ -74,13 +74,12 @@ public class MessageDependenciesTest:
     {
         // arrange
         var messgeDependencies = new MessageDependencies(
-            typeof(IMessage), new MessageDescriptor(typeof(IMessage)), null!, []);
+            typeof(IMessage), new MessageDescriptor(typeof(IMessage)), new ServiceCollection().BuildServiceProvider(), []);
         // act
         var indirectHandlers = messgeDependencies.IndirectHandlers;
         // assert
         Assert.NotNull(indirectHandlers);
         Assert.Empty(indirectHandlers);
-        _messageDependencyFixture.Dispose();
     }
     
     

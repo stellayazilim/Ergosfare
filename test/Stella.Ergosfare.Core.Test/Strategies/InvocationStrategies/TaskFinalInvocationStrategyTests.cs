@@ -53,13 +53,10 @@ public class TaskFinalInterceptorInvocationStrategyTests:
     public async Task Invoke_ShouldExecuteDirectAndIndirectFinalInterceptors()
     {
         _messageDependencyFixture = _messageDependencyFixture.New;
+        _messageDependencyFixture.RegisterHandler(typeof(StubFinalInterceptor));
+        _messageDependencyFixture.RegisterHandler(typeof(StubIndirectFinalInterceptor));
         _messageDependencyFixture.MessageRegistry.Register(typeof(StubIndirectMessage));
-        _messageDependencyFixture.MessageRegistry.Register(typeof(StubFinalInterceptor));
-        _messageDependencyFixture.MessageRegistry.Register(typeof(StubIndirectFinalInterceptor));
 
-        
-        
-        
         // Set fixture to descriptor and create descriptor
         var descriptor = _descriptorFixture
             .SetMessageRegistry(_messageDependencyFixture.MessageRegistry)
