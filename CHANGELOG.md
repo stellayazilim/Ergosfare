@@ -1,4 +1,43 @@
+## v1.1.0 – '2026-03-23'
 
+### Features & Improvements
+
+#### LRU Cache Strategy for MessageDescriptorCache
+
+* Added pluggable `IDescriptorCacheStrategy` interface for flexible cache management.
+* Implemented **LRU (Least Recently Used)** cache strategy with configurable size limit (default: 100 entries).
+* `MessageDescriptorCache` now supports `TryGet<T>` and `Add` methods with thread-safe operations.
+* Automatic eviction of least recently used entries to control memory usage.
+* Optional periodic cleanup for stale entries (24-hour threshold).
+
+#### Performance Optimizations
+
+* Replaced LINQ chains with manual loops in `ResolveHandlers` to eliminate per-call delegate allocations.
+* Optimized group filtering and sorting with single-pass array operations.
+* Reduced allocation overhead in handler resolution hot path.
+
+#### Cache Integration
+
+* `MessageDependenciesFactory` now consumes `MessageDescriptorCache` for dependency caching.
+* Cache keys are now generated from message type and group combinations.
+* Improved cache hit rates for repeated message invocations with same parameters.
+
+### Bug Fixes
+
+* Fixed excessive memory allocation in handler resolution path.
+* Corrected group intersection logic for better filtering accuracy.
+
+### Internal Changes
+
+* Refactored `ResolveHandlers` method to use array-based operations instead of LINQ.
+* Simplified `MessageDescriptorCache` API with generic `TryGet<T>` method.
+* Updated DI registration to include default LRU cache strategy.
+
+### Notes
+
+* Default cache size is set to 100 entries; can be configured via `LruCacheStrategy` constructor.
+* Cache strategy can be overridden by implementing custom `IDescriptorCacheStrategy`.
+* Existing consumers should see reduced memory allocation and improved performance without API changes.
 
 ## v1.0.1 – '2025-12-16'
 
