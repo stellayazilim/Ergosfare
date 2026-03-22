@@ -23,4 +23,12 @@ public interface IMessageRegistry : IReadOnlyCollection<IMessageDescriptor>
     /// If the type is already registered, this method may update or ignore it depending on the implementation.
     /// </remarks>
     void Register(Type type);
+
+    /// <summary>
+    /// Tries to find a message descriptor for the specified message type.
+    /// </summary>
+    /// <param name="messageType">The type of the message to find.</param>
+    /// <param name="descriptor">The found descriptor, if any.</param>
+    /// <returns>True if the descriptor was found; otherwise, false.</returns>
+    bool TryGetDescriptor(Type messageType, out IMessageDescriptor? descriptor);
 }

@@ -56,8 +56,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
         Exception? exception = null;
         try
         {
-            var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
-            message = (TMessage) await preInvoker.Invoke(message, context);
+            message = (TMessage) await TaskPreInterceptorInvocationStrategy.Invoke(messageDependencies, message, context);
 
             var handler = messageDependencies.Handlers.Single().Handler.Value;
 
@@ -76,23 +75,20 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             {
                 throw ex;
             }
-            var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
-            var invokedPostResult =  (Task?) await postInvoker.Invoke(message, result, context);
+            var invokedPostResult =  (Task?) await TaskPostInterceptorInvocationStrategy.Invoke(messageDependencies, resultAdapterService, message, result, context);
             result = invokedPostResult ?? result;
         }
         catch (Exception e) when (e is not ExecutionAbortedException)
         {
             exception = e;
-            var exceptionInvoker = new TaskExceptionInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
-            var invokedResult = (Task?) await exceptionInvoker.Invoke(message, result, ExceptionDispatchInfo.Capture(e),
+            var invokedResult = (Task?) await TaskExceptionInterceptorInvocationStrategy.Invoke(messageDependencies, message, result, ExceptionDispatchInfo.Capture(e),
                 context);
             result = invokedResult ?? result;
 
         }
         finally
         {
-            var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
-            await finalInvoker.Invoke(message, result, exception, context);
+            await TaskFinalInterceptorInvocationStrategy.Invoke(messageDependencies, message, result, exception, context);
         }
         
     }

@@ -19,6 +19,8 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// </remarks>
 internal sealed class MessageDependencies : IMessageDependencies
 {
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(Type, Type), Type> GenericTypeCache = new();
+
     private readonly Type _messageType;
     
     private readonly IEnumerable<string> _groups;
@@ -140,27 +142,56 @@ internal sealed class MessageDependencies : IMessageDependencies
 
     
     /// <summary>
-    /// Resolves a lazy collection of handlers filtered by group and ordered by weight and type name.
+    /// Resolves a lazy collection of handlers filtered by group.
+    /// Descriptors are assumed to be pre-sorted.
     /// </summary>
     /// <typeparam name="THandler">The handler type.</typeparam>
     /// <typeparam name="TDescriptor">The descriptor type.</typeparam>
-    /// <param name="descriptors">The descriptors to resolve.</param>
+    /// <param name="descriptors">The pre-sorted descriptors to resolve.</param>
     /// <param name="resolveFunc">The function to create handler instances from a type.</param>
     /// <returns>A lazy read-only collection of handlers and their descriptors.</returns>
     private ILazyHandlerCollection<THandler, TDescriptor> ResolveHandlers<THandler, TDescriptor>(
             IEnumerable<TDescriptor> descriptors, 
             Func<Type, THandler> resolveFunc ) where TDescriptor : IHandlerDescriptor
     {
-        return descriptors
-            .OrderByDescending(d => d.Weight)
-            .ThenBy(d => d.HandlerType.FullName, StringComparer.Ordinal)
-            .Where(d => d.Groups.Intersect(_groups).Any())
-            .Select<TDescriptor, ILazyHandler<THandler, TDescriptor>>(d => new LazyHandler<THandler, TDescriptor>
+        var resultList = new List<ILazyHandler<THandler, TDescriptor>>();
+
+        foreach (var d in descriptors)
+        {
+            if (IsInGroup(d.Groups))
             {
-                Handler = new Lazy<THandler>(() => resolveFunc(GetHandlerType(d))),
-                Descriptor = d
-            })
-            .ToLazyReadOnlyCollection<THandler, TDescriptor>();
+                resultList.Add(new LazyHandler<THandler, TDescriptor>
+                {
+                    Handler = new Lazy<THandler>(() => resolveFunc(GetHandlerType(d))),
+                    Descriptor = d
+                });
+            }
+        }
+
+        if (resultList.Count == 0)
+        {
+            return EmptyLazyHandlerCollection<THandler, TDescriptor>.Instance;
+        }
+
+        return resultList.ToLazyReadOnlyCollection();
+    }
+
+    private bool IsInGroup(IReadOnlyCollection<string> handlerGroups)
+    {
+        // Optimized group matching
+        foreach (var g in _groups)
+        {
+            foreach (var hg in handlerGroups)
+            {
+                if (g == hg) return true;
+            }
+        }
+        return false;
+    }
+
+    private static class EmptyLazyHandlerCollection<THandler, TDescriptor> where TDescriptor : IHandlerDescriptor
+    {
+        public static readonly ILazyHandlerCollection<THandler, TDescriptor> Instance = new LazyHandlerCollection<THandler, TDescriptor>([]);
     }
 
     /// <summary>
@@ -174,7 +205,8 @@ internal sealed class MessageDependencies : IMessageDependencies
 
         if (descriptor.MessageType.IsGenericType)
         {
-            handlerType = handlerType.MakeGenericType(_messageType.GetGenericArguments());
+            return GenericTypeCache.GetOrAdd((handlerType, _messageType), _ =>
+                handlerType.MakeGenericType(_messageType.GetGenericArguments()));
         }
         return handlerType;
     }

@@ -74,8 +74,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         try
         {
             // run pre interceptors
-            var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
-            message =  (TMessage)await preInvoker.Invoke(message, context) ;
+            message =  (TMessage)await TaskPreInterceptorInvocationStrategy.Invoke(messageDependencies, message, context) ;
 
 
 
@@ -135,9 +134,8 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         {
             if (_unknownException is null)
             {
-                var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
                 // we can't override result since its chunked
-                await postInvoker.Invoke(message, enumerator, context).ConfigureAwait(false);
+                await TaskPostInterceptorInvocationStrategy.Invoke(messageDependencies, resultAdapterService, message, enumerator, context).ConfigureAwait(false);
             }
         }
         catch (ExecutionAbortedException)
@@ -150,9 +148,9 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         {
             if (_unknownException is not null)
             {
-                var exceptionInvoker = new TaskExceptionInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
                 // we can't override result since its chunked
-                await exceptionInvoker.Invoke(
+                await TaskExceptionInterceptorInvocationStrategy.Invoke(
+                    messageDependencies,
                     message,
                     enumerator,
                     ExceptionDispatchInfo.Capture(_unknownException),
@@ -165,8 +163,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         }
         finally
         {
-            var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
-            await finalInvoker.Invoke(message, enumerator, _unknownException, context);
+            await TaskFinalInterceptorInvocationStrategy.Invoke(messageDependencies, message, enumerator, _unknownException, context);
         }
     }
     

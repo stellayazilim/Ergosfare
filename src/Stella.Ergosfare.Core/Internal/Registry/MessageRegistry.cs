@@ -48,6 +48,11 @@ internal sealed class MessageRegistry(
     /// All messages (commands, queries, events, etc.)
     /// </summary>
     private readonly List<MessageDescriptor> _messages = [];
+
+    /// <summary>
+    /// Quick lookup for message descriptors by their message type.
+    /// </summary>
+    private readonly ConcurrentDictionary<Type, MessageDescriptor> _messageLookup = new();
     
     
     /// <summary>
@@ -156,9 +161,28 @@ internal sealed class MessageRegistry(
         // Move all newly registered messages to the main messages list and clear the newMessages list
         if (_newMessages.Count > 0)
         {
+            foreach (var message in _newMessages)
+            {
+                _messageLookup[message.MessageType] = message;
+            }
             _messages.AddRange(_newMessages);
             _newMessages.Clear();
         }
+    }
+
+    /// <summary>
+    /// Tries to find a message descriptor for the specified message type.
+    /// </summary>
+    public bool TryGetDescriptor(Type messageType, out IMessageDescriptor? descriptor)
+    {
+        if (_messageLookup.TryGetValue(messageType, out var result))
+        {
+            descriptor = result;
+            return true;
+        }
+
+        descriptor = null;
+        return false;
     }
     
     

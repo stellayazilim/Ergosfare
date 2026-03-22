@@ -66,6 +66,8 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
     // filan interceptors
     public IReadOnlyCollection<IFinalInterceptorDescriptor> FinalInterceptors => _finalInterceptors;
     public IReadOnlyCollection<IFinalInterceptorDescriptor> IndirectFinalInterceptors => _indirectFinalInterceptors;
+
+    private bool _isDirty = false;
     
     /// <summary>
     /// Adds multiple handler descriptors to this message descriptor.
@@ -73,11 +75,11 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
     /// <param name="descriptors">The collection of descriptors to add.</param>
     public void AddDescriptors(IEnumerable<IHandlerDescriptor> descriptors)
     {
-        
         foreach (var descriptor in descriptors)
         {
-            AddDescriptor(descriptor);
+            AddDescriptorInternal(descriptor);
         }
+        SortAll();
     }
     
     
@@ -89,6 +91,13 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
     /// <param name="descriptor">The descriptor to add.</param>
     public void AddDescriptor(IHandlerDescriptor descriptor)
     {
+        AddDescriptorInternal(descriptor);
+        SortAll();
+    }
+
+    private void AddDescriptorInternal(IHandlerDescriptor descriptor)
+    {
+        _isDirty = true;
         if (MessageType == descriptor.MessageType)
         {
             switch (descriptor)
@@ -132,5 +141,36 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
                     break;
             }
         }
+    }
+
+    private void SortAll()
+    {
+        if (!_isDirty) return;
+        SortList(_preInterceptors);
+        SortList(_indirectPreInterceptors);
+        SortList(_handlers);
+        SortList(_indirectHandlers);
+        SortList(_postInterceptors);
+        SortList(_indirectPostInterceptors);
+        SortList(_exceptionInterceptors);
+        SortList(_indirectExceptionInterceptors);
+        SortList(_finalInterceptors);
+        SortList(_indirectFinalInterceptors);
+        _isDirty = false;
+    }
+
+    private static void SortList<T>(List<T> list) where T : IHandlerDescriptor
+    {
+        if (list.Count <= 1) return;
+
+        list.Sort((x, y) =>
+        {
+            // Weight descending
+            int result = y.Weight.CompareTo(x.Weight);
+            if (result != 0) return result;
+
+            // FullName ascending
+            return string.Compare(x.HandlerType.FullName, y.HandlerType.FullName, StringComparison.Ordinal);
+        });
     }
 }

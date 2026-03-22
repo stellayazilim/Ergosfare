@@ -64,27 +64,23 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
         try
         {
             // events doesn't need result adapter, since events intended to not return a result
-            var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, null);
-            await preInvoker.Invoke(message, context);
+            await TaskPreInterceptorInvocationStrategy.Invoke(messageDependencies, message, context);
             var sequentialExecutionTask = PublishSequentially(message, handlers, context);
             await sequentialExecutionTask;
 
-            var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, null);
-            await postInvoker.Invoke(message, sequentialExecutionTask, context);
+            await TaskPostInterceptorInvocationStrategy.Invoke(messageDependencies, null, message, sequentialExecutionTask, context);
         }
         catch (Exception e)
         {
             exception = e;
-            var exceptionInvoker = new TaskExceptionInterceptorInvocationStrategy(messageDependencies, null);
-            await exceptionInvoker.Invoke(message, executionTaskOfAllHandlers,
+            await TaskExceptionInterceptorInvocationStrategy.Invoke(messageDependencies, message, executionTaskOfAllHandlers,
                 ExceptionDispatchInfo.Capture(e), context);
 
         }
 
         finally
         {
-            var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
-            await finalInvoker.Invoke(message, executionTaskOfAllHandlers, exception, context);
+            await TaskFinalInterceptorInvocationStrategy.Invoke(messageDependencies, message, executionTaskOfAllHandlers, exception, context);
         }
     }
 

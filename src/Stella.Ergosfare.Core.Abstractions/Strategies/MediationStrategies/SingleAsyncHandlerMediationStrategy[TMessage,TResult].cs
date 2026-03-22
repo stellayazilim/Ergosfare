@@ -66,8 +66,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
         Exception? exception = null;
         try
         {
-            var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
-            message = (TMessage) await preInvoker.Invoke(message, context);
+            message = (TMessage) await TaskPreInterceptorInvocationStrategy.Invoke(messageDependencies, message, context);
 
             var handler = messageDependencies.Handlers.Single().Handler.Value;
 
@@ -85,9 +84,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
             if (ex is not null) throw ex;
     
 
-            var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
-            
-            var postResult = (TResult?)await postInvoker.Invoke(message, result, context);
+            var postResult = (TResult?)await TaskPostInterceptorInvocationStrategy.Invoke(messageDependencies, resultAdapterService, message, result, context);
             result = postResult is null ? result : postResult;
         }
         catch (ExecutionAbortedException)
@@ -98,8 +95,8 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
         {
             exception = e;
             
-            var exceptionInvoker = new TaskExceptionInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
-            var exceptionResult  = (TResult?)await exceptionInvoker.Invoke(
+            var exceptionResult  = (TResult?)await TaskExceptionInterceptorInvocationStrategy.Invoke(
+                messageDependencies,
                 message, 
                 result, 
                 ExceptionDispatchInfo.Capture(exception),
@@ -110,8 +107,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
         }
         finally
         {
-            var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
-            await finalInvoker.Invoke(message, result, exception, context);
+            await TaskFinalInterceptorInvocationStrategy.Invoke(messageDependencies, message, result, exception, context);
         }
         
         return result;
