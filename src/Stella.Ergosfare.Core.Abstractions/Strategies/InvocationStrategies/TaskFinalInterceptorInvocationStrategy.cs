@@ -33,10 +33,12 @@ internal static class TaskFinalInterceptorInvocationStrategy
     
     public static async Task Invoke(IMessageDependencies messageDependencies, object message, object? result, Exception? exception, IExecutionContext executionContext)
     {
-        await InvokeCollection(
-            messageDependencies.FinalInterceptors, message, result, exception, executionContext);
+        if (messageDependencies.FinalInterceptors.Count > 0)
+            await InvokeCollection(
+                messageDependencies.FinalInterceptors, message, result, exception, executionContext);
         
-        await InvokeCollection(
-            messageDependencies.IndirectFinalInterceptors, message, result, exception, executionContext);
+        if (messageDependencies.IndirectFinalInterceptors.Count > 0)
+            await InvokeCollection(
+                messageDependencies.IndirectFinalInterceptors, message, result, exception, executionContext);
     }
 }

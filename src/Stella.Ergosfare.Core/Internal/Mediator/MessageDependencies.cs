@@ -20,6 +20,7 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 internal sealed class MessageDependencies : IMessageDependencies
 {
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<(Type, Type), Type> GenericTypeCache = new();
+    private static readonly string[] DefaultGroupArray = [ GroupAttribute.DefaultGroupName ];
 
     private readonly Type _messageType;
     
@@ -91,8 +92,15 @@ internal sealed class MessageDependencies : IMessageDependencies
     {
         _messageType = messageType;
         
-        var groupNames = groups.ToList();
-        _groups = groupNames.Count == 0 ? [ GroupAttribute.DefaultGroupName ]: groupNames;
+        if (groups is string[] groupsArray)
+        {
+            _groups = groupsArray.Length == 0 ? DefaultGroupArray : groupsArray;
+        }
+        else
+        {
+            var groupNames = groups.ToList();
+            _groups = groupNames.Count == 0 ? DefaultGroupArray : groupNames;
+        }
 
         // resolve pre-interceptors
         PreInterceptors = ResolveHandlers(
@@ -154,12 +162,13 @@ internal sealed class MessageDependencies : IMessageDependencies
             IEnumerable<TDescriptor> descriptors, 
             Func<Type, THandler> resolveFunc ) where TDescriptor : IHandlerDescriptor
     {
-        var resultList = new List<ILazyHandler<THandler, TDescriptor>>();
+        List<ILazyHandler<THandler, TDescriptor>>? resultList = null;
 
         foreach (var d in descriptors)
         {
             if (IsInGroup(d.Groups))
             {
+                resultList ??= new List<ILazyHandler<THandler, TDescriptor>>();
                 resultList.Add(new LazyHandler<THandler, TDescriptor>
                 {
                     Handler = new Lazy<THandler>(() => resolveFunc(GetHandlerType(d))),
@@ -168,7 +177,7 @@ internal sealed class MessageDependencies : IMessageDependencies
             }
         }
 
-        if (resultList.Count == 0)
+        if (resultList == null)
         {
             return EmptyLazyHandlerCollection<THandler, TDescriptor>.Instance;
         }

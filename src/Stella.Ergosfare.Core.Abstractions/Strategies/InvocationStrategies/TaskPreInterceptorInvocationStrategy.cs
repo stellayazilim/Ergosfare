@@ -44,8 +44,12 @@ internal static class TaskPreInterceptorInvocationStrategy
     /// </summary>
     public static async Task<object> Invoke(IMessageDependencies messageDependencies, object message, IExecutionContext executionContext)
     {
-        message = await InvokeCollection(messageDependencies.PreInterceptors ,message, executionContext);
-        message = await InvokeCollection(messageDependencies.IndirectPreInterceptors ,message, executionContext);
+        if (messageDependencies.PreInterceptors.Count > 0)
+            message = await InvokeCollection(messageDependencies.PreInterceptors ,message, executionContext);
+
+        if (messageDependencies.IndirectPreInterceptors.Count > 0)
+            message = await InvokeCollection(messageDependencies.IndirectPreInterceptors ,message, executionContext);
+
         return message;
     }
 }

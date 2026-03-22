@@ -37,11 +37,14 @@ internal static class TaskExceptionInterceptorInvocationStrategy
     {
         if (messageDependencies.ExceptionInterceptors.Count == 0 && messageDependencies.IndirectExceptionInterceptors.Count == 0)
             exceptionDispatchInfo.Throw();
+
+        if (messageDependencies.ExceptionInterceptors.Count > 0)
+            result = await InvokeCollection(
+                messageDependencies.ExceptionInterceptors, message, result, exceptionDispatchInfo, executionContext);
         
-        result = await InvokeCollection(
-            messageDependencies.ExceptionInterceptors, message, result, exceptionDispatchInfo, executionContext);
-        result = await InvokeCollection(
-            messageDependencies.IndirectExceptionInterceptors, message, result, exceptionDispatchInfo, executionContext);
+        if (messageDependencies.IndirectExceptionInterceptors.Count > 0)
+            result = await InvokeCollection(
+                messageDependencies.IndirectExceptionInterceptors, message, result, exceptionDispatchInfo, executionContext);
         
         return result;
     }

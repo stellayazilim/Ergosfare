@@ -38,8 +38,12 @@ internal static class TaskPostInterceptorInvocationStrategy
     
     public static async Task<object?> Invoke(IMessageDependencies messageDependencies, IResultAdapterService? resultAdapterService, object message, object? result,  IExecutionContext context)
     {
-        result = await InvokeCollection(resultAdapterService, messageDependencies.PostInterceptors, message, result, context);
-        result = await InvokeCollection(resultAdapterService, messageDependencies.IndirectPostInterceptors, message, result, context);
+        if (messageDependencies.PostInterceptors.Count > 0)
+            result = await InvokeCollection(resultAdapterService, messageDependencies.PostInterceptors, message, result, context);
+
+        if (messageDependencies.IndirectPostInterceptors.Count > 0)
+            result = await InvokeCollection(resultAdapterService, messageDependencies.IndirectPostInterceptors, message, result, context);
+
         return result;
     }
 }
