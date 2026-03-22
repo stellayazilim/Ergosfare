@@ -8,6 +8,8 @@ using Stella.Ergosfare.Core.Internal.Registry;
 using Stella.Ergosfare.Events.Abstractions;
 using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
+using Stella.Ergosfare.Core.Abstractions.Caching;
+using Stella.Ergosfare.Core.Internal.Caching;
 using Xunit.Abstractions;
 
 namespace Stella.Ergosfare.Events.Test;
@@ -66,7 +68,10 @@ public class AsyncBroadcastMediationStrategyTests
     [Trait("Category", "Coverage")]
     public async Task ShouldNotThrowWhenNoHandlerFound()
     {
-        var services = new ServiceCollection().BuildServiceProvider();
+        var services = new ServiceCollection()
+            .AddSingleton<IDescriptorCacheStrategy, LruCacheStrategy>()
+            .AddSingleton<MessageDescriptorCache>()
+            .BuildServiceProvider();
         var messageRegistry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         messageRegistry.Register(typeof(StubNonGenericEvent));
         var messageMediator = new MessageMediator(

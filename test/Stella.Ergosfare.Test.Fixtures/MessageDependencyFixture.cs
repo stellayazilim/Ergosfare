@@ -9,6 +9,8 @@ using Stella.Ergosfare.Core.Internal.Registry.Descriptors;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Stella.Ergosfare.Contracts.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Caching;
+using Stella.Ergosfare.Core.Internal.Caching;
 
 namespace Stella.Ergosfare.Test.Fixtures;
 
@@ -63,6 +65,8 @@ public class MessageDependencyFixture : IFixture<MessageDependencyFixture>
     public MessageDependencyFixture()
     {
         _services = new ServiceCollection();
+        _services.TryAddSingleton<IDescriptorCacheStrategy, LruCacheStrategy>();
+        _services.TryAddSingleton<MessageDescriptorCache>();
         Registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
 
         _lazyProvider = new Lazy<ServiceProvider>(() => _services.BuildServiceProvider());
@@ -113,6 +117,8 @@ public class MessageDependencyFixture : IFixture<MessageDependencyFixture>
         foreach (var handler in handlerTypes)
         {
             Registry.Register(handler);
+            _services.TryAddSingleton<MessageDescriptorCache>();
+            _services.TryAddSingleton<IDescriptorCacheStrategy, LruCacheStrategy>();
             _services.TryAddTransient(handler); // allow handlers automatically registered
 
         }

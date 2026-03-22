@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Registry;
@@ -7,6 +8,8 @@ using Stella.Ergosfare.Core.Internal.Mediator;
 using Stella.Ergosfare.Core.Internal.Registry;
 using Stella.Ergosfare.Test.Fixtures.Stubs.Basic;
 using Moq;
+using Stella.Ergosfare.Core.Abstractions.Caching;
+using Stella.Ergosfare.Core.Internal.Caching;
 
 namespace Stella.Ergosfare.Core.Test;
 
@@ -79,7 +82,11 @@ public class MessageMediatorTests
     public void MessageMediatr_Mediate_ShouldSetExecutionContext()
     {
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
-        
+
+        var provider = new ServiceCollection()
+            .AddSingleton<IDescriptorCacheStrategy, LruCacheStrategy>()
+            .AddSingleton<MessageDescriptorCache>()
+            .BuildServiceProvider();
         registry.Register(typeof(StubVoidHandler));
         registry.Register(typeof(StubPreInterceptor));
         //registry.Register(typeof(StubIndirectInterceptor));
@@ -91,7 +98,7 @@ public class MessageMediatorTests
         //registry.Register(typeof(StubNonGenericDerivedPostInterceptor2));
         var mediator = new MessageMediator(
             registry,
-            new MessageDependenciesFactory(null!)
+            new MessageDependenciesFactory(provider)
         );
         var message = new StubMessage();
         var options = new MediateOptions<StubMessage, Task>

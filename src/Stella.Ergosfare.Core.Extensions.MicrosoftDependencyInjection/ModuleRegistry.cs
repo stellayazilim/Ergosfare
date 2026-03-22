@@ -7,6 +7,8 @@ using Stella.Ergosfare.Core.Internal.Factories;
 using Stella.Ergosfare.Core.Internal.Mediator;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Stella.Ergosfare.Core.Abstractions.Caching;
+using Stella.Ergosfare.Core.Internal.Caching;
 
 namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
@@ -50,6 +52,9 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
         }
         services.TryAddTransient<IMessageDependenciesFactory, MessageDependenciesFactory>();
         services.TryAddTransient<IMessageMediator, MessageMediator>();
+        services.TryAddSingleton<IDescriptorCacheStrategy, LruCacheStrategy>();
+        services.TryAddSingleton<MessageDescriptorCache>();
+       
         services.TryAddSingleton(messageRegistry);
         services.TryAddTransient(_ => AmbientExecutionContext.Current);
         services.TryAddTransient<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>();

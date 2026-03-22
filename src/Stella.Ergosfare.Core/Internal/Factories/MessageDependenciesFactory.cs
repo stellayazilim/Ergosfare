@@ -1,25 +1,40 @@
-﻿using Stella.Ergosfare.Core.Abstractions;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
+using Stella.Ergosfare.Core.Abstractions.Registry;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Internal.Mediator;
+using Stella.Ergosfare.Core.Internal.Caching;
 
 namespace Stella.Ergosfare.Core.Internal.Factories;
 
-/// <summary>
-/// Factory for creating <see cref="IMessageDependencies"/> instances.
-/// </summary>
-/// <param name="serviceProvider">The service provider used to resolve handlers and interceptors.</param>
-public sealed class MessageDependenciesFactory(IServiceProvider serviceProvider): IMessageDependenciesFactory
+public sealed class MessageDependenciesFactory : IMessageDependenciesFactory
 {
-    /// <summary>
-    /// Creates a new <see cref="IMessageDependencies"/> for the specified message type and descriptor.
-    /// </summary>
-    /// <param name="messageType">The type of the message.</param>
-    /// <param name="descriptor">The message descriptor containing handlers and interceptors.</param>
-    /// <param name="groups">The groups to filter handlers and interceptors.</param>
-    /// <returns>A <see cref="IMessageDependencies"/> instance for the message.</returns>
+    private readonly IServiceProvider _serviceProvider;
+
+    public MessageDependenciesFactory(IServiceProvider serviceProvider)
+    {
+        _serviceProvider = serviceProvider;
+    }
+
     public IMessageDependencies Create(Type messageType, IMessageDescriptor descriptor, IEnumerable<string> groups)
     {
-        return new MessageDependencies(messageType, descriptor, serviceProvider, groups);
+        var groupsArray = groups as string[] ?? groups.ToArray();
+        var groupsKey = groupsArray.Length == 0 ? "" : string.Join('|', groupsArray);
+        var cacheKey = $"{messageType.FullName}|{groupsKey}";
+        
+        var cache = _serviceProvider.GetRequiredService<MessageDescriptorCache>();
+        
+        // Cache'te var mı?
+        if (cache.TryGet<IMessageDependencies>(cacheKey, out var dependencies))
+        {
+            return dependencies;
+        }
+        
+        // Yoksa oluştur ve cache'e ekle
+        dependencies = new MessageDependencies(messageType, descriptor, _serviceProvider, groupsArray);
+        cache.Add(cacheKey, dependencies);
+        
+        return dependencies;
     }
 }
