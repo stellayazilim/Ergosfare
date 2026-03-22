@@ -10,5 +10,5 @@ Intel Xeon Processor 2.30GHz, 1 CPU, 4 logical and 4 physical cores
 ```
 | Method          | Mean     | Error   | StdDev  | Gen0   | Allocated |
 |---------------- |---------:|--------:|--------:|-------:|----------:|
-| StellaErgosfare | 367.6 ns | 3.97 ns | 3.72 ns | 0.0229 |     560 B |
-| MediatR         | 139.6 ns | 1.22 ns | 1.08 ns | 0.0052 |     128 B |
+| StellaErgosfare | 385.9 ns | 3.53 ns | 3.30 ns | 0.0234 |     560 B |
+| MediatR         | 140.4 ns | 0.89 ns | 0.69 ns | 0.0052 |     128 B |

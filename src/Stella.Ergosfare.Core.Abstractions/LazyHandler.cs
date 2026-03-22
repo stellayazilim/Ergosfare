@@ -13,27 +13,15 @@ namespace Stella.Ergosfare.Core.Abstractions;
 ///     This structure allows for lazy initialization of handlers, which can improve performance
 ///     by deferring the creation of handler instances until they are actually needed.
 /// </remarks>
-public struct LazyHandler<THandler, TDescriptor>: ILazyHandler<THandler, TDescriptor>
+public sealed class LazyHandler<THandler, TDescriptor>(Func<THandler> resolver, TDescriptor descriptor) : ILazyHandler<THandler, TDescriptor>
     where TDescriptor : IHandlerDescriptor
 {
     private THandler? _handler;
-    private readonly Func<THandler> _resolver;
 
-    public LazyHandler(Func<THandler> resolver, TDescriptor descriptor)
-    {
-        _resolver = resolver;
-        Descriptor = descriptor;
-        _handler = default;
-    }
-
-    public THandler Handler => _handler ??= _resolver();
+    public THandler Handler => _handler ??= resolver();
 
     /// <summary>
-    ///     Gets or initializes the descriptor associated with the handler.
+    ///     Gets the descriptor associated with the handler.
     /// </summary>
-    /// <remarks>
-    ///     The descriptor provides metadata about the handler, such as the message type it handles,
-    ///     its execution order, and any associated tags.
-    /// </remarks>
-    public TDescriptor Descriptor { get; }
+    public TDescriptor Descriptor => descriptor;
 }
