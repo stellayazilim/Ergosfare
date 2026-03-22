@@ -42,7 +42,7 @@ public class LazyHandlerFixture : IFixture<LazyHandlerFixture>
         return new LazyHandler<THandler, IHandlerDescriptor>
         {
             Descriptor = descriptor,
-            Handler = new Lazy<THandler>(new THandler()),
+            LazyHandlerInstance = new Lazy<THandler>(new THandler()),
         };
     }
 

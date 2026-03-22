@@ -140,7 +140,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests:
 
         // Optional: verify the exception interceptor ran
         var executedTypes = dependencies.ExceptionInterceptors
-            .Select(x => x.Handler.Value.GetType())
+            .Select(x => x.Handler!.GetType())
             .ToList();
 
         Assert.Contains(typeof(StubVoidAsyncExceptionInterceptor), executedTypes);

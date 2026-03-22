@@ -139,7 +139,7 @@ internal sealed class MessageDependencies : IMessageDependencies
     {
         var handlerType = descriptor.HandlerType;
 
-        if (descriptor.MessageType.IsGenericType)
+        if (descriptor.MessageType.IsGenericType && handlerType.IsGenericTypeDefinition)
         {
             return GenericTypeCache.GetOrAdd((handlerType, _messageType), _ =>
                 handlerType.MakeGenericType(_messageType.GetGenericArguments()));

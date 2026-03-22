@@ -25,13 +25,16 @@ internal static class TaskPostInterceptorInvocationStrategy
         foreach (var interceptor in interceptors)
         {
             var handler = interceptor.Handler;
-            var handleResult = handler.Handle(message, result, context);
+            var handleResult = handler.Handle(message, result ?? new object(), context);
             var awaitedResult = await TaskInvocationHelper.AwaitResult(handleResult);
 
             result = awaitedResult ?? result;
 
-            var ex = resultAdapterService?.LookupException(result);
-            if (ex != null) throw ex;
+            if (result != null)
+            {
+                var ex = resultAdapterService?.LookupException(result);
+                if (ex != null) throw ex;
+            }
         }
         return result;
     }
