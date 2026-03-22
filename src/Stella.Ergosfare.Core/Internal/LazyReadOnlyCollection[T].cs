@@ -19,24 +19,29 @@ public sealed class LazyHandlerCollection<THandler, TDescriptor> :
     where TDescriptor : IHandlerDescriptor
 {
     /// <summary>
-    /// Internal list storing the lazy handler entries.
+    /// Internal array storing the lazy handler entries.
     /// </summary>
-    private readonly List<ILazyHandler<THandler, TDescriptor>> _list;
+    private readonly ILazyHandler<THandler, TDescriptor>[] _items;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LazyHandlerCollection{THandler, TDescriptor}"/> class
     /// from the provided lazy handler source.
     /// </summary>
     /// <param name="source">The source collection of lazy handlers.</param>
+    public LazyHandlerCollection(ILazyHandler<THandler, TDescriptor>[] items)
+    {
+        _items = items;
+    }
+
     public LazyHandlerCollection(IEnumerable<ILazyHandler<THandler, TDescriptor>> source)
     {
-        _list = new List<ILazyHandler<THandler, TDescriptor>>(source);
+        _items = source.ToArray();
     }
 
     /// <summary>
     /// Gets the number of handlers in the collection.
     /// </summary>
-    public int Count => _list.Count;
+    public int Count => _items.Length;
 
     /// <summary>
     /// Returns an enumerator that iterates through the collection of lazy handlers.
@@ -44,7 +49,10 @@ public sealed class LazyHandlerCollection<THandler, TDescriptor> :
     /// <returns>An enumerator for <see cref="ILazyHandler{THandler, TDescriptor}"/>.</returns>
     public IEnumerator<ILazyHandler<THandler, TDescriptor>> GetEnumerator()
     {
-        return _list.GetEnumerator();
+        for (int i = 0; i < _items.Length; i++)
+        {
+            yield return _items[i];
+        }
     }
 
     /// <summary>

@@ -101,25 +101,21 @@ internal sealed class MessageDependencies : IMessageDependencies
         if (descriptors.Length == 1)
         {
             var d = descriptors[0];
-            return new SingleLazyHandlerCollection<THandler, TDescriptor>(new LazyHandler<THandler, TDescriptor>
-            {
-                LazyHandlerInstance = new Lazy<THandler>(() => resolveFunc(GetHandlerType(d))),
-                Descriptor = d
-            });
+            var handlerType = GetHandlerType(d);
+            return new SingleLazyHandlerCollection<THandler, TDescriptor>(
+                new LazyHandler<THandler, TDescriptor>(() => resolveFunc(handlerType), d));
         }
 
-        var resultList = new List<ILazyHandler<THandler, TDescriptor>>(descriptors.Length);
+        var resultList = new ILazyHandler<THandler, TDescriptor>[descriptors.Length];
 
-        foreach (var d in descriptors)
+        for (int i = 0; i < descriptors.Length; i++)
         {
-            resultList.Add(new LazyHandler<THandler, TDescriptor>
-            {
-                LazyHandlerInstance = new Lazy<THandler>(() => resolveFunc(GetHandlerType(d))),
-                Descriptor = d
-            });
+            var d = descriptors[i];
+            var handlerType = GetHandlerType(d);
+            resultList[i] = new LazyHandler<THandler, TDescriptor>(() => resolveFunc(handlerType), d);
         }
 
-        return resultList.ToLazyReadOnlyCollection();
+        return new LazyHandlerCollection<THandler, TDescriptor>(resultList);
     }
 
     private static class EmptyLazyHandlerCollection<THandler, TDescriptor> where TDescriptor : IHandlerDescriptor

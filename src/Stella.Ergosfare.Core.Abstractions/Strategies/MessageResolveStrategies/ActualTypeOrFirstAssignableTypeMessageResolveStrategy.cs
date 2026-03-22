@@ -17,6 +17,8 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies;
 /// </remarks>
 public sealed class ActualTypeOrFirstAssignableTypeMessageResolveStrategy(IMessageRegistry messageRegistry) : IMessageResolveStrategy
 {
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Type, IMessageDescriptor?> _cache = new();
+
     /// <summary>
     ///     Finds a message descriptor for the specified message type from the message registry.
     /// </summary>
@@ -30,16 +32,18 @@ public sealed class ActualTypeOrFirstAssignableTypeMessageResolveStrategy(IMessa
     /// </remarks>
     public IMessageDescriptor? Find(Type messageType)
     {
-        if (messageType.IsGenericType)
-        {
-            messageType = messageType.GetGenericTypeDefinition();
-        }
+        return _cache.GetOrAdd(messageType, FindInternal);
+    }
 
-        if (messageRegistry.TryGetDescriptor(messageType, out var descriptor))
+    private IMessageDescriptor? FindInternal(Type messageType)
+    {
+        var lookupType = messageType.IsGenericType ? messageType.GetGenericTypeDefinition() : messageType;
+
+        if (messageRegistry.TryGetDescriptor(lookupType, out var descriptor))
         {
             return descriptor;
         }
 
-        return messageRegistry.FirstOrDefault(d => d.MessageType.IsAssignableFrom(messageType));
+        return messageRegistry.FirstOrDefault(d => d.MessageType.IsAssignableFrom(lookupType));
     }
 }

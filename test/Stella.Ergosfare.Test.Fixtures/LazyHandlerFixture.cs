@@ -39,11 +39,7 @@ public class LazyHandlerFixture : IFixture<LazyHandlerFixture>
         var descriptor = _descriptorFixture.CreateDescriptor<THandler>();
 
         // Return a new LazyHandler instance with descriptor and lazy handler initialization
-        return new LazyHandler<THandler, IHandlerDescriptor>
-        {
-            Descriptor = descriptor,
-            LazyHandlerInstance = new Lazy<THandler>(new THandler()),
-        };
+        return new LazyHandler<THandler, IHandlerDescriptor>(() => new THandler(), descriptor);
     }
 
     /// <summary>

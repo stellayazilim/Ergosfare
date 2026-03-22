@@ -16,15 +16,17 @@ namespace Stella.Ergosfare.Core.Abstractions;
 public struct LazyHandler<THandler, TDescriptor>: ILazyHandler<THandler, TDescriptor>
     where TDescriptor : IHandlerDescriptor
 {
-    /// <summary>
-    ///     Gets or initializes the lazily initialized handler.
-    /// </summary>
-    /// <remarks>
-    ///     The handler is created only when its Value property is accessed for the first time.
-    /// </remarks>
-    public required Lazy<THandler> LazyHandlerInstance { get; init; }
+    private THandler? _handler;
+    private readonly Func<THandler> _resolver;
 
-    public THandler Handler => LazyHandlerInstance.Value;
+    public LazyHandler(Func<THandler> resolver, TDescriptor descriptor)
+    {
+        _resolver = resolver;
+        Descriptor = descriptor;
+        _handler = default;
+    }
+
+    public THandler Handler => _handler ??= _resolver();
 
     /// <summary>
     ///     Gets or initializes the descriptor associated with the handler.
@@ -33,5 +35,5 @@ public struct LazyHandler<THandler, TDescriptor>: ILazyHandler<THandler, TDescri
     ///     The descriptor provides metadata about the handler, such as the message type it handles,
     ///     its execution order, and any associated tags.
     /// </remarks>
-    public required TDescriptor Descriptor { get; init; }
+    public TDescriptor Descriptor { get; }
 }
