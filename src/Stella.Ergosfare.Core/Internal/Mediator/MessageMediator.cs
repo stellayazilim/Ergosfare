@@ -62,10 +62,13 @@ internal sealed class MessageMediator(
     public TResult Mediate<TMessage, TResult>(TMessage message, MediateOptions<TMessage, TResult> options) where TMessage : notnull
     {
         ArgumentNullException.ThrowIfNull(options);
-        
-        var context = new ErgosfareExecutionContext(options.Items, options.CancellationToken);
-        using var scope = AmbientExecutionContext.CreateScope(context);
-        
+
+        var groups = options.Groups;
+        if (groups is null || !groups.Any())
+        {
+            groups = MessageDependencies.DefaultGroupArray;
+        }
+
         var messageType = message.GetType();
         var descriptor = options.MessageResolveStrategy.Find(messageType);
         
@@ -85,7 +88,11 @@ internal sealed class MessageMediator(
             throw new InvalidOperationException($"No descriptor found for message type {messageType} with specified resolve strategy.");
         }
 
-        var messageDependencies = _messageDependenciesFactory.Create(messageType, descriptor, options.Groups);
+        var previous = AmbientExecutionContext.GetCurrentOrDefault();
+        var context = new ErgosfareExecutionContext(options.Items, options.CancellationToken);
+        using var scope = AmbientExecutionContext.CreateScope(context, previous);
+
+        var messageDependencies = _messageDependenciesFactory.Create(messageType, descriptor, groups);
 
         return options.MessageMediationStrategy.Mediate(message, messageDependencies, context);
     }

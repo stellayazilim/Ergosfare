@@ -28,7 +28,7 @@ public sealed class MediateOptions<TMessage, TResult>
     /// <summary>
     /// Gets or sets a collection of arbitrary items that can be shared or passed along during mediation.
     /// </summary>
-    public IDictionary<object, object?> Items { get; init; } = new Dictionary<object, object?>();
+    public IDictionary<object, object?>? Items { get; init; }
 
     /// <summary>
     /// Gets or sets the strategy responsible for executing the message mediation.

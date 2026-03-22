@@ -20,7 +20,7 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 internal sealed class MessageDependencies : IMessageDependencies
 {
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<(Type, Type), Type> GenericTypeCache = new();
-    private static readonly string[] DefaultGroupArray = [ GroupAttribute.DefaultGroupName ];
+    public static readonly string[] DefaultGroupArray = [ GroupAttribute.DefaultGroupName ];
 
     private readonly Type _messageType;
     private readonly IServiceProvider _serviceProvider;
@@ -76,10 +76,7 @@ internal sealed class MessageDependencies : IMessageDependencies
         _messageType = messageType;
         _serviceProvider = serviceProvider;
 
-        var groupList = groups as IReadOnlyCollection<string> ?? groups.ToList();
-        if (groupList.Count == 0) groupList = DefaultGroupArray;
-
-        _cached = ((Stella.Ergosfare.Core.Internal.Registry.Descriptors.MessageDescriptor)descriptor).GetCachedDescriptors(groupList);
+        _cached = ((Stella.Ergosfare.Core.Internal.Registry.Descriptors.MessageDescriptor)descriptor).GetCachedDescriptors(groups);
     }
 
     

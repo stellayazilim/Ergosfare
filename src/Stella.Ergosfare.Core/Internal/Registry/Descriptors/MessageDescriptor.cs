@@ -170,8 +170,24 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
 
     internal HandlerDescriptorCache GetCachedDescriptors(IEnumerable<string> groups)
     {
-        var groupKey = string.Join('|', groups.OrderBy(g => g));
-        return _groupCache.GetOrAdd(groupKey, _ => BuildCache(groups));
+        var groupList = groups as IReadOnlyList<string> ?? groups.ToList();
+
+        // If no groups provided, use Default
+        if (groupList.Count == 0)
+        {
+            groupList = [Stella.Ergosfare.Contracts.Attributes.GroupAttribute.DefaultGroupName];
+            return _groupCache.GetOrAdd(Stella.Ergosfare.Contracts.Attributes.GroupAttribute.DefaultGroupName,
+                _ => BuildCache(groupList));
+        }
+
+        // Optimization for common case: single group "Default"
+        if (groupList.Count == 1 && groupList[0] == Stella.Ergosfare.Contracts.Attributes.GroupAttribute.DefaultGroupName)
+        {
+            return _groupCache.GetOrAdd(Stella.Ergosfare.Contracts.Attributes.GroupAttribute.DefaultGroupName, _ => BuildCache(groupList));
+        }
+
+        var groupKey = string.Join('|', groupList.OrderBy(g => g));
+        return _groupCache.GetOrAdd(groupKey, _ => BuildCache(groupList));
     }
 
     private HandlerDescriptorCache BuildCache(IEnumerable<string> groups)

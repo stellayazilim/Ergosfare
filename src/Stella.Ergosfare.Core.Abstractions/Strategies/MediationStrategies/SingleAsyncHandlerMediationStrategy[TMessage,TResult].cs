@@ -67,25 +67,38 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
         // Fast path: No interceptors
         if (!messageDependencies.HasInterceptors)
         {
-            IHandler? handler;
             if (messageDependencies.Handlers is SingleLazyHandlerCollection<IHandler, IMainHandlerDescriptor> single)
             {
-                handler = single.SingleHandler.Handler;
-            }
-            else
-            {
-                handler = messageDependencies.Handlers.Single().Handler;
+                var h = single.SingleHandler.Handler;
+                if (h is IHandler<TMessage, Task<TResult>> stronglyTyped)
+                {
+                    var t = stronglyTyped.Handle(message, context);
+                    if (resultAdapterService == null) return t;
+                    return MediateWithResultAdapterOnly(t);
+                }
+
+                var task = (Task<TResult>)h.Handle(message, context);
+                if (resultAdapterService == null) return task;
+                return MediateWithResultAdapterOnly(task);
             }
 
+            var handler = messageDependencies.Handlers.Single().Handler;
             if (handler is null)
             {
                 throw new InvalidOperationException($"Handler for {typeof(TMessage).Name} is not of the expected type.");
             }
 
-            var task = (Task<TResult>)handler.Handle(message, context);
-            if (resultAdapterService == null) return task;
+            if (handler is IHandler<TMessage, Task<TResult>> stronglyTypedHandler)
+            {
+                var t = stronglyTypedHandler.Handle(message, context);
+                if (resultAdapterService == null) return t;
+                return MediateWithResultAdapterOnly(t);
+            }
 
-            return MediateWithResultAdapterOnly(task);
+            var taskResult = (Task<TResult>)handler.Handle(message, context);
+            if (resultAdapterService == null) return taskResult;
+
+            return MediateWithResultAdapterOnly(taskResult);
         }
 
         return MediateFull(message, messageDependencies, context);

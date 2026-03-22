@@ -20,11 +20,13 @@ internal sealed class ErgosfareExecutionContext(
     public CancellationToken CancellationToken { get; } = cancellationToken;
     
     
+    private IDictionary<object, object?>? _items = items;
+
     /// <summary>
     /// Gets a dictionary of arbitrary key-value pairs stored in the execution context.
     /// This can be used to share data between different handlers, interceptors, or other pipeline components.
     /// </summary>
-    public IDictionary<object, object?> Items { get; } = items ?? EmptyItems;
+    public IDictionary<object, object?> Items => _items ?? EmptyItems;
 
     /// <summary>
     /// Stores an item in the execution context under the specified key.
@@ -34,7 +36,8 @@ internal sealed class ErgosfareExecutionContext(
     /// <param name="item">The object to store in the context.</param>
     public void Set(string key, object item)
     {
-        Items[key] = item;
+        _items ??= new Dictionary<object, object?>();
+        _items[key] = item;
     }
 
     
@@ -45,7 +48,7 @@ internal sealed class ErgosfareExecutionContext(
     /// <returns><c>true</c> if an item with the given key exists; otherwise, <c>false</c>.</returns>
     public bool Has(string key)
     {
-        return Items.ContainsKey(key);
+        return _items?.ContainsKey(key) ?? false;
     }
 
     
@@ -60,7 +63,7 @@ internal sealed class ErgosfareExecutionContext(
     /// <returns><c>true</c> if an item with the given key exists and is of the correct type; otherwise, <c>false</c>.</returns>
     public TType Get<TType>(string key) where TType : notnull
     {
-        if (!Items.TryGetValue(key, out var ıtem)) 
+        if (_items == null || !_items.TryGetValue(key, out var ıtem))
             throw new InvalidOperationException("Item does not exist");
         return (TType)ıtem!;
     }
@@ -77,7 +80,7 @@ internal sealed class ErgosfareExecutionContext(
     /// <exception cref="InvalidCastException">Thrown if the stored item cannot be cast to <typeparamref name="TType"/>.</exception>
     public bool TryGet<TType>(string key, out TType item)
     {
-        if (Items.TryGetValue(key, out var el))
+        if (_items != null && _items.TryGetValue(key, out var el))
         {
             item = (TType)el!;
             return true;

@@ -82,6 +82,18 @@ public static class AmbientExecutionContext
     {
         return new ExecutionContextScope(context);
     }
+
+    /// <summary>
+    ///     Creates a new execution context scope that restores the previous context when disposed.
+    ///     Optimized for cases where we know a context change is required.
+    /// </summary>
+    /// <param name="context">The execution context to use within the scope.</param>
+    /// <param name="previous">The previous execution context (from GetCurrentOrDefault()).</param>
+    /// <returns>A disposable scope that restores the previous context when disposed.</returns>
+    public static ExecutionContextScope CreateScope(IExecutionContext context, IExecutionContext? previous)
+    {
+        return new ExecutionContextScope(context, previous);
+    }
     
     
     /// <summary>
@@ -103,6 +115,12 @@ public static class AmbientExecutionContext
         internal ExecutionContextScope(IExecutionContext newContext)
         {
             _previousContext = GetCurrentOrDefault();
+            ExecutionContextLocal.Value = newContext;
+        }
+
+        internal ExecutionContextScope(IExecutionContext newContext, IExecutionContext? previousContext)
+        {
+            _previousContext = previousContext;
             ExecutionContextLocal.Value = newContext;
         }
 
