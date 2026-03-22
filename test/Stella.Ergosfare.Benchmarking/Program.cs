@@ -76,14 +76,17 @@ public class MediationBenchmark
     }
 
     [Benchmark]
-    public Task StellaErgosfare()
+    public async Task StellaErgosfare()
     {
-        return _stellaMediator.Mediate(_stellaMessage, _stellaOptions);
+        
+        for (var i = 0; i < 100000; i++) 
+            await _stellaMediator.Mediate(_stellaMessage, _stellaOptions);
     }
 
     [Benchmark]
-    public Task MediatR()
+    public async Task MediatR()
     {
-        return _mediatrMediator.Send(_mediatrRequest);
+        for (var i = 0; i < 100000; i++) 
+            await _mediatrMediator.Send(_mediatrRequest);
     }
 }
