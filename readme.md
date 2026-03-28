@@ -8,49 +8,43 @@
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/stellayazilim/ergosfare/coverage_tests.yml?label=tests)
 ![Coverage](https://github.com/stellayazilim/Ergosfare/blob/badges/.badges/main/coverage.svg)
 
----
 
-## 📖 Documentation & 📜 Changelog
+## Documentation & Changelog
 
-- 📚 **Docs** → https://stellayazilim.github.io/Ergosfare.Docs  
-- 📌 **Changelog** → https://stellayazilim.github.io/ergosfare.changelog
+- **Docs** → https://stellayazilim.github.io/Ergosfare.Docs
+- **Changelog** → https://stellayazilim.github.io/ergosfare.changelog
 
----
+## Overview
 
-## 🚀 Overview
-
-**Ergosfare** is a lightweight, reflection-free, high-performance mediator for implementing **CQRS** and messaging pipelines in .NET.
+**Ergosfare** is a lightweight, reflection-free, high-performance mediator for implementing CQRS and messaging pipelines in .NET.
 
 Unlike traditional mediator libraries, it is:
 
 | Feature | Description |
-|--------|-------------|
-| ⚡ **Fast & AOT-ready** | No runtime reflection — compile-time registration |
-| 🧩 **Fully modular** | Commands, Queries, Events can be used independently |
-| 🔄 **Flexible** | Supports covariance & contravariance |
-| 🛡 **Interceptor-powered** | Cross-cutting concerns via pipeline hooks |
-| 🔗 **DI-friendly** | Works with `Microsoft.Extensions.DependencyInjection` |
-| 🧪 **Test-driven design** | Built with fixtures & instrumentation |
+|---------|-------------|
+| Fast & AOT-ready | No runtime reflection — compile-time registration |
+| Fully modular | Commands, Queries, Events can be used independently |
+| Flexible | Supports covariance & contravariance |
+| Interceptor-powered | Cross-cutting concerns via pipeline hooks |
+| DI-friendly | Works with Microsoft.Extensions.DependencyInjection |
+| Test-driven design | Built with fixtures & instrumentation |
 
----
+## Features
 
-## 🔧 Features
-
-- Unified handler execution model  
-- Group & weight-based handler ordering  
-- `IExecutionContext` for cancellation propagation  
+- Unified handler execution model
+- Group & weight-based handler ordering
+- `IExecutionContext` for cancellation propagation
 - Interceptors:
-  - **Pre** → before handlers, can modify/stop pipeline  
-  - **Post** → after success, can modify result  
-  - **Exception** → on error (catch/rethrow/retry)  
-  - **Final** → always executed  
-- No runtime reflection  
-- Result adapters for exception-free result handling  
-- Plugin support & pipeline signals
+  - Pre → before handlers, can modify/stop pipeline
+  - Post → after success, can modify result
+  - Exception → on error (catch/rethrow/retry)
+  - Final → always executed
+- Message descriptor cache for optimal performance
+- No runtime reflection
+- Result adapters for exception-free result handling
+- Plugin support
 
----
-
-## 🧱 Modules
+## Modules
 
 | Module | Description |
 |--------|-------------|
@@ -60,23 +54,22 @@ Unlike traditional mediator libraries, it is:
 | Queries (and Abstractions) | Query processing |
 | Events (and Abstractions) | Event dispatching |
 
-👉 *Use only what you need — all modules are independent & composable.*
+Use only what you need — all modules are independent & composable.
 
----
+## Installation
 
-## 📦 Installation
-
-```bash
+```
 dotnet add package Stella.Ergosfare
-# Or module-specific:
-# dotnet add package Stella.Ergosfare.Commands
-````
+```
 
-> If using GitHub Packages, update `nuget.config` accordingly.
+Or module-specific:
+```
+dotnet add package Stella.Ergosfare.Commands
+```
 
----
+If using GitHub Packages, update `nuget.config` accordingly.
 
-## ⚡ Quick Start
+## Quick Start
 
 ```csharp
 public record CreateProduct(string Name) : ICommand<Guid>;
@@ -86,9 +79,7 @@ public class CreateProductHandler : ICommandHandler<CreateProduct, Guid>
     public Task<Guid> HandleAsync(CreateProduct command, IExecutionContext context)
         => Task.FromResult(Guid.NewGuid());
 }
-```
 
-```csharp
 var services = new ServiceCollection()
     .AddErgosfare(o =>
     {
@@ -100,9 +91,7 @@ var mediator = services.GetRequiredService<ICommandMediator>();
 var id = await mediator.SendAsync(new CreateProduct("Laptop"));
 ```
 
----
-
-## 🛠 Interceptors
+## Interceptors
 
 ```csharp
 public class LoggingInterceptor : IAsyncPostInterceptor<ICommand>
@@ -115,9 +104,7 @@ public class LoggingInterceptor : IAsyncPostInterceptor<ICommand>
 }
 ```
 
----
-
-## 🎚 Result Adapters
+## Result Adapters
 
 ```csharp
 public class ResultAdapter : IResultAdapter
@@ -130,18 +117,14 @@ public class ResultAdapter : IResultAdapter
         ex = null; return false;
     }
 }
-```
 
-```csharp
 services.AddErgosfare(o =>
 {
     o.ConfigureResultAdapters(a => a.Register<ResultAdapter>());
 });
 ```
 
----
-
-## 🔌 Plugin Example
+## Plugin Example
 
 ```csharp
 public sealed class ExamplePlugin : IModule
@@ -152,9 +135,7 @@ public sealed class ExamplePlugin : IModule
     public void Build(IModuleConfiguration config)
         => _cfg(new ExamplePluginBuilder(config.Services));
 }
-```
 
-```csharp
 services.AddErgosfare(o =>
 {
     o.AddExamplePlugin(b => b.AddLogConsoleOnPipeline())
@@ -163,65 +144,27 @@ services.AddErgosfare(o =>
 });
 ```
 
----
 
-## 📡 Signals (Framework-Level Notifications)
 
-```csharp
-SignalHubAccessor.Instance.Subscribe<PipelineRetrySignal>(signal =>
-{
-    Console.WriteLine($"Pipeline retry → {signal.Message.GetType().Name}");
-});
-```
+## Roadmap
 
-🔍 For logging, metrics, monitoring, **not domain events.**
+- More testing fixtures
+- Project templates
+- Example applications
 
----
+## Project Status
 
-## 🧪 Testing Fixtures
+Production-ready. Handler & interceptor APIs are stable.
 
-```csharp
-var ctxFixture = new ExecutionContextFixture();
-await using var scope = ctxFixture.CreateScope();
-Assert.Same(ctxFixture.Ctx, AmbientExecutionContext.Current);
-```
+Current Goals:
+- Expand coverage
+- Improve documentation
 
-```csharp
-var apiFixture = new AspPipelineFixture();
-var response = await apiFixture.SendAsync(new HttpRequestMessage(HttpMethod.Get, "/api/products/42"));
-Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-```
+## Contributing
 
----
+Contributions & feedback are welcome. Open issues, PRs, or start a discussion.
 
-## 🗺 Roadmap
+## License
 
-* 🔬 More testing fixtures
-* 📦 Project templates
-* 💡 Example applications
+Ergosfare is licensed under the MIT License.
 
----
-
-## 📌 Project Status
-
-✔ Production-ready
-🔒 Handler & interceptor APIs are stable
-
-### 🎯 Current Goals
-
-* Expand coverage
-* Improve documentation
-* Prepare for **v1.0.0 stable**
-
----
-
-## 🤝 Contributing
-
-Contributions & feedback are welcome!
-Open issues, PRs, or start a discussion.
-
----
-
-## 📄 License
-
-Ergosfare is licensed under the **MIT License** → [LICENSE](LICENSE)
