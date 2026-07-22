@@ -137,7 +137,8 @@ public class MediationBenchmark
             await _mediatrMediator.Send(_mediatrRequest);
     }
 
-    // Ergosfare is a fork of LiteBus, so the upstream is included for reference.
+    // Ergosfare is an independent implementation whose design (API surface, naming) was
+    // heavily inspired by LiteBus, so LiteBus is included as a reference point.
     [Benchmark]
     public async Task LiteBus_PublicApi()
     {

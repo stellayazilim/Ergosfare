@@ -123,7 +123,7 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
         foreach (var handlerType in descriptorHandlerTypes)
         {
             // Only register concrete classes with DI container - interfaces and abstract classes are kept in
-            // LiteBus registry for polymorphic dispatch but cannot be instantiated by the DI container.
+            // the Ergosfare registry for polymorphic dispatch but cannot be instantiated by the DI container.
             // Without this filter, DI would throw "Cannot instantiate implementation type" errors.
             if (handlerType is { IsClass: true, IsAbstract: false })
             {
