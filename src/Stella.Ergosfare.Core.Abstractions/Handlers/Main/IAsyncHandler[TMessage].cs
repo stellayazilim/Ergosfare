@@ -15,15 +15,9 @@ namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 /// The explicit interface implementation maps the generic <see cref="IHandler{TMessage, TResult}.Handle"/> method
 /// to the strongly-typed <see cref="HandleAsync"/> method.
 /// </remarks>
-public interface IAsyncHandler<in TMessage>: IHandler<TMessage, ValueTask>
+public interface IAsyncHandler<in TMessage>: IHandler
     where TMessage : notnull
 {
-    /// <inheritdoc cref="IHandler{TMessage, TResult}.Handle"/>
-    ValueTask IHandler<TMessage, ValueTask>.Handle(TMessage message, IExecutionContext context)
-    {
-        return HandleAsync(message, context);
-    }
-
     /// <summary>
     /// Handles a message of type <typeparamref name="TMessage"/> asynchronously.
     /// </summary>

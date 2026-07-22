@@ -19,30 +19,9 @@ namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 ///     implementations that already hold a <see cref="Task{TResult}"/> can wrap it
 ///     allocation-free via <c>new ValueTask&lt;TResult&gt;(task)</c>.
 /// </remarks>
-public interface IAsyncHandler<in TMessage,  TResult>: IHandler<TMessage, ValueTask<TResult>>
+public interface IAsyncHandler<in TMessage,  TResult>: IHandler
     where TMessage : notnull
 {
-
-
-    /// <summary>
-    ///     Implements the Handle method from the inherited interface by forwarding to the
-    ///     strongly-typed <see cref="HandleAsync"/> member.
-    /// </summary>
-    /// <param name="message">The message to be handled.</param>
-    /// <param name="context">Current execution context</param>
-    /// <returns>
-    ///     A task representing the asynchronous handling operation, which upon completion yields the result of the
-    ///     handling process.
-    /// </returns>
-    /// <remarks>
-    ///     This method bridges the generic handling member with the asynchronous handling method by internally invoking
-    ///     HandleAsync, enabling a unified approach to message handling.
-    /// </remarks>
-    ValueTask<TResult> IHandler<TMessage, ValueTask<TResult>>.Handle(TMessage message, IExecutionContext context)
-    {
-        return HandleAsync(message, context);
-    }
-
 
     /// <summary>
     ///     Defines a method to handle messages asynchronously and produce a result.

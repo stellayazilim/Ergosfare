@@ -64,6 +64,7 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
         // context's provider. The mediator stays scoped only to capture the calling
         // scope's provider into that context — it is a thin, cheap wrapper.
         services.TryAddSingleton<IMessageDependenciesFactory, MessageDependenciesFactory>();
+        services.TryAddSingleton<PipelineExecutorCache>();
         services.TryAddScoped<IMessageMediator, MessageMediator>();
         services.TryAddSingleton<IDescriptorCacheStrategy, LruCacheStrategy>();
         services.TryAddSingleton<MessageDescriptorCache>();

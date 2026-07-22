@@ -84,9 +84,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
             // dispatches (TMessage = ICommand<T> etc.) fall back to the bridge.
             var fastHandler = messageDependencies.Handlers[0].Resolve(serviceProvider);
 
-            var fastResult = fastHandler is IHandler<TMessage, ValueTask<TResult>> fastTyped
-                ? await fastTyped.Handle(message, context)
-                : await (ValueTask<TResult>)fastHandler.Handle(message, context);
+            var fastResult = await InvokeHandler(fastHandler, message, context);
 
             var fastEx = resultAdapterService?.LookupException(fastResult);
             if (fastEx is not null) throw fastEx;
@@ -106,9 +104,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
 
             var handler = messageDependencies.Handlers[0].Resolve(serviceProvider);
 
-            result = handler is IHandler<TMessage, ValueTask<TResult>> typed
-                ? await typed.Handle(message, context)
-                : await (ValueTask<TResult>)handler.Handle(message, context);
+            result = await InvokeHandler(handler, message, context);
 
             var ex = resultAdapterService?.LookupException(result);
             if (ex is not null) throw ex;
@@ -156,4 +152,24 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
 
         return result;
     }
+
+    /// <summary>
+    /// Invokes the handler through its typed contract. There is no object-typed bridge:
+    /// asynchronous handlers are called via <c>IAsyncHandler</c>, synchronous handlers via
+    /// <see cref="IHandler{TMessage, TResult}"/> (`in TMessage` variance admits handlers
+    /// registered for base message types). Interface-erased dispatch is unsupported —
+    /// dispatch with the concrete message type (the executor path) instead.
+    /// </summary>
+#pragma warning disable CS8714 // TResult is used as a pattern type argument; handlers declare notnull results
+    private static ValueTask<TResult> InvokeHandler(object handler, TMessage message, IExecutionContext context)
+        => handler switch
+        {
+            IAsyncHandler<TMessage, TResult> asyncHandler => asyncHandler.HandleAsync(message, context),
+            IHandler<TMessage, ValueTask<TResult>> valueTaskShaped => valueTaskShaped.Handle(message, context),
+            IHandler<TMessage, TResult> syncHandler => ValueTask.FromResult(syncHandler.Handle(message, context)),
+            _ => throw new NotSupportedException(
+                $"'{handler.GetType()}' does not implement a supported handler contract for message '{typeof(TMessage)}' and result '{typeof(TResult)}'. " +
+                "Interface-erased dispatch is not supported; dispatch with the concrete message type."),
+        };
+#pragma warning restore CS8714
 }

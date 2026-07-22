@@ -31,11 +31,11 @@ public class IHandlerImplementationTests(ExecutionContextFixture executionContex
     {
         // arrange
         var ctx = ExecutionContextFixture.Ctx;
-   
-        IHandler handler = new StubVoidHandler();
+
+        IHandler<StubMessage, object> handler = new StubVoidHandler();
         // act
         var result = handler.Handle(Message, ctx);
         // assert
-        Assert.Null(result); 
+        Assert.Null(result);
     }
 }

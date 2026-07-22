@@ -22,9 +22,43 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 internal sealed class MessageMediator(
     IMessageRegistry messageRegistry,
     IMessageDependenciesFactory messageDependenciesFactory,
-    IServiceProvider serviceProvider)
+    IServiceProvider serviceProvider,
+    PipelineExecutorCache? executorCache = null)
     : IMessageMediator
 {
+    /// <summary>
+    /// Process-wide executor cache used by the <see cref="DispatchAsync(object, IDictionary{object, object?}?, CancellationToken)"/>
+    /// path. Optional so directly-constructed mediators (tests) keep working; the DI
+    /// registration always supplies it.
+    /// </summary>
+    private readonly PipelineExecutorCache? _executorCache = executorCache;
+
+    /// <inheritdoc />
+    public ValueTask DispatchAsync(object message, IDictionary<object, object?>? items = null, CancellationToken cancellationToken = default, IEnumerable<string>? groups = null)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+
+        var executor = RequireExecutorCache().GetVoidExecutor(message.GetType(), groups);
+        var context = new ErgosfareExecutionContext(items, cancellationToken);
+
+        return executor.Execute(message, context, _serviceProvider);
+    }
+
+    /// <inheritdoc />
+    public ValueTask<TResult> DispatchAsync<TResult>(object message, IDictionary<object, object?>? items = null, CancellationToken cancellationToken = default, IEnumerable<string>? groups = null)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+
+        var executor = RequireExecutorCache().GetExecutor<TResult>(message.GetType(), groups);
+        var context = new ErgosfareExecutionContext(items, cancellationToken);
+
+        return executor.Execute(message, context, _serviceProvider);
+    }
+
+    private PipelineExecutorCache RequireExecutorCache()
+        => _executorCache ?? throw new InvalidOperationException(
+            "Executor dispatch requires the PipelineExecutorCache; register Ergosfare through AddErgosfare or use Mediate with explicit options.");
+
 
     /// <summary>
     /// Registry used to keep track of registered message types.

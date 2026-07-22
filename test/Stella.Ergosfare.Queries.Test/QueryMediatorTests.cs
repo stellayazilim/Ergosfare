@@ -29,11 +29,9 @@ public class QueryMediatorTests
         var messageMediator = services.GetService<IMessageMediator>();
         var mediator = new QueryMediator(
             services.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
-            new ResultAdapterService(),
             messageMediator!);
         var result = mediator.QueryAsync(new StubNonGenericStringResultQuery(), null);
-        Assert.NotNull(result);
-        Assert.Equal(string.Empty, await result); 
+        Assert.Equal(string.Empty, await result);
     }
     
     /// <summary>
@@ -50,7 +48,6 @@ public class QueryMediatorTests
         var messageMediator = serviceCollection.GetService<IMessageMediator>();
         var mediator = new QueryMediator(
             serviceCollection.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
-            new ResultAdapterService(),
             messageMediator!);
         var expected = new []  {"Foo", "Bar", "Baz"};
         var result = new List<string>();

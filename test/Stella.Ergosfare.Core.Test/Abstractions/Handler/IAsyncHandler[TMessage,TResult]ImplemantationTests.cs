@@ -29,12 +29,11 @@ public class IAsyncHandlerTMessageTResultTests(ExecutionContextFixture execution
     public async Task IAsyncHandlersShouldImplements()
     {
         var ctx = ExecutionContextFixture.Ctx;
-        IHandler handler = new StubStringAsyncHandler();
-        
-        var result = handler.Handle(Message, ctx);
-        
+        IAsyncHandler<StubMessage, string> handler = new StubStringAsyncHandler();
+
+        var result = await handler.HandleAsync(Message, ctx);
+
         Assert.NotNull(result);
-        await Assert.IsType<ValueTask<string>>(result);
 
     }
 }

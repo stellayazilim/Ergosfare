@@ -23,13 +23,9 @@ public class AsyncHandlerTests(ExecutionContextFixture executionContextFixture)
     public async Task IAsyncHandlersShouldImplement()
     {      
         // arrange
-        IHandler handler1 =  new StubVoidAsyncHandler();
-       
-        // act
-        var result = handler1.Handle(Message, ExecutionContextFixture.Ctx);
-        
-        // assert
-        Assert.NotNull(result); 
-        await Assert.IsType<ValueTask>(result, exactMatch: false);
+        IAsyncHandler<StubMessage> handler1 = new StubVoidAsyncHandler();
+
+        // act & assert: the typed member completes
+        await handler1.HandleAsync(Message, ExecutionContextFixture.Ctx);
     }
 }

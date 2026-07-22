@@ -78,22 +78,21 @@ dotnet run -c Release -f net9.0 --project test/Stella.Ergosfare.Benchmarking
 ```
 
 Environment: BenchmarkDotNet v0.15.8 · Windows 11 · AMD Ryzen 7 7800X3D · .NET 9.0.11
-(RyuJIT x86-64-v4). Measured on the `preview` branch (ValueTask-first surface), 2026-07-23.
+(RyuJIT x86-64-v4). Measured on the `preview` branch (executor dispatch), 2026-07-23.
 
 | Scenario (100k dispatches/op) | Mean | Allocated |
 |---|---:|---:|
-| `StellaErgosfare` — raw `IMessageMediator` loop | 6.47 ms | 5.34 MB |
-| `StellaErgosfare_PublicApi` — `ICommandMediator.SendAsync` | 7.89 ms | 14.5 MB |
-| `MediatR` — `IMediator.Send` | 6.03 ms | 18.31 MB |
-| `LiteBus_PublicApi` — `ICommandMediator.SendAsync` | 146.91 ms | 714.87 MB |
-| `StellaErgosfare_PublicApi_ScopePerDispatch` — fresh scope each dispatch | 19.25 ms | 55.69 MB |
-| `MediatR_ScopePerDispatch` — fresh scope each dispatch | 10.45 ms | 33.57 MB |
+| `StellaErgosfare` — raw `IMessageMediator` loop | 6.33 ms | 5.34 MB |
+| `StellaErgosfare_PublicApi` — `ICommandMediator.SendAsync` | 7.19 ms | 5.34 MB |
+| `MediatR` — `IMediator.Send` | 6.24 ms | 18.31 MB |
+| `LiteBus_PublicApi` — `ICommandMediator.SendAsync` | 148.89 ms | 714.87 MB |
+| `StellaErgosfare_PublicApi_ScopePerDispatch` — fresh scope each dispatch | 18.42 ms | 41.96 MB |
+| `MediatR_ScopePerDispatch` — fresh scope each dispatch | 11.26 ms | 33.57 MB |
 
-The facade rows currently pay one boxed `ValueTask` per dispatch (~32 B): the mediator
-facades dispatch through the contract interfaces, so the handler's `ValueTask` crosses the
-object-typed bridge once. Concrete-typed dispatch (the raw row today, source-generated
-dispatch tomorrow) skips the bridge entirely — there, synchronously completing handlers
-allocate nothing, which a `Task`-based surface cannot do.
+All rows dispatch through pipelines closed over the message's concrete type (cached
+executors) — there is no object-typed bridge anywhere on the dispatch path, and the
+public facade allocates exactly what the raw mediator does. Synchronously completing
+handlers allocate nothing on the handler side, which a `Task`-based surface cannot do.
 
 Scenario notes:
 

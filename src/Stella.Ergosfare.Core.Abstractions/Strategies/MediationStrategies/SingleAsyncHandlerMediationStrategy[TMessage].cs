@@ -79,10 +79,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             // for a ValueTask slot). Interface-erased dispatches fall back to the DIM bridge.
             var fastHandler = messageDependencies.Handlers[0].Resolve(serviceProvider);
 
-            var fastResult = fastHandler is IHandler<TMessage, ValueTask> fastTyped
-                ? fastTyped.Handle(message, context)
-                : (ValueTask)fastHandler.Handle(message, context);
-            await fastResult;
+            await InvokeHandler(fastHandler, message, context);
 
             var fastEx = resultAdapterService?.LookupException(CompletedResultBox);
 
@@ -109,10 +106,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
 
             var handler = messageDependencies.Handlers[0].Resolve(serviceProvider);
 
-            var handled = handler is IHandler<TMessage, ValueTask> typed
-                ? typed.Handle(message, context)
-                : (ValueTask)handler.Handle(message, context);
-            await handled;
+            await InvokeHandler(handler, message, context);
             result = ValueTask.CompletedTask;
 
             var ex = resultAdapterService?.LookupException(CompletedResultBox);
@@ -153,5 +147,27 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             }
         }
 
+    }
+
+    /// <summary>
+    /// Invokes the handler through its typed contract — no object-typed bridge; see the
+    /// result-producing strategy for the dispatch rules.
+    /// </summary>
+    private static ValueTask InvokeHandler(object handler, TMessage message, IExecutionContext context)
+    {
+        switch (handler)
+        {
+            case IAsyncHandler<TMessage> asyncHandler:
+                return asyncHandler.HandleAsync(message, context);
+            case IHandler<TMessage, ValueTask> valueTaskShaped:
+                return valueTaskShaped.Handle(message, context);
+            case IHandler<TMessage, object> syncHandler:
+                syncHandler.Handle(message, context);
+                return ValueTask.CompletedTask;
+            default:
+                throw new NotSupportedException(
+                    $"'{handler.GetType()}' does not implement a supported handler contract for message '{typeof(TMessage)}'. " +
+                    "Interface-erased dispatch is not supported; dispatch with the concrete message type.");
+        }
     }
 }
