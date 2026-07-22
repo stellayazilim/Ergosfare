@@ -11,18 +11,19 @@ on:
 
 jobs:
   unit-tests:
+    # Single job with both SDKs installed: the solution multi-targets net9.0 and
+    # net10.0, so a per-SDK matrix cannot restore/build it with only one SDK.
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        dotnet-version: [ 9.0.x, 10.0.x ]   # .NET 9 ve 10
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ matrix.dotnet-version }}
+          dotnet-version: |
+            9.0.x
+            10.0.x
 
       - name: Restore Dependencies
         run: dotnet restore Stella.Ergosfare.slnx
