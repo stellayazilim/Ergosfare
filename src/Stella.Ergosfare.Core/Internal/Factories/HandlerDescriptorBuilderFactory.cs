@@ -1,4 +1,5 @@
-﻿using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
+﻿using System.Diagnostics.CodeAnalysis;
+using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Internal.Abstractions;
 using Stella.Ergosfare.Core.Internal.Builders;
 
@@ -39,7 +40,7 @@ internal class HandlerDescriptorBuilderFactory : IDisposable, IAsyncDisposable
     /// Each internal <see cref="IHandlerDescriptorBuilder"/> is checked to see if it
     /// can build descriptors for the given type using <see cref="IHandlerDescriptorBuilder.CanBuild"/>.
     /// </remarks>
-    public List<IHandlerDescriptor> BuildDescriptors(Type messageType)
+    public List<IHandlerDescriptor> BuildDescriptors([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type messageType)
     {
         return _descriptorBuilders
             .Where(d => d.CanBuild(messageType))

@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Stella.Ergosfare.Core.Abstractions.Registry;
 using Stella.Ergosfare.Events.Abstractions;
 
@@ -27,7 +28,7 @@ public class EventModuleBuilder(
     /// </summary>
     /// <typeparam name="TEvent">The event type to register. Must implement <see cref="IEvent"/>.</typeparam>
     /// <returns>The current <see cref="EventModuleBuilder"/> instance for fluent chaining.</returns>
-    public EventModuleBuilder Register<TEvent>() where TEvent : IEvent
+    public EventModuleBuilder Register<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] TEvent>() where TEvent : IEvent
     {
         Register(typeof(TEvent));
         return this;
@@ -40,7 +41,7 @@ public class EventModuleBuilder(
     /// <returns>The current <see cref="EventModuleBuilder"/> instance for fluent chaining.</returns>
     /// <exception cref="NotSupportedException" />
     /// Thrown when the provided type does not implement <see cref="IEvent"/>.
-    public EventModuleBuilder Register(Type eventType)
+    public EventModuleBuilder Register([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type eventType)
     {
         if (!eventType.IsAssignableTo(typeof(IEvent)))
             throw new NotSupportedException($"The given type '{eventType.Name}' is not an event and cannot be registered.");
@@ -54,6 +55,7 @@ public class EventModuleBuilder(
     /// </summary>
     /// <param name="assembly">The assembly to scan for types implementing <see cref="IEvent"/>.</param>
     /// <returns>The current <see cref="EventModuleBuilder"/> instance for fluent chaining.</returns>
+    [RequiresUnreferencedCode("Assembly scanning discovers event types via reflection; trimming may remove them. Register events explicitly (or use source-generated registration) in trimmed or AOT applications.")]
     public EventModuleBuilder RegisterFromAssembly(Assembly assembly)
     {
         foreach (var type in assembly.GetTypes()

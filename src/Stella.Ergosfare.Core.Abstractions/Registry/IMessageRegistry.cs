@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 
 namespace Stella.Ergosfare.Core.Abstractions.Registry;
@@ -22,5 +23,19 @@ public interface IMessageRegistry : IReadOnlyCollection<IMessageDescriptor>
     /// <remarks>
     /// If the type is already registered, this method may update or ignore it depending on the implementation.
     /// </remarks>
-    void Register(Type type);
+    void Register([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type type);
+
+    /// <summary>
+    /// Registers pre-built handler descriptors, bypassing reflection-based descriptor
+    /// construction entirely.
+    /// </summary>
+    /// <param name="descriptors">The handler descriptors to register.</param>
+    /// <remarks>
+    /// This is the injection seam for ahead-of-time registration (e.g. source-generated
+    /// code): the caller supplies complete <see cref="IHandlerDescriptor"/> instances and the
+    /// registry only links them to their message types. <see cref="Register"/> remains the
+    /// reflection-based fallback; the two may be mixed — a handler type registered through
+    /// either path is skipped by the other.
+    /// </remarks>
+    void RegisterDescriptors(IEnumerable<IHandlerDescriptor> descriptors);
 }

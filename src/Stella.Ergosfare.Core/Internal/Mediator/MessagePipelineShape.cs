@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Contracts.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 
@@ -102,6 +103,12 @@ internal sealed class MessagePipelineShape
     /// arguments when the descriptor targets a generic message type. Handler types that
     /// are already closed (registered against a constructed generic message) are used as-is.
     /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2055",
+        Justification = "Generic handler definitions are closed over message types that are alive in the registry; " +
+                        "their generic instantiations are rooted by the handler registrations themselves.")]
+    [UnconditionalSuppressMessage("AOT", "IL3050",
+        Justification = "Handler generics are closed over reference message types, which use shared generic code " +
+                        "under Native AOT. Source-generated pipeline plans will remove this call entirely.")]
     private static Type CloseHandlerType(IHandlerDescriptor descriptor, Type messageType)
     {
         var handlerType = descriptor.HandlerType;

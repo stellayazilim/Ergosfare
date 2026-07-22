@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions.Registry;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Internal.Factories;
@@ -55,7 +56,14 @@ internal sealed class MessageRegistry(
     /// These will be moved to <see cref="_messages"/> once processing is complete
     /// </summary>
     private readonly List<MessageDescriptor> _newMessages = [];
-    
+
+    /// <summary>
+    /// Index of every registered message descriptor (finalized or staged) by message type.
+    /// Registration-time lookups are O(1) instead of scanning <see cref="_messages"/> and
+    /// <see cref="_newMessages"/>.
+    /// </summary>
+    private readonly Dictionary<Type, MessageDescriptor> _messageIndex = new();
+
     /// <summary>
     /// Types that have already been processed and registered (as message or handler)
     /// </summary>
@@ -112,7 +120,7 @@ internal sealed class MessageRegistry(
     /// The method prevents duplicate registrations by tracking processed types.
     /// Handlers and messages are stored separately but linked via message descriptors.
     /// </remarks>
-    public void Register(Type type)
+    public void Register([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type type)
     {
         
         // If the type has already been processed, skip registration
@@ -172,10 +180,73 @@ internal sealed class MessageRegistry(
 
         Interlocked.Increment(ref _version);
     }
-    
-    
-    
-    
+
+
+    /// <summary>
+    /// Registers pre-built handler descriptors, bypassing the reflection-based descriptor
+    /// builders. This is the ahead-of-time registration seam used by source-generated code.
+    /// </summary>
+    /// <param name="descriptors">The handler descriptors to register.</param>
+    /// <remarks>
+    /// Handler types already registered — through either <see cref="Register"/> or a prior
+    /// injection — are skipped, so generated registration and the runtime scanning fallback
+    /// can coexist without producing duplicate descriptors.
+    /// </remarks>
+    public void RegisterDescriptors(IEnumerable<IHandlerDescriptor> descriptors)
+    {
+        // Collect first, mark processed after: one handler type may legitimately supply
+        // several descriptors in the same batch (it can implement multiple handler roles).
+        List<IHandlerDescriptor>? accepted = null;
+        foreach (var descriptor in descriptors)
+        {
+            if (_processedTypes.ContainsKey(descriptor.HandlerType))
+            {
+                continue;
+            }
+
+            (accepted ??= []).Add(descriptor);
+        }
+
+        if (accepted is null)
+        {
+            return;
+        }
+
+        foreach (var descriptor in accepted)
+        {
+            RegisterMessage(descriptor.MessageType);
+            _descriptors.Add(descriptor);
+            _processedTypes[descriptor.HandlerType] = 0;
+        }
+
+        // Same linking pass as Register(): attach the new descriptors to every existing
+        // message, then give staged messages the full descriptor set before finalizing.
+        if (_messages.Count > 0)
+        {
+            foreach (var messageDescriptor in _messages)
+            {
+                messageDescriptor.AddDescriptors(accepted);
+            }
+        }
+
+        if (_newMessages.Count > 0 && _descriptors.Count > 0)
+        {
+            foreach (var messageDescriptor in _newMessages)
+            {
+                messageDescriptor.AddDescriptors(_descriptors);
+            }
+        }
+
+        if (_newMessages.Count > 0)
+        {
+            _messages.AddRange(_newMessages);
+            _newMessages.Clear();
+        }
+
+        Interlocked.Increment(ref _version);
+    }
+
+
     /// <summary>
     /// Registers a message type if it is not already registered.
     /// </summary>
@@ -197,25 +268,16 @@ internal sealed class MessageRegistry(
         // This prevents registering the same generic message multiple times for different type arguments
         messageType = messageType.IsGenericType ? messageType.GetGenericTypeDefinition() : messageType;
 
-        // Check if the message type is already registered in the messages list
-        var existingMessage = _messages.FirstOrDefault(
-            d => d.MessageType == messageType
-        );
-
-        // _messages içinde aynı tip zaten varsa kayıt yapılmaz.
-        if (existingMessage != null)
+        // The index covers both finalized and staged messages, so a single O(1) lookup
+        // replaces the previous linear scans over _messages and _newMessages.
+        if (_messageIndex.ContainsKey(messageType))
         {
             return;
         }
 
-        // Also check if it's in the newMessages list awaiting processing
-        var isNewMessage = _newMessages.FirstOrDefault(
-            d => d.MessageType == messageType
-        );
-
-        if (isNewMessage != null) return;
-    
-        // Create a new MessageDescriptor and add it to the newMessages list
-        _newMessages.Add(new MessageDescriptor(messageType));
+        // Create a new MessageDescriptor and stage it in the newMessages list
+        var descriptor = new MessageDescriptor(messageType);
+        _messageIndex[messageType] = descriptor;
+        _newMessages.Add(descriptor);
     }
 }

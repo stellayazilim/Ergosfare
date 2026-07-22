@@ -1,4 +1,5 @@
-﻿using Stella.Ergosfare.Contracts.Attributes;
+﻿using System.Diagnostics.CodeAnalysis;
+using Stella.Ergosfare.Contracts.Attributes;
 
 namespace Stella.Ergosfare.Core.Extensions;
 
@@ -13,7 +14,9 @@ internal static class TypeExtensions
     /// <param name="type">The type to inspect.</param>
     /// <param name="interfaceType">The generic interface type definition to match.</param>
     /// <returns>An enumerable of interfaces implemented by <paramref name="type"/> that match <paramref name="interfaceType"/>.</returns>
-    public static IEnumerable<Type> GetInterfacesEqualTo(this Type type, Type interfaceType)
+    public static IEnumerable<Type> GetInterfacesEqualTo(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] this Type type,
+        Type interfaceType)
     {
         return type.GetInterfaces()
             .Where(t => t.IsGenericType && t.GetGenericTypeDefinition() == interfaceType);

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 
@@ -29,7 +30,9 @@ public interface IHandlerDescriptor: IHasMessageType
     IReadOnlyCollection<string> Groups { get; }
     
     /// <summary>
-    /// Gets the concrete type of the handler.
+    /// Gets the concrete type of the handler. Public constructors are preserved under
+    /// trimming so the type can be activated by the DI container.
     /// </summary>
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
     Type HandlerType { get; }
 }

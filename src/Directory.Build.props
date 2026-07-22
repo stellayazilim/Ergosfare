@@ -1,5 +1,11 @@
 <Project>
     <Import Project="../Directory.Build.props" />
+    <PropertyGroup>
+        <!-- Source-gen prep: surface trim/AOT diagnostics on the library surface so the
+             reflective registration paths are annotated honestly before the generator
+             replaces them. -->
+        <IsAotCompatible>true</IsAotCompatible>
+    </PropertyGroup>
     <ItemGroup>
         <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
             <_Parameter1>$(MSBuildProjectName).Test</_Parameter1>

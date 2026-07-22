@@ -1,4 +1,5 @@
-﻿using Stella.Ergosfare.Core.Abstractions;
+﻿using System.Diagnostics.CodeAnalysis;
+using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Abstractions.Registry;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
@@ -101,6 +102,9 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
     /// </summary>
     /// <param name="descriptor">The message descriptor containing handler metadata.</param>
     /// <param name="allHandlerTypes">Accumulates every registered handler type across descriptors.</param>
+    [UnconditionalSuppressMessage("Trimming", "IL2072",
+        Justification = "Every element of the set originates from IHandlerDescriptor.HandlerType, which is annotated " +
+                        "to preserve public constructors; the HashSet only deduplicates and cannot carry the annotation.")]
     private void RegisterHandlersFromDescriptor(IMessageDescriptor descriptor, HashSet<Type> allHandlerTypes)
     {
         // Use a local HashSet to avoid redundant registrations within the same descriptor
