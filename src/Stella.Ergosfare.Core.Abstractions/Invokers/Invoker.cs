@@ -57,7 +57,7 @@ internal abstract class AbstractInvoker(
     /// This method is used to unify handling of interceptor return values across pre-, post-, exception-, and final-interceptor pipelines,
     /// allowing synchronous and asynchronous interceptors to be treated consistently.
     /// </remarks>
-    protected async Task<object?> ConvertTask(object result)
+    protected async Task<object?> ConvertTask(object? result)
     {
         if (result is Task task)
         {

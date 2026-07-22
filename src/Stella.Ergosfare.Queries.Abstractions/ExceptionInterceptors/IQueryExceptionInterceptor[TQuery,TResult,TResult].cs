@@ -21,9 +21,9 @@ public interface IQueryExceptionInterceptor<in TQuery, in TResult, TModifiedResu
     where TModifiedResult : TResult
 {
     /// <inheritdoc />
-    async Task<object> IAsyncExceptionInterceptor<TQuery, TResult>.HandleAsync(
-        TQuery query, TResult? result, Exception exception, IExecutionContext context 
-        ) => (await HandleAsync(query, result, exception, context))!;
+    async Task<object?> IAsyncExceptionInterceptor<TQuery, TResult>.HandleAsync(
+        TQuery query, TResult? result, Exception exception, IExecutionContext context
+        ) => await HandleAsync(query, result, exception, context);
     
     
     /// <summary>

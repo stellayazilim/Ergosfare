@@ -52,20 +52,20 @@ public class MediatrHandler : IRequestHandler<MediatrRequest>
 [MemoryDiagnoser]
 public class MediationBenchmark
 {
-    private IServiceProvider _stellaProvider;
-    private IMessageMediator _stellaMediator;
-    private ICommandMediator _stellaCommandMediator;
-    private StellaMessage _stellaMessage;
-    private StellaCommand _stellaCommand;
-    private MediateOptions<StellaMessage, Task> _stellaOptions;
+    private IServiceProvider _stellaProvider = null!;
+    private IMessageMediator _stellaMediator = null!;
+    private ICommandMediator _stellaCommandMediator = null!;
+    private StellaMessage _stellaMessage = null!;
+    private StellaCommand _stellaCommand = null!;
+    private MediateOptions<StellaMessage, Task> _stellaOptions = null!;
 
-    private IServiceProvider _mediatrProvider;
-    private IMediator _mediatrMediator;
-    private MediatrRequest _mediatrRequest;
+    private IServiceProvider _mediatrProvider = null!;
+    private IMediator _mediatrMediator = null!;
+    private MediatrRequest _mediatrRequest = null!;
 
-    private IServiceProvider _liteBusProvider;
-    private LiteBus.Commands.Abstractions.ICommandMediator _liteBusCommandMediator;
-    private LiteBusCommand _liteBusCommand;
+    private IServiceProvider _liteBusProvider = null!;
+    private LiteBus.Commands.Abstractions.ICommandMediator _liteBusCommandMediator = null!;
+    private LiteBusCommand _liteBusCommand = null!;
 
     [GlobalSetup]
     public void Setup()

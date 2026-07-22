@@ -2,6 +2,7 @@ using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Internal.Contexts;
 using Stella.Ergosfare.Test.Fixtures;
+#pragma warning disable CS0618 // deliberately exercising the deprecated ambient context until its removal
 
 namespace Stella.Ergosfare.Core.Test;
 

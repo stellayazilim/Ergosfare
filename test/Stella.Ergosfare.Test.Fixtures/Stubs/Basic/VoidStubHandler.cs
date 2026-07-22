@@ -98,7 +98,7 @@ public class StubPostInterceptor: IPostInterceptor<StubMessage, object>
 /// </summary>
 public class StubExceptionInterceptor: IExceptionInterceptor<StubMessage, object>
 {
-    public static object Result;
+    public static object? Result;
     public static bool IsCalled;
     /// <summary>
     /// Handles an exception raised during message handling.

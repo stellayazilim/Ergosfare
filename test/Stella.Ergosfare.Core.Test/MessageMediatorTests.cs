@@ -10,6 +10,7 @@ using Stella.Ergosfare.Test.Fixtures.Stubs.Basic;
 using Moq;
 using Stella.Ergosfare.Core.Abstractions.Caching;
 using Stella.Ergosfare.Core.Internal.Caching;
+#pragma warning disable CS0618 // deliberately exercising the deprecated ambient context until its removal
 
 namespace Stella.Ergosfare.Core.Test;
 
@@ -32,9 +33,9 @@ public class MessageMediatorTests
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         // act & assert
         Assert.Throws<ArgumentNullException>(
-            () =>  new MessageMediator(null, null, null));
+            () =>  new MessageMediator(null!, null!, null!));
         Assert.Throws<ArgumentNullException>(
-            () => new MessageMediator(registry, null, null));
+            () => new MessageMediator(registry, null!, null!));
     }
 
     /// <summary>
@@ -46,7 +47,7 @@ public class MessageMediatorTests
     {
         // arrange 
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
-        var messageDependencyFactory = new MessageDependenciesFactory(null);
+        var messageDependencyFactory = new MessageDependenciesFactory(null!);
         // act
         var mediator = new MessageMediator(registry, messageDependencyFactory, new ServiceCollection().BuildServiceProvider());
         // assert
@@ -63,13 +64,13 @@ public class MessageMediatorTests
     {
         // arrange 
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
-        var messageDependencyFactory = new MessageDependenciesFactory(null);
+        var messageDependencyFactory = new MessageDependenciesFactory(null!);
         var mediator = new MessageMediator(registry,messageDependencyFactory, new ServiceCollection().BuildServiceProvider());
         // act && assert
-        await Assert.ThrowsAsync<ArgumentNullException>(() => 
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
             mediator
                 .Mediate<StubMessage, Task>(
-                    new StubMessage(), null));
+                    new StubMessage(), null!));
     }
     
     /// <summary>
@@ -123,7 +124,7 @@ public class MessageMediatorTests
         {
             var currentContext = AmbientExecutionContext.GetCurrentOrDefault();
             Assert.Equal(options.CancellationToken, AmbientExecutionContext.Current.CancellationToken);
-            Assert.Equal(options.Items, currentContext.Items);
+            Assert.Equal(options.Items, currentContext!.Items);
         }
     }
 
@@ -178,7 +179,7 @@ public class MessageMediatorTests
             CancellationToken = CancellationToken.None,
             Groups = []
         };
-        var mediator = new MessageMediator(registry.Object, new MessageDependenciesFactory(null), new ServiceCollection().BuildServiceProvider());
+        var mediator = new MessageMediator(registry.Object, new MessageDependenciesFactory(null!), new ServiceCollection().BuildServiceProvider());
         // act & assert
         await Assert.ThrowsAsync<InvalidOperationException>(() => mediator.Mediate(new StubIndirectMessage(), options));
     }

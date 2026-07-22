@@ -17,6 +17,6 @@ public class ResultAdapterTests
     {
         var resultAdapterService = new ResultAdapterService();
 
-        Assert.Throws<ArgumentNullException>(() => resultAdapterService.AddAdapter(null));
+        Assert.Throws<ArgumentNullException>(() => resultAdapterService.AddAdapter(null!));
     }
 }

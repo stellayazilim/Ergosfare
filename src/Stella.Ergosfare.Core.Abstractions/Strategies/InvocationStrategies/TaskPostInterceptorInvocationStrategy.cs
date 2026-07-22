@@ -38,9 +38,9 @@ internal sealed class TaskPostInterceptorInvocationStrategy(
             var handler = interceptors[i].Resolve(ServiceProvider);
 
             // Execute interceptor handler and await result
-            result = await (Task<object?>) handler.Handle(message, result, context);
+            result = await (Task<object?>) handler.Handle(message, result!, context);
 
-            var ex = resultAdapterService?.LookupException(result);
+            var ex = ResultAdapterService?.LookupException(result);
 
             if (ex != null) throw ex;
         }
