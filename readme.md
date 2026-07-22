@@ -78,16 +78,22 @@ dotnet run -c Release -f net9.0 --project test/Stella.Ergosfare.Benchmarking
 ```
 
 Environment: BenchmarkDotNet v0.15.8 · Windows 11 · AMD Ryzen 7 7800X3D · .NET 9.0.11
-(RyuJIT x86-64-v4). Measured on the `preview` branch, 2026-07-22.
+(RyuJIT x86-64-v4). Measured on the `preview` branch (ValueTask-first surface), 2026-07-23.
 
 | Scenario (100k dispatches/op) | Mean | Allocated |
 |---|---:|---:|
-| `StellaErgosfare` — raw `IMessageMediator` loop | 5.61 ms | 5.34 MB |
-| `StellaErgosfare_PublicApi` — `ICommandMediator.SendAsync` | 6.82 ms | 11.44 MB |
-| `MediatR` — `IMediator.Send` | 6.05 ms | 18.31 MB |
-| `LiteBus_PublicApi` — `ICommandMediator.SendAsync` | 139.26 ms | 714.87 MB |
-| `StellaErgosfare_PublicApi_ScopePerDispatch` — fresh scope each dispatch | 16.77 ms | 52.64 MB |
-| `MediatR_ScopePerDispatch` — fresh scope each dispatch | 10.38 ms | 33.57 MB |
+| `StellaErgosfare` — raw `IMessageMediator` loop | 6.47 ms | 5.34 MB |
+| `StellaErgosfare_PublicApi` — `ICommandMediator.SendAsync` | 7.89 ms | 14.5 MB |
+| `MediatR` — `IMediator.Send` | 6.03 ms | 18.31 MB |
+| `LiteBus_PublicApi` — `ICommandMediator.SendAsync` | 146.91 ms | 714.87 MB |
+| `StellaErgosfare_PublicApi_ScopePerDispatch` — fresh scope each dispatch | 19.25 ms | 55.69 MB |
+| `MediatR_ScopePerDispatch` — fresh scope each dispatch | 10.45 ms | 33.57 MB |
+
+The facade rows currently pay one boxed `ValueTask` per dispatch (~32 B): the mediator
+facades dispatch through the contract interfaces, so the handler's `ValueTask` crosses the
+object-typed bridge once. Concrete-typed dispatch (the raw row today, source-generated
+dispatch tomorrow) skips the bridge entirely — there, synchronously completing handlers
+allocate nothing, which a `Task`-based surface cannot do.
 
 Scenario notes:
 
@@ -111,6 +117,10 @@ Tracked in [CHANGELOG.md](CHANGELOG.md) under *Unreleased — v2 preview line*. 
   state.
 - **Three-parameter `TModifiedResult` interceptor interfaces removed** (deprecated in
   v1.4.0). The two-parameter typed interfaces expose the typed `HandleAsync` directly.
+- **`ValueTask`-first surface.** Handlers, interceptors, and the mediator facades return
+  `ValueTask` / `ValueTask<TResult>`. One surface serves both worlds: `async` bodies
+  compile unchanged, existing `Task`-producing code wraps allocation-free via
+  `new ValueTask<T>(task)`, and synchronously completing handlers allocate nothing.
 - **`[Experimental]` gate introduced.** Unstable APIs ship marked
   `[Experimental("ERGOEXPxxx")]` instead of blocking the release train — see below.
 
@@ -122,7 +132,7 @@ disappear in any release, including patch releases. Consuming one is a compile-t
 until you opt in explicitly:
 
 ```csharp
-#pragma warning disable ERGOEXP001 // IAsyncValueTaskHandler — experimental, no compat guarantee
+#pragma warning disable ERGOEXP001 // example: opting into an experimental API
 ```
 
 or per project:
@@ -131,7 +141,7 @@ or per project:
 <NoWarn>$(NoWarn);ERGOEXP001</NoWarn>
 ```
 
-Current experimental surface: `IAsyncValueTaskHandler<TMessage, TResult>` (`ERGOEXP001`).
+Current experimental surface: none — the gate is in place for future experimental APIs.
 
 ## Installation
 
@@ -152,8 +162,8 @@ public record CreateProduct(string Name) : ICommand<Guid>;
 
 public sealed class CreateProductHandler : ICommandHandler<CreateProduct, Guid>
 {
-    public Task<Guid> HandleAsync(CreateProduct command, IExecutionContext context)
-        => Task.FromResult(Guid.NewGuid());
+    public ValueTask<Guid> HandleAsync(CreateProduct command, IExecutionContext context)
+        => ValueTask.FromResult(Guid.NewGuid());
 }
 
 var services = new ServiceCollection()
@@ -172,10 +182,10 @@ A typed post-interceptor (v1.4+ two-parameter form — the only form on the v2 l
 ```csharp
 public sealed class AuditInterceptor : ICommandPostInterceptor<CreateProduct, Guid>
 {
-    public Task<Guid> HandleAsync(CreateProduct command, Guid result, IExecutionContext context)
+    public ValueTask<Guid> HandleAsync(CreateProduct command, Guid result, IExecutionContext context)
     {
         // observe or replace the typed result — no casts, no object round-trip
-        return Task.FromResult(result);
+        return ValueTask.FromResult(result);
     }
 }
 ```

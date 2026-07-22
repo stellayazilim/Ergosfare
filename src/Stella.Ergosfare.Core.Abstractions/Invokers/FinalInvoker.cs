@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using System;
 
 namespace Stella.Ergosfare.Core.Abstractions.Invokers;
@@ -29,7 +30,7 @@ internal abstract class FinalInvoker(
     /// An object representing the outcome of the invocation. 
     /// The actual type depends on the handler and may be a result, task, or value task.
     /// </returns>
-    public abstract object Invoke(
+    public abstract ValueTask Invoke(
         object message, 
         object? result, 
         Exception? exception, 

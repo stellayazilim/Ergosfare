@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
+using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 
 namespace Stella.Ergosfare.Core.Abstractions.Strategies;
@@ -57,10 +58,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         }
 
         var handler = messageDependencies.Handlers[0].Resolve(serviceProvider);
-        
 
-        
-        
         // enumerator to consume
         IAsyncEnumerable<TResult>? enumerable = null;
 
@@ -71,8 +69,12 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
             message =  (TMessage)await preInvoker.Invoke(message, context) ;
 
 
-
-            enumerable = (IAsyncEnumerable<TResult>?)handler.Handle(message, context);
+            // Typed seam: direct typed invocation when the dispatch TMessage satisfies the
+            // handler's message type (`in TMessage` variance; IAsyncEnumerable<out T>
+            // covariance admits derived elements). Erased dispatches use the DIM bridge.
+            enumerable = handler is IHandler<TMessage, IAsyncEnumerable<TResult>> typed
+                ? typed.Handle(message, context)
+                : (IAsyncEnumerable<TResult>?)handler.Handle(message, context);
            
 
         }

@@ -5,7 +5,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 
 
 /// <summary>
-/// Executes post-interceptors for a message using <see cref="Task"/>-based handlers.
+/// Executes post-interceptors for a message using <see cref="ValueTask"/>-based handlers.
 /// </summary>
 /// <remarks>
 /// The post-interceptor list is pre-merged in registration order: direct post-interceptors
@@ -26,10 +26,10 @@ internal sealed class TaskPostInterceptorInvocationStrategy(
     /// <param name="result">The current result of the message handling, which may be transformed by post-interceptors.</param>
     /// <param name="context">The execution context for the current pipeline invocation.</param>
     /// <returns>
-    /// A <see cref="Task{Object}"/> representing the asynchronous operation.
+    /// A <see cref="ValueTask{Object}"/> representing the asynchronous operation.
     /// The task result contains the transformed result after all post-interceptors have executed.
     /// </returns>
-    public override async Task<object?> Invoke(object message, object? result,  IExecutionContext context)
+    public override async ValueTask<object?> Invoke(object message, object? result,  IExecutionContext context)
     {
         var interceptors = MessageDependencies.PostInterceptors;
 
@@ -38,7 +38,7 @@ internal sealed class TaskPostInterceptorInvocationStrategy(
             var handler = interceptors[i].Resolve(ServiceProvider);
 
             // Execute interceptor handler and await result
-            result = await (Task<object?>) handler.Handle(message, result!, context);
+            result = await (ValueTask<object?>) handler.Handle(message, result!, context);
 
             var ex = ResultAdapterService?.LookupException(result);
 

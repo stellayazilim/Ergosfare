@@ -19,11 +19,11 @@ public class QueryModuleTests
     /// A test handler that does not implement a query interface.
     /// Used to verify that non-query handlers cannot be registered.
     /// </summary>
-    private class NonQueryHandler: IHandler<IMessage, Task>
+    private class NonQueryHandler: IHandler<IMessage, ValueTask>
     {
-        public Task Handle(IMessage message, IExecutionContext context)
+        public ValueTask Handle(IMessage message, IExecutionContext context)
         {
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
     }
 

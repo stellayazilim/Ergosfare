@@ -13,8 +13,8 @@ public static class CommandMediatorExtensions
     /// <param name="commandMediator">The command mediator instance.</param>
     /// <param name="command">The command to send.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-    public static Task SendAsync(this ICommandMediator commandMediator, ICommand command,
+    /// <returns>A <see cref="ValueTask"/> representing the asynchronous operation.</returns>
+    public static ValueTask SendAsync(this ICommandMediator commandMediator, ICommand command,
         CancellationToken cancellationToken = default)
     {
         return commandMediator.SendAsync(command,null, cancellationToken);
@@ -27,8 +27,8 @@ public static class CommandMediatorExtensions
     /// <param name="commandMediator">The command mediator instance.</param>
     /// <param name="command">The command to send.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
-    /// <returns>A <see cref="Task{TResult}"/> representing the asynchronous operation returning the result.</returns>
-    public static Task<TResult> SendAsync<TResult>(this ICommandMediator commandMediator, ICommand<TResult> command,
+    /// <returns>A <see cref="ValueTask{TResult}"/> representing the asynchronous operation returning the result.</returns>
+    public static ValueTask<TResult> SendAsync<TResult>(this ICommandMediator commandMediator, ICommand<TResult> command,
         CancellationToken cancellationToken = default)
     {
         return commandMediator.SendAsync(command, null, cancellationToken);
@@ -41,8 +41,8 @@ public static class CommandMediatorExtensions
     /// <param name="command">The command to send.</param>
     /// <param name="groups">The groups used to filter command handlers.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-    public static Task SendAsync(
+    /// <returns>A <see cref="ValueTask"/> representing the asynchronous operation.</returns>
+    public static ValueTask SendAsync(
         this ICommandMediator commandMediator,
         ICommand command,
         string[] groups,
@@ -63,8 +63,8 @@ public static class CommandMediatorExtensions
     /// <param name="command">The command to send.</param>
     /// <param name="groups">The groups used to filter command handlers.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
-    /// <returns>A <see cref="Task{TResult}"/> representing the asynchronous operation returning the result.</returns>
-    public static Task<TResult> SendAsync<TResult>(
+    /// <returns>A <see cref="ValueTask{TResult}"/> representing the asynchronous operation returning the result.</returns>
+    public static ValueTask<TResult> SendAsync<TResult>(
         this ICommandMediator commandMediator,
         ICommand<TResult> command,
         string[] groups,

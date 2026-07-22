@@ -30,9 +30,9 @@ public class CommandPreInterceptorTResultTResultTests
         /// <returns>
         /// A <see cref="Task{TResult}"/> containing the same <paramref name="command"/> instance.
         /// </returns>
-        public Task<StubNonGenericCommand> HandleAsync(StubNonGenericCommand command, IExecutionContext context)
+        public ValueTask<StubNonGenericCommand> HandleAsync(StubNonGenericCommand command, IExecutionContext context)
         {
-            return Task.FromResult(command);
+            return ValueTask.FromResult(command);
         }
     }
 

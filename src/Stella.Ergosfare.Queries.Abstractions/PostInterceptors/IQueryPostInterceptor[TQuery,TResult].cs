@@ -24,7 +24,7 @@ public interface IQueryPostInterceptor<TQuery, TResult> : IQuery, IAsyncPostInte
     where TResult : notnull
 {
     /// <inheritdoc />
-    async Task<object> IAsyncPostInterceptor<TQuery, TResult>.HandleAsync(
+    async ValueTask<object> IAsyncPostInterceptor<TQuery, TResult>.HandleAsync(
         TQuery query, TResult messageResult, IExecutionContext context)
         => (await HandleAsync(query, messageResult, context))!;
 
@@ -35,8 +35,8 @@ public interface IQueryPostInterceptor<TQuery, TResult> : IQuery, IAsyncPostInte
     /// <param name="queryResult">The result produced by the query handler.</param>
     /// <param name="context">The current execution context.</param>
     /// <returns>
-    /// A <see cref="Task{TResult}"/> producing the (possibly modified) result that
+    /// A <see cref="ValueTask{TResult}"/> producing the (possibly modified) result that
     /// continues through the pipeline.
     /// </returns>
-    new Task<TResult> HandleAsync(TQuery query, TResult queryResult, IExecutionContext context);
+    new ValueTask<TResult> HandleAsync(TQuery query, TResult queryResult, IExecutionContext context);
 }

@@ -41,7 +41,7 @@ public class FinalInterceptorDescriptorBuilderTests
         Assert.NotNull(desc);
         Assert.Equal(typeof(VoidStubGenericFinalInterceptor<StubGenericMessage<string>>), desc.HandlerType);
         Assert.Equal(typeof(StubGenericMessage<>), desc.MessageType);
-        Assert.Equal(typeof(Task), desc.ResultType);
+        Assert.Equal(typeof(ValueTask), desc.ResultType);
         // Default weight and groups since no attributes applied
         Assert.Equal(0, (int)desc.Weight);
         Assert.Equal(["default"],desc.Groups);
@@ -61,6 +61,6 @@ public class FinalInterceptorDescriptorBuilderTests
 
         Assert.NotNull(desc);
         Assert.Equal(typeof(StubGenericMessage<>), desc.MessageType);
-        Assert.Equal(typeof(Task), desc.ResultType);
+        Assert.Equal(typeof(ValueTask), desc.ResultType);
     }
 }

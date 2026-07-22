@@ -13,8 +13,8 @@ public static class EventMediatorExtensions
     /// <param name="eventMediator">The <see cref="IEventMediator"/> used to publish the event.</param>
     /// <param name="event">The event to publish.</param>
     /// <param name="cancellationToken">An optional <see cref="CancellationToken"/> to cancel the operation.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous publish operation.</returns>
-    public static Task PublishAsync(this IEventMediator eventMediator, IEvent @event, CancellationToken cancellationToken = default)
+    /// <returns>A <see cref="ValueTask"/> representing the asynchronous publish operation.</returns>
+    public static ValueTask PublishAsync(this IEventMediator eventMediator, IEvent @event, CancellationToken cancellationToken = default)
     {
         return eventMediator.PublishAsync(@event, null, cancellationToken);
     }
@@ -31,8 +31,8 @@ public static class EventMediatorExtensions
     /// Only handlers belonging to these groups will be invoked.
     /// </param>
     /// <param name="cancellationToken">An optional <see cref="CancellationToken"/> to cancel the operation.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous publish operation.</returns>
-    public static Task PublishAsync(this IEventMediator eventMediator, IEvent @event, string[] groups, CancellationToken cancellationToken = default)
+    /// <returns>A <see cref="ValueTask"/> representing the asynchronous publish operation.</returns>
+    public static ValueTask PublishAsync(this IEventMediator eventMediator, IEvent @event, string[] groups, CancellationToken cancellationToken = default)
     {
         return eventMediator.PublishAsync(@event,
             new EventMediationSettings

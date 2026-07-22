@@ -24,7 +24,7 @@ public class FinalInterceptorTests
         var result =  interceptor.Handle(new  StubMessage(), null, null, fixture.Ctx);
 
         Assert.NotNull(result);
-        await Assert.IsType<Task>(result, exactMatch:false);
+        await Assert.IsType<ValueTask>(result, exactMatch:false);
 
     }
 
@@ -41,7 +41,7 @@ public class FinalInterceptorTests
         IFinalInterceptor interceptor = new StubStringAsyncFinalInterceptor();
         var result =  interceptor.Handle(new  StubMessage(), StubStringAsyncFinalInterceptor.Result, null, fixture.Ctx);
         Assert.NotNull(result);
-        await Assert.IsType<Task>(result, exactMatch:false);
+        await Assert.IsType<ValueTask>(result, exactMatch:false);
     }
 
 }

@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using System.Runtime.ExceptionServices;
 
 namespace Stella.Ergosfare.Core.Abstractions.Invokers;
@@ -31,7 +32,7 @@ internal abstract class ExceptionInvoker(
     /// An object representing the outcome after all exception interceptors have run. 
     /// This may be a transformed result or the original result if no interceptor modified it.
     /// </returns>
-    public abstract object Invoke(
+    public abstract ValueTask<object?> Invoke(
         object message, 
         object result, 
         ExceptionDispatchInfo exceptionDispatchInfo, 

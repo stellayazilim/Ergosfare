@@ -45,33 +45,38 @@ internal abstract class AbstractInvoker(
     /// <param name="result">
     /// The object returned by an interceptor. Can be:
     /// <list type="bullet">
-    ///   <item>A <see cref="Task"/> (no result), which will be awaited and converted to <c>null</c>.</item>
-    ///   <item>A <see cref="Task{TResult}"/> (with a result), which will be awaited and its result returned.</item>
+    ///   <item>A boxed <see cref="ValueTask"/> (no result), which will be awaited and converted to <c>null</c>.</item>
+    ///   <item>A boxed <see cref="ValueTask{TResult}"/> of <see cref="object"/>, which will be awaited and its result returned.</item>
+    ///   <item>A <see cref="Task"/> / <see cref="Task{TResult}"/> (interceptors implemented against the object-typed root), awaited likewise.</item>
     ///   <item>A regular object, which is returned as-is.</item>
     /// </list>
     /// </param>
     /// <returns>
-    /// The awaited result as <see cref="object"/>. If the input was a <see cref="Task"/> with no result, returns <c>null</c>.
+    /// The awaited result as <see cref="object"/>. If the input carried no result, returns <c>null</c>.
     /// </returns>
     /// <remarks>
     /// This method is used to unify handling of interceptor return values across pre-, post-, exception-, and final-interceptor pipelines,
-    /// allowing synchronous and asynchronous interceptors to be treated consistently.
+    /// allowing synchronous and asynchronous interceptors to be treated consistently. Each boxed
+    /// <see cref="ValueTask"/> arrives here exactly once and is awaited exactly once.
     /// </remarks>
-    protected async Task<object?> ConvertTask(object? result)
+    protected async ValueTask<object?> ConvertTask(object? result)
     {
-        if (result is Task task)
+        switch (result)
         {
-            await task;
-            return null;
+            case ValueTask<object?> valueTaskT:
+                return await valueTaskT;
+            case ValueTask valueTask:
+                await valueTask;
+                return null;
+            case Task<object?> taskT:
+                return await taskT;
+            case Task task:
+                await task;
+                return null;
+            default:
+                // safely return: it's not an async carrier
+                return result;
         }
-
-        if (result is Task<object?> taskT)
-        {
-            return await taskT;
-        }
-
-        // safely return it's not a task
-        return result;
     }
     
     /// <summary>

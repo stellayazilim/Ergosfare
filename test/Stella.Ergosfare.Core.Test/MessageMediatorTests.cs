@@ -68,8 +68,8 @@ public class MessageMediatorTests
         // act && assert
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
             mediator
-                .Mediate<StubMessage, Task>(
-                    new StubMessage(), null!));
+                .Mediate<StubMessage, ValueTask>(
+                    new StubMessage(), null!).AsTask());
     }
     
     /// <summary>
@@ -86,7 +86,7 @@ public class MessageMediatorTests
             new MessageDependenciesFactory(null!),
             new ServiceCollection().BuildServiceProvider()
         );
-        var options = new MediateOptions<StubMessage, Task>
+        var options = new MediateOptions<StubMessage, ValueTask>
         {
             RegisterPlainMessagesOnSpot = false,
             CancellationToken = CancellationToken.None,
@@ -98,7 +98,7 @@ public class MessageMediatorTests
         };
         // Act & assert
         await Assert.ThrowsAsync<NoHandlerFoundException>(() => mediator
-            .Mediate(new StubIndirectMessage(), options));
+            .Mediate(new StubIndirectMessage(), options).AsTask());
     }
 
     /// <summary>
@@ -113,9 +113,9 @@ public class MessageMediatorTests
         // Arrange
         var registry = new Mock<IMessageRegistry>();
         var mediationstrategy = new Mock<IMessageMediationStrategy<
-            StubMessage, Task>>();
+            StubMessage, ValueTask>>();
         var messageResolveStrategy = new Mock<IMessageResolveStrategy>();
-        var options = new MediateOptions<StubMessage, Task>
+        var options = new MediateOptions<StubMessage, ValueTask>
         {
             MessageResolveStrategy = messageResolveStrategy.Object,
             MessageMediationStrategy = mediationstrategy.Object,
@@ -125,6 +125,6 @@ public class MessageMediatorTests
         };
         var mediator = new MessageMediator(registry.Object, new MessageDependenciesFactory(null!), new ServiceCollection().BuildServiceProvider());
         // act & assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() => mediator.Mediate(new StubIndirectMessage(), options));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => mediator.Mediate(new StubIndirectMessage(), options).AsTask());
     }
 }

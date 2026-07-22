@@ -36,8 +36,8 @@ public class QueryMediator(
     /// Optional settings to influence pipeline execution, such as filters and custom items.
     /// </param>
     /// <param name="cancellationToken">A cancellation token for async execution.</param>
-    /// <returns>A <see cref="Task{TResult}"/> representing the asynchronous execution of the query.</returns>
-    public Task<TResult> QueryAsync<TResult>(IQuery<TResult> query, QueryMediationSettings? queryMediationSettings = null,
+    /// <returns>A <see cref="ValueTask{TResult}"/> representing the asynchronous execution of the query.</returns>
+    public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, QueryMediationSettings? queryMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
         // Reuse the mediation strategy for this result type
@@ -51,7 +51,7 @@ public class QueryMediator(
 
         // Execute the query through the message mediator
         var result = messageMediator.Mediate(query,
-            new MediateOptions<IQuery<TResult>, Task<TResult>>
+            new MediateOptions<IQuery<TResult>, ValueTask<TResult>>
             {
                 MessageMediationStrategy = (SingleAsyncHandlerMediationStrategy<IQuery<TResult>, TResult>)mediationStrategy,
                 MessageResolveStrategy = messageResolveStrategy,

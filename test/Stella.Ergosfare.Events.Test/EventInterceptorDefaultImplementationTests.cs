@@ -19,10 +19,10 @@ public class EventInterceptorDefaultImplementationTests
     {
         public bool Called;
 
-        public Task HandleAsync(IEvent @event, IExecutionContext executionContext)
+        public ValueTask HandleAsync(IEvent @event, IExecutionContext executionContext)
         {
             Called = true;
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
     }
 
@@ -30,9 +30,9 @@ public class EventInterceptorDefaultImplementationTests
     {
         public static readonly TestEvent Replacement = new();
 
-        public Task<TestEvent> HandleAsync(TestEvent @event, IExecutionContext context)
+        public ValueTask<TestEvent> HandleAsync(TestEvent @event, IExecutionContext context)
         {
-            return Task.FromResult(Replacement);
+            return ValueTask.FromResult(Replacement);
         }
     }
 
@@ -40,10 +40,10 @@ public class EventInterceptorDefaultImplementationTests
     {
         public bool Called;
 
-        public Task HandleAsync(IEvent @event, Task result, IExecutionContext executionContext)
+        public ValueTask HandleAsync(IEvent @event, ValueTask result, IExecutionContext executionContext)
         {
             Called = true;
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
     }
 
@@ -51,10 +51,10 @@ public class EventInterceptorDefaultImplementationTests
     {
         public bool Called;
 
-        public Task HandleAsync(TestEvent @event, Task result, IExecutionContext executionContext)
+        public ValueTask HandleAsync(TestEvent @event, ValueTask result, IExecutionContext executionContext)
         {
             Called = true;
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
     }
 
@@ -92,7 +92,7 @@ public class EventInterceptorDefaultImplementationTests
         var interceptor = new TestPostInterceptor();
 
         // Regression: this call used to recurse infinitely instead of reaching the typed member.
-        await ((IAsyncPostInterceptor<IEvent>) interceptor).HandleAsync(new TestEvent(), Task.CompletedTask, CreateContext());
+        await ((IAsyncPostInterceptor<IEvent>) interceptor).HandleAsync(new TestEvent(), ValueTask.CompletedTask, CreateContext());
 
         Assert.True(interceptor.Called);
     }
@@ -105,7 +105,7 @@ public class EventInterceptorDefaultImplementationTests
         var interceptor = new TestTypedPostInterceptor();
 
         // Regression: this call used to recurse infinitely instead of reaching the typed member.
-        await ((IAsyncPostInterceptor<TestEvent>) interceptor).HandleAsync(new TestEvent(), Task.CompletedTask, CreateContext());
+        await ((IAsyncPostInterceptor<TestEvent>) interceptor).HandleAsync(new TestEvent(), ValueTask.CompletedTask, CreateContext());
 
         Assert.True(interceptor.Called);
     }

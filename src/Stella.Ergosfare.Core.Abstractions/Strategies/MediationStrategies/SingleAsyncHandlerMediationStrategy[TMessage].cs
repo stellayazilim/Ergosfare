@@ -3,6 +3,7 @@ using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
+using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 
 namespace Stella.Ergosfare.Core.Abstractions.Strategies;
@@ -19,8 +20,14 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies;
 ///     In case of any exception during the process, it delegates the error handling to the registered error handlers.
 /// </remarks>
 public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
-    IResultAdapterService? resultAdapterService) : IMessageMediationStrategy<TMessage, Task> where TMessage : IMessage
+    IResultAdapterService? resultAdapterService) : IMessageMediationStrategy<TMessage, ValueTask> where TMessage : IMessage
 {
+    /// <summary>
+    /// A completed <see cref="ValueTask"/> boxed once and reused as the void pipeline's
+    /// result object — boxing per dispatch would cost an allocation on the hot path.
+    /// </summary>
+    private static readonly object CompletedResultBox = ValueTask.CompletedTask;
+
     /// <summary>
     ///     Mediates a message by executing the appropriate handler and orchestrating the handling pipeline.
     /// </summary>
@@ -40,7 +47,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
     ///     If an exception occurs during any stage, the appropriate error handlers are executed.
     ///     If a <see cref="ExecutionAbortedException" /> is caught, the mediation process is aborted without error.
     /// </remarks>
-    public async Task Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context, IServiceProvider serviceProvider)
+    public async ValueTask Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context, IServiceProvider serviceProvider)
     {
         if (messageDependencies is null)
         {
@@ -67,12 +74,17 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
         // unchanged, matching the zero-interceptor rethrow behavior of the full pipeline.
         if ((preInterceptorCount | postInterceptorCount | exceptionInterceptorCount | finalInterceptorCount) == 0)
         {
+            // Typed seam: direct typed invocation when the dispatch TMessage satisfies the
+            // handler's message type (`in TMessage` variance; `out TResult` admits ValueTask<T>
+            // for a ValueTask slot). Interface-erased dispatches fall back to the DIM bridge.
             var fastHandler = messageDependencies.Handlers[0].Resolve(serviceProvider);
 
-            var fastResult = (Task)fastHandler.Handle(message, context);
+            var fastResult = fastHandler is IHandler<TMessage, ValueTask> fastTyped
+                ? fastTyped.Handle(message, context)
+                : (ValueTask)fastHandler.Handle(message, context);
             await fastResult;
 
-            var fastEx = resultAdapterService?.LookupException(fastResult);
+            var fastEx = resultAdapterService?.LookupException(CompletedResultBox);
 
             if (fastEx != null)
             {
@@ -82,7 +94,10 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             return;
         }
 
-        Task? result = null;
+        // A ValueTask may be awaited only once, so after consuming the handler's ValueTask
+        // the completed ValueTask.CompletedTask flows through the interceptor stages as the
+        // (meaningless for void pipelines) result object — it is safely multi-awaitable.
+        ValueTask? result = null;
         Exception? exception = null;
         try
         {
@@ -94,10 +109,13 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
 
             var handler = messageDependencies.Handlers[0].Resolve(serviceProvider);
 
-            result =  (Task)handler.Handle(message, context);
-            await result;
+            var handled = handler is IHandler<TMessage, ValueTask> typed
+                ? typed.Handle(message, context)
+                : (ValueTask)handler.Handle(message, context);
+            await handled;
+            result = ValueTask.CompletedTask;
 
-            var ex = resultAdapterService?.LookupException(result);
+            var ex = resultAdapterService?.LookupException(CompletedResultBox);
 
             if (ex != null)
             {
@@ -107,7 +125,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             if (postInterceptorCount > 0)
             {
                 var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
-                var invokedPostResult =  (Task?) await postInvoker.Invoke(message, result, context);
+                var invokedPostResult =  (ValueTask?) await postInvoker.Invoke(message, result, context);
                 result = invokedPostResult ?? result;
             }
         }
@@ -121,7 +139,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             }
 
             var exceptionInvoker = new TaskExceptionInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
-            var invokedResult = (Task?) await exceptionInvoker.Invoke(message, result, ExceptionDispatchInfo.Capture(e),
+            var invokedResult = (ValueTask?) await exceptionInvoker.Invoke(message, result, ExceptionDispatchInfo.Capture(e),
                 context);
             result = invokedResult ?? result;
 

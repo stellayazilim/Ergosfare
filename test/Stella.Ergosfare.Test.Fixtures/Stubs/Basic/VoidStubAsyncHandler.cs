@@ -16,10 +16,10 @@ public class StubVoidAsyncHandler: IAsyncHandler<StubMessage>
     /// </summary>
     /// <param name="message">The message to handle.</param>
     /// <param name="context">The execution context.</param>
-    /// <returns>A completed <see cref="Task"/>.</returns>
-    public Task HandleAsync(StubMessage message, IExecutionContext context)
+    /// <returns>A completed <see cref="ValueTask"/>.</returns>
+    public ValueTask HandleAsync(StubMessage message, IExecutionContext context)
     {
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 }
 
@@ -30,9 +30,9 @@ public class StubVoidAsyncHandler: IAsyncHandler<StubMessage>
 public class StubVoidAsyncPreInterceptor: IAsyncPreInterceptor<StubMessage>
 {
     /// <inheritdoc />
-    public Task<object> HandleAsync(StubMessage message, IExecutionContext context)
+    public ValueTask<object> HandleAsync(StubMessage message, IExecutionContext context)
     {
-        return Task.FromResult<object>(message);
+        return ValueTask.FromResult<object>(message);
     }
 }
 
@@ -43,9 +43,9 @@ public class StubVoidAsyncPreInterceptor: IAsyncPreInterceptor<StubMessage>
 public class StubVoidAsyncPostInterceptor: IAsyncPostInterceptor<StubMessage>
 {
     /// <inheritdoc />
-    public Task<object> HandleAsync(StubMessage message, object? result, IExecutionContext context)
+    public ValueTask<object> HandleAsync(StubMessage message, object? result, IExecutionContext context)
     {
-        return Task.FromResult(result!);
+        return ValueTask.FromResult(result!);
     }
 }
 
@@ -56,9 +56,9 @@ public class StubVoidAsyncPostInterceptor: IAsyncPostInterceptor<StubMessage>
 public class StubVoidAsyncExceptionInterceptor: IAsyncExceptionInterceptor<StubMessage>
 {
     /// <inheritdoc />
-    public Task<object> HandleAsync(StubMessage message, object? messageResult, Exception exception, IExecutionContext context)
+    public ValueTask<object> HandleAsync(StubMessage message, object? messageResult, Exception exception, IExecutionContext context)
     {
-        return Task.FromResult<object>(messageResult!);
+        return ValueTask.FromResult<object>(messageResult!);
     }
 }
 
@@ -69,9 +69,9 @@ public class StubVoidAsyncExceptionInterceptor: IAsyncExceptionInterceptor<StubM
 public class StubVoidAsyncFinalInterceptor: IAsyncFinalInterceptor<StubMessage>
 {
     /// <inheritdoc />
-    public Task HandleAsync(StubMessage message, object? result, Exception? exception, IExecutionContext context)
+    public ValueTask HandleAsync(StubMessage message, object? result, Exception? exception, IExecutionContext context)
     {
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 }
 
@@ -82,8 +82,8 @@ public class StubVoidAsyncFinalInterceptor: IAsyncFinalInterceptor<StubMessage>
 public class StubVoidIndirectAsyncFinalInterceptor: IAsyncFinalInterceptor<StubIndirectMessage>
 {
     /// <inheritdoc />
-    public Task HandleAsync(StubIndirectMessage message, object? result, Exception? exception, IExecutionContext context)
+    public ValueTask HandleAsync(StubIndirectMessage message, object? result, Exception? exception, IExecutionContext context)
     {
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 }

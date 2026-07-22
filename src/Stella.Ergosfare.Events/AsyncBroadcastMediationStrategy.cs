@@ -31,9 +31,15 @@ namespace Stella.Ergosfare.Events;
 public sealed class AsyncBroadcastMediationStrategy<TMessage>(
     IResultAdapterService? resultAdapterService,
     EventMediationSettings settings)
-    : IMessageMediationStrategy<TMessage, Task>
+    : IMessageMediationStrategy<TMessage, ValueTask>
     where TMessage : notnull
 {
+    /// <summary>
+    /// A completed <see cref="ValueTask"/> boxed once and reused as the broadcast's
+    /// (meaningless for events) result object flowing through the interceptor stages.
+    /// </summary>
+    private static readonly object CompletedResultBox = ValueTask.CompletedTask;
+
     /// <summary>
     ///     Mediates the given message by broadcasting it to all registered handlers concurrently.
     /// </summary>
@@ -43,11 +49,10 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
     ///     pre-handlers, post-handlers, and error handlers.
     /// </param>
     /// <param name="context"></param>
-    /// <returns>A Task representing the asynchronous operation of the mediation process.</returns>
-    public async Task Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context, IServiceProvider serviceProvider)
+    /// <returns>A ValueTask representing the asynchronous operation of the mediation process.</returns>
+    public async ValueTask Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context, IServiceProvider serviceProvider)
     {
 
-        var executionTaskOfAllHandlers = Task.CompletedTask;
         var handlers = messageDependencies.Handlers
             .Where(x => settings.Filters.HandlerPredicate(x.Descriptor.HandlerType))
             .ToList();
@@ -66,17 +71,18 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
             // events doesn't need result adapter, since events intended to not return a result
             var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, null, serviceProvider);
             await preInvoker.Invoke(message, context);
-            var sequentialExecutionTask = PublishSequentially(message, handlers, context, serviceProvider);
-            await sequentialExecutionTask;
+            await PublishSequentially(message, handlers, context, serviceProvider);
 
+            // A ValueTask may be awaited only once — the completed ValueTask stands in as the
+            // (meaningless for events) result object flowing through the interceptor stages.
             var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, null, serviceProvider);
-            await postInvoker.Invoke(message, sequentialExecutionTask, context);
+            await postInvoker.Invoke(message, CompletedResultBox, context);
         }
         catch (Exception e)
         {
             exception = e;
             var exceptionInvoker = new TaskExceptionInterceptorInvocationStrategy(messageDependencies, null, serviceProvider);
-            await exceptionInvoker.Invoke(message, executionTaskOfAllHandlers,
+            await exceptionInvoker.Invoke(message, CompletedResultBox,
                 ExceptionDispatchInfo.Capture(e), context);
 
         }
@@ -84,7 +90,7 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
         finally
         {
             var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
-            await finalInvoker.Invoke(message, executionTaskOfAllHandlers, exception, context);
+            await finalInvoker.Invoke(message, CompletedResultBox, exception, context);
         }
     }
 
@@ -96,11 +102,18 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
     /// <param name="handlers">The collection of handlers resolved for this message.</param>
     /// <param name="context">The execution context for this mediation pipeline.</param>
     /// <param name="serviceProvider">The provider of the scope this dispatch runs in.</param>
-    private async Task PublishSequentially(TMessage message, IReadOnlyList<IHandlerReference<IHandler, IMainHandlerDescriptor>> handlers, IExecutionContext context, IServiceProvider serviceProvider)
+    private async ValueTask PublishSequentially(TMessage message, IReadOnlyList<IHandlerReference<IHandler, IMainHandlerDescriptor>> handlers, IExecutionContext context, IServiceProvider serviceProvider)
     {
         for (var i = 0; i < handlers.Count; i++)
         {
-            var handleTask = (Task)handlers[i].Resolve(serviceProvider).Handle(message, context);
+            // Typed seam: PublishAsync<TEvent> dispatches with the concrete event type, so
+            // the typed check hits (`in TMessage` variance also admits base-typed handlers);
+            // the interface-erased PublishAsync(IEvent) overload falls back to the bridge.
+            var handler = handlers[i].Resolve(serviceProvider);
+
+            var handleTask = handler is IHandler<TMessage, ValueTask> typed
+                ? typed.Handle(message, context)
+                : (ValueTask)handler.Handle(message, context);
 
             await handleTask;
         }

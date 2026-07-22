@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 namespace Stella.Ergosfare.Core.Abstractions.Invokers;
 
 /// <summary>
@@ -22,5 +23,5 @@ internal abstract class PostInvoker(
     /// <returns>
     /// The transformed result after all post-interceptors have been executed.
     /// </returns>
-    public abstract object Invoke(object message, object? result, IExecutionContext executionContext);
+    public abstract ValueTask<object?> Invoke(object message, object? result, IExecutionContext executionContext);
 }

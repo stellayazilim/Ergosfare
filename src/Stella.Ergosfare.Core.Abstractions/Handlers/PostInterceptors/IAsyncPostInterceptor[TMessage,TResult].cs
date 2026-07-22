@@ -38,9 +38,9 @@ public interface IAsyncPostInterceptor<in TMessage, in TResult>
     /// <param name="messageResult">The result produced by the main handler, which can be inspected or modified.</param>
     /// <param name="context">The current execution context.</param>
     /// <returns>
-    /// A <see cref="Task{Object}"/> representing the asynchronous operation.
+    /// A <see cref="ValueTask{Object}"/> representing the asynchronous operation.
     /// The returned object should represent the modified result to continue through the pipeline.
     /// </returns>
-    Task<object> HandleAsync(TMessage message, TResult messageResult, IExecutionContext context);
+    ValueTask<object> HandleAsync(TMessage message, TResult messageResult, IExecutionContext context);
 }
 

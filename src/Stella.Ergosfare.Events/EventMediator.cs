@@ -23,8 +23,8 @@ public sealed class EventMediator(
     /// <param name="event">The event message to publish.</param>
     /// <param name="eventMediationSettings">Optional settings for pipeline execution, e.g., filters, items, and exception behavior.</param>
     /// <param name="cancellationToken">Cancellation token for async execution.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous publish operation.</returns>
-    public async Task PublishAsync(IEvent @event,
+    /// <returns>A <see cref="ValueTask"/> representing the asynchronous publish operation.</returns>
+    public async ValueTask PublishAsync(IEvent @event,
                              EventMediationSettings? eventMediationSettings = null,
                              CancellationToken cancellationToken = default)
     {
@@ -33,7 +33,7 @@ public sealed class EventMediator(
 
         // Execute the event through the message mediator
         await  messageMediator.Mediate(@event,
-            new MediateOptions<IEvent, Task>
+            new MediateOptions<IEvent, ValueTask>
             {
                 MessageMediationStrategy = mediationStrategy,
                 MessageResolveStrategy = messageResolveStrategy,
@@ -52,8 +52,8 @@ public sealed class EventMediator(
     /// <param name="event">The strongly-typed poco event message to publish.</param>
     /// <param name="eventMediationSettings">Optional settings for pipeline execution, e.g., filters, items, and exception behavior.</param>
     /// <param name="cancellationToken">Cancellation token for async execution.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous publish operation.</returns>
-    public async Task PublishAsync<TEvent>(TEvent @event,
+    /// <returns>A <see cref="ValueTask"/> representing the asynchronous publish operation.</returns>
+    public async ValueTask PublishAsync<TEvent>(TEvent @event,
                                      EventMediationSettings? eventMediationSettings = null,
                                      CancellationToken cancellationToken = default) where TEvent : notnull
     {
@@ -61,7 +61,7 @@ public sealed class EventMediator(
         var mediationStrategy = new AsyncBroadcastMediationStrategy<TEvent>(resultAdapterService, eventMediationSettings ??= new EventMediationSettings());
         // Execute the strongly-typed event through the mediator
         await messageMediator.Mediate(@event,
-            new MediateOptions<TEvent, Task>
+            new MediateOptions<TEvent, ValueTask>
             {
                 MessageMediationStrategy = mediationStrategy,
                 MessageResolveStrategy = messageResolveStrategy,

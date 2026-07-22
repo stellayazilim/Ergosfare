@@ -43,11 +43,11 @@ public class StubVoidHandlerThrows : IHandler<StubMessage, object>
 
 
 
-public class StubVoidIndirectHandler: IHandler<StubIndirectMessage, Task>
+public class StubVoidIndirectHandler: IHandler<StubIndirectMessage, ValueTask>
 {
-    public Task Handle(StubIndirectMessage message, IExecutionContext context)
+    public ValueTask Handle(StubIndirectMessage message, IExecutionContext context)
     {
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 }
 
@@ -112,7 +112,7 @@ public class StubExceptionInterceptor: IExceptionInterceptor<StubMessage, object
     {
         IsCalled = true;
         Result = messageResult;
-        return Task.FromResult(messageResult);
+        return ValueTask.FromResult(messageResult);
     }
 }
 

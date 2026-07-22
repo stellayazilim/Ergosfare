@@ -17,14 +17,14 @@ public class EventModuleTests
     /// <summary>
     /// A non-event handler stub used to test invalid registrations.
     /// </summary>
-    private class NonEventHandler: IHandler<IMessage, Task>
+    private class NonEventHandler: IHandler<IMessage, ValueTask>
     {
         /// <summary>
         /// Handles a message but performs no operation.
         /// </summary>
-        public Task Handle(IMessage message, IExecutionContext context)
+        public ValueTask Handle(IMessage message, IExecutionContext context)
         {
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
     }
 
@@ -35,7 +35,7 @@ public class EventModuleTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public void ShouldRegisterEventModule()
+    public async Task ShouldRegisterEventModule()
     {
         var serviceCollection = new ServiceCollection()
             .AddErgosfare(x => x.AddEventModule(c =>
@@ -44,10 +44,8 @@ public class EventModuleTests
             )).BuildServiceProvider();
         var mediator = serviceCollection.GetRequiredService<IEventMediator>();
 
-        var result = mediator.PublishAsync((IEvent) new StubNonGenericEvent());
-        var genericResult = mediator.PublishAsync<StubNonGenericEvent>(new StubNonGenericEvent());
-        Assert.NotNull(result);
-        Assert.NotNull(genericResult);
+        await mediator.PublishAsync((IEvent) new StubNonGenericEvent());
+        await mediator.PublishAsync<StubNonGenericEvent>(new StubNonGenericEvent());
         
     }
 
