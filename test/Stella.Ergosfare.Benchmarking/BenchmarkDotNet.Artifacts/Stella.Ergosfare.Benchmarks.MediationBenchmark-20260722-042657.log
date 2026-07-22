@@ -1,0 +1,371 @@
+// Validating benchmarks:
+// ***** BenchmarkRunner: Start   *****
+// ***** Found 3 benchmark(s) in total *****
+// ***** Building 1 exe(s) in Parallel: Start   *****
+// start dotnet  restore --nodeReuse:false /p:UseSharedCompilation=false /p:Deterministic=true /p:Optimize=true /p:ArtifactsPath="G:\Projects\ergosfare\test\Stella.Ergosfare.Benchmarking\bin\Release\net9.0\Stella.Ergosfare.Benchmarking-1/" /p:OutDir="G:\Projects\ergosfare\test\Stella.Ergosfare.Benchmarking\bin\Release\net9.0\Stella.Ergosfare.Benchmarking-1\bin\Release\net9.0/" /p:OutputPath="G:\Projects\ergosfare\test\Stella.Ergosfare.Benchmarking\bin\Release\net9.0\Stella.Ergosfare.Benchmarking-1\bin\Release\net9.0/" /p:PublishDir="G:\Projects\ergosfare\test\Stella.Ergosfare.Benchmarking\bin\Release\net9.0\Stella.Ergosfare.Benchmarking-1\publish/" in G:\Projects\ergosfare\test\Stella.Ergosfare.Benchmarking\bin\Release\net9.0\Stella.Ergosfare.Benchmarking-1
+// command took 1.94 sec and exited with 0
+// start dotnet  build -c Release --no-restore --nodeReuse:false /p:UseSharedCompilation=false /p:Deterministic=true /p:Optimize=true /p:ArtifactsPath="G:\Projects\ergosfare\test\Stella.Ergosfare.Benchmarking\bin\Release\net9.0\Stella.Ergosfare.Benchmarking-1/" /p:OutDir="G:\Projects\ergosfare\test\Stella.Ergosfare.Benchmarking\bin\Release\net9.0\Stella.Ergosfare.Benchmarking-1\bin\Release\net9.0/" /p:OutputPath="G:\Projects\ergosfare\test\Stella.Ergosfare.Benchmarking\bin\Release\net9.0\Stella.Ergosfare.Benchmarking-1\bin\Release\net9.0/" /p:PublishDir="G:\Projects\ergosfare\test\Stella.Ergosfare.Benchmarking\bin\Release\net9.0\Stella.Ergosfare.Benchmarking-1\publish/" --output "G:\Projects\ergosfare\test\Stella.Ergosfare.Benchmarking\bin\Release\net9.0\Stella.Ergosfare.Benchmarking-1\bin\Release\net9.0/" in G:\Projects\ergosfare\test\Stella.Ergosfare.Benchmarking\bin\Release\net9.0\Stella.Ergosfare.Benchmarking-1
+// command took 21.45 sec and exited with 0
+// ***** Done, took 00:00:23 (23.5 sec)   *****
+// Found 3 benchmarks:
+//   MediationBenchmark.StellaErgosfare: DefaultJob
+//   MediationBenchmark.StellaErgosfare_PublicApi: DefaultJob
+//   MediationBenchmark.MediatR: DefaultJob
+
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: Yüksek performans)
+// **************************
+// Benchmark: MediationBenchmark.StellaErgosfare: DefaultJob
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Stella.Ergosfare.Benchmarking-1.dll --anonymousPipes 2756 2752 --benchmarkName Stella.Ergosfare.Benchmarks.MediationBenchmark.StellaErgosfare --job Default --benchmarkId 0 in G:\Projects\ergosfare\test\Stella.Ergosfare.Benchmarking\bin\Release\net9.0\Stella.Ergosfare.Benchmarking-1\bin\Release\net9.0
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 9.0.11 (9.0.11, 9.0.1125.51716), X64 RyuJIT x86-64-v4
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX512 IFMA+VBMI,AVX512 F+BW+CD+DQ+VL,AVX2+BMI1+BMI2+F16C+FMA+LZCNT+MOVBE,AVX,SSE3+SSSE3+SSE4.1+SSE4.2+POPCNT,X86Base+SSE+SSE2,AES+PCLMUL VectorSize=256
+// Job: DefaultJob
+
+OverheadJitting  1: 1 op, 98900.00 ns, 98.9000 us/op
+WorkloadJitting  1: 1 op, 37919700.00 ns, 37.9197 ms/op
+
+WorkloadPilot    1: 2 op, 47478300.00 ns, 23.7392 ms/op
+WorkloadPilot    2: 3 op, 71043600.00 ns, 23.6812 ms/op
+WorkloadPilot    3: 4 op, 93743200.00 ns, 23.4358 ms/op
+WorkloadPilot    4: 5 op, 92900000.00 ns, 18.5800 ms/op
+WorkloadPilot    5: 6 op, 38354100.00 ns, 6.3924 ms/op
+WorkloadPilot    6: 7 op, 44854900.00 ns, 6.4078 ms/op
+WorkloadPilot    7: 8 op, 50880800.00 ns, 6.3601 ms/op
+WorkloadPilot    8: 9 op, 57649500.00 ns, 6.4055 ms/op
+WorkloadPilot    9: 10 op, 63000100.00 ns, 6.3000 ms/op
+WorkloadPilot   10: 11 op, 70474400.00 ns, 6.4068 ms/op
+WorkloadPilot   11: 12 op, 76850600.00 ns, 6.4042 ms/op
+WorkloadPilot   12: 13 op, 84126400.00 ns, 6.4713 ms/op
+WorkloadPilot   13: 14 op, 87821000.00 ns, 6.2729 ms/op
+WorkloadPilot   14: 15 op, 96792700.00 ns, 6.4528 ms/op
+WorkloadPilot   15: 16 op, 102043300.00 ns, 6.3777 ms/op
+WorkloadPilot   16: 32 op, 201824200.00 ns, 6.3070 ms/op
+WorkloadPilot   17: 64 op, 407421900.00 ns, 6.3660 ms/op
+WorkloadPilot   18: 128 op, 862605800.00 ns, 6.7391 ms/op
+
+WorkloadWarmup   1: 128 op, 799082700.00 ns, 6.2428 ms/op
+WorkloadWarmup   2: 128 op, 796199800.00 ns, 6.2203 ms/op
+WorkloadWarmup   3: 128 op, 812949000.00 ns, 6.3512 ms/op
+WorkloadWarmup   4: 128 op, 802444100.00 ns, 6.2691 ms/op
+WorkloadWarmup   5: 128 op, 807450400.00 ns, 6.3082 ms/op
+WorkloadWarmup   6: 128 op, 809393700.00 ns, 6.3234 ms/op
+WorkloadWarmup   7: 128 op, 826082300.00 ns, 6.4538 ms/op
+WorkloadWarmup   8: 128 op, 814997900.00 ns, 6.3672 ms/op
+
+// BeforeActualRun
+WorkloadActual   1: 128 op, 851291100.00 ns, 6.6507 ms/op
+WorkloadActual   2: 128 op, 813085400.00 ns, 6.3522 ms/op
+WorkloadActual   3: 128 op, 823426700.00 ns, 6.4330 ms/op
+WorkloadActual   4: 128 op, 832098900.00 ns, 6.5008 ms/op
+WorkloadActual   5: 128 op, 800316000.00 ns, 6.2525 ms/op
+WorkloadActual   6: 128 op, 799872700.00 ns, 6.2490 ms/op
+WorkloadActual   7: 128 op, 802037200.00 ns, 6.2659 ms/op
+WorkloadActual   8: 128 op, 815649600.00 ns, 6.3723 ms/op
+WorkloadActual   9: 128 op, 829534600.00 ns, 6.4807 ms/op
+WorkloadActual  10: 128 op, 812323900.00 ns, 6.3463 ms/op
+WorkloadActual  11: 128 op, 815461000.00 ns, 6.3708 ms/op
+WorkloadActual  12: 128 op, 815688800.00 ns, 6.3726 ms/op
+WorkloadActual  13: 128 op, 829670200.00 ns, 6.4818 ms/op
+WorkloadActual  14: 128 op, 806595900.00 ns, 6.3015 ms/op
+WorkloadActual  15: 128 op, 809646100.00 ns, 6.3254 ms/op
+
+// AfterActualRun
+WorkloadResult   1: 128 op, 851291100.00 ns, 6.6507 ms/op
+WorkloadResult   2: 128 op, 813085400.00 ns, 6.3522 ms/op
+WorkloadResult   3: 128 op, 823426700.00 ns, 6.4330 ms/op
+WorkloadResult   4: 128 op, 832098900.00 ns, 6.5008 ms/op
+WorkloadResult   5: 128 op, 800316000.00 ns, 6.2525 ms/op
+WorkloadResult   6: 128 op, 799872700.00 ns, 6.2490 ms/op
+WorkloadResult   7: 128 op, 802037200.00 ns, 6.2659 ms/op
+WorkloadResult   8: 128 op, 815649600.00 ns, 6.3723 ms/op
+WorkloadResult   9: 128 op, 829534600.00 ns, 6.4807 ms/op
+WorkloadResult  10: 128 op, 812323900.00 ns, 6.3463 ms/op
+WorkloadResult  11: 128 op, 815461000.00 ns, 6.3708 ms/op
+WorkloadResult  12: 128 op, 815688800.00 ns, 6.3726 ms/op
+WorkloadResult  13: 128 op, 829670200.00 ns, 6.4818 ms/op
+WorkloadResult  14: 128 op, 806595900.00 ns, 6.3015 ms/op
+WorkloadResult  15: 128 op, 809646100.00 ns, 6.3254 ms/op
+// GC:  26 0 0 1331200000 128
+// Threading:  0 0 128
+
+// AfterAll
+// Benchmark Process 38464 has exited with code 0.
+
+Mean = 6.384 ms, StdErr = 0.028 ms (0.44%), N = 15, StdDev = 0.110 ms
+Min = 6.249 ms, Q1 = 6.313 ms, Median = 6.371 ms, Q3 = 6.457 ms, Max = 6.651 ms
+IQR = 0.143 ms, LowerFence = 6.098 ms, UpperFence = 6.672 ms
+ConfidenceInterval = [6.266 ms; 6.501 ms] (CI 99.9%), Margin = 0.117 ms (1.84% of Mean)
+Skewness = 0.78, Kurtosis = 2.91, MValue = 2
+
+// ** Remained 2 (%66,7) benchmark(s) to run. Estimated finish 2026-07-22 4:28 (0h 0m from now) **
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: Yüksek performans)
+// **************************
+// Benchmark: MediationBenchmark.StellaErgosfare_PublicApi: DefaultJob
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Stella.Ergosfare.Benchmarking-1.dll --anonymousPipes 1892 2068 --benchmarkName Stella.Ergosfare.Benchmarks.MediationBenchmark.StellaErgosfare_PublicApi --job Default --benchmarkId 1 in G:\Projects\ergosfare\test\Stella.Ergosfare.Benchmarking\bin\Release\net9.0\Stella.Ergosfare.Benchmarking-1\bin\Release\net9.0
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 9.0.11 (9.0.11, 9.0.1125.51716), X64 RyuJIT x86-64-v4
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX512 IFMA+VBMI,AVX512 F+BW+CD+DQ+VL,AVX2+BMI1+BMI2+F16C+FMA+LZCNT+MOVBE,AVX,SSE3+SSSE3+SSE4.1+SSE4.2+POPCNT,X86Base+SSE+SSE2,AES+PCLMUL VectorSize=256
+// Job: DefaultJob
+
+OverheadJitting  1: 1 op, 87400.00 ns, 87.4000 us/op
+WorkloadJitting  1: 1 op, 36578100.00 ns, 36.5781 ms/op
+
+WorkloadPilot    1: 2 op, 51676400.00 ns, 25.8382 ms/op
+WorkloadPilot    2: 3 op, 69471600.00 ns, 23.1572 ms/op
+WorkloadPilot    3: 4 op, 95418300.00 ns, 23.8546 ms/op
+WorkloadPilot    4: 5 op, 107475400.00 ns, 21.4951 ms/op
+WorkloadPilot    5: 6 op, 42150500.00 ns, 7.0251 ms/op
+WorkloadPilot    6: 7 op, 49498600.00 ns, 7.0712 ms/op
+WorkloadPilot    7: 8 op, 54880500.00 ns, 6.8601 ms/op
+WorkloadPilot    8: 9 op, 64005600.00 ns, 7.1117 ms/op
+WorkloadPilot    9: 10 op, 70608700.00 ns, 7.0609 ms/op
+WorkloadPilot   10: 11 op, 75642000.00 ns, 6.8765 ms/op
+WorkloadPilot   11: 12 op, 82447900.00 ns, 6.8707 ms/op
+WorkloadPilot   12: 13 op, 90765500.00 ns, 6.9820 ms/op
+WorkloadPilot   13: 14 op, 96946900.00 ns, 6.9248 ms/op
+WorkloadPilot   14: 15 op, 103986000.00 ns, 6.9324 ms/op
+WorkloadPilot   15: 16 op, 112395300.00 ns, 7.0247 ms/op
+WorkloadPilot   16: 32 op, 224621400.00 ns, 7.0194 ms/op
+WorkloadPilot   17: 64 op, 448278300.00 ns, 7.0043 ms/op
+WorkloadPilot   18: 128 op, 891525800.00 ns, 6.9650 ms/op
+
+WorkloadWarmup   1: 128 op, 898311200.00 ns, 7.0181 ms/op
+WorkloadWarmup   2: 128 op, 894686200.00 ns, 6.9897 ms/op
+WorkloadWarmup   3: 128 op, 900557600.00 ns, 7.0356 ms/op
+WorkloadWarmup   4: 128 op, 903730300.00 ns, 7.0604 ms/op
+WorkloadWarmup   5: 128 op, 910454700.00 ns, 7.1129 ms/op
+WorkloadWarmup   6: 128 op, 913815800.00 ns, 7.1392 ms/op
+WorkloadWarmup   7: 128 op, 899827700.00 ns, 7.0299 ms/op
+WorkloadWarmup   8: 128 op, 879492900.00 ns, 6.8710 ms/op
+WorkloadWarmup   9: 128 op, 885893100.00 ns, 6.9210 ms/op
+WorkloadWarmup  10: 128 op, 890658800.00 ns, 6.9583 ms/op
+WorkloadWarmup  11: 128 op, 890231100.00 ns, 6.9549 ms/op
+
+// BeforeActualRun
+WorkloadActual   1: 128 op, 890333900.00 ns, 6.9557 ms/op
+WorkloadActual   2: 128 op, 881989300.00 ns, 6.8905 ms/op
+WorkloadActual   3: 128 op, 896249400.00 ns, 7.0019 ms/op
+WorkloadActual   4: 128 op, 889848500.00 ns, 6.9519 ms/op
+WorkloadActual   5: 128 op, 888750100.00 ns, 6.9434 ms/op
+WorkloadActual   6: 128 op, 891674000.00 ns, 6.9662 ms/op
+WorkloadActual   7: 128 op, 884269000.00 ns, 6.9084 ms/op
+WorkloadActual   8: 128 op, 893093800.00 ns, 6.9773 ms/op
+WorkloadActual   9: 128 op, 893473500.00 ns, 6.9803 ms/op
+WorkloadActual  10: 128 op, 893832400.00 ns, 6.9831 ms/op
+WorkloadActual  11: 128 op, 908997300.00 ns, 7.1015 ms/op
+WorkloadActual  12: 128 op, 881619800.00 ns, 6.8877 ms/op
+WorkloadActual  13: 128 op, 891953800.00 ns, 6.9684 ms/op
+WorkloadActual  14: 128 op, 888672600.00 ns, 6.9428 ms/op
+WorkloadActual  15: 128 op, 878875800.00 ns, 6.8662 ms/op
+
+// AfterActualRun
+WorkloadResult   1: 128 op, 890333900.00 ns, 6.9557 ms/op
+WorkloadResult   2: 128 op, 881989300.00 ns, 6.8905 ms/op
+WorkloadResult   3: 128 op, 896249400.00 ns, 7.0019 ms/op
+WorkloadResult   4: 128 op, 889848500.00 ns, 6.9519 ms/op
+WorkloadResult   5: 128 op, 888750100.00 ns, 6.9434 ms/op
+WorkloadResult   6: 128 op, 891674000.00 ns, 6.9662 ms/op
+WorkloadResult   7: 128 op, 884269000.00 ns, 6.9084 ms/op
+WorkloadResult   8: 128 op, 893093800.00 ns, 6.9773 ms/op
+WorkloadResult   9: 128 op, 893473500.00 ns, 6.9803 ms/op
+WorkloadResult  10: 128 op, 893832400.00 ns, 6.9831 ms/op
+WorkloadResult  11: 128 op, 881619800.00 ns, 6.8877 ms/op
+WorkloadResult  12: 128 op, 891953800.00 ns, 6.9684 ms/op
+WorkloadResult  13: 128 op, 888672600.00 ns, 6.9428 ms/op
+WorkloadResult  14: 128 op, 878875800.00 ns, 6.8662 ms/op
+// GC:  42 0 0 2150400000 128
+// Threading:  0 0 128
+
+// AfterAll
+// Benchmark Process 44224 has exited with code 0.
+
+Mean = 6.945 ms, StdErr = 0.011 ms (0.16%), N = 14, StdDev = 0.041 ms
+Min = 6.866 ms, Q1 = 6.917 ms, Median = 6.954 ms, Q3 = 6.975 ms, Max = 7.002 ms
+IQR = 0.058 ms, LowerFence = 6.830 ms, UpperFence = 7.062 ms
+ConfidenceInterval = [6.898 ms; 6.991 ms] (CI 99.9%), Margin = 0.046 ms (0.67% of Mean)
+Skewness = -0.53, Kurtosis = 1.87, MValue = 2
+
+// ** Remained 1 (%33,3) benchmark(s) to run. Estimated finish 2026-07-22 4:28 (0h 0m from now) **
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: Yüksek performans)
+// **************************
+// Benchmark: MediationBenchmark.MediatR: DefaultJob
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet Stella.Ergosfare.Benchmarking-1.dll --anonymousPipes 2768 1984 --benchmarkName Stella.Ergosfare.Benchmarks.MediationBenchmark.MediatR --job Default --benchmarkId 2 in G:\Projects\ergosfare\test\Stella.Ergosfare.Benchmarking\bin\Release\net9.0\Stella.Ergosfare.Benchmarking-1\bin\Release\net9.0
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.8
+// Runtime=.NET 9.0.11 (9.0.11, 9.0.1125.51716), X64 RyuJIT x86-64-v4
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX512 IFMA+VBMI,AVX512 F+BW+CD+DQ+VL,AVX2+BMI1+BMI2+F16C+FMA+LZCNT+MOVBE,AVX,SSE3+SSSE3+SSE4.1+SSE4.2+POPCNT,X86Base+SSE+SSE2,AES+PCLMUL VectorSize=256
+// Job: DefaultJob
+
+OverheadJitting  1: 1 op, 75600.00 ns, 75.6000 us/op
+WorkloadJitting  1: 1 op, 37447900.00 ns, 37.4479 ms/op
+
+WorkloadPilot    1: 2 op, 60635500.00 ns, 30.3178 ms/op
+WorkloadPilot    2: 3 op, 82782400.00 ns, 27.5941 ms/op
+WorkloadPilot    3: 4 op, 63620300.00 ns, 15.9051 ms/op
+WorkloadPilot    4: 5 op, 29680000.00 ns, 5.9360 ms/op
+WorkloadPilot    5: 6 op, 36042600.00 ns, 6.0071 ms/op
+WorkloadPilot    6: 7 op, 42722100.00 ns, 6.1032 ms/op
+WorkloadPilot    7: 8 op, 47455600.00 ns, 5.9320 ms/op
+WorkloadPilot    8: 9 op, 53277100.00 ns, 5.9197 ms/op
+WorkloadPilot    9: 10 op, 59382900.00 ns, 5.9383 ms/op
+WorkloadPilot   10: 11 op, 64777200.00 ns, 5.8888 ms/op
+WorkloadPilot   11: 12 op, 70790200.00 ns, 5.8992 ms/op
+WorkloadPilot   12: 13 op, 76615200.00 ns, 5.8935 ms/op
+WorkloadPilot   13: 14 op, 85702900.00 ns, 6.1216 ms/op
+WorkloadPilot   14: 15 op, 88988600.00 ns, 5.9326 ms/op
+WorkloadPilot   15: 16 op, 94459500.00 ns, 5.9037 ms/op
+WorkloadPilot   16: 32 op, 188808200.00 ns, 5.9003 ms/op
+WorkloadPilot   17: 64 op, 379304300.00 ns, 5.9266 ms/op
+WorkloadPilot   18: 128 op, 750263900.00 ns, 5.8614 ms/op
+
+WorkloadWarmup   1: 128 op, 745083300.00 ns, 5.8210 ms/op
+WorkloadWarmup   2: 128 op, 753595600.00 ns, 5.8875 ms/op
+WorkloadWarmup   3: 128 op, 757448300.00 ns, 5.9176 ms/op
+WorkloadWarmup   4: 128 op, 772060000.00 ns, 6.0317 ms/op
+WorkloadWarmup   5: 128 op, 757338100.00 ns, 5.9167 ms/op
+WorkloadWarmup   6: 128 op, 763406400.00 ns, 5.9641 ms/op
+WorkloadWarmup   7: 128 op, 761312900.00 ns, 5.9478 ms/op
+
+// BeforeActualRun
+WorkloadActual   1: 128 op, 775561400.00 ns, 6.0591 ms/op
+WorkloadActual   2: 128 op, 765829300.00 ns, 5.9830 ms/op
+WorkloadActual   3: 128 op, 766829700.00 ns, 5.9909 ms/op
+WorkloadActual   4: 128 op, 755600400.00 ns, 5.9031 ms/op
+WorkloadActual   5: 128 op, 762216500.00 ns, 5.9548 ms/op
+WorkloadActual   6: 128 op, 758985900.00 ns, 5.9296 ms/op
+WorkloadActual   7: 128 op, 778093300.00 ns, 6.0789 ms/op
+WorkloadActual   8: 128 op, 746606200.00 ns, 5.8329 ms/op
+WorkloadActual   9: 128 op, 761326600.00 ns, 5.9479 ms/op
+WorkloadActual  10: 128 op, 749334700.00 ns, 5.8542 ms/op
+WorkloadActual  11: 128 op, 749476500.00 ns, 5.8553 ms/op
+WorkloadActual  12: 128 op, 751987100.00 ns, 5.8749 ms/op
+WorkloadActual  13: 128 op, 748340600.00 ns, 5.8464 ms/op
+WorkloadActual  14: 128 op, 749131500.00 ns, 5.8526 ms/op
+WorkloadActual  15: 128 op, 752130300.00 ns, 5.8760 ms/op
+
+// AfterActualRun
+WorkloadResult   1: 128 op, 775561400.00 ns, 6.0591 ms/op
+WorkloadResult   2: 128 op, 765829300.00 ns, 5.9830 ms/op
+WorkloadResult   3: 128 op, 766829700.00 ns, 5.9909 ms/op
+WorkloadResult   4: 128 op, 755600400.00 ns, 5.9031 ms/op
+WorkloadResult   5: 128 op, 762216500.00 ns, 5.9548 ms/op
+WorkloadResult   6: 128 op, 758985900.00 ns, 5.9296 ms/op
+WorkloadResult   7: 128 op, 778093300.00 ns, 6.0789 ms/op
+WorkloadResult   8: 128 op, 746606200.00 ns, 5.8329 ms/op
+WorkloadResult   9: 128 op, 761326600.00 ns, 5.9479 ms/op
+WorkloadResult  10: 128 op, 749334700.00 ns, 5.8542 ms/op
+WorkloadResult  11: 128 op, 749476500.00 ns, 5.8553 ms/op
+WorkloadResult  12: 128 op, 751987100.00 ns, 5.8749 ms/op
+WorkloadResult  13: 128 op, 748340600.00 ns, 5.8464 ms/op
+WorkloadResult  14: 128 op, 749131500.00 ns, 5.8526 ms/op
+WorkloadResult  15: 128 op, 752130300.00 ns, 5.8760 ms/op
+// GC:  48 0 0 2457600000 128
+// Threading:  0 0 128
+
+// AfterAll
+// Benchmark Process 15356 has exited with code 0.
+
+Mean = 5.923 ms, StdErr = 0.020 ms (0.34%), N = 15, StdDev = 0.078 ms
+Min = 5.833 ms, Q1 = 5.855 ms, Median = 5.903 ms, Q3 = 5.969 ms, Max = 6.079 ms
+IQR = 0.114 ms, LowerFence = 5.683 ms, UpperFence = 6.140 ms
+ConfidenceInterval = [5.839 ms; 6.006 ms] (CI 99.9%), Margin = 0.084 ms (1.41% of Mean)
+Skewness = 0.64, Kurtosis = 2.04, MValue = 2
+
+// ** Remained 0 (%0,0) benchmark(s) to run. Estimated finish 2026-07-22 4:28 (0h 0m from now) **
+Successfully reverted power plan (GUID: 381b4222-f694-41f0-9685-ff5bb260df2e FriendlyName: Dengeli)
+// ***** BenchmarkRunner: Finish  *****
+
+// * Export *
+  BenchmarkDotNet.Artifacts\results\Stella.Ergosfare.Benchmarks.MediationBenchmark-report.csv
+  BenchmarkDotNet.Artifacts\results\Stella.Ergosfare.Benchmarks.MediationBenchmark-report-github.md
+  BenchmarkDotNet.Artifacts\results\Stella.Ergosfare.Benchmarks.MediationBenchmark-report.html
+
+// * Detailed results *
+MediationBenchmark.StellaErgosfare: DefaultJob
+Runtime = .NET 9.0.11 (9.0.11, 9.0.1125.51716), X64 RyuJIT x86-64-v4; GC = Concurrent Workstation
+Mean = 6.384 ms, StdErr = 0.028 ms (0.44%), N = 15, StdDev = 0.110 ms
+Min = 6.249 ms, Q1 = 6.313 ms, Median = 6.371 ms, Q3 = 6.457 ms, Max = 6.651 ms
+IQR = 0.143 ms, LowerFence = 6.098 ms, UpperFence = 6.672 ms
+ConfidenceInterval = [6.266 ms; 6.501 ms] (CI 99.9%), Margin = 0.117 ms (1.84% of Mean)
+Skewness = 0.78, Kurtosis = 2.91, MValue = 2
+-------------------- Histogram --------------------
+[6.191 ms ; 6.382 ms) | @@@@@@@@@@
+[6.382 ms ; 6.532 ms) | @@@@
+[6.532 ms ; 6.709 ms) | @
+---------------------------------------------------
+
+MediationBenchmark.StellaErgosfare_PublicApi: DefaultJob
+Runtime = .NET 9.0.11 (9.0.11, 9.0.1125.51716), X64 RyuJIT x86-64-v4; GC = Concurrent Workstation
+Mean = 6.945 ms, StdErr = 0.011 ms (0.16%), N = 14, StdDev = 0.041 ms
+Min = 6.866 ms, Q1 = 6.917 ms, Median = 6.954 ms, Q3 = 6.975 ms, Max = 7.002 ms
+IQR = 0.058 ms, LowerFence = 6.830 ms, UpperFence = 7.062 ms
+ConfidenceInterval = [6.898 ms; 6.991 ms] (CI 99.9%), Margin = 0.046 ms (0.67% of Mean)
+Skewness = -0.53, Kurtosis = 1.87, MValue = 2
+-------------------- Histogram --------------------
+[6.844 ms ; 7.024 ms) | @@@@@@@@@@@@@@
+---------------------------------------------------
+
+MediationBenchmark.MediatR: DefaultJob
+Runtime = .NET 9.0.11 (9.0.11, 9.0.1125.51716), X64 RyuJIT x86-64-v4; GC = Concurrent Workstation
+Mean = 5.923 ms, StdErr = 0.020 ms (0.34%), N = 15, StdDev = 0.078 ms
+Min = 5.833 ms, Q1 = 5.855 ms, Median = 5.903 ms, Q3 = 5.969 ms, Max = 6.079 ms
+IQR = 0.114 ms, LowerFence = 5.683 ms, UpperFence = 6.140 ms
+ConfidenceInterval = [5.839 ms; 6.006 ms] (CI 99.9%), Margin = 0.084 ms (1.41% of Mean)
+Skewness = 0.64, Kurtosis = 2.04, MValue = 2
+-------------------- Histogram --------------------
+[5.809 ms ; 6.121 ms) | @@@@@@@@@@@@@@@
+---------------------------------------------------
+
+// * Summary *
+
+BenchmarkDotNet v0.15.8, Windows 11 (10.0.26200.8875/25H2/2025Update/HudsonValley2)
+AMD Ryzen 7 7800X3D 4.20GHz, 1 CPU, 16 logical and 8 physical cores
+.NET SDK 10.0.100
+  [Host]     : .NET 9.0.11 (9.0.11, 9.0.1125.51716), X64 RyuJIT x86-64-v4
+  DefaultJob : .NET 9.0.11 (9.0.11, 9.0.1125.51716), X64 RyuJIT x86-64-v4
+
+
+| Method                    | Mean     | Error     | StdDev    | Gen0     | Allocated |
+|-------------------------- |---------:|----------:|----------:|---------:|----------:|
+| StellaErgosfare           | 6.384 ms | 0.1173 ms | 0.1098 ms | 203.1250 |   9.92 MB |
+| StellaErgosfare_PublicApi | 6.945 ms | 0.0464 ms | 0.0411 ms | 328.1250 |  16.02 MB |
+| MediatR                   | 5.923 ms | 0.0837 ms | 0.0783 ms | 375.0000 |  18.31 MB |
+
+// * Hints *
+Outliers
+  MediationBenchmark.StellaErgosfare_PublicApi: Default -> 1 outlier  was  removed (7.10 ms)
+
+// * Legends *
+  Mean      : Arithmetic mean of all measurements
+  Error     : Half of 99.9% confidence interval
+  StdDev    : Standard deviation of all measurements
+  Gen0      : GC Generation 0 collects per 1000 operations
+  Allocated : Allocated memory per single operation (managed only, inclusive, 1KB = 1024B)
+  1 ms      : 1 Millisecond (0.001 sec)
+
+// * Diagnostic Output - MemoryDiagnoser *
+
+
+// ***** BenchmarkRunner: End *****
+Run time: 00:01:12 (72.72 sec), executed benchmarks: 3
+
+Global total time: 00:01:36 (96.68 sec), executed benchmarks: 3
+// * Artifacts cleanup *
+Artifacts cleanup is finished

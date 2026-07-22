@@ -10,6 +10,8 @@ using Stella.Ergosfare.Core.Abstractions.Registry;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using MediatR;
+using LiteBus.Commands;
+using LiteBus.Extensions.Microsoft.DependencyInjection;
 using System.Threading.Tasks;
 using System.Threading;
 
@@ -35,6 +37,12 @@ public class StellaCommandHandler : ICommandHandler<StellaCommand>
     public Task HandleAsync(StellaCommand message, IExecutionContext context) => Task.CompletedTask;
 }
 
+public class LiteBusCommand : LiteBus.Commands.Abstractions.ICommand { }
+public class LiteBusCommandHandler : LiteBus.Commands.Abstractions.ICommandHandler<LiteBusCommand>
+{
+    public Task HandleAsync(LiteBusCommand message, CancellationToken cancellationToken = default) => Task.CompletedTask;
+}
+
 public class MediatrRequest : IRequest { }
 public class MediatrHandler : IRequestHandler<MediatrRequest>
 {
@@ -54,6 +62,10 @@ public class MediationBenchmark
     private IServiceProvider _mediatrProvider;
     private IMediator _mediatrMediator;
     private MediatrRequest _mediatrRequest;
+
+    private IServiceProvider _liteBusProvider;
+    private LiteBus.Commands.Abstractions.ICommandMediator _liteBusCommandMediator;
+    private LiteBusCommand _liteBusCommand;
 
     [GlobalSetup]
     public void Setup()
@@ -88,6 +100,17 @@ public class MediationBenchmark
         _mediatrProvider = mediatrServices.BuildServiceProvider();
         _mediatrMediator = _mediatrProvider.GetRequiredService<IMediator>();
         _mediatrRequest = new MediatrRequest();
+
+        // LiteBus Setup
+        var liteBusServices = new ServiceCollection();
+        liteBusServices.AddLiteBus(builder => {
+            builder.AddCommandModule(module => {
+                module.Register<LiteBusCommandHandler>();
+            });
+        });
+        _liteBusProvider = liteBusServices.BuildServiceProvider();
+        _liteBusCommandMediator = _liteBusProvider.GetRequiredService<LiteBus.Commands.Abstractions.ICommandMediator>();
+        _liteBusCommand = new LiteBusCommand();
     }
 
     [Benchmark]
@@ -112,5 +135,13 @@ public class MediationBenchmark
     {
         for (var i = 0; i < 100000; i++)
             await _mediatrMediator.Send(_mediatrRequest);
+    }
+
+    // Ergosfare is a fork of LiteBus, so the upstream is included for reference.
+    [Benchmark]
+    public async Task LiteBus_PublicApi()
+    {
+        for (var i = 0; i < 100000; i++)
+            await _liteBusCommandMediator.SendAsync(_liteBusCommand);
     }
 }
