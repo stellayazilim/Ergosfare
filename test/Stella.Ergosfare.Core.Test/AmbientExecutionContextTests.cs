@@ -2,6 +2,7 @@ using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Test.Fixtures;
 // ReSharper disable ConvertToPrimaryConstructor
+#pragma warning disable CS0618 // this suite deliberately tests the deprecated ambient context until its removal
 
 namespace Stella.Ergosfare.Core.Test;
 

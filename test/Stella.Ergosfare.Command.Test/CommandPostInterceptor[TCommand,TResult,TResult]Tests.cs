@@ -26,9 +26,9 @@ public class CommandPostInterceptorTCommandTResultTResultTests
         /// <param name="commandResult">The result produced by the command.</param>
         /// <param name="context">The execution context.</param>
         /// <returns>A <see cref="Task{TResult}"/> that contains the same result as <paramref name="commandResult"/>.</returns>
-        public Task<string?> HandleAsync(StubNonGenericCommandStringResult command, string? commandResult, IExecutionContext context)
+        public Task<string> HandleAsync(StubNonGenericCommandStringResult command, string? commandResult, IExecutionContext context)
         {
-            return Task.FromResult(commandResult);
+            return Task.FromResult(commandResult!);
         }
     }
 
@@ -46,7 +46,7 @@ public class CommandPostInterceptorTCommandTResultTResultTests
         IAsyncPostInterceptor<StubNonGenericCommandStringResult, string> interceptor = new TestCommandTCommandTResultTResultPostInterceptor();
         
         // act 
-        var result = await interceptor.HandleAsync(new StubNonGenericCommandStringResult(), String.Empty, null);
+        var result = await interceptor.HandleAsync(new StubNonGenericCommandStringResult(), String.Empty, null!);
         
         // assert
         Assert.IsType<string>(result);

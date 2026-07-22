@@ -5,6 +5,7 @@ using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Stella.Ergosfare.Command.Test.__stubs__;
+#pragma warning disable CS0618 // deliberately exercising the obsolete stub command type
 
 namespace Stella.Ergosfare.Command.Test;
 
@@ -27,14 +28,10 @@ public class CommandMediatorExtensionsTests
         var mockInterceptor2 = new Mock<StubCommandPreInterceptor2>();
 
         var cancellationToken = CancellationToken.None;
-        #pragma warning disable CS0618 // Type or member is obsolete
         var cmd = new StubNonGenericCommand();
-        #pragma warning restore CS0618 // Type or member is obsolete
 
         mockInterceptor1.Setup(s =>
-        #pragma warning disable CS0618 // Type or member is obsolete
                 s.HandleAsync(It.IsAny<StubNonGenericCommand>(), It.IsAny<IExecutionContext>()))
-        #pragma warning restore CS0618 // Type or member is obsolete
             .CallBase();
         mockInterceptor2.Setup(s =>
             s.HandleAsync(It.IsAny<StubNonGenericCommand>(), It.IsAny<IExecutionContext>()))

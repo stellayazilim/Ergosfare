@@ -4,6 +4,7 @@ using Stella.Ergosfare.Core.Internal.Contexts;
 using Stella.Ergosfare.Core.Internal.Factories;
 using Stella.Ergosfare.Core.Internal.Registry;
 using Microsoft.Extensions.DependencyInjection;
+#pragma warning disable CS0618 // deliberately exercising the deprecated ambient context until its removal
 
 namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test;
 

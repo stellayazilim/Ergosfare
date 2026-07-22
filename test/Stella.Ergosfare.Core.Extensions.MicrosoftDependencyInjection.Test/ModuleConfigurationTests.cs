@@ -22,7 +22,7 @@ public class ModuleConfigurationTests
         var serviceProvier = new ServiceCollection()
             .AddTransient<MessageHandler>();
         
-        var moduleConfiguration = new ModuleConfiguration(serviceProvier, null);
+        var moduleConfiguration = new ModuleConfiguration(serviceProvier, null!);
         
         // act
         serviceProvier.BuildServiceProvider();

@@ -101,7 +101,7 @@ public class ResultAdapterFixtures : IFixture<ResultAdapterFixtures>
         /// </summary>
         public static bool IsCalled;
 
-        public Task<object> HandleAsync(ResultAdapterMessage message, ErrorOr<string> result, Exception exception, IExecutionContext context)
+        public Task<object?> HandleAsync(ResultAdapterMessage message, ErrorOr<string> result, Exception exception, IExecutionContext context)
         {
             IsCalled = true;
             throw exception;

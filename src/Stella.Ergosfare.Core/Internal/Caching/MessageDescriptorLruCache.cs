@@ -50,7 +50,11 @@ public sealed class LruCacheStrategy : IDescriptorCacheStrategy
     {
         lock (_cleanupLock)
         {
-            if ((uint)_cache.Count <= _maxSize) return;
+            // Called when the cache is at (or beyond) capacity, before a new entry is
+            // added: evicting down to maxSize - 1 keeps the post-add count within
+            // maxSize. The previous <= guard returned early at exactly maxSize, letting
+            // the cache grow to maxSize + 1 before eviction kicked in.
+            if ((uint)_cache.Count < _maxSize) return;
 
             var toRemove = _cache
                 .OrderBy(x => x.Value.LastAccessed)

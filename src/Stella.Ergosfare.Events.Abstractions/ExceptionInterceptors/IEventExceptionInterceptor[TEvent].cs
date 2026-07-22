@@ -29,7 +29,7 @@ public interface IEventExceptionInterceptor<in TEvent> : IEvent, IAsyncException
 {
     
     /// <inheritdoc cref="IAsyncExceptionInterceptor{TEvent}.HandleAsync"/>
-    async Task<object> IAsyncExceptionInterceptor<TEvent, Task>.HandleAsync(TEvent @event, Task? result,
+    async Task<object?> IAsyncExceptionInterceptor<TEvent, Task>.HandleAsync(TEvent @event, Task? result,
         Exception exception, IExecutionContext context)
     {
         await HandleAsync(@event, result, exception, context);

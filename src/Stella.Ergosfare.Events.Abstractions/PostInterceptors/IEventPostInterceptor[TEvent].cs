@@ -27,7 +27,11 @@ public interface IEventPostInterceptor<in TEvent> : IEvent, IAsyncPostIntercepto
     /// <inheritdoc cref="IAsyncPostInterceptor{TEvent, Task}.HandleAsync"/>
     async Task<object> IAsyncPostInterceptor<TEvent>.HandleAsync(TEvent @event, object result, IExecutionContext context)
     {
-        return await HandleAsync(@event, result, context);
+        // The cast is required so this call binds to the typed member below; without it
+        // the simple-name call resolved back to the inherited interface member — i.e.
+        // this very implementation — and recursed infinitely.
+        await HandleAsync(@event, (Task) result, context);
+        return Task.CompletedTask;
     }
     
     

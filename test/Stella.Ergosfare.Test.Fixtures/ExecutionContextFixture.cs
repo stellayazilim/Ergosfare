@@ -1,6 +1,7 @@
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Internal.Contexts;
 using Microsoft.Extensions.DependencyInjection;
+#pragma warning disable CS0618 // fixture intentionally drives the deprecated ambient context for tests that cover it
 
 namespace Stella.Ergosfare.Test.Fixtures;
 

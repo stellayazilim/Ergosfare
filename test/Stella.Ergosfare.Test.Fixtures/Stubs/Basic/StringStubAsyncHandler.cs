@@ -69,8 +69,8 @@ public class StubStringAsyncExceptionInterceptorModifiesResult : IAsyncException
     /// <param name="exception">The exception that occurred during handling.</param>
     /// <param name="context">The current execution context.</param>
     /// <returns>A task that completes with the modified result.</returns>
-    public Task<object> HandleAsync(StubMessage message, string? result, Exception exception, IExecutionContext context)
+    public Task<object?> HandleAsync(StubMessage message, string? result, Exception exception, IExecutionContext context)
     {
-        return Task.FromResult<object>("modified result");
+        return Task.FromResult<object?>("modified result");
     }
 }
