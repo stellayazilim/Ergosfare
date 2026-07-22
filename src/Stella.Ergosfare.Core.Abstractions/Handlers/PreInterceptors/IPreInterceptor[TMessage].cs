@@ -16,8 +16,8 @@ namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 /// when the pipeline is executed.
 /// </para>
 /// <para>
-/// Use <see cref="AmbientExecutionContext.Current"/> when accessing ambient or contextual information
-/// during message processing.
+/// Use the <see cref="IExecutionContext"/> parameter passed to <see cref="Handle"/> when accessing
+/// contextual information during message processing.
 /// </para>
 /// </remarks>
 public interface IPreInterceptor<in TMessage> : IPreInterceptor 

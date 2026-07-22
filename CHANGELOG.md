@@ -1,3 +1,65 @@
+## v1.2.0 – '2026-07-22'
+
+### Deprecations
+
+#### `AmbientExecutionContext` (planned removal in the next major version)
+
+* The entire `AmbientExecutionContext` API is now marked `[Obsolete]`: the execution context is passed to every handler and interceptor as a parameter, which is the supported way to access it.
+* Ambient publication is now **opt-in and disabled by default**. Components that require constructor-injected `IExecutionContext` (the only feature that genuinely needs the ambient mechanism) must enable it during registration:
+
+  ```csharp
+  services.AddErgosfare(options =>
+  {
+      options.EnableAmbientExecutionContext(); // deprecated compatibility switch
+      options.AddCoreModule(module => { /* ... */ });
+  });
+  ```
+
+* When disabled (the default), no `AsyncLocal` write occurs on the dispatch path. Resolving `IExecutionContext` from DI without enabling the switch throws `NoExecutionContextException` with guidance.
+* Migration: replace `AmbientExecutionContext.Current` usages with the `IExecutionContext` parameter your handler/interceptor already receives. The static API will be removed together with `EnableAmbientExecutionContext()` in the next major release.
+
+### Features & Improvements
+
+#### Dispatch hot-path overhaul (~5x faster, ~11x less allocation)
+
+* Resolved message descriptors are cached per message `Type` in the resolve strategy; the previous full-registry LINQ scan per dispatch is gone.
+* Zero-interceptor fast path: when a message has no pre/post/exception/final interceptors, the handler is invoked directly — no invoker objects or empty-collection async iterations are constructed.
+* Resolved `MessageDependencies` are cached in `ConcurrentDictionary`s keyed by `Type` (plus a struct key for group filters); per-dispatch string-key construction, service-provider lookups, and LRU timestamp writes are eliminated.
+* `CommandMediator`/`QueryMediator` reuse their stateless mediation strategies and no longer materialize default settings objects per call; mediators are now registered as singletons (`TryAdd`, so user overrides still apply).
+* `MessageDescriptor` stage lists are allocated lazily, trimming startup allocations per registered message type.
+* Benchmark (100k dispatches/op, Ryzen 7 7800X3D, .NET 9, ambient context disabled): raw mediator path 31.6 ms / 112.9 MB → 4.4 ms / 3.1 MB; public `SendAsync` path 5.3 ms / 9.2 MB; MediatR on the same benchmark: 6.1 ms / 18.3 MB.
+
+#### Lifetime-aware handler resolution — scoped dependencies now supported (default on)
+
+* Handler resolution now honors registered DI lifetimes. Messages whose handlers and interceptors are all **singleton-registered** keep the process-wide memoized fast path; everything else (the framework default is transient) is resolved from the **calling scope's provider** and cached per scope — so scoped constructor dependencies (`DbContext`, unit-of-work, current-user services) get one instance per scope, exactly like MediatR, and `IDisposable` handlers/dependencies are disposed with their scope.
+* Previously (v1.1.0) handler instances were silently memoized process-wide: the first dispatch captured the first caller's scope — including its `DbContext` — and reused it for every subsequent dispatch, even after that scope was disposed. This was a latent correctness bug that did not surface as an exception (default `BuildServiceProvider()` does not validate scopes).
+* Opting out: `ForceMemoizedHandlers()` on the registration builder restores the pre-v1.2 memoize-everything behavior for maximum dispatch throughput. Per-handler control needs no new API — register a handler as singleton (before `AddErgosfare`, so `TryAdd` respects it) to keep it on the fast path.
+* Within a scope, resolution is memoized per message type, so apps dispatching several messages per request pay the per-dispatch resolution cost once per scope.
+* Ordered, group-filtered pipeline shapes are cached process-wide (invalidated by the registry version); a fresh scope only materializes cheap lazy wrappers over the cached descriptor arrays.
+* Cost (measured, fresh scope per dispatch — the per-request worst case): ~0.47 µs and ~1.55 KB per scope for a single-handler message, versus ~0.11 µs / ~0.35 KB for MediatR's equivalent shape; dispatches after the first within the same scope use the memoized fast path (~55-70 ns).
+
+#### Runtime registration correctness
+
+* `MessageRegistry` now tracks a monotonic `Version`, and dependency caches invalidate when the registry changes — runtime registrations (including handlers added to already-registered messages) become visible to subsequent dispatches. Previously the dependency cache was never invalidated.
+
+### Bug Fixes
+
+* `IAsyncPostInterceptor<TMessage, TResult>` default implementation now forwards the `IExecutionContext` parameter it receives instead of reading the ambient context.
+* `SingleStreamHandlerMediationStrategy` no longer unconditionally overwrites the ambient context without restoring it; it re-publishes the context for stream enumeration only when ambient access is enabled.
+* Final interceptor types (direct and indirect) are now registered with the DI container; previously `RegisterHandlersFromDescriptor` skipped them, so standalone final interceptors could not be resolved.
+
+### API Changes
+
+* `MediateOptions<TMessage, TResult>.Items` is now nullable and no longer allocates a default dictionary; the execution context creates its `Items` dictionary lazily on first access.
+* `ILazyHandlerCollection<THandler, TDescriptor>` gained a `First()` default interface method (allocation-free in the built-in implementation).
+* `ICommandMediator`, `IQueryMediator`, `IEventMediator`/`IPublisher`, `IMessageMediator`, and `IMessageDependenciesFactory` are registered as **scoped** (previously transient) so per-dispatch handler resolution binds to the calling scope; `ActualTypeOrFirstAssignableTypeMessageResolveStrategy` is a singleton. All registrations use `TryAdd`, so user overrides still win.
+* New registration extension: `ForceMemoizedHandlers()` (opt-out of lifetime-aware resolution).
+
+### Notes
+
+* Behavioral change vs v1.1.0: scoped/transient-registered handlers (the default) are no longer silently memoized across scopes — they now behave as their registration declares. If you relied on the old implicit memoization for performance, either register those handlers as singletons or call `ForceMemoizedHandlers()`.
+* With the ambient context disabled (the default), both the raw and public dispatch paths are faster than MediatR and allocate a fraction of its memory; enabling `EnableAmbientExecutionContext()` re-introduces the per-dispatch `AsyncLocal` cost.
+
 ## v1.1.0 – '2026-03-23'
 
 ### Features & Improvements

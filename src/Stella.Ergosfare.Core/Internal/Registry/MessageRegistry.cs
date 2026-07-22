@@ -60,6 +60,16 @@ internal sealed class MessageRegistry(
     /// Types that have already been processed and registered (as message or handler)
     /// </summary>
     private readonly ConcurrentDictionary<Type, byte> _processedTypes = new();
+
+
+    /// <summary>
+    /// Monotonically increasing version, bumped on every effective registration.
+    /// Unlike <see cref="Count"/>, this also changes when handlers are added to
+    /// already-registered messages, allowing dependency caches to invalidate.
+    /// </summary>
+    internal int Version => _version;
+
+    private int _version;
     
     
     /// <summary>
@@ -159,6 +169,8 @@ internal sealed class MessageRegistry(
             _messages.AddRange(_newMessages);
             _newMessages.Clear();
         }
+
+        Interlocked.Increment(ref _version);
     }
     
     

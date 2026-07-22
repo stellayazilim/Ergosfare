@@ -164,6 +164,12 @@ Current Goals:
 
 Contributions & feedback are welcome. Open issues, PRs, or start a discussion.
 
+## Acknowledgments
+
+Ergosfare's design — including its public API surface, naming conventions, and module
+architecture — is heavily inspired by [LiteBus](https://github.com/litenova/LiteBus)
+by A. Shafie (MIT licensed). 
+
 ## License
 
 Ergosfare is licensed under the MIT License.

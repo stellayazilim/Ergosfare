@@ -20,11 +20,15 @@ internal sealed class ErgosfareExecutionContext(
     public CancellationToken CancellationToken { get; } = cancellationToken;
     
     
+    private IDictionary<object, object?>? _items = items;
+
     /// <summary>
     /// Gets a dictionary of arbitrary key-value pairs stored in the execution context.
     /// This can be used to share data between different handlers, interceptors, or other pipeline components.
+    /// The backing dictionary is created lazily on first access so dispatches that never
+    /// touch shared items pay no allocation for it.
     /// </summary>
-    public IDictionary<object, object?> Items { get; } = items ?? new Dictionary<object, object?>();
+    public IDictionary<object, object?> Items => _items ??= new Dictionary<object, object?>();
 
     /// <summary>
     /// Stores an item in the execution context under the specified key.

@@ -23,11 +23,11 @@ public interface IAsyncPostInterceptor<in TMessage, in TResult>
 {
     /// <inheritdoc cref="IPostInterceptor{TMessage, TResult}.Handle"/>
     object IPostInterceptor<TMessage, TResult>.Handle(
-        TMessage message, 
-        TResult messageResult, 
+        TMessage message,
+        TResult messageResult,
         IExecutionContext context)
     {
-        return HandleAsync(message,  messageResult, AmbientExecutionContext.Current);
+        return HandleAsync(message,  messageResult, context);
     }
     
     /// <inheritdoc cref="IPostInterceptor{TMessage,TResult}.Handle"/> 

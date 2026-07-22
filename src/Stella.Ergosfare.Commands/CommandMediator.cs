@@ -1,4 +1,5 @@
-﻿using Stella.Ergosfare.Commands.Abstractions;
+using System.Collections.Concurrent;
+using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 
@@ -13,6 +14,20 @@ public class CommandMediator(
     IResultAdapterService? resultAdapterService,
     IMessageMediator messageMediator) : ICommandMediator
 {
+    private static readonly string[] EmptyGroups = [];
+
+    /// <summary>
+    /// Mediation strategy for non-generic commands; stateless, so shared across calls.
+    /// </summary>
+    private readonly SingleAsyncHandlerMediationStrategy<ICommand> _mediationStrategy = new(resultAdapterService);
+
+    /// <summary>
+    /// Mediation strategies for typed commands, one per result type; stateless, so shared
+    /// across calls. Created lazily so mediators in short-lived scopes that never send
+    /// typed commands pay nothing.
+    /// </summary>
+    private ConcurrentDictionary<Type, object>? _typedMediationStrategies;
+
     /// <summary>
     /// Mediates command messages through the configured pipeline, including signal dispatching,
     /// mediation strategies, and optional result adaptation.
@@ -20,17 +35,14 @@ public class CommandMediator(
     public Task SendAsync(ICommand commandConstruct, CommandMediationSettings? commandMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
-        
-        commandMediationSettings ??= new CommandMediationSettings();
-        var mediationStrategy = new SingleAsyncHandlerMediationStrategy<ICommand>(resultAdapterService);
 
         var options = new MediateOptions<ICommand, Task>
         {
-            MessageMediationStrategy = mediationStrategy,
+            MessageMediationStrategy = _mediationStrategy,
             MessageResolveStrategy = messageResolveStrategy,
             CancellationToken = cancellationToken,
-            Items = commandMediationSettings.Items,
-            Groups = commandMediationSettings.Filters.Groups
+            Items = commandMediationSettings?.Items,
+            Groups = commandMediationSettings?.Filters.Groups ?? EmptyGroups
         };
         var result =  messageMediator.Mediate(commandConstruct, options);
         return result;
@@ -49,20 +61,25 @@ public class CommandMediator(
         CommandMediationSettings? commandMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
-        commandMediationSettings ??= new CommandMediationSettings();
-        var mediationStrategy = new SingleAsyncHandlerMediationStrategy<ICommand<TResult>, TResult>(resultAdapterService);
+        var typedMediationStrategies = LazyInitializer.EnsureInitialized(ref _typedMediationStrategies);
+
+        if (!typedMediationStrategies.TryGetValue(typeof(TResult), out var mediationStrategy))
+        {
+            mediationStrategy = typedMediationStrategies.GetOrAdd(typeof(TResult),
+                new SingleAsyncHandlerMediationStrategy<ICommand<TResult>, TResult>(resultAdapterService));
+        }
 
         var options = new MediateOptions<ICommand<TResult>, Task<TResult>>
         {
             MessageResolveStrategy = messageResolveStrategy,
-            MessageMediationStrategy = mediationStrategy,
+            MessageMediationStrategy = (SingleAsyncHandlerMediationStrategy<ICommand<TResult>, TResult>)mediationStrategy,
             CancellationToken = cancellationToken,
-            Items = commandMediationSettings.Items,
-            Groups = commandMediationSettings.Filters.Groups
+            Items = commandMediationSettings?.Items,
+            Groups = commandMediationSettings?.Filters.Groups ?? EmptyGroups
         };
 
         return messageMediator.Mediate(commandConstruct, options);
     }
 
-  
+
 }

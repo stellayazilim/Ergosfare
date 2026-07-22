@@ -1,4 +1,5 @@
-﻿
+
+using System.Linq;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 
 namespace Stella.Ergosfare.Core.Abstractions;
@@ -16,4 +17,11 @@ namespace Stella.Ergosfare.Core.Abstractions;
 ///     only when they are actually needed.
 /// </remarks>
 public interface ILazyHandlerCollection<THandler, out TDescriptor> : IReadOnlyCollection<ILazyHandler<THandler, TDescriptor>>
-    where TDescriptor : IHandlerDescriptor;
+    where TDescriptor : IHandlerDescriptor
+{
+    /// <summary>
+    ///     Returns the first handler in the collection.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when the collection is empty.</exception>
+    ILazyHandler<THandler, TDescriptor> First() => Enumerable.First(this);
+}

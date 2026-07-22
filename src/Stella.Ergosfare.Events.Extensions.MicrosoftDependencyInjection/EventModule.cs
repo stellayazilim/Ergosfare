@@ -29,7 +29,8 @@ internal class EventModule(Action<EventModuleBuilder> builder) : IModule
     {
         builder(new EventModuleBuilder(configuration.MessageRegistry));
 
-        configuration.Services.TryAddTransient<IEventMediator, EventMediator>();
-        configuration.Services.TryAddTransient<IPublisher, EventMediator>();
+        // Scoped so per-dispatch handler resolution binds to the calling scope's provider.
+        configuration.Services.TryAddScoped<IEventMediator, EventMediator>();
+        configuration.Services.TryAddScoped<IPublisher, EventMediator>();
     }
 }

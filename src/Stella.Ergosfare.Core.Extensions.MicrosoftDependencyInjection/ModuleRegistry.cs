@@ -8,7 +8,9 @@ using Stella.Ergosfare.Core.Internal.Mediator;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Stella.Ergosfare.Core.Abstractions.Caching;
+using Stella.Ergosfare.Core.Internal;
 using Stella.Ergosfare.Core.Internal.Caching;
+using Stella.Ergosfare.Core.Internal.Registry;
 
 namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
@@ -25,6 +27,12 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
     /// Uses a <see cref="HashSet{T}"/> to enforce uniqueness and prevent duplicates.
     /// </summary>
     private readonly HashSet<IModule> _modules = new();
+
+    /// <summary>
+    /// When set (via <c>ForceMemoizedHandlers()</c>), every handler graph is memoized
+    /// process-wide regardless of registered DI lifetimes — the pre-v1.2 behavior.
+    /// </summary>
+    internal bool MemoizeAllHandlers { get; set; }
 
     
     /// <summary>
@@ -50,19 +58,42 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
         {
             module.Build(moduleConfiguration);
         }
-        services.TryAddTransient<IMessageDependenciesFactory, MessageDependenciesFactory>();
-        services.TryAddTransient<IMessageMediator, MessageMediator>();
+        // Scoped so that per-dispatch handler resolution binds to the calling scope's
+        // provider; the memoized fast path uses RootServiceProviderAccessor instead.
+        services.TryAddScoped<IMessageDependenciesFactory, MessageDependenciesFactory>();
+        services.TryAddScoped<IMessageMediator, MessageMediator>();
         services.TryAddSingleton<IDescriptorCacheStrategy, LruCacheStrategy>();
         services.TryAddSingleton<MessageDescriptorCache>();
-       
+        services.TryAddSingleton<RootServiceProviderAccessor>();
+        services.TryAddSingleton(new ErgosfareRuntimeOptions { MemoizeAllHandlers = MemoizeAllHandlers });
+
         services.TryAddSingleton(messageRegistry);
+#pragma warning disable CS0618 // ambient context is deprecated; resolving IExecutionContext from DI requires EnableAmbientExecutionContext()
         services.TryAddTransient(_ => AmbientExecutionContext.Current);
-        services.TryAddTransient<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>();
+#pragma warning restore CS0618
+        services.TryAddSingleton<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>();
+
+        var allHandlerTypes = new HashSet<Type>();
         foreach (var descriptor in messageRegistry)
         {
             // Register all handler types from the registry
-            RegisterHandlersFromDescriptor(descriptor);
+            RegisterHandlersFromDescriptor(descriptor, allHandlerTypes);
         }
+
+        // Capture the effective DI lifetime of every handler type (a user registration made
+        // before AddErgosfare wins over the TryAddTransient defaults above). Messages whose
+        // whole pipeline is singleton-registered keep the memoized fast path; the rest are
+        // resolved per scope so scoped/transient dependencies are honored.
+        var handlerLifetimes = new Dictionary<Type, ServiceLifetime>();
+        foreach (var serviceDescriptor in services)
+        {
+            if (allHandlerTypes.Contains(serviceDescriptor.ServiceType))
+            {
+                handlerLifetimes[serviceDescriptor.ServiceType] = serviceDescriptor.Lifetime;
+            }
+        }
+
+        services.TryAddSingleton(new HandlerLifetimeRegistry(handlerLifetimes));
     }
     
     
@@ -70,7 +101,8 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
     /// Collects and registers all handler types defined in the given message descriptor.
     /// </summary>
     /// <param name="descriptor">The message descriptor containing handler metadata.</param>
-    private void RegisterHandlersFromDescriptor(IMessageDescriptor descriptor)
+    /// <param name="allHandlerTypes">Accumulates every registered handler type across descriptors.</param>
+    private void RegisterHandlersFromDescriptor(IMessageDescriptor descriptor, HashSet<Type> allHandlerTypes)
     {
         // Use a local HashSet to avoid redundant registrations within the same descriptor
         var descriptorHandlerTypes = new HashSet<Type>();
@@ -84,16 +116,19 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
         CollectHandlerTypes(descriptor.IndirectPostInterceptors, descriptorHandlerTypes);
         CollectHandlerTypes(descriptor.ExceptionInterceptors, descriptorHandlerTypes);
         CollectHandlerTypes(descriptor.IndirectExceptionInterceptors, descriptorHandlerTypes);
+        CollectHandlerTypes(descriptor.FinalInterceptors, descriptorHandlerTypes);
+        CollectHandlerTypes(descriptor.IndirectFinalInterceptors, descriptorHandlerTypes);
 
         // Register each type once
         foreach (var handlerType in descriptorHandlerTypes)
         {
-            // Only register concrete classes with DI container - interfaces and abstract classes are kept in 
-            // LiteBus registry for polymorphic dispatch but cannot be instantiated by the DI container.
+            // Only register concrete classes with DI container - interfaces and abstract classes are kept in
+            // the Ergosfare registry for polymorphic dispatch but cannot be instantiated by the DI container.
             // Without this filter, DI would throw "Cannot instantiate implementation type" errors.
             if (handlerType is { IsClass: true, IsAbstract: false })
             {
                 services.TryAddTransient(handlerType);
+                allHandlerTypes.Add(handlerType);
             }
         }
     }

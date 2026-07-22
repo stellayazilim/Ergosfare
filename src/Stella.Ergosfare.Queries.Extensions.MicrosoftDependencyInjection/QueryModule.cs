@@ -23,6 +23,7 @@ internal class QueryModule(
     public void Build(IModuleConfiguration configuration)
     {
         builder(new QueryModuleBuilder(configuration.MessageRegistry));
-        configuration.Services.TryAddTransient<IQueryMediator, QueryMediator>();
+        // Scoped so per-dispatch handler resolution binds to the calling scope's provider.
+        configuration.Services.TryAddScoped<IQueryMediator, QueryMediator>();
     }
 }
