@@ -61,42 +61,53 @@ internal sealed class MessageMediator(
     /// </remarks>
     public TResult Mediate<TMessage, TResult>(TMessage message, MediateOptions<TMessage, TResult> options) where TMessage : notnull
     {
-        
-    
-        ArgumentNullException.ThrowIfNull(options);
-        
 
-        // Use a scope to manage the execution context
-        using var _ = AmbientExecutionContext.CreateScope(new ErgosfareExecutionContext( options.Items, options.CancellationToken));
-        // Get the actual type of the message
-        var messageType = message.GetType();
-        
-        var descriptor = options.MessageResolveStrategy.Find(messageType);
-        
-        
-        if (descriptor is null)
+
+        ArgumentNullException.ThrowIfNull(options);
+
+
+        // Publish the execution context ambiently for the duration of the dispatch,
+        // restoring the previous one afterwards (same semantics as CreateScope,
+        // without allocating a scope object).
+        var context = new ErgosfareExecutionContext(options.Items, options.CancellationToken);
+        var previousContext = AmbientExecutionContext.GetCurrentOrDefault();
+        AmbientExecutionContext.Current = context;
+
+        try
         {
-            if (!options.RegisterPlainMessagesOnSpot)
+            // Get the actual type of the message
+            var messageType = message.GetType();
+
+            var descriptor = options.MessageResolveStrategy.Find(messageType);
+
+
+            if (descriptor is null)
             {
-                throw new NoHandlerFoundException(messageType);
+                if (!options.RegisterPlainMessagesOnSpot)
+                {
+                    throw new NoHandlerFoundException(messageType);
+                }
+
+                _messageRegistry.Register(messageType);
+
+                descriptor = options.MessageResolveStrategy.Find(messageType);
             }
 
-            _messageRegistry.Register(messageType);
+            if (descriptor is null)
+            {
+                throw new InvalidOperationException($"No descriptor found for message type {messageType} with specified resolve strategy.");
+            }
 
-            descriptor = options.MessageResolveStrategy.Find(messageType);
+            // Resolve the dependencies in lazy mode
+            var messageDependencies = _messageDependenciesFactory.Create(messageType, descriptor, options.Groups);
+
+            // Mediate the message using the specified strategy
+            // natural pipeline execution with fresh context
+            return options.MessageMediationStrategy.Mediate(message, messageDependencies, context);
         }
-
-        if (descriptor is null)
+        finally
         {
-            throw new InvalidOperationException($"No descriptor found for message type {messageType} with specified resolve strategy.");
+            AmbientExecutionContext.Current = previousContext!;
         }
-
-        // Resolve the dependencies in lazy mode
-        var messageDependencies = _messageDependenciesFactory.Create(messageType, descriptor, options.Groups);
-
-        // Mediate the message using the specified strategy
-        // natural pipeline execution with fresh context
-        return options.MessageMediationStrategy.Mediate(message, messageDependencies,
-            AmbientExecutionContext.Current);
     }
 }
