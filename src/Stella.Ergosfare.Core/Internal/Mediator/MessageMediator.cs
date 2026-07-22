@@ -59,7 +59,6 @@ internal sealed class MessageMediator(
     /// The mediation process involves the following steps:
     /// <list type="number">
     /// <item>Create a new <see cref="ErgosfareExecutionContext"/> for the current message and options.</item>
-    /// <item>Establish a scoped ambient execution context via <see cref="AmbientExecutionContext.CreateScope"/>.</item>
     /// <item>Resolve the message type and find the corresponding handler descriptor using the <see cref="MediateOptions{TMessage, TResult}.MessageResolveStrategy"/>.</item>
     /// <item>If no descriptor exists and <c>RegisterPlainMessagesOnSpot</c> is true, register the message type on-the-fly.</item>
     /// <item>Use the <see cref="IMessageDependenciesFactory"/> to create handler dependencies.</item>
@@ -72,63 +71,37 @@ internal sealed class MessageMediator(
 
         ArgumentNullException.ThrowIfNull(options);
 
-
-        // Ambient publication is opt-in (deprecated): when enabled, publish the execution
-        // context for the duration of the dispatch and restore the previous one afterwards
-        // (same semantics as CreateScope, without allocating a scope object).
         var context = new ErgosfareExecutionContext(options.Items, options.CancellationToken);
-#pragma warning disable CS0618 // ambient context is deprecated but supported until removal
-        var ambientEnabled = AmbientExecutionContext.IsEnabled;
-        IExecutionContext? previousContext = null;
 
-        if (ambientEnabled)
+        // Get the actual type of the message
+        var messageType = message.GetType();
+
+        var descriptor = options.MessageResolveStrategy.Find(messageType);
+
+
+        if (descriptor is null)
         {
-            previousContext = AmbientExecutionContext.GetCurrentOrDefault();
-            AmbientExecutionContext.Current = context;
-        }
-#pragma warning restore CS0618
-
-        try
-        {
-            // Get the actual type of the message
-            var messageType = message.GetType();
-
-            var descriptor = options.MessageResolveStrategy.Find(messageType);
-
-
-            if (descriptor is null)
+            if (!options.RegisterPlainMessagesOnSpot)
             {
-                if (!options.RegisterPlainMessagesOnSpot)
-                {
-                    throw new NoHandlerFoundException(messageType);
-                }
-
-                _messageRegistry.Register(messageType);
-
-                descriptor = options.MessageResolveStrategy.Find(messageType);
+                throw new NoHandlerFoundException(messageType);
             }
 
-            if (descriptor is null)
-            {
-                throw new InvalidOperationException($"No descriptor found for message type {messageType} with specified resolve strategy.");
-            }
+            _messageRegistry.Register(messageType);
 
-            // Resolve the dependencies in lazy mode
-            var messageDependencies = _messageDependenciesFactory.Create(messageType, descriptor, options.Groups);
-
-            // Mediate the message using the specified strategy. The scope's provider is
-            // handed to the strategy explicitly — handler resolution belongs to the
-            // dispatch pipeline, never to the execution context.
-            return options.MessageMediationStrategy.Mediate(message, messageDependencies, context, _serviceProvider);
+            descriptor = options.MessageResolveStrategy.Find(messageType);
         }
-        finally
+
+        if (descriptor is null)
         {
-            if (ambientEnabled)
-            {
-#pragma warning disable CS0618 // ambient context is deprecated but supported until removal
-                AmbientExecutionContext.Current = previousContext!;
-#pragma warning restore CS0618
-            }
+            throw new InvalidOperationException($"No descriptor found for message type {messageType} with specified resolve strategy.");
         }
+
+        // Resolve the dependencies in lazy mode
+        var messageDependencies = _messageDependenciesFactory.Create(messageType, descriptor, options.Groups);
+
+        // Mediate the message using the specified strategy. The scope's provider is
+        // handed to the strategy explicitly — handler resolution belongs to the
+        // dispatch pipeline, never to the execution context.
+        return options.MessageMediationStrategy.Mediate(message, messageDependencies, context, _serviceProvider);
     }
 }

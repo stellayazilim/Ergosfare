@@ -2,6 +2,7 @@ using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Internal.Contexts;
 using Stella.Ergosfare.Test.Fixtures.Stubs.Basic;
+#pragma warning disable ERGOEXP001 // deliberately exercising the experimental ValueTask handler
 
 namespace Stella.Ergosfare.Core.Test.Handlers;
 

@@ -11,9 +11,8 @@ namespace Stella.Ergosfare.Commands.Abstractions;
 /// without specifying a particular result type. The <see cref="HandleAsync"/> method returns <see cref="object"/>,
 /// so any result modifications are handled via object references and casting.
 ///
-/// For scenarios where type safety is required, use the generic versions:
-/// <see cref="ICommandPostInterceptor{TCommand,TResult}"/> or 
-/// <see cref="ICommandPostInterceptor{TCommand,TResult,TModifiedResult}"/>.
+/// For scenarios where type safety is required, use the generic version:
+/// <see cref="ICommandPostInterceptor{TCommand,TResult}"/>.
 /// </remarks>
 // ReSharper disable once UnusedType.Global
 public interface ICommandPostInterceptor: ICommand, IAsyncPostInterceptor<ICommand>;

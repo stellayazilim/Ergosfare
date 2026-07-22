@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Threading.Tasks;
 
 namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 
@@ -71,8 +72,10 @@ public interface IAsyncHandler<in TMessage,  TResult>: IHandler<TMessage, Task<T
 ///     Represents an asynchronous handler for messages that produces a <see cref="ValueTask{TResult}"/> result.
 /// </summary>
 /// <remarks>
-///     This API is experimental and may change in future releases.
+///     This API is experimental, sits outside the compatibility promise, and may change or be
+///     removed in any release. Suppress diagnostic <c>ERGOEXP001</c> to opt in.
 /// </remarks>
+[Experimental("ERGOEXP001")]
 public interface IAsyncValueTaskHandler<in TMessage,  TResult>: IHandler<TMessage, ValueTask<TResult>>
     where TMessage : notnull
 {

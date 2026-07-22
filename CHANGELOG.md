@@ -1,3 +1,15 @@
+## Unreleased — v2 preview line
+
+### Removed
+
+* `AmbientExecutionContext` and `EnableAmbientExecutionContext()` (deprecated since v1.2.0) are removed. The execution context is passed to every handler and interceptor as a parameter; `IExecutionContext` can no longer be resolved from DI. `NoExecutionContextException` is removed with it, and no `AsyncLocal` publication remains anywhere on the dispatch path.
+* The obsolete three-parameter `TModifiedResult` interceptor interfaces — `ICommandPostInterceptor<TCommand, TResult, TModifiedResult>`, `ICommandExceptionInterceptor<TCommand, TResult, TModifiedResult>`, `IQueryPostInterceptor<TQuery, TResult, TModifiedResult>`, `IQueryExceptionInterceptor<TQuery, TResult, TModifiedResult>` — are removed. Use the two-parameter variants introduced in v1.4.0; they expose the typed `HandleAsync` directly.
+* The unused internal `MainInvoker` base class is removed.
+
+### Experimental
+
+* `IAsyncValueTaskHandler<TMessage, TResult>` is now marked `[Experimental("ERGOEXP001")]`. Experimental APIs sit outside the compatibility promise and may change or be removed in any release; consuming one is a compile-time error unless the diagnostic is explicitly suppressed.
+
 ## v1.4.0 – '2026-07-22'
 
 ### Features & Improvements

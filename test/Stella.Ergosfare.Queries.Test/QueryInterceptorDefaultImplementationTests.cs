@@ -91,62 +91,6 @@ public class QueryInterceptorDefaultImplementationTests
         Assert.Equal("original", result);
     }
 
-    #region Obsolete three-parameter variants — kept covered until removal
-#pragma warning disable CS0618 // deliberately exercising the obsolete three-parameter interceptors
-
-    private class LegacyThreeParamPostInterceptor : IQueryPostInterceptor<TestQuery, string, string>
-    {
-        public bool Called;
-
-        public Task<string> HandleAsync(TestQuery query, string result, IExecutionContext executionContext)
-        {
-            Called = true;
-            return Task.FromResult(result);
-        }
-    }
-
-    private class LegacyThreeParamExceptionInterceptor : IQueryExceptionInterceptor<TestQuery, string, string>
-    {
-        public bool Called;
-
-        public Task<string?> HandleAsync(TestQuery query, string? result, Exception exception, IExecutionContext context)
-        {
-            Called = true;
-            return Task.FromResult(result);
-        }
-    }
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
-    public async Task LegacyThreeParamPostInterceptor_ShouldForwardToTypedHandleAsync()
-    {
-        var interceptor = new LegacyThreeParamPostInterceptor();
-
-        var result = await ((IAsyncPostInterceptor<TestQuery, string>) interceptor).HandleAsync(
-            new TestQuery(), "result", FakeExecutionContext.Instance);
-
-        Assert.True(interceptor.Called);
-        Assert.Equal("result", result);
-    }
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
-    public async Task LegacyThreeParamExceptionInterceptor_ShouldForwardToTypedHandleAsync()
-    {
-        var interceptor = new LegacyThreeParamExceptionInterceptor();
-
-        var result = await ((IAsyncExceptionInterceptor<TestQuery, string>) interceptor).HandleAsync(
-            new TestQuery(), "original", new Exception("boom"), FakeExecutionContext.Instance);
-
-        Assert.True(interceptor.Called);
-        Assert.Equal("original", result);
-    }
-
-#pragma warning restore CS0618
-    #endregion
-
     /// <summary>
     /// Minimal <see cref="IExecutionContext"/> stand-in; the default implementations under
     /// test never touch the context.

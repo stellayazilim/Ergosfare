@@ -69,34 +69,4 @@ public class CommandExceptionInterceptorDefaultImplementationTests
         Assert.Equal("result", result);
     }
 
-    #region Obsolete three-parameter variant — kept covered until removal
-#pragma warning disable CS0618 // deliberately exercising the obsolete three-parameter interceptor
-
-    private class LegacyThreeParamExceptionInterceptor : ICommandExceptionInterceptor<TestCommandStringResult, string, string>
-    {
-        public bool Called;
-
-        public Task<string?> HandleAsync(TestCommandStringResult command, string? result, Exception? exception, IExecutionContext context)
-        {
-            Called = true;
-            return Task.FromResult(result);
-        }
-    }
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
-    public async Task LegacyThreeParamDefaultImplementation_ShouldForwardToTypedHandleAsync()
-    {
-        var interceptor = new LegacyThreeParamExceptionInterceptor();
-
-        var result = await ((IAsyncExceptionInterceptor<TestCommandStringResult, string>) interceptor).HandleAsync(
-            new TestCommandStringResult(), "original", new Exception("boom"), new ErgosfareExecutionContext(null, default));
-
-        Assert.True(interceptor.Called);
-        Assert.Equal("original", result);
-    }
-
-#pragma warning restore CS0618
-    #endregion
 }
