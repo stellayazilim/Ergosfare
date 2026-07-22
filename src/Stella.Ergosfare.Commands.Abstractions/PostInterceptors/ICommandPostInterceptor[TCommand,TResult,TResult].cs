@@ -19,7 +19,8 @@ namespace Stella.Ergosfare.Commands.Abstractions;
 /// The result type that this interceptor can return. Must be compatible with <typeparamref name="TResult"/>.
 /// Nullable to allow returning null if appropriate.
 /// </typeparam>
-public interface ICommandPostInterceptor<in TCommand, in TResult,  TModifiedResult> : ICommandPostInterceptor<TCommand, TResult>
+[Obsolete("Use ICommandPostInterceptor<TCommand, TResult> instead; it returns the typed result directly without requiring a third type parameter. This interface will be removed in the next major version.")]
+public interface ICommandPostInterceptor<in TCommand, in TResult,  TModifiedResult> : ICommand, IAsyncPostInterceptor<TCommand, TResult>
     where TCommand : ICommand<TResult>
     where TResult : notnull
     where TModifiedResult : TResult

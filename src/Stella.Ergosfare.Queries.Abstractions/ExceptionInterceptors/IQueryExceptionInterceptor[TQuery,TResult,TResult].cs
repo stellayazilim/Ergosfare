@@ -14,8 +14,9 @@ namespace Stella.Ergosfare.Queries.Abstractions;
 /// The type of the result that this interceptor can return. Must be compatible with <typeparamref name="TResult"/>.
 /// </typeparam>
 // ReSharper disable once UnusedType.Global
+[Obsolete("Use IQueryExceptionInterceptor<TQuery, TResult> instead; it returns the typed result directly without requiring a third type parameter. This interface will be removed in the next major version.")]
 public interface IQueryExceptionInterceptor<in TQuery, in TResult, TModifiedResult>
-    : IQuery,IAsyncExceptionInterceptor<TQuery, TResult> 
+    : IQuery,IAsyncExceptionInterceptor<TQuery, TResult>
     where TQuery : IQuery<TResult>
     where TResult : notnull
     where TModifiedResult : TResult

@@ -24,9 +24,10 @@ namespace Stella.Ergosfare.Queries.Abstractions;
 /// forwarded to the type-safe <see cref="HandleAsync"/> method, returning a boxed <see cref="object"/>.
 /// </remarks>
 // ReSharper disable once UnusedType.Global
+[Obsolete("Use IQueryPostInterceptor<TQuery, TResult> instead; it returns the typed result directly without requiring a third type parameter. This interface will be removed in the next major version.")]
 public interface IQueryPostInterceptor<in TQuery,in TResult, TModifiedResult>:
     IQuery, IAsyncPostInterceptor<TQuery, TResult>
-    where TQuery: IQuery 
+    where TQuery: IQuery
     where TResult: notnull
     where TModifiedResult: TResult 
 {
