@@ -144,4 +144,26 @@ public class MediationBenchmark
         for (var i = 0; i < 100000; i++)
             await _liteBusCommandMediator.SendAsync(_liteBusCommand);
     }
+
+    // Fresh DI scope per dispatch — the realistic per-request shape where
+    // lifetime-aware (scoped) handler resolution actually pays its cost.
+    [Benchmark]
+    public async Task StellaErgosfare_PublicApi_ScopePerDispatch()
+    {
+        for (var i = 0; i < 100000; i++)
+        {
+            using var scope = _stellaProvider.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<ICommandMediator>().SendAsync(_stellaCommand);
+        }
+    }
+
+    [Benchmark]
+    public async Task MediatR_ScopePerDispatch()
+    {
+        for (var i = 0; i < 100000; i++)
+        {
+            using var scope = _mediatrProvider.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<IMediator>().Send(_mediatrRequest);
+        }
+    }
 }

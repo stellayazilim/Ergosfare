@@ -28,6 +28,7 @@ internal class CommandModule : IModule
     {
         _builder(new CommandModuleBuilder(configuration.MessageRegistry));
 
-        configuration.Services.TryAddSingleton<ICommandMediator, CommandMediator>();
+        // Scoped so per-dispatch handler resolution binds to the calling scope's provider.
+        configuration.Services.TryAddScoped<ICommandMediator, CommandMediator>();
     }
 }
