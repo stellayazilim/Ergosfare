@@ -38,9 +38,12 @@ public sealed class MessageDependenciesFactory : IMessageDependenciesFactory
 
     /// <summary>
     /// Per-factory (per-scope) cache of dependencies bound to this factory's provider.
+    /// Scopes are short-lived and rarely contended, so a plain dictionary under a lock
+    /// keeps the per-scope allocation footprint small.
     /// </summary>
-    private readonly ConcurrentDictionary<Type, IMessageDependencies> _scopedDependenciesByType = new();
-    private readonly ConcurrentDictionary<GroupedDependenciesKey, IMessageDependencies> _scopedDependenciesByTypeAndGroups = new();
+    private readonly object _scopedCacheLock = new();
+    private Dictionary<Type, IMessageDependencies>? _scopedDependenciesByType;
+    private Dictionary<GroupedDependenciesKey, IMessageDependencies>? _scopedDependenciesByTypeAndGroups;
 
     public MessageDependenciesFactory(IServiceProvider serviceProvider)
     {
@@ -70,9 +73,12 @@ public sealed class MessageDependenciesFactory : IMessageDependenciesFactory
 
             if (_localRegistryVersion != registryVersion)
             {
-                _scopedDependenciesByType.Clear();
-                _scopedDependenciesByTypeAndGroups.Clear();
-                _localRegistryVersion = registryVersion;
+                lock (_scopedCacheLock)
+                {
+                    _scopedDependenciesByType = null;
+                    _scopedDependenciesByTypeAndGroups = null;
+                    _localRegistryVersion = registryVersion;
+                }
             }
         }
 
@@ -97,27 +103,35 @@ public sealed class MessageDependenciesFactory : IMessageDependenciesFactory
 
         if (groupsArray.Length == 0)
         {
-            if (_scopedDependenciesByType.TryGetValue(messageType, out var scoped))
+            lock (_scopedCacheLock)
             {
-                return scoped;
+                if (_scopedDependenciesByType?.TryGetValue(messageType, out var scoped) == true)
+                {
+                    return scoped;
+                }
+
+                // Building dependencies runs no user code (handlers stay lazy), so it is
+                // safe and simplest to build inside the lock.
+                var dependencies = new MessageDependencies(messageType, descriptor, _serviceProvider, groupsArray);
+                (_scopedDependenciesByType ??= new Dictionary<Type, IMessageDependencies>())[messageType] = dependencies;
+
+                return dependencies;
             }
-
-            var dependencies = new MessageDependencies(messageType, descriptor, _serviceProvider, groupsArray);
-            _scopedDependenciesByType[messageType] = dependencies;
-
-            return dependencies;
         }
 
         var key = new GroupedDependenciesKey(messageType, groupsArray);
 
-        if (_scopedDependenciesByTypeAndGroups.TryGetValue(key, out var scopedGrouped))
+        lock (_scopedCacheLock)
         {
-            return scopedGrouped;
+            if (_scopedDependenciesByTypeAndGroups?.TryGetValue(key, out var scopedGrouped) == true)
+            {
+                return scopedGrouped;
+            }
+
+            var groupedDependencies = new MessageDependencies(messageType, descriptor, _serviceProvider, groupsArray);
+            (_scopedDependenciesByTypeAndGroups ??= new Dictionary<GroupedDependenciesKey, IMessageDependencies>())[key] = groupedDependencies;
+
+            return groupedDependencies;
         }
-
-        var groupedDependencies = new MessageDependencies(messageType, descriptor, _serviceProvider, groupsArray);
-        _scopedDependenciesByTypeAndGroups[key] = groupedDependencies;
-
-        return groupedDependencies;
     }
 }

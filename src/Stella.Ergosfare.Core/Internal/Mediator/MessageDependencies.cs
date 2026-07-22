@@ -140,6 +140,16 @@ internal sealed class MessageDependencies : IMessageDependencies
 
     
     /// <summary>
+    /// Shared empty collection per closed generic, so empty pipeline stages cost nothing
+    /// to build — important when dependencies are constructed per scope.
+    /// </summary>
+    private static class EmptyLazyHandlers<THandler, TDescriptor> where TDescriptor : IHandlerDescriptor
+    {
+        public static readonly ILazyHandlerCollection<THandler, TDescriptor> Instance =
+            new LazyHandlerCollection<THandler, TDescriptor>([]);
+    }
+
+    /// <summary>
     /// Resolves a lazy collection of handlers filtered by group and ordered by weight and type name.
     /// </summary>
     /// <typeparam name="THandler">The handler type.</typeparam>
@@ -148,9 +158,14 @@ internal sealed class MessageDependencies : IMessageDependencies
     /// <param name="resolveFunc">The function to create handler instances from a type.</param>
     /// <returns>A lazy read-only collection of handlers and their descriptors.</returns>
     private ILazyHandlerCollection<THandler, TDescriptor> ResolveHandlers<THandler, TDescriptor>(
-            IEnumerable<TDescriptor> descriptors, 
+            IEnumerable<TDescriptor> descriptors,
             Func<Type, THandler> resolveFunc ) where TDescriptor : IHandlerDescriptor
     {
+        if (descriptors is IReadOnlyCollection<TDescriptor> { Count: 0 })
+        {
+            return EmptyLazyHandlers<THandler, TDescriptor>.Instance;
+        }
+
         return descriptors
             .OrderByDescending(d => d.Weight)
             .ThenBy(d => d.HandlerType.FullName, StringComparer.Ordinal)

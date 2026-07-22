@@ -22,9 +22,11 @@ public class CommandMediator(
     private readonly SingleAsyncHandlerMediationStrategy<ICommand> _mediationStrategy = new(resultAdapterService);
 
     /// <summary>
-    /// Mediation strategies for typed commands, one per result type; stateless, so shared across calls.
+    /// Mediation strategies for typed commands, one per result type; stateless, so shared
+    /// across calls. Created lazily so mediators in short-lived scopes that never send
+    /// typed commands pay nothing.
     /// </summary>
-    private readonly ConcurrentDictionary<Type, object> _typedMediationStrategies = new();
+    private ConcurrentDictionary<Type, object>? _typedMediationStrategies;
 
     /// <summary>
     /// Mediates command messages through the configured pipeline, including signal dispatching,
@@ -59,9 +61,11 @@ public class CommandMediator(
         CommandMediationSettings? commandMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
-        if (!_typedMediationStrategies.TryGetValue(typeof(TResult), out var mediationStrategy))
+        var typedMediationStrategies = LazyInitializer.EnsureInitialized(ref _typedMediationStrategies);
+
+        if (!typedMediationStrategies.TryGetValue(typeof(TResult), out var mediationStrategy))
         {
-            mediationStrategy = _typedMediationStrategies.GetOrAdd(typeof(TResult),
+            mediationStrategy = typedMediationStrategies.GetOrAdd(typeof(TResult),
                 new SingleAsyncHandlerMediationStrategy<ICommand<TResult>, TResult>(resultAdapterService));
         }
 

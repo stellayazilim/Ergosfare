@@ -35,6 +35,7 @@
 * Previously (v1.1.0) handler instances were silently memoized process-wide: the first dispatch captured the first caller's scope — including its `DbContext` — and reused it for every subsequent dispatch, even after that scope was disposed. This was a latent correctness bug that did not surface as an exception (default `BuildServiceProvider()` does not validate scopes).
 * Opting out: `ForceMemoizedHandlers()` on the registration builder restores the pre-v1.2 memoize-everything behavior for maximum dispatch throughput. Per-handler control needs no new API — register a handler as singleton (before `AddErgosfare`, so `TryAdd` respects it) to keep it on the fast path.
 * Within a scope, resolution is memoized per message type, so apps dispatching several messages per request pay the per-dispatch resolution cost once per scope.
+* Cost (measured, fresh scope per dispatch — the per-request worst case): ~0.9 µs and ~3.4 KB per scope for a single-handler message, versus ~0.1 µs / ~0.35 KB for MediatR's equivalent shape; dispatches after the first within the same scope use the memoized fast path (~55-67 ns). Reducing the per-scope pipeline materialization further (caching sorted descriptor arrays globally) is planned follow-up work.
 
 #### Runtime registration correctness
 

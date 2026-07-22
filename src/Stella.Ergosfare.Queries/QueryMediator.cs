@@ -20,9 +20,11 @@ public class QueryMediator(
     private static readonly string[] EmptyGroups = [];
 
     /// <summary>
-    /// Mediation strategies for queries, one per result type; stateless, so shared across calls.
+    /// Mediation strategies for queries, one per result type; stateless, so shared across
+    /// calls. Created lazily so mediators in short-lived scopes that never run typed
+    /// queries pay nothing.
     /// </summary>
-    private readonly ConcurrentDictionary<Type, object> _typedMediationStrategies = new();
+    private ConcurrentDictionary<Type, object>? _typedMediationStrategies;
 
     /// <summary>
     /// Executes a query and returns a single result of type <typeparamref name="TResult"/>.
@@ -39,9 +41,11 @@ public class QueryMediator(
         CancellationToken cancellationToken = default)
     {
         // Reuse the mediation strategy for this result type
-        if (!_typedMediationStrategies.TryGetValue(typeof(TResult), out var mediationStrategy))
+        var typedMediationStrategies = LazyInitializer.EnsureInitialized(ref _typedMediationStrategies);
+
+        if (!typedMediationStrategies.TryGetValue(typeof(TResult), out var mediationStrategy))
         {
-            mediationStrategy = _typedMediationStrategies.GetOrAdd(typeof(TResult),
+            mediationStrategy = typedMediationStrategies.GetOrAdd(typeof(TResult),
                 new SingleAsyncHandlerMediationStrategy<IQuery<TResult>, TResult>(resultAdapterService));
         }
 
