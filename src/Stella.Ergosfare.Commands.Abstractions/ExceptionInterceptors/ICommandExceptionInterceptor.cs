@@ -12,9 +12,8 @@ namespace Stella.Ergosfare.Commands.Abstractions;
 /// scenarios where you want to apply exception handling logic across multiple command types
 /// in a generic pipeline without caring about the exact result type.
 /// 
-/// For scenarios where type safety is required, use one of the generic versions:
-/// <see cref="ICommandExceptionInterceptor{TCommand, TResult}"/> or
-/// <see cref="ICommandExceptionInterceptor{TCommand, TResult, TModifiedResult}"/>.
+/// For scenarios where type safety is required, use the generic version:
+/// <see cref="ICommandExceptionInterceptor{TCommand, TResult}"/>.
 /// </remarks>
 // ReSharper disable once UnusedType.Global
 public interface ICommandExceptionInterceptor: ICommand, IAsyncExceptionInterceptor<ICommand>;

@@ -63,3 +63,10 @@ It defines how versions are incremented, backward compatibility is maintained, a
 * Any stable release (v1.4.x, v1.5.x, etc.) during the next 3 months must keep `OldMethod()` functional.
 * After 3 months, the **next major release (v2.0.0 or later)** may remove `OldMethod()`.
 
+## 4. Experimental APIs
+
+* APIs marked with `[Experimental]` (diagnostic IDs prefixed `ERGOEXP`, e.g. `ERGOEXP001`) sit **entirely outside the compatibility promise** — even when they ship in a stable release.
+* They may change or be removed in **any** release (major, minor, or patch) without an obsolete period or migration window.
+* Consuming an experimental API is a **compile-time error** unless the consumer explicitly suppresses its diagnostic ID (e.g. `#pragma warning disable ERGOEXP001` or `<NoWarn>`), so opting in is always a deliberate act.
+* An experimental API graduates by having the attribute removed in a stable release; from that release on, it is a stable API covered by Section 3.
+

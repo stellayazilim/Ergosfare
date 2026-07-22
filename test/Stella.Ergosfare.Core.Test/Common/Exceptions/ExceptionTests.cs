@@ -17,17 +17,6 @@ public class ExceptionTests
 
     [Fact]
     [Trait("Category", "Coverage")]
-    public void NoExecutionContextExceptionTest()
-    {
-        var noExecutionContextException = new NoExecutionContextException();
-        
-        Assert.NotNull(noExecutionContextException);
-        Assert.Equal("No execution context is set", noExecutionContextException.Message);
-    }
-
-
-    [Fact]
-    [Trait("Category", "Coverage")]
     public void MultipleHandlerExceptionTest()
     {
         // arrange & act

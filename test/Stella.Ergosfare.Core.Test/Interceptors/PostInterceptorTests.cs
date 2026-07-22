@@ -20,7 +20,7 @@ public class PostInterceptorTests
     [Trait("Category", "Unit")]
     public async Task TestPostInterceptorsShouldImplement()
     {
-        var fixture = new ExecutionContextFixture().PropagateAmbientContext();
+        var fixture = new ExecutionContextFixture();
         IPostInterceptor interceptor = new StubVoidAsyncPostInterceptor();
         var result =  interceptor.Handle(new StubMessage(), StubPostInterceptor.Result,  fixture.Ctx);
         Assert.NotNull(result);
