@@ -94,8 +94,11 @@ public sealed class MessageDependenciesFactory : IMessageDependenciesFactory
                 return memoized!;
             }
 
+            // The memoized graph shares the same process-wide shape cache as the scoped
+            // path, so type resolution work is done once regardless of caching mode.
+            var memoizedShape = cache.GetOrAddShape(messageType, groupsArray, descriptor);
             var memoizedDependencies = new MessageDependencies(
-                messageType, descriptor, _memoizedGraphProvider ?? _serviceProvider, groupsArray);
+                memoizedShape, _memoizedGraphProvider ?? _serviceProvider);
             cache.AddDependencies(messageType, groupsArray, memoizedDependencies);
 
             return memoizedDependencies;
@@ -114,7 +117,7 @@ public sealed class MessageDependenciesFactory : IMessageDependenciesFactory
                 // cache; only cheap lazy wrappers are materialized per scope. Building
                 // runs no user code (handlers stay lazy), so it happens inside the lock.
                 var shape = cache.GetOrAddShape(messageType, groupsArray, descriptor);
-                var dependencies = new MessageDependencies(messageType, shape, _serviceProvider);
+                var dependencies = new MessageDependencies(shape, _serviceProvider);
                 (_scopedDependenciesByType ??= new Dictionary<Type, IMessageDependencies>())[messageType] = dependencies;
 
                 return dependencies;
@@ -131,7 +134,7 @@ public sealed class MessageDependenciesFactory : IMessageDependenciesFactory
             }
 
             var groupedShape = cache.GetOrAddShape(messageType, groupsArray, descriptor);
-            var groupedDependencies = new MessageDependencies(messageType, groupedShape, _serviceProvider);
+            var groupedDependencies = new MessageDependencies(groupedShape, _serviceProvider);
             (_scopedDependenciesByTypeAndGroups ??= new Dictionary<GroupedDependenciesKey, IMessageDependencies>())[key] = groupedDependencies;
 
             return groupedDependencies;

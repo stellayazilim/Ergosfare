@@ -13,15 +13,14 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// </summary>
 /// <remarks>
 /// This class resolves handlers using an <see cref="IServiceProvider"/>.
-/// Group filtering and ordering live in the cached <see cref="MessagePipelineShape"/>;
-/// this class only materializes lazy wrappers over the shape's descriptor arrays, so
+/// All type resolution work lives in the cached <see cref="MessagePipelineShape"/>: group
+/// filtering, ordering, and the concrete (closed) handler type per descriptor. This class
+/// only binds the shape's planned handlers to a provider through lazy wrappers, so
 /// per-scope construction stays cheap. Handlers are returned as lazy collections to
 /// avoid unnecessary instantiation until they are required for mediation.
 /// </remarks>
 internal sealed class MessageDependencies : IMessageDependencies
 {
-    private readonly Type _messageType;
-
 
     /// <summary>
     /// Gets the lazy collection of pre-interceptors for the message.
@@ -86,7 +85,7 @@ internal sealed class MessageDependencies : IMessageDependencies
         IMessageDescriptor descriptor,
         IServiceProvider serviceProvider,
         IEnumerable<string> groups)
-        : this(messageType, MessagePipelineShape.Create(descriptor, groups), serviceProvider)
+        : this(MessagePipelineShape.Create(messageType, descriptor, groups), serviceProvider)
     {
     }
 
@@ -94,13 +93,10 @@ internal sealed class MessageDependencies : IMessageDependencies
     /// Initializes a new instance from a (cached) pipeline shape, materializing only the
     /// lazy handler wrappers bound to the given provider.
     /// </summary>
-    /// <param name="messageType">The type of the message for which dependencies are resolved.</param>
-    /// <param name="shape">The ordered, group-filtered pipeline shape.</param>
+    /// <param name="shape">The ordered, group-filtered pipeline shape with pre-resolved handler types.</param>
     /// <param name="serviceProvider">The service provider used to resolve handler instances.</param>
-    public MessageDependencies(Type messageType, MessagePipelineShape shape, IServiceProvider serviceProvider)
+    public MessageDependencies(MessagePipelineShape shape, IServiceProvider serviceProvider)
     {
-        _messageType = messageType;
-
         Handlers = Materialize<IHandler, IMainHandlerDescriptor>(shape.Handlers, serviceProvider);
         IndirectHandlers = Materialize<IHandler, IMainHandlerDescriptor>(shape.IndirectHandlers, serviceProvider);
         PreInterceptors = Materialize<IPreInterceptor, IPreInterceptorDescriptor>(shape.PreInterceptors, serviceProvider);
@@ -125,46 +121,31 @@ internal sealed class MessageDependencies : IMessageDependencies
     }
 
     /// <summary>
-    /// Wraps the shape's descriptor array in lazily-resolving handler entries bound to the
-    /// given provider.
+    /// Wraps the shape's planned handlers in lazily-resolving entries bound to the given
+    /// provider. The handler type comes pre-resolved from the shape, so resolution is a
+    /// plain service lookup.
     /// </summary>
-    private ILazyHandlerCollection<THandler, TDescriptor> Materialize<THandler, TDescriptor>(
-        TDescriptor[] descriptors,
+    private static ILazyHandlerCollection<THandler, TDescriptor> Materialize<THandler, TDescriptor>(
+        PlannedHandler<TDescriptor>[] plannedHandlers,
         IServiceProvider serviceProvider) where TDescriptor : IHandlerDescriptor
     {
-        if (descriptors.Length == 0)
+        if (plannedHandlers.Length == 0)
         {
             return EmptyLazyHandlers<THandler, TDescriptor>.Instance;
         }
 
-        var lazyHandlers = new ILazyHandler<THandler, TDescriptor>[descriptors.Length];
+        var lazyHandlers = new ILazyHandler<THandler, TDescriptor>[plannedHandlers.Length];
 
-        for (var i = 0; i < descriptors.Length; i++)
+        for (var i = 0; i < plannedHandlers.Length; i++)
         {
-            var descriptor = descriptors[i];
+            var handlerType = plannedHandlers[i].HandlerType;
             lazyHandlers[i] = new LazyHandler<THandler, TDescriptor>
             {
-                Handler = new Lazy<THandler>(() => (THandler) serviceProvider.GetRequiredService(GetHandlerType(descriptor))),
-                Descriptor = descriptor
+                Handler = new Lazy<THandler>(() => (THandler) serviceProvider.GetRequiredService(handlerType)),
+                Descriptor = plannedHandlers[i].Descriptor
             };
         }
 
         return new LazyHandlerCollection<THandler, TDescriptor>(lazyHandlers);
-    }
-
-    /// <summary>
-    /// Returns the correct handler type, making it generic if the message type is generic.
-    /// </summary>
-    /// <param name="descriptor">The handler descriptor.</param>
-    /// <returns>The concrete type to instantiate for the handler.</returns>
-    private Type GetHandlerType(IHandlerDescriptor descriptor)
-    {
-        var handlerType = descriptor.HandlerType;
-
-        if (descriptor.MessageType.IsGenericType)
-        {
-            handlerType = handlerType.MakeGenericType(_messageType.GetGenericArguments());
-        }
-        return handlerType;
     }
 }
