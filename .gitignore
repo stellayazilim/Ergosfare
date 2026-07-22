@@ -18,4 +18,4 @@ TestResults/
 changelog/**
 changelog/**/
 docs/**
-docs/**/
+docs/**/BenchmarkDotNet.Artifacts/
