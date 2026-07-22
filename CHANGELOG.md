@@ -1,3 +1,19 @@
+## Unreleased
+
+### Features & Improvements
+
+#### Typed interceptors without the third type parameter
+
+* The two-parameter typed interceptor interfaces — `ICommandExceptionInterceptor<TCommand, TResult>`, `ICommandPostInterceptor<TCommand, TResult>`, `IQueryExceptionInterceptor<TQuery, TResult>`, `IQueryPostInterceptor<TQuery, TResult>` — now declare the type-safe `HandleAsync` member returning the typed result directly.
+* Their type parameters are deliberately **invariant** now: the pipeline invokes interceptors through the non-generic root interfaces, so interface variance bought nothing — while `in TResult` blocked typed returns, which was the only reason the three-parameter `TModifiedResult` variants existed.
+* The three-parameter variants are marked `[Obsolete]` and will be removed in the next major version.
+* Migration note: implementors of the previous marker-only two-parameter interfaces now implement the typed member (returning `Task<TResult>` / `Task<TResult?>`) instead of the base `Task<object>` member.
+
+### CI
+
+* Coverage and unit-test workflows run as a single job with both SDKs installed — the solution multi-targets net9.0/net10.0, so per-SDK matrix legs could not restore it, and the two parallel coverage jobs raced each other pushing the badges branch (the `is at … but expected …` non-fast-forward failure).
+* The coverage badge is generated only on pushes to `main` (pull requests no longer overwrite the badge or push to the badges branch), and the badge action receives only its supported `coverage-file-name` input.
+
 ## v1.3.0 – '2026-07-22'
 
 ### Internal Surface Changes — Core / Core.Abstractions

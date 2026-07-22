@@ -7,33 +7,96 @@ using Stella.Ergosfare.Core.Internal.Contexts;
 namespace Stella.Ergosfare.Command.Test;
 
 /// <summary>
-/// Verifies that the default interface implementation of
-/// <see cref="ICommandExceptionInterceptor{TCommand, TResult, TModifiedResult}"/> forwards
-/// the untyped pipeline call to the type-safe member.
+/// Verifies that the default interface implementations of the typed command interceptor
+/// interfaces forward the untyped pipeline calls to their type-safe members.
 /// </summary>
+/// <remarks>
+/// The stub interceptors are pass-through and record invocation on instance flags: module
+/// tests register this whole assembly, so stubs must not alter pipeline results.
+/// </remarks>
 public class CommandExceptionInterceptorDefaultImplementationTests
 {
-    private class TestCommandExceptionInterceptor : ICommandExceptionInterceptor<TestCommandStringResult, string, string>
+    private class TestCommandExceptionInterceptor : ICommandExceptionInterceptor<TestCommandStringResult, string>
     {
-        public Task<string?> HandleAsync(TestCommandStringResult command, string? result, Exception? exception, IExecutionContext context)
+        public bool Called;
+
+        public Task<string?> HandleAsync(TestCommandStringResult command, string? result, Exception exception, IExecutionContext context)
         {
-            return Task.FromResult<string?>("modified");
+            Called = true;
+            return Task.FromResult(result);
+        }
+    }
+
+    private class TestCommandPostInterceptor : ICommandPostInterceptor<TestCommandStringResult, string>
+    {
+        public bool Called;
+
+        public Task<string> HandleAsync(TestCommandStringResult command, string commandResult, IExecutionContext context)
+        {
+            Called = true;
+            return Task.FromResult(commandResult);
         }
     }
 
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task DefaultImplementation_ShouldForwardToTypedHandleAsync()
+    public async Task ExceptionInterceptorDefaultImplementation_ShouldForwardToTypedHandleAsync()
     {
         // arrange
-        IAsyncExceptionInterceptor<TestCommandStringResult, string> interceptor = new TestCommandExceptionInterceptor();
+        var interceptor = new TestCommandExceptionInterceptor();
 
         // act — invoke through the root interface member the pipeline uses
-        var result = await interceptor.HandleAsync(
+        var result = await ((IAsyncExceptionInterceptor<TestCommandStringResult, string>) interceptor).HandleAsync(
             new TestCommandStringResult(), "original", new Exception("boom"), new ErgosfareExecutionContext(null, default));
 
         // assert
-        Assert.Equal("modified", result);
+        Assert.True(interceptor.Called);
+        Assert.Equal("original", result);
     }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task PostInterceptorDefaultImplementation_ShouldForwardToTypedHandleAsync()
+    {
+        var interceptor = new TestCommandPostInterceptor();
+
+        var result = await ((IAsyncPostInterceptor<TestCommandStringResult, string>) interceptor).HandleAsync(
+            new TestCommandStringResult(), "result", new ErgosfareExecutionContext(null, default));
+
+        Assert.True(interceptor.Called);
+        Assert.Equal("result", result);
+    }
+
+    #region Obsolete three-parameter variant — kept covered until removal
+#pragma warning disable CS0618 // deliberately exercising the obsolete three-parameter interceptor
+
+    private class LegacyThreeParamExceptionInterceptor : ICommandExceptionInterceptor<TestCommandStringResult, string, string>
+    {
+        public bool Called;
+
+        public Task<string?> HandleAsync(TestCommandStringResult command, string? result, Exception? exception, IExecutionContext context)
+        {
+            Called = true;
+            return Task.FromResult(result);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task LegacyThreeParamDefaultImplementation_ShouldForwardToTypedHandleAsync()
+    {
+        var interceptor = new LegacyThreeParamExceptionInterceptor();
+
+        var result = await ((IAsyncExceptionInterceptor<TestCommandStringResult, string>) interceptor).HandleAsync(
+            new TestCommandStringResult(), "original", new Exception("boom"), new ErgosfareExecutionContext(null, default));
+
+        Assert.True(interceptor.Called);
+        Assert.Equal("original", result);
+    }
+
+#pragma warning restore CS0618
+    #endregion
 }

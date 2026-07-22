@@ -22,7 +22,8 @@ namespace Stella.Ergosfare.Commands.Abstractions;
 /// For non-type-safe or generic usage, consider using <see cref="IAsyncExceptionInterceptor{TCommand,TResult}"/> directly.
 /// </remarks>
 // ReSharper disable once UnusedType.Global
-public interface ICommandExceptionInterceptor<in TCommand,in TResult, TModifiedResult>: 
+[Obsolete("Use ICommandExceptionInterceptor<TCommand, TResult> instead; it returns the typed result directly without requiring a third type parameter. This interface will be removed in the next major version.")]
+public interface ICommandExceptionInterceptor<in TCommand,in TResult, TModifiedResult>:
     IAsyncExceptionInterceptor<TCommand, TResult>
     where TCommand : ICommand<TResult>
     where TResult : notnull
