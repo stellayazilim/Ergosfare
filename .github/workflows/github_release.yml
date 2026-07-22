@@ -16,31 +16,27 @@ on:
 
 jobs:
   release:
+    # Single job with both SDKs: the per-SDK matrix ran every step twice, and the
+    # duplicated release steps raced each other uploading the same assets — the
+    # cause of the v1.4.0 failure.
     runs-on: ubuntu-latest
     environment: publish
-    strategy:
-      matrix:
-        dotnet-version: [ 9.0.x, 10.0.x ]   # .NET 9 ve 10
     permissions:
       contents: write
       packages: write
       id-token: write
     steps:
-      - name: Resolve branch
-        run: |
-          if [ -n "${{ github.event.inputs.branch }}" ]; then
-            echo "branch=${{ github.event.inputs.branch }}" >> $GITHUB_ENV
-          else
-            echo "branch=${GITHUB_REF_NAME}" >> $GITHUB_ENV
-          fi
-      
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
-          ref: ${{ env.branch }}
+          # Tag pushes check out the tag; manual dispatches check out the given branch.
+          ref: ${{ github.event.inputs.branch || github.ref }}
+          fetch-depth: 0
 
-      - uses: actions/setup-dotnet@v3
+      - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ matrix.dotnet-version }}
+          dotnet-version: |
+            9.0.x
+            10.0.x
 
       - name: Set version
         run: |
@@ -56,13 +52,20 @@ jobs:
 
       - name: Validate release type
         run: |
-          if [[ "${{ env.branch }}" == "main" ]] && [[ "$VERSION" == *-* ]]; then
-            echo "❌ RC tag from main branch is not allowed" && exit 1
+          git fetch origin main --quiet
+          git fetch origin preview --quiet || true
+          if [[ "$VERSION" == *-* ]]; then
+            # Pre-release (-preview.N / -rc.N) tags must come from the preview line.
+            if git rev-parse --verify --quiet origin/preview > /dev/null; then
+              git merge-base --is-ancestor HEAD origin/preview \
+                || { echo "❌ Pre-release tags must point at commits on the preview branch"; exit 1; }
+            fi
+            echo "✔ Pre-release tag validated"
+          else
+            git merge-base --is-ancestor HEAD origin/main \
+              || { echo "❌ Stable tags must point at commits on main"; exit 1; }
+            echo "✔ Stable tag validated"
           fi
-          if [[ "${{ env.branch }}" =~ rc[0-9]+ ]] && [[ "$VERSION" != *-* ]]; then
-            echo "❌ Stable tag from RC branch is not allowed" && exit 1
-          fi
-          echo "✔ GitHub release validation passed"
 
       - name: Restore & Build
         run: |
@@ -93,7 +96,7 @@ jobs:
             dotnet pack "$proj" -c Release -o ./nupkg-github /p:Version=${{ env.VERSION }} /p:IncludeSymbols=true /p:IncludeSource=true --no-build
           done
 
-      - name: Pack fixtures (GitHub only)
+      - name: Pack test fixtures (GitHub only)
         run: |
           dotnet pack ./test/Stella.Ergosfare.Test.Fixtures/Stella.Ergosfare.Test.Fixtures.csproj \
             -c Release -o ./nupkg-github /p:Version=${{ env.VERSION }} \
@@ -109,23 +112,10 @@ jobs:
           done
 
       - name: Create GitHub Release (with pkg attachments)
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           files: ./nupkg-github/*.nupkg
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Pack test fixtures (GitHub only)
-        run: |
-          dotnet pack ./test/Stella.Ergosfare.Test.Fixtures/Stella.Ergosfare.Test.Fixtures.csproj \
-            -c Release -o ./nupkg-github /p:Version=${{ env.VERSION }} \
-            /p:IncludeSymbols=true /p:IncludeSource=true --no-build
-
-      - name: Create GitHub Release with fixtures
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: ./nupkg-github/*.nupkg
+          prerelease: ${{ contains(env.VERSION, '-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
