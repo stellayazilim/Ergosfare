@@ -47,6 +47,7 @@
 ### Notes
 
 * Handler resolution semantics are unchanged: handlers were already effectively cached per message type by the dependency cache; the singleton lifetimes make the existing behavior deterministic.
+* **Scoped dependencies in handlers are not supported** (unchanged, now explicit): handler instances are memoized process-wide after the first dispatch. On v1.1.0 this silently reused the first caller's scope — including after that scope was disposed; as of this release the object graph is deterministically root-owned instead. Per-dispatch (scoped) handler resolution is under consideration as an opt-in lifetime mode for a future release.
 * With the ambient context disabled (the default), both the raw and public dispatch paths are faster than MediatR and allocate a fraction of its memory; enabling `EnableAmbientExecutionContext()` re-introduces the per-dispatch `AsyncLocal` cost.
 
 ## v1.1.0 – '2026-03-23'
