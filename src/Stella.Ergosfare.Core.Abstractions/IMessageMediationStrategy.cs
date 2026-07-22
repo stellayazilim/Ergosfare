@@ -25,12 +25,18 @@ public interface IMessageMediationStrategy<in TMessage, out TMessageResult>
     /// </param>
     /// <param name="executionContext">
     ///     The context in which the mediation is executed, providing access to cancellation tokens,
-    ///     shared data, and other execution-related information.
+    ///     shared data, and other execution-related information. The context is a pure data
+    ///     carrier between handlers; it plays no part in handler resolution.
+    /// </param>
+    /// <param name="serviceProvider">
+    ///     The provider of the scope the dispatch runs in. The strategy resolves handler and
+    ///     interceptor instances from it at invocation time — resolution is the dispatcher's
+    ///     responsibility.
     /// </param>
     /// <returns>The result of the mediation process, of type <typeparamref name="TMessageResult" />.</returns>
     /// <remarks>
     ///     The implementation of this method defines the specific pattern for mediating messages, such as
     ///     executing a single handler, broadcasting to multiple handlers, or implementing more complex orchestration logic.
     /// </remarks>
-    TMessageResult Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext executionContext);
+    TMessageResult Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext executionContext, IServiceProvider serviceProvider);
 }

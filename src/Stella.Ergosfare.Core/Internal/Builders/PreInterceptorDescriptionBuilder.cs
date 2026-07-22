@@ -9,7 +9,7 @@ namespace Stella.Ergosfare.Core.Internal.Builders;
 /// <summary>
 /// Builds <see cref="PreInterceptorDescriptor"/> instances for types implementing <see cref="IPreInterceptor"/>.
 /// </summary>
-public class PreInterceptorDescriptionBuilder: IHandlerDescriptorBuilder
+internal sealed class PreInterceptorDescriptionBuilder: IHandlerDescriptorBuilder
 {
     
     /// <summary>

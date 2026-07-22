@@ -5,8 +5,9 @@ namespace Stella.Ergosfare.Core.Abstractions.Invokers;
 /// </summary>
 internal abstract class PreInvoker(
     IMessageDependencies messageDependencies,
-    IResultAdapterService? resultAdapterService): 
-    AbstractInvoker(messageDependencies, resultAdapterService)
+    IResultAdapterService? resultAdapterService,
+    IServiceProvider serviceProvider):
+    AbstractInvoker(messageDependencies, resultAdapterService, serviceProvider)
 {
    
     /// <summary>

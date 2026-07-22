@@ -32,9 +32,9 @@ public class MessageMediatorTests
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         // act & assert
         Assert.Throws<ArgumentNullException>(
-            () =>  new MessageMediator(null, null));
+            () =>  new MessageMediator(null, null, null));
         Assert.Throws<ArgumentNullException>(
-            () => new MessageMediator(registry, null));
+            () => new MessageMediator(registry, null, null));
     }
 
     /// <summary>
@@ -48,7 +48,7 @@ public class MessageMediatorTests
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         var messageDependencyFactory = new MessageDependenciesFactory(null);
         // act
-        var mediator = new MessageMediator(registry, messageDependencyFactory);
+        var mediator = new MessageMediator(registry, messageDependencyFactory, new ServiceCollection().BuildServiceProvider());
         // assert
         Assert.NotNull(mediator);
     }
@@ -64,7 +64,7 @@ public class MessageMediatorTests
         // arrange 
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         var messageDependencyFactory = new MessageDependenciesFactory(null);
-        var mediator = new MessageMediator(registry,messageDependencyFactory);
+        var mediator = new MessageMediator(registry,messageDependencyFactory, new ServiceCollection().BuildServiceProvider());
         // act && assert
         await Assert.ThrowsAsync<ArgumentNullException>(() => 
             mediator
@@ -98,7 +98,8 @@ public class MessageMediatorTests
         //registry.Register(typeof(StubNonGenericDerivedPostInterceptor2));
         var mediator = new MessageMediator(
             registry,
-            new MessageDependenciesFactory(provider)
+            new MessageDependenciesFactory(provider),
+            provider
         );
         var message = new StubMessage();
         var options = new MediateOptions<StubMessage, Task>
@@ -137,7 +138,8 @@ public class MessageMediatorTests
         var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
         var mediator = new MessageMediator(
             registry,
-            new MessageDependenciesFactory(null!)
+            new MessageDependenciesFactory(null!),
+            new ServiceCollection().BuildServiceProvider()
         );
         var options = new MediateOptions<StubMessage, Task>
         {
@@ -176,7 +178,7 @@ public class MessageMediatorTests
             CancellationToken = CancellationToken.None,
             Groups = []
         };
-        var mediator = new MessageMediator(registry.Object, new MessageDependenciesFactory(null));
+        var mediator = new MessageMediator(registry.Object, new MessageDependenciesFactory(null), new ServiceCollection().BuildServiceProvider());
         // act & assert
         await Assert.ThrowsAsync<InvalidOperationException>(() => mediator.Mediate(new StubIndirectMessage(), options));
     }

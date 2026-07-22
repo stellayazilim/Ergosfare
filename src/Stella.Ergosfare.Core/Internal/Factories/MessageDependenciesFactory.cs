@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
@@ -11,20 +10,19 @@ using Stella.Ergosfare.Core.Internal.Registry;
 namespace Stella.Ergosfare.Core.Internal.Factories;
 
 /// <summary>
-/// Creates (and caches) the resolved handler graph for a message type.
+/// Creates (and caches process-wide) the resolved handler graph for a message type.
 /// </summary>
 /// <remarks>
-/// Two caching modes exist, chosen per message:
-/// <list type="bullet">
-/// <item>Messages whose handlers and interceptors are all singleton-registered (or when
-/// <see cref="ErgosfareRuntimeOptions.MemoizeAllHandlers"/> is enabled) are memoized
-/// process-wide, bound to the root provider — the fast path.</item>
-/// <item>Everything else is bound to the calling scope's provider and cached per factory
-/// instance. The factory is registered scoped, so scoped and transient handler
-/// dependencies are honored per scope, and disposables are disposed with the scope.</item>
-/// </list>
+/// Dependencies are provider-independent: handler instances are resolved per invocation
+/// from the dispatching scope's provider (carried by the execution context), so DI
+/// lifetimes are honored without binding the graph to any scope. Messages whose pipeline
+/// is fully singleton-registered — or all messages when
+/// <see cref="ErgosfareRuntimeOptions.MemoizeAllHandlers"/> is enabled — additionally
+/// cache resolved instances inside their references, pinned to the root provider.
+/// The factory itself is registered as a singleton; every dispatch after the first is a
+/// cache lookup.
 /// </remarks>
-public sealed class MessageDependenciesFactory : IMessageDependenciesFactory
+internal sealed class MessageDependenciesFactory : IMessageDependenciesFactory
 {
     private readonly IServiceProvider _serviceProvider;
 
@@ -34,16 +32,6 @@ public sealed class MessageDependenciesFactory : IMessageDependenciesFactory
     private ErgosfareRuntimeOptions? _runtimeOptions;
     private IServiceProvider? _memoizedGraphProvider;
     private bool _servicesResolved;
-    private int _localRegistryVersion = -1;
-
-    /// <summary>
-    /// Per-factory (per-scope) cache of dependencies bound to this factory's provider.
-    /// Scopes are short-lived and rarely contended, so a plain dictionary under a lock
-    /// keeps the per-scope allocation footprint small.
-    /// </summary>
-    private readonly object _scopedCacheLock = new();
-    private Dictionary<Type, IMessageDependencies>? _scopedDependenciesByType;
-    private Dictionary<GroupedDependenciesKey, IMessageDependencies>? _scopedDependenciesByTypeAndGroups;
 
     public MessageDependenciesFactory(IServiceProvider serviceProvider)
     {
@@ -70,74 +58,27 @@ public sealed class MessageDependenciesFactory : IMessageDependenciesFactory
             var registryVersion = _registry is MessageRegistry registry ? registry.Version : _registry.Count;
             cache.InvalidateIfRegistryChanged(registryVersion);
             _handlerLifetimes?.InvalidateIfRegistryChanged(registryVersion);
-
-            if (_localRegistryVersion != registryVersion)
-            {
-                lock (_scopedCacheLock)
-                {
-                    _scopedDependenciesByType = null;
-                    _scopedDependenciesByTypeAndGroups = null;
-                    _localRegistryVersion = registryVersion;
-                }
-            }
         }
 
         var groupsArray = groups as string[] ?? groups.ToArray();
 
-        var memoizeGraph = (_runtimeOptions?.MemoizeAllHandlers ?? false)
-                           || (_handlerLifetimes?.AreAllHandlersSingleton(messageType, descriptor) ?? false);
-
-        if (memoizeGraph)
+        if (cache.TryGetDependencies(messageType, groupsArray, out var cached))
         {
-            if (cache.TryGetDependencies(messageType, groupsArray, out var memoized))
-            {
-                return memoized!;
-            }
-
-            // The memoized graph shares the same process-wide shape cache as the scoped
-            // path, so type resolution work is done once regardless of caching mode.
-            var memoizedShape = cache.GetOrAddShape(messageType, groupsArray, descriptor);
-            var memoizedDependencies = new MessageDependencies(
-                memoizedShape, _memoizedGraphProvider ?? _serviceProvider);
-            cache.AddDependencies(messageType, groupsArray, memoizedDependencies);
-
-            return memoizedDependencies;
+            return cached!;
         }
 
-        if (groupsArray.Length == 0)
-        {
-            lock (_scopedCacheLock)
-            {
-                if (_scopedDependenciesByType?.TryGetValue(messageType, out var scoped) == true)
-                {
-                    return scoped;
-                }
+        var shape = cache.GetOrAddShape(messageType, groupsArray, descriptor);
 
-                // The heavy part (ordering/filtering) comes from the process-wide shape
-                // cache; only cheap lazy wrappers are materialized per scope. Building
-                // runs no user code (handlers stay lazy), so it happens inside the lock.
-                var shape = cache.GetOrAddShape(messageType, groupsArray, descriptor);
-                var dependencies = new MessageDependencies(shape, _serviceProvider);
-                (_scopedDependenciesByType ??= new Dictionary<Type, IMessageDependencies>())[messageType] = dependencies;
+        // Pipelines that are fully singleton-registered (or forced via MemoizeAllHandlers)
+        // cache handler instances inside their references, pinned to the root provider.
+        var memoizeInstances = (_runtimeOptions?.MemoizeAllHandlers ?? false)
+                               || (_handlerLifetimes?.AreAllHandlersSingleton(messageType, descriptor) ?? false);
 
-                return dependencies;
-            }
-        }
+        var dependencies = new MessageDependencies(
+            shape, memoizeInstances ? _memoizedGraphProvider ?? _serviceProvider : null);
 
-        var key = new GroupedDependenciesKey(messageType, groupsArray);
+        cache.AddDependencies(messageType, groupsArray, dependencies);
 
-        lock (_scopedCacheLock)
-        {
-            if (_scopedDependenciesByTypeAndGroups?.TryGetValue(key, out var scopedGrouped) == true)
-            {
-                return scopedGrouped;
-            }
-
-            var groupedShape = cache.GetOrAddShape(messageType, groupsArray, descriptor);
-            var groupedDependencies = new MessageDependencies(groupedShape, _serviceProvider);
-            (_scopedDependenciesByTypeAndGroups ??= new Dictionary<GroupedDependenciesKey, IMessageDependencies>())[key] = groupedDependencies;
-
-            return groupedDependencies;
-        }
+        return dependencies;
     }
 }

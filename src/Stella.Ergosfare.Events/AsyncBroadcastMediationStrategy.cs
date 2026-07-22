@@ -44,9 +44,9 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
     /// </param>
     /// <param name="context"></param>
     /// <returns>A Task representing the asynchronous operation of the mediation process.</returns>
-    public async Task Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context)
+    public async Task Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context, IServiceProvider serviceProvider)
     {
-        
+
         var executionTaskOfAllHandlers = Task.CompletedTask;
         var handlers = messageDependencies.Handlers
             .Where(x => settings.Filters.HandlerPredicate(x.Descriptor.HandlerType))
@@ -64,18 +64,18 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
         try
         {
             // events doesn't need result adapter, since events intended to not return a result
-            var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, null);
+            var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, null, serviceProvider);
             await preInvoker.Invoke(message, context);
-            var sequentialExecutionTask = PublishSequentially(message, handlers, context);
+            var sequentialExecutionTask = PublishSequentially(message, handlers, context, serviceProvider);
             await sequentialExecutionTask;
 
-            var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, null);
+            var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, null, serviceProvider);
             await postInvoker.Invoke(message, sequentialExecutionTask, context);
         }
         catch (Exception e)
         {
             exception = e;
-            var exceptionInvoker = new TaskExceptionInterceptorInvocationStrategy(messageDependencies, null);
+            var exceptionInvoker = new TaskExceptionInterceptorInvocationStrategy(messageDependencies, null, serviceProvider);
             await exceptionInvoker.Invoke(message, executionTaskOfAllHandlers,
                 ExceptionDispatchInfo.Capture(e), context);
 
@@ -83,7 +83,7 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
 
         finally
         {
-            var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
+            var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
             await finalInvoker.Invoke(message, executionTaskOfAllHandlers, exception, context);
         }
     }
@@ -95,11 +95,12 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
     /// <param name="message">The message being handled.</param>
     /// <param name="handlers">The collection of handlers resolved for this message.</param>
     /// <param name="context">The execution context for this mediation pipeline.</param>
-    private async Task PublishSequentially(TMessage message, IEnumerable<ILazyHandler<IHandler, IMainHandlerDescriptor>> handlers, IExecutionContext context)
+    /// <param name="serviceProvider">The provider of the scope this dispatch runs in.</param>
+    private async Task PublishSequentially(TMessage message, IReadOnlyList<IHandlerReference<IHandler, IMainHandlerDescriptor>> handlers, IExecutionContext context, IServiceProvider serviceProvider)
     {
-        foreach (var lazyHandler in handlers)
+        for (var i = 0; i < handlers.Count; i++)
         {
-            var handleTask = (Task)lazyHandler.Handler.Value.Handle(message, context);
+            var handleTask = (Task)handlers[i].Resolve(serviceProvider).Handle(message, context);
 
             await handleTask;
         }

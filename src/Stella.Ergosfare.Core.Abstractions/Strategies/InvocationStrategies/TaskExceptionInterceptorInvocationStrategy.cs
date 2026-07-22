@@ -1,7 +1,5 @@
 using System.Runtime.ExceptionServices;
-using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Invokers;
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 
 namespace Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 
@@ -10,49 +8,18 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 /// Executes exception interceptors for a message using <see cref="Task"/>-based handlers.
 /// </summary>
 /// <remarks>
-/// This strategy runs both direct and indirect exception interceptors in the order:
-/// 1. Direct exception interceptors
-/// 2. Indirect exception interceptors
-/// 
-/// Events are raised before and after each interceptor, and at the beginning and end of the pipeline.
-/// If no exception interceptors are registered, the captured exception is rethrown immediately.
+/// The exception interceptor list is pre-merged in registration order: direct exception
+/// interceptors first, then indirect ones. If no exception interceptors are registered,
+/// the captured exception is rethrown immediately.
 /// </remarks>
 internal sealed class TaskExceptionInterceptorInvocationStrategy(
     IMessageDependencies messageDependencies,
-    IResultAdapterService? resultAdapterService) : ExceptionInvoker(messageDependencies, resultAdapterService)
+    IResultAdapterService? resultAdapterService,
+    IServiceProvider serviceProvider) : ExceptionInvoker(messageDependencies, resultAdapterService, serviceProvider)
 {
 
-
-    
     /// <summary>
-    /// Invokes a collection of exception interceptors in sequence.
-    /// </summary>
-    /// <param name="interceptors">The collection of exception interceptors to execute.</param>
-    /// <param name="message">The message being processed, which is provided to each interceptor.</param>
-    /// <param name="result">The current result of the message handling, which may be transformed by interceptors.</param>
-    /// <param name="dispatchInfo">The captured exception information for the current pipeline invocation.</param>
-    /// <param name="executionContext">The execution context for the current pipeline invocation.</param>
-    /// <returns>
-    /// A <see cref="Task{Object}"/> representing the asynchronous operation.
-    /// The task result contains the transformed result after all interceptors in the collection have executed.
-    /// </returns>
-    private async Task<object?> InvokeExceptionInterceptorCollection(
-        ILazyHandlerCollection<IExceptionInterceptor,IExceptionInterceptorDescriptor> interceptors,  
-        object message, object? result, ExceptionDispatchInfo dispatchInfo, IExecutionContext executionContext)
-    {
-       
-        foreach (var interceptor in interceptors)
-        {
-            var handler = interceptor.Handler.Value;
-            var objectResult = handler.Handle(message, result, dispatchInfo.SourceException, executionContext);
-            result = await ConvertTask(objectResult);
-        }
-        return await Task.FromResult(result);
-    }
-    
-    
-    /// <summary>
-    /// Executes all exception interceptors (direct and indirect) for the specified message and result.
+    /// Executes all exception interceptors (direct and indirect, pre-merged) for the specified message and result.
     /// </summary>
     /// <param name="message">The message being processed.</param>
     /// <param name="result">The current result of the message handling, which may be transformed by exception interceptors.</param>
@@ -67,12 +34,16 @@ internal sealed class TaskExceptionInterceptorInvocationStrategy(
         IExecutionContext executionContext)
     {
         if (ExceptionInterceptorCount == 0) exceptionDispatchInfo.Throw();
-        
-        result = await InvokeExceptionInterceptorCollection(
-            MessageDependencies.ExceptionInterceptors, message, result, exceptionDispatchInfo, executionContext);
-        result = await InvokeExceptionInterceptorCollection(
-            MessageDependencies.IndirectExceptionInterceptors, message, result, exceptionDispatchInfo, executionContext);
-        
+
+        var interceptors = MessageDependencies.ExceptionInterceptors;
+
+        for (var i = 0; i < interceptors.Count; i++)
+        {
+            var handler = interceptors[i].Resolve(ServiceProvider);
+            var objectResult = handler.Handle(message, result, exceptionDispatchInfo.SourceException, executionContext);
+            result = await ConvertTask(objectResult);
+        }
+
         return result;
     }
 }

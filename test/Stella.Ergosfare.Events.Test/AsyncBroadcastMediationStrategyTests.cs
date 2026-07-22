@@ -35,7 +35,8 @@ public class AsyncBroadcastMediationStrategyTests
         messageRegistry.Register(typeof(StubNonGenericEvent));
         var messageMediator = new MessageMediator(
                 messageRegistry,
-                new MessageDependenciesFactory(services));
+                new MessageDependenciesFactory(services),
+                services);
         var mediator = new EventMediator(
             new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(messageRegistry),
             new ResultAdapterService(),
@@ -76,7 +77,8 @@ public class AsyncBroadcastMediationStrategyTests
         messageRegistry.Register(typeof(StubNonGenericEvent));
         var messageMediator = new MessageMediator(
             messageRegistry,
-            new MessageDependenciesFactory(services));
+            new MessageDependenciesFactory(services),
+            services);
         var mediator = new EventMediator(
             new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(messageRegistry),
             new ResultAdapterService(),

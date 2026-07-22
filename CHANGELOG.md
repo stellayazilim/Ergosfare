@@ -1,3 +1,30 @@
+## v1.3.0 – '2026-07-22'
+
+### Internal Surface Changes — Core / Core.Abstractions
+
+These packages are public so the first-party modules (Commands, Queries, Events) can consume them across assembly boundaries; they are not a third-party plugin contract, so changes here are not considered breaking. Code that registers handlers/interceptors and dispatches through `ICommandMediator`/`IQueryMediator`/`IEventMediator` compiles and behaves unchanged.
+
+* `IMessageDependencies` reshaped: ten lazy collections → six fixed `IReadOnlyList` stages. The four interceptor stages (pre/post/exception/final) merge direct and indirect registrations into a single list — direct entries first, then indirect, each segment ordered by weight and handler type name — matching the execution order the invokers previously implemented as two passes. Main handlers keep the direct/indirect split because single-handler validation applies to direct handlers only.
+* `ILazyHandler`, `ILazyHandlerCollection`, `LazyHandler`, `LazyHandlerCollection`, and `ToLazyReadOnlyCollection` are removed. Their replacement is `IHandlerReference<THandler, TDescriptor>`: the descriptor, the pre-computed concrete `HandlerType`, and `Resolve(IServiceProvider)` which obtains the instance for the current dispatch.
+* `IMessageMediationStrategy<TMessage, TResult>.Mediate` gained an `IServiceProvider` parameter: the mediator hands the dispatching scope's provider down the pipeline explicitly — resolution is the dispatcher's responsibility. The execution context stays a pure data carrier between handlers: it plays no part in handler resolution and deliberately exposes no service provider, so user-facing handler code gets no service-locator surface.
+* `IMessageDependenciesFactory` is registered as a **singleton** (was scoped); its dependency graphs are provider-independent and cached process-wide. `IMessageMediator` stays scoped but is now a thin wrapper whose only per-scope job is carrying the scope's provider into the execution context.
+* Implementation types in `Stella.Ergosfare.Core` that are not part of the public contract are now `internal`: the handler descriptor builders (`HandlerDescriptorBuilder`, `PreInterceptorDescriptionBuilder`, `PostHandlerDescriptorBuilder`, `ExceptionInterceptorDescriptorBuilder`, `FinalInterceptorDescriptorBuilder`), `HandlerDescriptorBuilderFactory`, and `MessageDependenciesFactory` (still consumable through the public `IMessageDependenciesFactory`). Default implementations of public abstractions — `ResultAdapterService`, `LruCacheStrategy` — remain public. First-party assemblies use `InternalsVisibleTo`; forks building custom modules can add their own grants.
+
+### Features & Improvements
+
+#### Provider-independent dependency graphs — scope-per-dispatch ~2.6x faster, ~2.7x less allocation
+
+* The resolved pipeline of a message (ordered stages, closed generic handler types) is built once per message type and group set, and shared process-wide. A fresh DI scope no longer rebuilds factory state, per-scope caches, or lazy wrapper graphs — the per-scope cost is the scope itself plus two small mediator wrappers.
+* Handler and interceptor instances resolve per invocation from the execution context's provider, so DI lifetimes are honored exactly: singleton → container-cached, scoped → one per scope, transient → one per dispatch. Fully singleton pipelines (and `ForceMemoizedHandlers()`) additionally cache instances inside their references, pinned to the root provider.
+* Pipeline shapes pre-compute closed generic handler types: `MakeGenericType` runs once per closed message type instead of on every scope's first resolution. Closing is guarded by `IsGenericTypeDefinition`, so handlers registered against a constructed generic message resolve as-is (previously a latent `MakeGenericType` throw on first resolution).
+* Interceptor invocation is a single indexed pass over the merged, pre-ordered array — the double direct/indirect passes and per-loop enumerator allocations are gone.
+* Benchmark (100k dispatches/op, Ryzen 7 7800X3D, .NET 9, fresh scope per dispatch): 45.6 ms / 146.5 MB → **17.2 ms / 53.4 MB**; MediatR on the same shape: 10.3 ms / 33.6 MB.
+
+### Notes
+
+* Behavioral change: transient-registered handlers (the framework default) now resolve once per dispatch instead of being implicitly reused across dispatches within the same scope — i.e. a transient registration now behaves as declared, matching MediatR semantics. On dispatch-heavy single-scope loops this costs one handler instance per dispatch (raw mediator path: 3.05 → 6.1 MB per 100k dispatches — still well below MediatR's 18.3 MB on the same loop). To keep instance reuse, register those handlers as singletons (before `AddErgosfare`, so `TryAdd` respects it) or call `ForceMemoizedHandlers()`.
+* Dispatching a message whose pipeline has no direct main handler now throws `InvalidOperationException` with an explicit "No handler is registered for …" message instead of a LINQ "Sequence contains no elements" error.
+
 ## v1.2.0 – '2026-07-22'
 
 ### Deprecations

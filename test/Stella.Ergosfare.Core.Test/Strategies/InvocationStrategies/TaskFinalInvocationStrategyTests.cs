@@ -70,8 +70,12 @@ public class TaskFinalInterceptorInvocationStrategyTests:
         // Create dependencies from descriptor
         var messageDependencies = _messageDependencyFixture.CreateDependenciesFromDescriptor<StubMessage>(descriptor!);
         
+        // Direct and indirect final interceptors are merged into one list, direct first.
         Assert.NotEmpty(messageDependencies.FinalInterceptors);
-        Assert.NotEmpty(messageDependencies.IndirectFinalInterceptors);
+        Assert.Contains(messageDependencies.FinalInterceptors,
+            r => r.HandlerType == typeof(StubFinalInterceptor));
+        Assert.Contains(messageDependencies.FinalInterceptors,
+            r => r.HandlerType == typeof(StubIndirectFinalInterceptor));
         
         // cleanup
         _descriptorFixture.Dispose();

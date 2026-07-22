@@ -6,8 +6,9 @@ namespace Stella.Ergosfare.Core.Abstractions.Invokers;
 /// </summary>
 internal abstract class PostInvoker(
     IMessageDependencies messageDependencies,
-    IResultAdapterService? resultAdapterService): 
-    AbstractInvoker(messageDependencies, resultAdapterService)
+    IResultAdapterService? resultAdapterService,
+    IServiceProvider serviceProvider):
+    AbstractInvoker(messageDependencies, resultAdapterService, serviceProvider)
 {
     /// <summary>
     /// Executes the post-interceptors for the given message and result within

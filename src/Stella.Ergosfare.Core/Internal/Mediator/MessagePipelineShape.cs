@@ -4,25 +4,22 @@ using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 /// <summary>
-/// The provider-independent plan of a message's resolved pipeline: per stage, the
-/// group-filtered descriptors ordered by weight and handler type name, each paired with
-/// the pre-computed concrete handler type to resolve. Shapes depend only on the registry
-/// contents, the message type and the group set, so they are cached process-wide and
-/// shared across scopes — each scope then only materializes cheap lazy wrappers over
-/// these arrays, without re-doing any type resolution.
+/// The provider-independent plan of a message's resolved pipeline. Interceptor stages
+/// hold direct and indirect registrations merged into a single array — direct entries
+/// first, then indirect, each segment ordered by weight (descending) and handler type
+/// name. Main handlers keep the direct/indirect split because mediation strategies treat
+/// them differently. Each entry carries the pre-computed concrete handler type, so no
+/// type resolution happens after the shape is built. Shapes depend only on the registry
+/// contents, the message type and the group set, and are cached process-wide.
 /// </summary>
 internal sealed class MessagePipelineShape
 {
     public required PlannedHandler<IMainHandlerDescriptor>[] Handlers { get; init; }
     public required PlannedHandler<IMainHandlerDescriptor>[] IndirectHandlers { get; init; }
     public required PlannedHandler<IPreInterceptorDescriptor>[] PreInterceptors { get; init; }
-    public required PlannedHandler<IPreInterceptorDescriptor>[] IndirectPreInterceptors { get; init; }
     public required PlannedHandler<IPostInterceptorDescriptor>[] PostInterceptors { get; init; }
-    public required PlannedHandler<IPostInterceptorDescriptor>[] IndirectPostInterceptors { get; init; }
     public required PlannedHandler<IExceptionInterceptorDescriptor>[] ExceptionInterceptors { get; init; }
-    public required PlannedHandler<IExceptionInterceptorDescriptor>[] IndirectExceptionInterceptors { get; init; }
     public required PlannedHandler<IFinalInterceptorDescriptor>[] FinalInterceptors { get; init; }
-    public required PlannedHandler<IFinalInterceptorDescriptor>[] IndirectFinalInterceptors { get; init; }
 
     public static MessagePipelineShape Create(Type messageType, IMessageDescriptor descriptor, IEnumerable<string> groups)
     {
@@ -33,15 +30,44 @@ internal sealed class MessagePipelineShape
         {
             Handlers = Prepare(descriptor.Handlers, messageType, effectiveGroups),
             IndirectHandlers = Prepare(descriptor.IndirectHandlers, messageType, effectiveGroups),
-            PreInterceptors = Prepare(descriptor.PreInterceptors, messageType, effectiveGroups),
-            IndirectPreInterceptors = Prepare(descriptor.IndirectPreInterceptors, messageType, effectiveGroups),
-            PostInterceptors = Prepare(descriptor.PostInterceptors, messageType, effectiveGroups),
-            IndirectPostInterceptors = Prepare(descriptor.IndirectPostInterceptors, messageType, effectiveGroups),
-            ExceptionInterceptors = Prepare(descriptor.ExceptionInterceptors, messageType, effectiveGroups),
-            IndirectExceptionInterceptors = Prepare(descriptor.IndirectExceptionInterceptors, messageType, effectiveGroups),
-            FinalInterceptors = Prepare(descriptor.FinalInterceptors, messageType, effectiveGroups),
-            IndirectFinalInterceptors = Prepare(descriptor.IndirectFinalInterceptors, messageType, effectiveGroups),
+            PreInterceptors = Merge(
+                Prepare(descriptor.PreInterceptors, messageType, effectiveGroups),
+                Prepare(descriptor.IndirectPreInterceptors, messageType, effectiveGroups)),
+            PostInterceptors = Merge(
+                Prepare(descriptor.PostInterceptors, messageType, effectiveGroups),
+                Prepare(descriptor.IndirectPostInterceptors, messageType, effectiveGroups)),
+            ExceptionInterceptors = Merge(
+                Prepare(descriptor.ExceptionInterceptors, messageType, effectiveGroups),
+                Prepare(descriptor.IndirectExceptionInterceptors, messageType, effectiveGroups)),
+            FinalInterceptors = Merge(
+                Prepare(descriptor.FinalInterceptors, messageType, effectiveGroups),
+                Prepare(descriptor.IndirectFinalInterceptors, messageType, effectiveGroups)),
         };
+    }
+
+    /// <summary>
+    /// Concatenates the direct and indirect segments of an interceptor stage, preserving
+    /// the direct-first execution order the invokers previously implemented as two passes.
+    /// </summary>
+    private static PlannedHandler<TDescriptor>[] Merge<TDescriptor>(
+        PlannedHandler<TDescriptor>[] direct,
+        PlannedHandler<TDescriptor>[] indirect)
+        where TDescriptor : IHandlerDescriptor
+    {
+        if (indirect.Length == 0)
+        {
+            return direct;
+        }
+
+        if (direct.Length == 0)
+        {
+            return indirect;
+        }
+
+        var merged = new PlannedHandler<TDescriptor>[direct.Length + indirect.Length];
+        direct.CopyTo(merged, 0);
+        indirect.CopyTo(merged, direct.Length);
+        return merged;
     }
 
     /// <summary>

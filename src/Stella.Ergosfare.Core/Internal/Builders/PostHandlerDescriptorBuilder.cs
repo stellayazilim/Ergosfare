@@ -10,7 +10,7 @@ namespace Stella.Ergosfare.Core.Internal.Builders;
 /// <summary>
 /// Builds <see cref="PostInterceptorDescriptor"/> instances for types implementing <see cref="IPostInterceptor"/>.
 /// </summary>
-public sealed class PostHandlerDescriptorBuilder: IHandlerDescriptorBuilder
+internal sealed class PostHandlerDescriptorBuilder: IHandlerDescriptorBuilder
 {
     /// <summary>
     /// Determines whether the specified type implements <see cref="IPostInterceptor"/>.

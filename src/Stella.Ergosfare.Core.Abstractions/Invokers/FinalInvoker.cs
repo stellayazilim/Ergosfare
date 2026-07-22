@@ -10,9 +10,10 @@ namespace Stella.Ergosfare.Core.Abstractions.Invokers;
 /// They are intended for cleanup, logging, or finalization tasks, and do not rethrow exceptions.
 /// </remarks>
 internal abstract class FinalInvoker(
-    IMessageDependencies messageDependencies, 
-    IResultAdapterService? resultAdapterService) 
-    : AbstractInvoker(messageDependencies, resultAdapterService)
+    IMessageDependencies messageDependencies,
+    IResultAdapterService? resultAdapterService,
+    IServiceProvider serviceProvider)
+    : AbstractInvoker(messageDependencies, resultAdapterService, serviceProvider)
 {
     /// <summary>
     /// Invokes final interceptors for the given <paramref name="message"/>, 

@@ -13,8 +13,9 @@ namespace Stella.Ergosfare.Core.Abstractions.Invokers;
 /// </remarks>
 internal abstract class ExceptionInvoker(
     IMessageDependencies messageDependencies,
-    IResultAdapterService? resultAdapterService) 
-    : AbstractInvoker(messageDependencies,resultAdapterService)
+    IResultAdapterService? resultAdapterService,
+    IServiceProvider serviceProvider)
+    : AbstractInvoker(messageDependencies, resultAdapterService, serviceProvider)
 {
     /// <summary>
     /// Invokes exception interceptors for the given <paramref name="message"/> 

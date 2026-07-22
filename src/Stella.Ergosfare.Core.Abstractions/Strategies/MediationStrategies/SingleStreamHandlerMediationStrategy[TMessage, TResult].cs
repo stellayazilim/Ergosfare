@@ -44,13 +44,18 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
     /// </returns>
     /// <exception cref="MultipleHandlerFoundException">Thrown if more than one handler is registered for the message.</exception>
     public async IAsyncEnumerable<TResult> Mediate(TMessage message, IMessageDependencies messageDependencies,
-        IExecutionContext context)
+        IExecutionContext context, IServiceProvider serviceProvider)
     {
         if (messageDependencies.Handlers.Count > 1)
         {
             throw new MultipleHandlerFoundException(typeof(TMessage), messageDependencies.Handlers.Count);
         }
-        
+
+        if (messageDependencies.Handlers.Count == 0)
+        {
+            throw new InvalidOperationException($"No handler is registered for {typeof(TMessage).Name}.");
+        }
+
 #pragma warning disable CS0618 // ambient context is deprecated but supported until removal
         // Stream enumeration happens outside the mediator's dispatch window, so when ambient
         // access is enabled the context is re-published for the enumeration flow.
@@ -59,18 +64,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
             AmbientExecutionContext.Current = context;
         }
 #pragma warning restore CS0618
-        var handler = messageDependencies
-            .Handlers
-            .Single()
-            .Handler
-            .Value;
-        
-        
-        if (handler is null)
-        {
-            throw new InvalidOperationException(
-                $"Handler for {typeof(TMessage).Name} is not of the expected type.");
-        }
+        var handler = messageDependencies.Handlers[0].Resolve(serviceProvider);
         
 
         
@@ -81,7 +75,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         try
         {
             // run pre interceptors
-            var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
+            var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
             message =  (TMessage)await preInvoker.Invoke(message, context) ;
 
 
@@ -142,7 +136,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         {
             if (_unknownException is null)
             {
-                var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
+                var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
                 // we can't override result since its chunked
                 await postInvoker.Invoke(message, enumerator, context).ConfigureAwait(false);
             }
@@ -157,7 +151,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         {
             if (_unknownException is not null)
             {
-                var exceptionInvoker = new TaskExceptionInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
+                var exceptionInvoker = new TaskExceptionInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
                 // we can't override result since its chunked
                 await exceptionInvoker.Invoke(
                     message,
@@ -172,7 +166,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         }
         finally
         {
-            var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
+            var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
             await finalInvoker.Invoke(message, enumerator, _unknownException, context);
         }
     }

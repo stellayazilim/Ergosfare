@@ -28,7 +28,7 @@ namespace Stella.Ergosfare.Test.Fixtures;
 public class ExecutionContextFixture : IAsyncDisposable, IFixture<ExecutionContextFixture>
 {
     private bool _disposed;
-    private readonly IExecutionContext _executionContext = 
+    private readonly IExecutionContext _executionContext =
         new ErgosfareExecutionContext( new Dictionary<object, object?>(), CancellationToken.None);
    
 

@@ -9,7 +9,7 @@ namespace Stella.Ergosfare.Core.Internal.Builders;
 /// <summary>
 /// Builds <see cref="MainHandlerDescriptor"/> instances for types implementing <see cref="IHandler"/>.
 /// </summary>
-public sealed class HandlerDescriptorBuilder: IHandlerDescriptorBuilder
+internal sealed class HandlerDescriptorBuilder: IHandlerDescriptorBuilder
 {
     
     /// <summary>

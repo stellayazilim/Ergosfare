@@ -20,20 +20,27 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 internal sealed class MessageMediator(
     IMessageRegistry messageRegistry,
-    IMessageDependenciesFactory messageDependenciesFactory)
+    IMessageDependenciesFactory messageDependenciesFactory,
+    IServiceProvider serviceProvider)
     : IMessageMediator
 {
-    
+
     /// <summary>
     /// Registry used to keep track of registered message types.
     /// </summary>
     private readonly IMessageRegistry _messageRegistry = messageRegistry ?? throw new ArgumentNullException(nameof(messageRegistry));
-    
-    
+
+
     /// <summary>
     /// Factory used to create message handler dependencies for a given message type and descriptor.
     /// </summary>
     private readonly IMessageDependenciesFactory _messageDependenciesFactory = messageDependenciesFactory ?? throw new ArgumentNullException(nameof(messageDependenciesFactory));
+
+    /// <summary>
+    /// The provider of the scope this mediator was resolved from; passed to the mediation
+    /// strategy on each dispatch so handlers resolve against the calling scope.
+    /// </summary>
+    private readonly IServiceProvider _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
 
     
     /// <summary>
@@ -109,9 +116,10 @@ internal sealed class MessageMediator(
             // Resolve the dependencies in lazy mode
             var messageDependencies = _messageDependenciesFactory.Create(messageType, descriptor, options.Groups);
 
-            // Mediate the message using the specified strategy
-            // natural pipeline execution with fresh context
-            return options.MessageMediationStrategy.Mediate(message, messageDependencies, context);
+            // Mediate the message using the specified strategy. The scope's provider is
+            // handed to the strategy explicitly — handler resolution belongs to the
+            // dispatch pipeline, never to the execution context.
+            return options.MessageMediationStrategy.Mediate(message, messageDependencies, context, _serviceProvider);
         }
         finally
         {
