@@ -46,8 +46,11 @@ jobs:
             TAG_NAME=${GITHUB_REF#refs/tags/}
           fi
 
+          [[ "$TAG_NAME" == v* ]] || { echo "❌ Tag must start with v"; exit 1; }
+
           VERSION=${TAG_NAME#v}
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "RELEASE_SHA=$(git rev-parse HEAD)" >> $GITHUB_ENV
           echo "Using version: $VERSION"
 
       - name: Validate release type
@@ -115,6 +118,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          # Manual dispatches may create the tag at release time; without this it
+          # would be created on the default branch instead of the built commit.
+          target_commitish: ${{ env.RELEASE_SHA }}
           files: ./nupkg-github/*.nupkg
           prerelease: ${{ contains(env.VERSION, '-') }}
         env:

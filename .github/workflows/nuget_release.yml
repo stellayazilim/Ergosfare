@@ -46,6 +46,8 @@ jobs:
             TAG_NAME="${GITHUB_REF#refs/tags/}"
           fi
 
+          [[ "$TAG_NAME" == v* ]] || { echo "❌ Tag must start with v"; exit 1; }
+
           VERSION="${TAG_NAME#v}"
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "Resolved version: $VERSION"
