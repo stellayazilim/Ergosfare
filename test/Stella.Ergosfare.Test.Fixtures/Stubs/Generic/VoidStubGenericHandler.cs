@@ -8,14 +8,14 @@ namespace Stella.Ergosfare.Test.Fixtures.Stubs.Generic;
 /// Implements <see cref="IHandler{TMessage, TResult}"/> for <see cref="StubGenericMessage{TMessage}"/>.
 /// </summary>
 /// <typeparam name="TMessage">The type parameter for the generic message.</typeparam>
-public class VoidStubGenericHandler<TMessage> : IHandler<StubGenericMessage<TMessage>, Task>
+public class VoidStubGenericHandler<TMessage> : IHandler<StubGenericMessage<TMessage>, ValueTask>
 {
     /// <summary>
     /// Handles the message by doing nothing.
     /// </summary>
-    public Task Handle(StubGenericMessage<TMessage> message, IExecutionContext context)
+    public ValueTask Handle(StubGenericMessage<TMessage> message, IExecutionContext context)
     {
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 }
 
@@ -33,41 +33,41 @@ public class VoidStubGenericPreInterceptor<TMessage> : IPreInterceptor<StubGener
 }
 
 /// <summary>
-/// A stub post-interceptor that returns a completed Task.
+/// A stub post-interceptor that returns a completed ValueTask.
 /// Implements <see cref="IPostInterceptor{TMessage, TResult}"/>.
 /// </summary>
 /// <typeparam name="TMessage">The type parameter for the generic message.</typeparam>
-public class VoidStubGenericPostInterceptor<TMessage> : IPostInterceptor<StubGenericMessage<TMessage>, Task>
+public class VoidStubGenericPostInterceptor<TMessage> : IPostInterceptor<StubGenericMessage<TMessage>, ValueTask>
 {
-    public object Handle(StubGenericMessage<TMessage> message, Task? messageResult, IExecutionContext context)
+    public object Handle(StubGenericMessage<TMessage> message, ValueTask messageResult, IExecutionContext context)
     {
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 }
 
 /// <summary>
-/// A stub exception interceptor that returns a completed Task.
+/// A stub exception interceptor that returns a completed ValueTask.
 /// Implements <see cref="IExceptionInterceptor{TMessage, TResult}"/>.
 /// </summary>
 /// <typeparam name="TMessage">The type parameter for the generic message.</typeparam>
-public class VoidStubGenericExceptionInterceptor<TMessage> : IExceptionInterceptor<StubGenericMessage<TMessage>, Task>
+public class VoidStubGenericExceptionInterceptor<TMessage> : IExceptionInterceptor<StubGenericMessage<TMessage>, ValueTask>
 {
-    public object Handle(StubGenericMessage<TMessage> message, Task? messageResult, Exception exception, IExecutionContext context)
+    public object Handle(StubGenericMessage<TMessage> message, ValueTask messageResult, Exception exception, IExecutionContext context)
     {
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 }
 
 /// <summary>
-/// A stub final interceptor that returns a completed Task.
+/// A stub final interceptor that returns a completed ValueTask.
 /// Implements <see cref="IFinalInterceptor{TMessage, TResult}"/>.
 /// </summary>
 /// <typeparam name="TMessage">The type parameter for the generic message.</typeparam>
-public class VoidStubGenericFinalInterceptor<TMessage> : IFinalInterceptor<StubGenericMessage<TMessage>, Task>
+public class VoidStubGenericFinalInterceptor<TMessage> : IFinalInterceptor<StubGenericMessage<TMessage>, ValueTask>
 {
-    public object Handle(StubGenericMessage<TMessage> message, Task? result, Exception? exception, IExecutionContext executionContext)
+    public object Handle(StubGenericMessage<TMessage> message, ValueTask result, Exception? exception, IExecutionContext executionContext)
     {
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 }
 
@@ -76,10 +76,10 @@ public class VoidStubGenericFinalInterceptor<TMessage> : IFinalInterceptor<StubG
 /// Implements <see cref="IFinalInterceptor{TMessage, TResult}"/>.
 /// </summary>
 /// <typeparam name="TMessage">The type parameter for the generic message.</typeparam>
-public class VoidMultiStubGenericFinalInterceptor<TMessage> : IFinalInterceptor<StubGenericMessage<TMessage>, Task>
+public class VoidMultiStubGenericFinalInterceptor<TMessage> : IFinalInterceptor<StubGenericMessage<TMessage>, ValueTask>
 {
-    public object Handle(StubGenericMessage<TMessage> message, Task? result, Exception? exception, IExecutionContext executionContext)
+    public object Handle(StubGenericMessage<TMessage> message, ValueTask result, Exception? exception, IExecutionContext executionContext)
     {
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 }

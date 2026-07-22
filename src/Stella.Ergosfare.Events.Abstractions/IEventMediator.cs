@@ -31,7 +31,7 @@ public interface IEventMediator
     ///     By default, if no handlers are found for the event, the operation completes successfully
     ///     without any action. This behavior can be changed using the <see cref="EventMediationSettings" />.
     /// </remarks>
-    Task PublishAsync(IEvent @event, EventMediationSettings? eventMediationSettings = null, CancellationToken cancellationToken = default);
+    ValueTask PublishAsync(IEvent @event, EventMediationSettings? eventMediationSettings = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Asynchronously publishes an event with a specific type.
@@ -53,6 +53,6 @@ public interface IEventMediator
     ///     By default, if no handlers are found for the event, the operation completes successfully
     ///     without any action. This behavior can be changed using the <see cref="EventMediationSettings" />.
     /// </remarks>
-    Task PublishAsync<TEvent>(TEvent @event, EventMediationSettings? eventMediationSettings = null, CancellationToken cancellationToken = default)
+    ValueTask PublishAsync<TEvent>(TEvent @event, EventMediationSettings? eventMediationSettings = null, CancellationToken cancellationToken = default)
         where TEvent : notnull;
 }

@@ -1,4 +1,5 @@
-﻿using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
+﻿using System.Diagnostics.CodeAnalysis;
+using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 
 namespace Stella.Ergosfare.Core.Internal.Registry.Descriptors;
 
@@ -32,5 +33,6 @@ internal abstract class HandlerDescriptor: IHandlerDescriptor
     /// <summary>
     /// Gets the concrete type of the handler implementation.
     /// </summary>
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
     public required Type HandlerType { get; init; }
 }

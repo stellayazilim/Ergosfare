@@ -29,11 +29,11 @@ public interface IAsyncPreInterceptor<in TMessage>:
     /// <param name="message">The input message to be processed.</param>
     /// <param name="context">The current execution context.</param>
     /// <returns>
-    /// A <see cref="Task{Object}"/> representing the asynchronous operation.
+    /// A <see cref="ValueTask{Object}"/> representing the asynchronous operation.
     /// The returned <see cref="object"/> is actually of type <typeparamref name="TMessage"/> (the input message type). 
     /// This allows the interceptor to return either the original message or a modified version, which will continue through the pipeline.
     /// </returns>
-    Task<object> HandleAsync(
+    ValueTask<object> HandleAsync(
         TMessage message, 
         IExecutionContext context);
 }

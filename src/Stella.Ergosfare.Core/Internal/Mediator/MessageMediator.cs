@@ -1,4 +1,5 @@
-﻿using Stella.Ergosfare.Core.Abstractions;
+﻿using System.Diagnostics.CodeAnalysis;
+using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Abstractions.Registry;
@@ -65,6 +66,10 @@ internal sealed class MessageMediator(
     /// <item>Mediate the message via the <see cref="MediateOptions{TMessage, TResult}.MessageMediationStrategy"/> using the resolved dependencies and current execution context.</item>
     /// </list>
     /// </remarks>
+    [UnconditionalSuppressMessage("Trimming", "IL2072",
+        Justification = "RegisterPlainMessagesOnSpot registers the runtime type of a live message instance; " +
+                        "the instance roots its type, and this opt-in dynamic path is not supported on trimmed apps — " +
+                        "pre-register plain messages explicitly there.")]
     public TResult Mediate<TMessage, TResult>(TMessage message, MediateOptions<TMessage, TResult> options) where TMessage : notnull
     {
 

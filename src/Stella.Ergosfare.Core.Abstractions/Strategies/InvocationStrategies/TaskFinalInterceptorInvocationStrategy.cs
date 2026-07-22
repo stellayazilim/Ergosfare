@@ -5,7 +5,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 
 
 /// <summary>
-/// Executes final interceptors for a message using <see cref="Task"/>-based handlers.
+/// Executes final interceptors for a message using <see cref="ValueTask"/>-based handlers.
 /// </summary>
 /// <remarks>
 /// Final interceptors are executed after pre-, post-, and exception interceptors. The
@@ -26,8 +26,8 @@ internal sealed class TaskFinalInterceptorInvocationStrategy(
     /// <param name="result">The current result of the message handling, which may be passed to final interceptors.</param>
     /// <param name="exception">An optional exception captured earlier in the pipeline.</param>
     /// <param name="executionContext">The execution context for the current pipeline invocation.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous operation of executing all final interceptors.</returns>
-    public override async Task Invoke(object message, object? result, Exception? exception, IExecutionContext executionContext)
+    /// <returns>A <see cref="ValueTask"/> representing the asynchronous operation of executing all final interceptors.</returns>
+    public override async ValueTask Invoke(object message, object? result, Exception? exception, IExecutionContext executionContext)
     {
         var interceptors = MessageDependencies.FinalInterceptors;
 
@@ -36,7 +36,7 @@ internal sealed class TaskFinalInterceptorInvocationStrategy(
             var handler = interceptors[i].Resolve(ServiceProvider);
 
             // Execute interceptor
-            await (Task) handler.Handle(message, result, exception, executionContext);
+            await (ValueTask) handler.Handle(message, result, exception, executionContext);
         }
     }
 }

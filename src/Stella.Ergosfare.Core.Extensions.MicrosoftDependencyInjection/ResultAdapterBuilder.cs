@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Stella.Ergosfare.Core.Abstractions;
 
@@ -40,7 +41,7 @@ public class ResultAdapterBuilder(IResultAdapterService resultAdapterService)
     /// <remarks>
     /// The adapter type must implement <see cref="IResultAdapter"/> and have a parameterless constructor.
     /// </remarks>
-    public ResultAdapterBuilder Register(Type adapter) 
+    public ResultAdapterBuilder Register([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type adapter)
     {
         // Use Activator to create an instance dynamically
         if (Activator.CreateInstance(adapter) is IResultAdapter resultAdapter)
@@ -58,6 +59,7 @@ public class ResultAdapterBuilder(IResultAdapterService resultAdapterService)
     /// This scans for non-abstract, concrete classes that implement <see cref="IResultAdapter"/>.
     /// Each matching type is instantiated and registered.
     /// </remarks>
+    [RequiresUnreferencedCode("Assembly scanning discovers adapter types via reflection; trimming may remove them. Register adapters explicitly in trimmed or AOT applications.")]
     public ResultAdapterBuilder RegisterFromAssembly(Assembly assembly)
     {
         // Scan all types in the assembly and register those that implement IResultAdapter

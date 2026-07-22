@@ -23,6 +23,6 @@ public class ExceptionInterceptorTests
         IExceptionInterceptor interceptor = new StubVoidAsyncExceptionInterceptor();
         var result = interceptor.Handle(new StubMessage(), "not null", new Exception(), fixture.Ctx);
         Assert.NotNull(result);
-        await Assert.IsType<Task>(result, exactMatch: false);
+        await Assert.IsType<ValueTask<object>>(result);
     }
 }

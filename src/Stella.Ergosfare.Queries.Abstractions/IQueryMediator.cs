@@ -21,7 +21,7 @@ public interface IQueryMediator: IMessage
     ///     is executed, including pre-handlers, the main handler, post-handlers, and error handlers if exceptions occur.
     ///     The result produced by the handler is returned to the caller.
     /// </remarks>
-    Task<TQueryResult> QueryAsync<TQueryResult>(IQuery<TQueryResult> query,
+    ValueTask<TQueryResult> QueryAsync<TQueryResult>(IQuery<TQueryResult> query,
                                                 QueryMediationSettings? queryMediationSettings = null,
                                                 CancellationToken cancellationToken = default);
 

@@ -35,9 +35,9 @@ public interface IAsyncExceptionInterceptor<in TMessage, in TResult>:
     /// <param name="exception">The exception that was thrown during message processing.</param>
     /// <param name="context">The current execution context.</param>
     /// <returns>
-    /// A <see cref="Task"/> representing the asynchronous operation.
+    /// A <see cref="ValueTask"/> representing the asynchronous operation.
     /// The result of type <typeparamref name="TResult"/> may be modified and will be propagated through the pipeline.
     /// </returns>
-    Task<object?> HandleAsync(TMessage message, TResult? result, Exception exception, IExecutionContext context);
+    ValueTask<object?> HandleAsync(TMessage message, TResult? result, Exception exception, IExecutionContext context);
     
 }

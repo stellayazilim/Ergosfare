@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 namespace Stella.Ergosfare.Core.Abstractions.Invokers;
 
 /// <summary>
@@ -22,5 +23,5 @@ internal abstract class PreInvoker(
     /// An object representing the result of pre-interceptor execution, which
     /// may include a modified message or additional processing state.
     /// </returns>
-    public abstract object Invoke(object message, IExecutionContext executionContext);
+    public abstract ValueTask<object> Invoke(object message, IExecutionContext executionContext);
 }

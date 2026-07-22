@@ -30,6 +30,6 @@ public class AsyncHandlerTests(ExecutionContextFixture executionContextFixture)
         
         // assert
         Assert.NotNull(result); 
-        await Assert.IsType<Task>(result, exactMatch: false);
+        await Assert.IsType<ValueTask>(result, exactMatch: false);
     }
 }

@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Stella.Ergosfare.Core.Abstractions.Registry;
 
 namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -18,7 +19,7 @@ public class CoreModuleBuilder(IMessageRegistry registry): IModuleBuilder
     /// </summary>
     /// <param name="type">The type to register as a message.</param>
     /// <returns>The current <see cref="IModuleBuilder"/> instance for fluent chaining.</returns>
-    public IModuleBuilder Register(Type type)
+    public IModuleBuilder Register([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type type)
     {
         registry.Register(type);
         return this;
@@ -30,7 +31,7 @@ public class CoreModuleBuilder(IMessageRegistry registry): IModuleBuilder
     /// </summary>
     /// <typeparam name="T">The type to register as a message.</typeparam>
     /// <returns>The current <see cref="IModuleBuilder"/> instance for fluent chaining.</returns>
-    public IModuleBuilder Register<T>()
+    public IModuleBuilder Register<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] T>()
     {
         Register(typeof(T));
         return this;
@@ -43,6 +44,7 @@ public class CoreModuleBuilder(IMessageRegistry registry): IModuleBuilder
     /// <param name="assembly">The assembly whose types should be registered as messages.</param>
     /// <returns>The current <see cref="IModuleBuilder"/> instance for fluent chaining.</returns>
 
+    [RequiresUnreferencedCode("Assembly scanning discovers types via reflection; trimming may remove them. Register types explicitly (or use source-generated registration) in trimmed or AOT applications.")]
     public IModuleBuilder RegisterFromAssembly(Assembly assembly)
     {
         foreach (var type in assembly.GetTypes())

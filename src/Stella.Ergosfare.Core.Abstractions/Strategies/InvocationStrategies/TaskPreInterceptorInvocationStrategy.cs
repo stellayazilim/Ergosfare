@@ -6,7 +6,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 
 
 /// <summary>
-/// Executes pre-interceptors for a message using <see cref="Task"/>-based handlers.
+/// Executes pre-interceptors for a message using <see cref="ValueTask"/>-based handlers.
 /// </summary>
 /// <remarks>
 /// The pre-interceptor list is pre-merged in registration order: direct pre-interceptors
@@ -25,10 +25,10 @@ internal sealed class TaskPreInterceptorInvocationStrategy(
     /// <param name="message">The message being processed.</param>
     /// <param name="executionContext">The execution context for the current pipeline invocation.</param>
     /// <returns>
-    /// A <see cref="Task{Object}"/> representing the asynchronous operation.
+    /// A <see cref="ValueTask{Object}"/> representing the asynchronous operation.
     /// The task result contains the transformed message after all pre-interceptors have executed.
     /// </returns>
-    public override async Task<object> Invoke(object message, IExecutionContext executionContext)
+    public override async ValueTask<object> Invoke(object message, IExecutionContext executionContext)
     {
         var interceptors = MessageDependencies.PreInterceptors;
 
@@ -37,7 +37,7 @@ internal sealed class TaskPreInterceptorInvocationStrategy(
             var handler = interceptors[i].Resolve(ServiceProvider);
 
             // Execute interceptor handler and await result
-            message = await (Task<object>) handler.Handle(message, executionContext);
+            message = await (ValueTask<object>) handler.Handle(message, executionContext);
         }
 
         return message;

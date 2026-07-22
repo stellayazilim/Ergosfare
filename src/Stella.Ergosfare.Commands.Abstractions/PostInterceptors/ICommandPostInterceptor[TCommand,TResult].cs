@@ -26,7 +26,7 @@ public interface ICommandPostInterceptor<TCommand, TResult> :
     where TResult : notnull
 {
     /// <inheritdoc />
-    async Task<object> IAsyncPostInterceptor<TCommand, TResult>.HandleAsync(
+    async ValueTask<object> IAsyncPostInterceptor<TCommand, TResult>.HandleAsync(
         TCommand command, TResult messageResult, IExecutionContext context)
         => (await HandleAsync(command, messageResult, context))!;
 
@@ -37,8 +37,8 @@ public interface ICommandPostInterceptor<TCommand, TResult> :
     /// <param name="commandResult">The result produced by the command handler.</param>
     /// <param name="context">The current execution context.</param>
     /// <returns>
-    /// A <see cref="Task{TResult}"/> producing the (possibly modified) result that
+    /// A <see cref="ValueTask{TResult}"/> producing the (possibly modified) result that
     /// continues through the pipeline.
     /// </returns>
-    new Task<TResult> HandleAsync(TCommand command, TResult commandResult, IExecutionContext context);
+    new ValueTask<TResult> HandleAsync(TCommand command, TResult commandResult, IExecutionContext context);
 }

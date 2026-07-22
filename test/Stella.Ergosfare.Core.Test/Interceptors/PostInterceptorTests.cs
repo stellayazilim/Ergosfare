@@ -24,7 +24,7 @@ public class PostInterceptorTests
         IPostInterceptor interceptor = new StubVoidAsyncPostInterceptor();
         var result =  interceptor.Handle(new StubMessage(), StubPostInterceptor.Result,  fixture.Ctx);
         Assert.NotNull(result);
-        await Assert.IsType<Task>(result, exactMatch:false);
+        await Assert.IsType<ValueTask<object>>(result);
 
     }
 }

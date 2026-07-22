@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -18,7 +19,7 @@ public interface IModuleBuilder
     /// <returns>
     /// The current <see cref="IModuleBuilder"/> instance to allow for fluent chaining.
     /// </returns>
-    IModuleBuilder Register<T>();
+    IModuleBuilder Register<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] T>();
 
     /// <summary>
     /// Registers the specified type with the module.
@@ -30,7 +31,7 @@ public interface IModuleBuilder
     /// <returns>
     /// The current <see cref="IModuleBuilder"/> instance to allow for fluent chaining.
     /// </returns>
-    IModuleBuilder Register(Type type);
+    IModuleBuilder Register([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type type);
 
     /// <summary>
     /// Registers all valid types from the provided assembly with the module.
@@ -42,5 +43,6 @@ public interface IModuleBuilder
     /// <returns>
     /// The current <see cref="IModuleBuilder"/> instance to allow for fluent chaining.
     /// </returns>
+    [RequiresUnreferencedCode("Assembly scanning discovers types via reflection; trimming may remove them. Register types explicitly (or use source-generated registration) in trimmed or AOT applications.")]
     IModuleBuilder RegisterFromAssembly(Assembly assembly);
 }

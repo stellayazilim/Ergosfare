@@ -29,7 +29,7 @@ public interface ICommandMediator
     ///     appropriate handler based on its type, and the command handling pipeline is executed, including
     ///     pre-handlers, the main handler, post-handlers, and error handlers if exceptions occur.
     /// </remarks>
-    Task SendAsync(ICommand command, CommandMediationSettings? commandMediationSettings = null, CancellationToken cancellationToken = default);
+    ValueTask SendAsync(ICommand command, CommandMediationSettings? commandMediationSettings = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Asynchronously sends a command for mediation and returns a result.
@@ -48,7 +48,7 @@ public interface ICommandMediator
     ///     is executed, including pre-handlers, the main handler, post-handlers, and error handlers if exceptions occur.
     ///     The result produced by the handler is returned to the caller.
     /// </remarks>
-    Task<TResult> SendAsync<TResult>(ICommand<TResult> command,
+    ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command,
                                                    CommandMediationSettings? commandMediationSettings = null,
                                                    CancellationToken cancellationToken = default);
 }

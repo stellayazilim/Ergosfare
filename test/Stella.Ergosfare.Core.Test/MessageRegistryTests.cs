@@ -271,34 +271,106 @@ public class MessageRegistryTests: IClassFixture<MessageDependencyFixture>
     
     
     /// <summary>
-    /// Verifies that registering a message that is already in the _newMessages queue
-    /// does not add a duplicate.
-    /// This covers the branch using FirstOrDefault to detect duplicates.
+    /// Verifies that registering a message that is already staged in the _newMessages queue
+    /// does not add a duplicate. This covers the index-based duplicate detection branch.
     /// </summary>
     [Fact]
     public void Register_ShouldNotDuplicateMessageIfAlreadyInNewMessages()
     {
-        // arrange 
+        // arrange
         _messageDependencyFixture = _messageDependencyFixture.New;
         var registry = _messageDependencyFixture.MessageRegistry;
 
         var newMessagesField = typeof(MessageRegistry)
             .GetField("_newMessages", BindingFlags.NonPublic | BindingFlags.Instance);
         var newMessages = (List<MessageDescriptor>)newMessagesField!.GetValue(registry)!;
-        var descriptor = new MessageDescriptor(typeof(StubMessage));
-        newMessages.Add(descriptor);
 
         // Use reflection to invoke the private RegisterMessage method
         var registerMessageMethod = typeof(MessageRegistry)
             .GetMethod("RegisterMessage", BindingFlags.NonPublic | BindingFlags.Instance)!;
 
-        // Act: call RegisterMessage with the same message type
+        // Act: stage the message, then attempt to stage the same message type again
+        registerMessageMethod.Invoke(registry, new object?[] { typeof(StubMessage) });
         registerMessageMethod.Invoke(registry, new object?[] { typeof(StubMessage) });
 
-        // Assert: _newMessages should still contain only the original descriptor (no duplicate)
+        // Assert: _newMessages should still contain only one descriptor (no duplicate)
         Assert.Single(newMessages);
         Assert.Equal(typeof(StubMessage), newMessages[0].MessageType);
 
         _messageDependencyFixture.Dispose();
     }
-}   
+
+    /// <summary>
+    /// Verifies that <see cref="MessageRegistry.RegisterDescriptors"/> links injected pre-built
+    /// descriptors to their message types without invoking the reflection-based builders.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public void RegisterDescriptors_ShouldLinkInjectedDescriptorsToMessages()
+    {
+        // arrange
+        _messageDependencyFixture = _messageDependencyFixture.New;
+        var registry = _messageDependencyFixture.MessageRegistry;
+
+        var descriptor = new MainHandlerDescriptor
+        {
+            MessageType = typeof(StubMessage),
+            HandlerType = typeof(StubVoidHandler),
+            ResultType = typeof(object),
+            Groups = [Stella.Ergosfare.Contracts.Attributes.GroupAttribute.DefaultGroupName],
+            Weight = 0,
+        };
+
+        // act
+        registry.RegisterDescriptors([descriptor]);
+
+        // assert
+        Assert.Single(registry);
+        Assert.Equal(typeof(StubMessage), registry.First().MessageType);
+        Assert.Same(descriptor, registry.First().Handlers.Single());
+
+        _messageDependencyFixture.Dispose();
+    }
+
+    /// <summary>
+    /// Verifies that a handler type already registered through the reflection path is skipped
+    /// by descriptor injection, and vice versa — the two registration paths are idempotent
+    /// with respect to each other.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public void RegisterDescriptors_ShouldBeIdempotentWithRuntimeRegistration()
+    {
+        // arrange
+        _messageDependencyFixture = _messageDependencyFixture.New;
+        var registry = _messageDependencyFixture.MessageRegistry;
+
+        MainHandlerDescriptor MakeDescriptor(Type handlerType) => new()
+        {
+            MessageType = typeof(StubMessage),
+            HandlerType = handlerType,
+            ResultType = typeof(object),
+            Groups = [Stella.Ergosfare.Contracts.Attributes.GroupAttribute.DefaultGroupName],
+            Weight = 0,
+        };
+
+        // act 1: runtime registration first, injection second → injection skipped
+        registry.Register(typeof(StubVoidHandler));
+        registry.RegisterDescriptors([MakeDescriptor(typeof(StubVoidHandler))]);
+
+        // act 2: injection first, runtime registration second → runtime skipped
+        registry.RegisterDescriptors([MakeDescriptor(typeof(StubStringHandler))]);
+        registry.Register(typeof(StubStringHandler));
+
+        // assert: one message, exactly one descriptor per handler type
+        Assert.Single(registry);
+        var handlers = registry.First().Handlers;
+        Assert.Equal(2, handlers.Count);
+        Assert.Single(handlers, h => h.HandlerType == typeof(StubVoidHandler));
+        Assert.Single(handlers, h => h.HandlerType == typeof(StubStringHandler));
+
+        _messageDependencyFixture.Dispose();
+    }
+}

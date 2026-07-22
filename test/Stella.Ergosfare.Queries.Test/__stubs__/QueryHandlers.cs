@@ -21,10 +21,10 @@ public class StubNonGenericStringResultQueryHandler: IQueryHandler<StubNonGeneri
     /// <param name="message">The query message.</param>
     /// <param name="context">The execution context.</param>
     /// <returns>A task representing the asynchronous operation, with an empty string result.</returns>
-    public Task<string> HandleAsync(StubNonGenericStringResultQuery message, IExecutionContext context)
+    public ValueTask<string> HandleAsync(StubNonGenericStringResultQuery message, IExecutionContext context)
     {
         IsCalled = true;
-        return Task.FromResult(string.Empty);
+        return ValueTask.FromResult(string.Empty);
     }
 }
 

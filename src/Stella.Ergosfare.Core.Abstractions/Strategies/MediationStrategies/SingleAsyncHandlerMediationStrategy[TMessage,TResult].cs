@@ -3,6 +3,7 @@ using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
+using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 
 namespace Stella.Ergosfare.Core.Abstractions.Strategies;
@@ -14,7 +15,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies;
 /// </summary>
 /// <typeparam name="TMessage">The type of the message being handled.</typeparam>
 /// <typeparam name="TResult">The type of the result returned by the handler.</typeparam>
-public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResultAdapterService? resultAdapterService) : IMessageMediationStrategy<TMessage, Task<TResult>> 
+public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResultAdapterService? resultAdapterService) : IMessageMediationStrategy<TMessage, ValueTask<TResult>> 
     where TMessage : notnull
 {
     
@@ -27,7 +28,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
     /// <param name="messageDependencies">The dependencies of the message, including registered handlers and interceptors.</param>
     /// <param name="context">The current execution context containing checkpoints, snapshots, and pipeline state.</param>
     /// <returns>
-    /// A <see cref="Task{TResult}"/> representing the asynchronous operation, returning the final result 
+    /// A <see cref="ValueTask{TResult}"/> representing the asynchronous operation, returning the final result 
     /// after executing the handler and all applicable interceptors.
     /// </returns>
     /// <exception cref="ArgumentNullException">Thrown if <paramref name="messageDependencies"/> is null.</exception>
@@ -51,7 +52,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
     /// <item>Checkpoints and snapshots ensure that retries, partial execution, or snapshot-based replay work seamlessly.</item>
     /// </list>
     /// </remarks>
-    public async Task<TResult> Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context, IServiceProvider serviceProvider)
+    public async ValueTask<TResult> Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context, IServiceProvider serviceProvider)
     {
         if (messageDependencies is null)
         {
@@ -77,9 +78,15 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
         // unchanged, matching the zero-interceptor rethrow behavior of the full pipeline.
         if ((preInterceptorCount | postInterceptorCount | exceptionInterceptorCount | finalInterceptorCount) == 0)
         {
+            // Typed seam: when the dispatch TMessage is the handler's message type (or a
+            // derived one — IHandler's `in TMessage` variance covers that), invoke the typed
+            // member directly and skip the object-typed DIM bridge. Interface-erased
+            // dispatches (TMessage = ICommand<T> etc.) fall back to the bridge.
             var fastHandler = messageDependencies.Handlers[0].Resolve(serviceProvider);
 
-            var fastResult = await (Task<TResult>)fastHandler.Handle(message, context);
+            var fastResult = fastHandler is IHandler<TMessage, ValueTask<TResult>> fastTyped
+                ? await fastTyped.Handle(message, context)
+                : await (ValueTask<TResult>)fastHandler.Handle(message, context);
 
             var fastEx = resultAdapterService?.LookupException(fastResult);
             if (fastEx is not null) throw fastEx;
@@ -99,7 +106,9 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
 
             var handler = messageDependencies.Handlers[0].Resolve(serviceProvider);
 
-            result = await (Task<TResult>)handler.Handle(message, context);
+            result = handler is IHandler<TMessage, ValueTask<TResult>> typed
+                ? await typed.Handle(message, context)
+                : await (ValueTask<TResult>)handler.Handle(message, context);
 
             var ex = resultAdapterService?.LookupException(result);
             if (ex is not null) throw ex;

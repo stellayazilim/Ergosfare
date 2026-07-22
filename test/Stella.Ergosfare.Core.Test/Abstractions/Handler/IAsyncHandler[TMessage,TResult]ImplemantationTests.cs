@@ -34,7 +34,7 @@ public class IAsyncHandlerTMessageTResultTests(ExecutionContextFixture execution
         var result = handler.Handle(Message, ctx);
         
         Assert.NotNull(result);
-        await Assert.IsType<Task<string>>(result);
+        await Assert.IsType<ValueTask<string>>(result);
 
     }
 }

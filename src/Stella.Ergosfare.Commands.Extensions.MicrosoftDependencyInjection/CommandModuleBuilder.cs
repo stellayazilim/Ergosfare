@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Registry;
 
@@ -26,7 +27,7 @@ public sealed class CommandModuleBuilder
     /// </summary>
     /// <typeparam name="T">The type of command to register, which must implement <see cref="IRegistrableCommandConstruct" />.</typeparam>
     /// <returns>The current <see cref="CommandModuleBuilder" /> instance for method chaining.</returns>
-    public CommandModuleBuilder Register<T>() where T : ICommand
+    public CommandModuleBuilder Register<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] T>() where T : ICommand
     {
         Register(typeof(T));
         return this;
@@ -37,7 +38,7 @@ public sealed class CommandModuleBuilder
     /// </summary>
     /// <param name="type">The type of command to register, which must implement <see cref="IRegistrableCommandConstruct" />.</param>
     /// <returns>The current <see cref="CommandModuleBuilder" /> instance for method chaining.</returns>
-    public CommandModuleBuilder Register(Type type)
+    public CommandModuleBuilder Register([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type type)
     {
         if (!type.IsAssignableTo(typeof(ICommand)))
         {
@@ -53,6 +54,7 @@ public sealed class CommandModuleBuilder
     /// </summary>
     /// <param name="assembly">The assembly from which to register command types.</param>
     /// <returns>The current <see cref="CommandModuleBuilder" /> instance for method chaining.</returns>
+    [RequiresUnreferencedCode("Assembly scanning discovers command types via reflection; trimming may remove them. Register commands explicitly (or use source-generated registration) in trimmed or AOT applications.")]
     public CommandModuleBuilder RegisterFromAssembly(Assembly assembly)
     {
         foreach (var registrableCommandConstruct in assembly.GetTypes().Where(t => t.IsAssignableTo(typeof(ICommand))))

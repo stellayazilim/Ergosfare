@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Extensions;
@@ -23,7 +24,7 @@ internal sealed class FinalInterceptorDescriptorBuilder: IHandlerDescriptorBuild
     /// <returns>
     /// <c>true</c> if the type implements <see cref="IFinalInterceptor"/>; otherwise <c>false</c>.
     /// </returns>
-    public bool CanBuild(Type type)
+    public bool CanBuild([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type type)
     {
         return type.IsAssignableTo(typeof(IFinalInterceptor));
     }
@@ -36,7 +37,7 @@ internal sealed class FinalInterceptorDescriptorBuilder: IHandlerDescriptorBuild
     /// A sequence of <see cref="FinalInterceptorDescriptor"/> objects describing the handler,
     /// including its weight, groups, message type, result type, and handler type.
     /// </returns>
-    public IEnumerable<IHandlerDescriptor> Build(Type handlerType)
+    public IEnumerable<IHandlerDescriptor> Build([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type handlerType)
     {
         // Identify the interfaces on the handler that match IFinalInterceptor<TMessage, TResult>
         var interfaces = handlerType.GetInterfacesEqualTo(typeof( IFinalInterceptor<,>));

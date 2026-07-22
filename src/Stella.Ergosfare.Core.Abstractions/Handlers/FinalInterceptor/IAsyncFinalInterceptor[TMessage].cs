@@ -44,6 +44,6 @@ public interface IAsyncFinalInterceptor<in TMessage>: IFinalInterceptor<TMessage
     /// <param name="result">The result produced by the handler, if any. Treated as <see cref="object"/> and may be null.</param>
     /// <param name="exception">The exception thrown during handling, if any.</param>
     /// <param name="context">The current execution context.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-    Task HandleAsync(TMessage message, object? result, Exception? exception, IExecutionContext context);
+    /// <returns>A <see cref="ValueTask"/> representing the asynchronous operation.</returns>
+    ValueTask HandleAsync(TMessage message, object? result, Exception? exception, IExecutionContext context);
 }

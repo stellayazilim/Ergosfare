@@ -20,7 +20,7 @@ public class CommandModuleTests
     /// A stub handler that is not a command handler.
     /// Used to verify that non-command handlers cannot be registered in the command module.
     /// </summary>
-    private class NonCommandHandler: IHandler<IMessage, Task>
+    private class NonCommandHandler: IHandler<IMessage, ValueTask>
     {
         /// <summary>
         /// Handles a message asynchronously.
@@ -28,9 +28,9 @@ public class CommandModuleTests
         /// <param name="message">The message to handle.</param>
         /// <param name="context">The execution context.</param>
         /// <returns>A completed <see cref="Task"/>.</returns>
-        public Task Handle(IMessage message, IExecutionContext context)
+        public ValueTask Handle(IMessage message, IExecutionContext context)
         {
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
     }
     

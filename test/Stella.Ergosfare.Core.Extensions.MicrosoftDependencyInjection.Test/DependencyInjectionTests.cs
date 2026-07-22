@@ -20,7 +20,7 @@ public class DependencyInjectionTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public void ErgosfareShouldRegistered()
+    public async Task ErgosfareShouldRegistered()
     {
         var serviceProvider = new ServiceCollection()
             .AddErgosfare(c =>
@@ -34,14 +34,13 @@ public class DependencyInjectionTests
             })
             .BuildServiceProvider();
         var mediator = serviceProvider.GetRequiredService<IMessageMediator>();
-        var options = new MediateOptions<Message, Task>
+        var options = new MediateOptions<Message, ValueTask>
         {
             MessageResolveStrategy = serviceProvider.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
             MessageMediationStrategy = new SingleAsyncHandlerMediationStrategy<Message>(new ResultAdapterService()),
             CancellationToken = default,
             Groups = []
         };
-        var result = mediator.Mediate(new  Message(), options);
-        Assert.NotNull(result);
+        await mediator.Mediate(new  Message(), options);
     }
 }

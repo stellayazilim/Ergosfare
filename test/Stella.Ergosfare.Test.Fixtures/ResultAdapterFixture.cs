@@ -54,9 +54,9 @@ public class ResultAdapterFixtures : IFixture<ResultAdapterFixtures>
     /// </summary>
     public class ResultAdapterErrorOrHandlerReturnException : IAsyncHandler<ResultAdapterMessage, ErrorOr<string>>
     {
-        public async Task<ErrorOr<string>> HandleAsync(ResultAdapterMessage message, IExecutionContext context)
+        public async ValueTask<ErrorOr<string>> HandleAsync(ResultAdapterMessage message, IExecutionContext context)
         {
-            await Task.CompletedTask;
+            await ValueTask.CompletedTask;
             return CreateError<string>();
         }
     }
@@ -71,9 +71,9 @@ public class ResultAdapterFixtures : IFixture<ResultAdapterFixtures>
         /// </summary>
         public const string Result = "Hello world";
 
-        public async Task<ErrorOr<string>> HandleAsync(ResultAdapterMessage message, IExecutionContext context)
+        public async ValueTask<ErrorOr<string>> HandleAsync(ResultAdapterMessage message, IExecutionContext context)
         {
-            await Task.CompletedTask;
+            await ValueTask.CompletedTask;
             return CreateResult<string>(Result);
         }
     }
@@ -83,9 +83,9 @@ public class ResultAdapterFixtures : IFixture<ResultAdapterFixtures>
     /// </summary>
     public class ResultAdapterErrorOrPostInterceptorReturnException : IAsyncPostInterceptor<ResultAdapterMessage, ErrorOr<string>>
     {
-        public async Task<object> HandleAsync(ResultAdapterMessage message, ErrorOr<string> messageResult, IExecutionContext context)
+        public async ValueTask<object> HandleAsync(ResultAdapterMessage message, ErrorOr<string> messageResult, IExecutionContext context)
         {
-            await Task.CompletedTask;
+            await ValueTask.CompletedTask;
             return CreateError<string>();
         }
     }
@@ -101,7 +101,7 @@ public class ResultAdapterFixtures : IFixture<ResultAdapterFixtures>
         /// </summary>
         public static bool IsCalled;
 
-        public Task<object?> HandleAsync(ResultAdapterMessage message, ErrorOr<string> result, Exception exception, IExecutionContext context)
+        public ValueTask<object?> HandleAsync(ResultAdapterMessage message, ErrorOr<string> result, Exception exception, IExecutionContext context)
         {
             IsCalled = true;
             throw exception;

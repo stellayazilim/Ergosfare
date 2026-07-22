@@ -20,10 +20,10 @@ public class QueryInterceptorDefaultImplementationTests
     {
         public bool Called;
 
-        public Task<TestQuery?> HandleAsync(TestQuery query, IExecutionContext executionContext)
+        public ValueTask<TestQuery?> HandleAsync(TestQuery query, IExecutionContext executionContext)
         {
             Called = true;
-            return Task.FromResult<TestQuery?>(query);
+            return ValueTask.FromResult<TestQuery?>(query);
         }
     }
 
@@ -31,10 +31,10 @@ public class QueryInterceptorDefaultImplementationTests
     {
         public bool Called;
 
-        public Task<string> HandleAsync(TestQuery query, string result, IExecutionContext executionContext)
+        public ValueTask<string> HandleAsync(TestQuery query, string result, IExecutionContext executionContext)
         {
             Called = true;
-            return Task.FromResult(result);
+            return ValueTask.FromResult(result);
         }
     }
 
@@ -42,10 +42,10 @@ public class QueryInterceptorDefaultImplementationTests
     {
         public bool Called;
 
-        public Task<string?> HandleAsync(TestQuery query, string? result, Exception exception, IExecutionContext context)
+        public ValueTask<string?> HandleAsync(TestQuery query, string? result, Exception exception, IExecutionContext context)
         {
             Called = true;
-            return Task.FromResult(result);
+            return ValueTask.FromResult(result);
         }
     }
 

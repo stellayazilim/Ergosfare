@@ -20,10 +20,10 @@ public class CommandExceptionInterceptorDefaultImplementationTests
     {
         public bool Called;
 
-        public Task<string?> HandleAsync(TestCommandStringResult command, string? result, Exception exception, IExecutionContext context)
+        public ValueTask<string?> HandleAsync(TestCommandStringResult command, string? result, Exception exception, IExecutionContext context)
         {
             Called = true;
-            return Task.FromResult(result);
+            return ValueTask.FromResult(result);
         }
     }
 
@@ -31,10 +31,10 @@ public class CommandExceptionInterceptorDefaultImplementationTests
     {
         public bool Called;
 
-        public Task<string> HandleAsync(TestCommandStringResult command, string commandResult, IExecutionContext context)
+        public ValueTask<string> HandleAsync(TestCommandStringResult command, string commandResult, IExecutionContext context)
         {
             Called = true;
-            return Task.FromResult(commandResult);
+            return ValueTask.FromResult(commandResult);
         }
     }
 

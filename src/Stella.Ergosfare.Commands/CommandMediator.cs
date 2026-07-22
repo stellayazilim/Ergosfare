@@ -32,11 +32,11 @@ public class CommandMediator(
     /// Mediates command messages through the configured pipeline, including signal dispatching,
     /// mediation strategies, and optional result adaptation.
     /// </summary>
-    public Task SendAsync(ICommand commandConstruct, CommandMediationSettings? commandMediationSettings = null,
+    public ValueTask SendAsync(ICommand commandConstruct, CommandMediationSettings? commandMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
 
-        var options = new MediateOptions<ICommand, Task>
+        var options = new MediateOptions<ICommand, ValueTask>
         {
             MessageMediationStrategy = _mediationStrategy,
             MessageResolveStrategy = messageResolveStrategy,
@@ -55,9 +55,9 @@ public class CommandMediator(
     /// <param name="commandConstruct">The command to send.</param>
     /// <param name="commandMediationSettings">Optional settings for command mediation, such as filtering or additional items.</param>
     /// <param name="cancellationToken">Cancellation token for aborting the operation.</param>
-    /// <returns>A <see cref="Task{TResult}"/> representing the asynchronous operation and containing the command result.</returns>
+    /// <returns>A <see cref="ValueTask{TResult}"/> representing the asynchronous operation and containing the command result.</returns>
 
-    public Task<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct,
+    public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct,
         CommandMediationSettings? commandMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
@@ -69,7 +69,7 @@ public class CommandMediator(
                 new SingleAsyncHandlerMediationStrategy<ICommand<TResult>, TResult>(resultAdapterService));
         }
 
-        var options = new MediateOptions<ICommand<TResult>, Task<TResult>>
+        var options = new MediateOptions<ICommand<TResult>, ValueTask<TResult>>
         {
             MessageResolveStrategy = messageResolveStrategy,
             MessageMediationStrategy = (SingleAsyncHandlerMediationStrategy<ICommand<TResult>, TResult>)mediationStrategy,

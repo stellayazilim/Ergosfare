@@ -30,8 +30,8 @@ public class PreInterceptorTests
 
         // assert
         Assert.NotNull(result);
-        await Assert.IsType<Task<object>>(result);
-        var awaitedResult = await (Task<object>)result;
+        var valueTask = Assert.IsType<ValueTask<object>>(result);
+        var awaitedResult = await valueTask;
         Assert.IsType<StubMessage>(awaitedResult, exactMatch: false );
     }
 }

@@ -17,10 +17,10 @@ public sealed class MessageHandler: IAsyncHandler<Message>
     /// </summary>
     /// <param name="message">The message to handle.</param>
     /// <param name="context">The execution context providing services and metadata.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-    public Task HandleAsync(Message message, IExecutionContext context)
+    /// <returns>A <see cref="ValueTask"/> representing the asynchronous operation.</returns>
+    public ValueTask HandleAsync(Message message, IExecutionContext context)
     {
         Console.WriteLine("Message received");
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 }

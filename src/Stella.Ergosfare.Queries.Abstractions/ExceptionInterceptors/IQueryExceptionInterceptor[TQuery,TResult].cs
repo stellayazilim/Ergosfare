@@ -25,7 +25,7 @@ public interface IQueryExceptionInterceptor<TQuery, TResult>
     where TResult : notnull
 {
     /// <inheritdoc />
-    async Task<object?> IAsyncExceptionInterceptor<TQuery, TResult>.HandleAsync(
+    async ValueTask<object?> IAsyncExceptionInterceptor<TQuery, TResult>.HandleAsync(
         TQuery query, TResult? result, Exception exception, IExecutionContext context)
         => await HandleAsync(query, result, exception, context);
 
@@ -37,8 +37,8 @@ public interface IQueryExceptionInterceptor<TQuery, TResult>
     /// <param name="exception">The exception thrown during pipeline execution.</param>
     /// <param name="context">The current execution context.</param>
     /// <returns>
-    /// A <see cref="Task{TResult}"/> producing the (possibly modified) result that
+    /// A <see cref="ValueTask{TResult}"/> producing the (possibly modified) result that
     /// continues through the pipeline.
     /// </returns>
-    new Task<TResult?> HandleAsync(TQuery query, TResult? result, Exception exception, IExecutionContext context);
+    new ValueTask<TResult?> HandleAsync(TQuery query, TResult? result, Exception exception, IExecutionContext context);
 }

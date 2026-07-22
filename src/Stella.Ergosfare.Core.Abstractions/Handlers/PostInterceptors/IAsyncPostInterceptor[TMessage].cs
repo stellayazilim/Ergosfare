@@ -31,6 +31,6 @@ public interface IAsyncPostInterceptor<in TMessage>
     /// The result produced by the main handler. For messages without a meaningful result, this can be <c>null</c> and should be ignored.
     /// </param>
     /// <param name="context">The current execution context.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-    Task<object> HandleAsync(TMessage message, object _, IExecutionContext context);
+    /// <returns>A <see cref="ValueTask"/> representing the asynchronous operation.</returns>
+    ValueTask<object> HandleAsync(TMessage message, object _, IExecutionContext context);
 }

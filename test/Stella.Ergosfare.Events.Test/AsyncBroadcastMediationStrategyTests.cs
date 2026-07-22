@@ -116,8 +116,7 @@ public class AsyncBroadcastMediationStrategyTests
             .BuildServiceProvider();
         var mediator = services.GetRequiredService<IPublisher>();
         var handler = services.GetRequiredService<StubNonGenericEventHandler1>();
-        var result =  mediator.PublishAsync(new StubNonGenericEvent());
-        Assert.NotNull(result);
+        await mediator.PublishAsync(new StubNonGenericEvent());
     }
 
     /// <summary>

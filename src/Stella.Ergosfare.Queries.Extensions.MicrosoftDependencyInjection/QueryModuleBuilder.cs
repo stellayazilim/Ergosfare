@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Stella.Ergosfare.Core.Abstractions.Registry;
 using Stella.Ergosfare.Queries.Abstractions;
 
@@ -18,7 +19,7 @@ public sealed class QueryModuleBuilder(IMessageRegistry messageRegistry)
     /// </summary>
     /// <typeparam name="TQuery">The query type to register. Must implement <see cref="IQuery"/>.</typeparam>
     /// <returns>The current <see cref="QueryModuleBuilder"/> instance for fluent chaining.</returns>
-    public QueryModuleBuilder Register<TQuery>() where TQuery : IQuery
+    public QueryModuleBuilder Register<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] TQuery>() where TQuery : IQuery
     {
         Register(typeof(TQuery));
         return this;
@@ -30,7 +31,7 @@ public sealed class QueryModuleBuilder(IMessageRegistry messageRegistry)
     /// <param name="queryType">The <see cref="Type"/> of the query to register.</param>
     /// <returns>The current <see cref="QueryModuleBuilder"/> instance for fluent chaining.</returns>
     /// <exception cref="NotSupportedException">Thrown if the type does not implement <see cref="IQuery"/>.</exception>
-    public QueryModuleBuilder Register(Type queryType)
+    public QueryModuleBuilder Register([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type queryType)
     {
         if (!queryType.IsAssignableTo(typeof(IQuery)))    
             throw new NotSupportedException($"The given type '{queryType.Name}' is not a query construct and cannot be registered.");
@@ -45,6 +46,7 @@ public sealed class QueryModuleBuilder(IMessageRegistry messageRegistry)
     /// </summary>
     /// <param name="assembly">The <see cref="Assembly"/> to scan for query types.</param>
     /// <returns>The current <see cref="QueryModuleBuilder"/> instance for fluent chaining.</returns>
+    [RequiresUnreferencedCode("Assembly scanning discovers query types via reflection; trimming may remove them. Register queries explicitly (or use source-generated registration) in trimmed or AOT applications.")]
     public QueryModuleBuilder RegisterFromAssembly(Assembly assembly)
     {
         foreach (var type in assembly.GetTypes().Where(t => t.IsAssignableTo(typeof(IQuery))))
