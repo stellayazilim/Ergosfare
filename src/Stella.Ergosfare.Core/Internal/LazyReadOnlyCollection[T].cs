@@ -39,6 +39,20 @@ public sealed class LazyHandlerCollection<THandler, TDescriptor> :
     public int Count => _list.Count;
 
     /// <summary>
+    /// Returns the first handler in the collection without allocating an enumerator.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when the collection is empty.</exception>
+    public ILazyHandler<THandler, TDescriptor> First()
+    {
+        if (_list.Count == 0)
+        {
+            throw new InvalidOperationException("Sequence contains no elements");
+        }
+
+        return _list[0];
+    }
+
+    /// <summary>
     /// Returns an enumerator that iterates through the collection of lazy handlers.
     /// </summary>
     /// <returns>An enumerator for <see cref="ILazyHandler{THandler, TDescriptor}"/>.</returns>
