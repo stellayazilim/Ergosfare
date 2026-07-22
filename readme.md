@@ -168,8 +168,7 @@ Contributions & feedback are welcome. Open issues, PRs, or start a discussion.
 
 Ergosfare's design — including its public API surface, naming conventions, and module
 architecture — is heavily inspired by [LiteBus](https://github.com/litenova/LiteBus)
-by A. Shafie (MIT licensed). Ergosfare is an independent implementation and shares no
-code with LiteBus, but it would not look the way it does without that prior work.
+by A. Shafie (MIT licensed). 
 
 ## License
 
