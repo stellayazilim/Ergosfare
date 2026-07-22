@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Caching;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
+using Stella.Ergosfare.Core.Internal.Mediator;
 
 namespace Stella.Ergosfare.Core.Internal.Caching;
 
@@ -22,6 +23,13 @@ internal sealed class MessageDescriptorCache
     /// Hot-path cache for resolved dependencies keyed by message type and group set.
     /// </summary>
     private readonly ConcurrentDictionary<GroupedDependenciesKey, IMessageDependencies> _dependenciesByTypeAndGroups = new();
+
+    /// <summary>
+    /// Process-wide cache of provider-independent pipeline shapes (ordered, group-filtered
+    /// descriptor arrays). Scoped dispatches materialize cheap lazy wrappers over these.
+    /// </summary>
+    private readonly ConcurrentDictionary<Type, MessagePipelineShape> _shapesByType = new();
+    private readonly ConcurrentDictionary<GroupedDependenciesKey, MessagePipelineShape> _shapesByTypeAndGroups = new();
 
     private int _registryVersion = -1;
 
@@ -52,6 +60,8 @@ internal sealed class MessageDescriptorCache
         _strategy.Clear();
         _dependenciesByType.Clear();
         _dependenciesByTypeAndGroups.Clear();
+        _shapesByType.Clear();
+        _shapesByTypeAndGroups.Clear();
     }
 
     public void Evict(string key) => _strategy.Evict(key);
@@ -71,7 +81,35 @@ internal sealed class MessageDescriptorCache
 
         _dependenciesByType.Clear();
         _dependenciesByTypeAndGroups.Clear();
+        _shapesByType.Clear();
+        _shapesByTypeAndGroups.Clear();
         Volatile.Write(ref _registryVersion, registryVersion);
+    }
+
+    /// <summary>
+    /// Returns the cached provider-independent pipeline shape for the message type and
+    /// group set, building it from the descriptor on first use.
+    /// </summary>
+    public MessagePipelineShape GetOrAddShape(Type messageType, string[] groups, IMessageDescriptor descriptor)
+    {
+        if (groups.Length == 0)
+        {
+            if (_shapesByType.TryGetValue(messageType, out var shape))
+            {
+                return shape;
+            }
+
+            return _shapesByType.GetOrAdd(messageType, MessagePipelineShape.Create(descriptor, groups));
+        }
+
+        var key = new GroupedDependenciesKey(messageType, groups);
+
+        if (_shapesByTypeAndGroups.TryGetValue(key, out var groupedShape))
+        {
+            return groupedShape;
+        }
+
+        return _shapesByTypeAndGroups.GetOrAdd(key, MessagePipelineShape.Create(descriptor, groups));
     }
 
     public bool TryGetDependencies(Type messageType, string[] groups, out IMessageDependencies? dependencies)

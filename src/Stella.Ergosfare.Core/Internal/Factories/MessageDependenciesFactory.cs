@@ -110,9 +110,11 @@ public sealed class MessageDependenciesFactory : IMessageDependenciesFactory
                     return scoped;
                 }
 
-                // Building dependencies runs no user code (handlers stay lazy), so it is
-                // safe and simplest to build inside the lock.
-                var dependencies = new MessageDependencies(messageType, descriptor, _serviceProvider, groupsArray);
+                // The heavy part (ordering/filtering) comes from the process-wide shape
+                // cache; only cheap lazy wrappers are materialized per scope. Building
+                // runs no user code (handlers stay lazy), so it happens inside the lock.
+                var shape = cache.GetOrAddShape(messageType, groupsArray, descriptor);
+                var dependencies = new MessageDependencies(messageType, shape, _serviceProvider);
                 (_scopedDependenciesByType ??= new Dictionary<Type, IMessageDependencies>())[messageType] = dependencies;
 
                 return dependencies;
@@ -128,7 +130,8 @@ public sealed class MessageDependenciesFactory : IMessageDependenciesFactory
                 return scopedGrouped;
             }
 
-            var groupedDependencies = new MessageDependencies(messageType, descriptor, _serviceProvider, groupsArray);
+            var groupedShape = cache.GetOrAddShape(messageType, groupsArray, descriptor);
+            var groupedDependencies = new MessageDependencies(messageType, groupedShape, _serviceProvider);
             (_scopedDependenciesByTypeAndGroups ??= new Dictionary<GroupedDependenciesKey, IMessageDependencies>())[key] = groupedDependencies;
 
             return groupedDependencies;

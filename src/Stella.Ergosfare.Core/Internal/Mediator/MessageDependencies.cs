@@ -1,8 +1,7 @@
-﻿using Stella.Ergosfare.Contracts.Attributes;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
-using Stella.Ergosfare.Core.Internal.Extensions;
+using Stella.Ergosfare.Core.Internal;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Core.Internal.Mediator;
@@ -13,70 +12,71 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// including pre/post interceptors, main handlers, exception interceptors, and final interceptors.
 /// </summary>
 /// <remarks>
-/// This class resolves handlers using an <see cref="IServiceProvider"/> and 
-/// filters them by the specified groups. Handlers are returned as lazy collections to avoid
-/// unnecessary instantiation until they are required for mediation.
+/// This class resolves handlers using an <see cref="IServiceProvider"/>.
+/// Group filtering and ordering live in the cached <see cref="MessagePipelineShape"/>;
+/// this class only materializes lazy wrappers over the shape's descriptor arrays, so
+/// per-scope construction stays cheap. Handlers are returned as lazy collections to
+/// avoid unnecessary instantiation until they are required for mediation.
 /// </remarks>
 internal sealed class MessageDependencies : IMessageDependencies
 {
     private readonly Type _messageType;
-    
-    private readonly IEnumerable<string> _groups;
-    
-    
+
+
     /// <summary>
     /// Gets the lazy collection of pre-interceptors for the message.
     /// </summary>
     public ILazyHandlerCollection<IPreInterceptor, IPreInterceptorDescriptor> PreInterceptors { get; }
-    
+
     /// <summary>
     /// Gets the lazy collection of indirect pre-interceptors for the message.
     /// </summary>
     public ILazyHandlerCollection<IPreInterceptor, IPreInterceptorDescriptor> IndirectPreInterceptors { get; }
-    
+
     /// <summary>
     /// Gets the lazy collection of main handlers for the message.
     /// </summary>
     public ILazyHandlerCollection<IHandler, IMainHandlerDescriptor> Handlers { get; }
-    
+
     /// <summary>
     /// Gets the lazy collection of indirect main handlers for the message.
     /// </summary>
     public ILazyHandlerCollection<IHandler, IMainHandlerDescriptor> IndirectHandlers { get; }
-    
+
     /// <summary>
     /// Gets the lazy collection of post-interceptors for the message.
     /// </summary>
     public ILazyHandlerCollection<IPostInterceptor, IPostInterceptorDescriptor> PostInterceptors { get; }
-    
+
     /// <summary>
     /// Gets the lazy collection of indirect post-interceptors for the message.
     /// </summary>
     public ILazyHandlerCollection<IPostInterceptor, IPostInterceptorDescriptor> IndirectPostInterceptors { get; }
-  
+
     /// <summary>
     /// Gets the lazy collection of exception interceptors for the message.
     /// </summary>
     public ILazyHandlerCollection<IExceptionInterceptor, IExceptionInterceptorDescriptor> ExceptionInterceptors { get; }
-    
+
     /// <summary>
     /// Gets the lazy collection of indirect exception interceptors for the message.
     /// </summary>
     public ILazyHandlerCollection<IExceptionInterceptor, IExceptionInterceptorDescriptor> IndirectExceptionInterceptors { get; }
-    
+
     /// <summary>
     /// Gets the lazy collection of final interceptors for the message.
     /// </summary>
     public ILazyHandlerCollection<IFinalInterceptor, IFinalInterceptorDescriptor> FinalInterceptors { get; }
-    
+
     /// <summary>
     /// Gets the lazy collection of indirect final interceptors for the message.
     /// </summary>
     public ILazyHandlerCollection<IFinalInterceptor, IFinalInterceptorDescriptor> IndirectFinalInterceptors { get; }
-  
+
     /// <summary>
     /// Initializes a new instance of <see cref="MessageDependencies"/> for the given message type,
-    /// descriptor, service provider, and groups.
+    /// descriptor, service provider, and groups. Builds a pipeline shape on the fly; prefer the
+    /// shape-based constructor with a cached shape on hot paths.
     /// </summary>
     /// <param name="messageType">The type of the message for which dependencies are resolved.</param>
     /// <param name="descriptor">The message descriptor providing handler metadata.</param>
@@ -86,59 +86,34 @@ internal sealed class MessageDependencies : IMessageDependencies
         IMessageDescriptor descriptor,
         IServiceProvider serviceProvider,
         IEnumerable<string> groups)
+        : this(messageType, MessagePipelineShape.Create(descriptor, groups), serviceProvider)
     {
-        _messageType = messageType;
-        
-        var groupNames = groups.ToList();
-        _groups = groupNames.Count == 0 ? [ GroupAttribute.DefaultGroupName ]: groupNames;
-
-        // resolve pre-interceptors
-        PreInterceptors = ResolveHandlers(
-            descriptor.PreInterceptors, 
-            handlerType => (IPreInterceptor) serviceProvider.GetRequiredService(handlerType));
-        
-        // resolve indirect pre-interceptors
-        IndirectPreInterceptors = ResolveHandlers(
-            descriptor.IndirectPreInterceptors, 
-            handlerType => (IPreInterceptor) serviceProvider.GetRequiredService(handlerType));
-        
-        // resolve main handlers
-        Handlers = ResolveHandlers(descriptor.Handlers, handlerType => (IHandler) serviceProvider.GetRequiredService(handlerType));
-        
-        // resolve indirect main handlers
-        IndirectHandlers = ResolveHandlers(descriptor.IndirectHandlers, handlerType => (IHandler) serviceProvider.GetRequiredService(handlerType));
-
-        // resolve post-interceptors
-        PostInterceptors = ResolveHandlers(
-            descriptor.PostInterceptors,
-            handlerType => (IPostInterceptor)  serviceProvider.GetRequiredService(handlerType));
-        // resolve indirect post-interceptors
-        IndirectPostInterceptors = ResolveHandlers(
-            descriptor.IndirectPostInterceptors,
-            handlerType => (IPostInterceptor)  serviceProvider.GetRequiredService(handlerType));
-        
-        // resolve exception-interceptors
-        ExceptionInterceptors = ResolveHandlers(
-            descriptor.ExceptionInterceptors,
-            handlerType => (IExceptionInterceptor)  serviceProvider.GetRequiredService(handlerType)
-            );
-        // resolve indirect exception-interceptors
-        IndirectExceptionInterceptors = ResolveHandlers(
-            descriptor.IndirectExceptionInterceptors,
-            handlerType => (IExceptionInterceptor)  serviceProvider.GetRequiredService(handlerType));
-        
-        // resolve final-interceptors
-        FinalInterceptors = ResolveHandlers(
-            descriptor.FinalInterceptors,
-            handlerType => (IFinalInterceptor)  serviceProvider.GetRequiredService(handlerType));
-        
-        // resolve indirect final-interceptors
-        IndirectFinalInterceptors = ResolveHandlers(
-            descriptor.IndirectFinalInterceptors,
-            handlerType => (IFinalInterceptor)  serviceProvider.GetRequiredService(handlerType));
     }
 
-    
+    /// <summary>
+    /// Initializes a new instance from a (cached) pipeline shape, materializing only the
+    /// lazy handler wrappers bound to the given provider.
+    /// </summary>
+    /// <param name="messageType">The type of the message for which dependencies are resolved.</param>
+    /// <param name="shape">The ordered, group-filtered pipeline shape.</param>
+    /// <param name="serviceProvider">The service provider used to resolve handler instances.</param>
+    public MessageDependencies(Type messageType, MessagePipelineShape shape, IServiceProvider serviceProvider)
+    {
+        _messageType = messageType;
+
+        Handlers = Materialize<IHandler, IMainHandlerDescriptor>(shape.Handlers, serviceProvider);
+        IndirectHandlers = Materialize<IHandler, IMainHandlerDescriptor>(shape.IndirectHandlers, serviceProvider);
+        PreInterceptors = Materialize<IPreInterceptor, IPreInterceptorDescriptor>(shape.PreInterceptors, serviceProvider);
+        IndirectPreInterceptors = Materialize<IPreInterceptor, IPreInterceptorDescriptor>(shape.IndirectPreInterceptors, serviceProvider);
+        PostInterceptors = Materialize<IPostInterceptor, IPostInterceptorDescriptor>(shape.PostInterceptors, serviceProvider);
+        IndirectPostInterceptors = Materialize<IPostInterceptor, IPostInterceptorDescriptor>(shape.IndirectPostInterceptors, serviceProvider);
+        ExceptionInterceptors = Materialize<IExceptionInterceptor, IExceptionInterceptorDescriptor>(shape.ExceptionInterceptors, serviceProvider);
+        IndirectExceptionInterceptors = Materialize<IExceptionInterceptor, IExceptionInterceptorDescriptor>(shape.IndirectExceptionInterceptors, serviceProvider);
+        FinalInterceptors = Materialize<IFinalInterceptor, IFinalInterceptorDescriptor>(shape.FinalInterceptors, serviceProvider);
+        IndirectFinalInterceptors = Materialize<IFinalInterceptor, IFinalInterceptorDescriptor>(shape.IndirectFinalInterceptors, serviceProvider);
+    }
+
+
     /// <summary>
     /// Shared empty collection per closed generic, so empty pipeline stages cost nothing
     /// to build — important when dependencies are constructed per scope.
@@ -150,32 +125,31 @@ internal sealed class MessageDependencies : IMessageDependencies
     }
 
     /// <summary>
-    /// Resolves a lazy collection of handlers filtered by group and ordered by weight and type name.
+    /// Wraps the shape's descriptor array in lazily-resolving handler entries bound to the
+    /// given provider.
     /// </summary>
-    /// <typeparam name="THandler">The handler type.</typeparam>
-    /// <typeparam name="TDescriptor">The descriptor type.</typeparam>
-    /// <param name="descriptors">The descriptors to resolve.</param>
-    /// <param name="resolveFunc">The function to create handler instances from a type.</param>
-    /// <returns>A lazy read-only collection of handlers and their descriptors.</returns>
-    private ILazyHandlerCollection<THandler, TDescriptor> ResolveHandlers<THandler, TDescriptor>(
-            IEnumerable<TDescriptor> descriptors,
-            Func<Type, THandler> resolveFunc ) where TDescriptor : IHandlerDescriptor
+    private ILazyHandlerCollection<THandler, TDescriptor> Materialize<THandler, TDescriptor>(
+        TDescriptor[] descriptors,
+        IServiceProvider serviceProvider) where TDescriptor : IHandlerDescriptor
     {
-        if (descriptors is IReadOnlyCollection<TDescriptor> { Count: 0 })
+        if (descriptors.Length == 0)
         {
             return EmptyLazyHandlers<THandler, TDescriptor>.Instance;
         }
 
-        return descriptors
-            .OrderByDescending(d => d.Weight)
-            .ThenBy(d => d.HandlerType.FullName, StringComparer.Ordinal)
-            .Where(d => d.Groups.Intersect(_groups).Any())
-            .Select<TDescriptor, ILazyHandler<THandler, TDescriptor>>(d => new LazyHandler<THandler, TDescriptor>
+        var lazyHandlers = new ILazyHandler<THandler, TDescriptor>[descriptors.Length];
+
+        for (var i = 0; i < descriptors.Length; i++)
+        {
+            var descriptor = descriptors[i];
+            lazyHandlers[i] = new LazyHandler<THandler, TDescriptor>
             {
-                Handler = new Lazy<THandler>(() => resolveFunc(GetHandlerType(d))),
-                Descriptor = d
-            })
-            .ToLazyReadOnlyCollection<THandler, TDescriptor>();
+                Handler = new Lazy<THandler>(() => (THandler) serviceProvider.GetRequiredService(GetHandlerType(descriptor))),
+                Descriptor = descriptor
+            };
+        }
+
+        return new LazyHandlerCollection<THandler, TDescriptor>(lazyHandlers);
     }
 
     /// <summary>
