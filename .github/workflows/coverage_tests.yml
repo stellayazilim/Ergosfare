@@ -68,8 +68,16 @@ jobs:
         with:
           branch-name: badges
 
+      # 0.5.0 is the node24-native build; 0.3.1's node20 bundle crashed once GitHub
+      # started forcing Node 24. The file-name/badge-branch/github-token inputs are
+      # consumed by the action even though its action.yml does not declare them — the
+      # runner's "unexpected input" warning is cosmetic, but omitting github-token
+      # makes the badge upload crash.
       - name: Generate coverage badge
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: action-badges/cobertura-coverage-xml-badges@0.3.1
+        uses: action-badges/cobertura-coverage-xml-badges@0.5.0
         with:
           coverage-file-name: ./.coverage/Cobertura.xml
+          file-name: coverage.svg
+          badge-branch: badges
+          github-token: ${{ secrets.GITHUB_TOKEN }}
