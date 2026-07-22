@@ -55,7 +55,7 @@ jobs:
           git fetch origin main --quiet
           git fetch origin preview --quiet || true
           if [[ "$VERSION" == *-* ]]; then
-            # Pre-release (-preview.N / -rc.N) tags must come from the preview line.
+            # Pre-release (-preview.N) tags must come from the preview line.
             if git rev-parse --verify --quiet origin/preview > /dev/null; then
               git merge-base --is-ancestor HEAD origin/preview \
                 || { echo "❌ Pre-release tags must point at commits on the preview branch"; exit 1; }
