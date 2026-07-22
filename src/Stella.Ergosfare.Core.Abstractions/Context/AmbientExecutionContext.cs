@@ -8,14 +8,28 @@ namespace Stella.Ergosfare.Core.Abstractions;
 /// <summary>
 /// Provides access to the ambient <see cref="IExecutionContext"/> for the current asynchronous control flow.
 /// </summary>
+/// <remarks>
+/// Ambient publication is opt-in and disabled by default: the execution context is passed to every
+/// handler and interceptor as a parameter, which is the supported way to access it. Enable ambient
+/// access via <c>EnableAmbientExecutionContext()</c> during registration only when a component that
+/// cannot receive the parameter (e.g. a constructor-injected service) needs it.
+/// </remarks>
+[Obsolete("Ambient execution context is deprecated and disabled by default; use the IExecutionContext parameter passed to handlers and interceptors instead. Opt in via EnableAmbientExecutionContext() during registration if constructor-injected access is required. This API will be removed in a future major version.")]
 public static class AmbientExecutionContext
 {
-    
+
     /// <summary>
     /// Stores the <see cref="IExecutionContext"/> for the current asynchronous control flow.
     /// This ensures that the execution context flows correctly across async/await boundaries.
     /// </summary>
     private static readonly AsyncLocal<IExecutionContext> ExecutionContextLocal = new ();
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the mediation pipeline publishes the execution
+    /// context ambiently. Disabled by default; enabling it adds an <see cref="AsyncLocal{T}"/>
+    /// write to every dispatch.
+    /// </summary>
+    public static bool IsEnabled { get; set; }
     
     
     /// <summary>
@@ -32,7 +46,8 @@ public static class AmbientExecutionContext
     
     public static IExecutionContext Current
     {
-        get => ExecutionContextLocal.Value ?? throw new NoExecutionContextException();
+        get => ExecutionContextLocal.Value ?? throw new NoExecutionContextException(
+            "No execution context is set. Ambient execution context is opt-in; call EnableAmbientExecutionContext() during AddErgosfare registration, or use the IExecutionContext parameter passed to handlers and interceptors.");
         set => ExecutionContextLocal.Value = value;
     }
     

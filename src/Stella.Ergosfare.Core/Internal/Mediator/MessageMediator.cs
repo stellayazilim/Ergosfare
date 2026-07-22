@@ -66,12 +66,20 @@ internal sealed class MessageMediator(
         ArgumentNullException.ThrowIfNull(options);
 
 
-        // Publish the execution context ambiently for the duration of the dispatch,
-        // restoring the previous one afterwards (same semantics as CreateScope,
-        // without allocating a scope object).
+        // Ambient publication is opt-in (deprecated): when enabled, publish the execution
+        // context for the duration of the dispatch and restore the previous one afterwards
+        // (same semantics as CreateScope, without allocating a scope object).
         var context = new ErgosfareExecutionContext(options.Items, options.CancellationToken);
-        var previousContext = AmbientExecutionContext.GetCurrentOrDefault();
-        AmbientExecutionContext.Current = context;
+#pragma warning disable CS0618 // ambient context is deprecated but supported until removal
+        var ambientEnabled = AmbientExecutionContext.IsEnabled;
+        IExecutionContext? previousContext = null;
+
+        if (ambientEnabled)
+        {
+            previousContext = AmbientExecutionContext.GetCurrentOrDefault();
+            AmbientExecutionContext.Current = context;
+        }
+#pragma warning restore CS0618
 
         try
         {
@@ -107,7 +115,12 @@ internal sealed class MessageMediator(
         }
         finally
         {
-            AmbientExecutionContext.Current = previousContext!;
+            if (ambientEnabled)
+            {
+#pragma warning disable CS0618 // ambient context is deprecated but supported until removal
+                AmbientExecutionContext.Current = previousContext!;
+#pragma warning restore CS0618
+            }
         }
     }
 }

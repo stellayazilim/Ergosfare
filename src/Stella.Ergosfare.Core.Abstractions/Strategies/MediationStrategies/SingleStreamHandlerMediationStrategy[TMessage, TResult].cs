@@ -51,7 +51,14 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
             throw new MultipleHandlerFoundException(typeof(TMessage), messageDependencies.Handlers.Count);
         }
         
-        AmbientExecutionContext.Current = context;
+#pragma warning disable CS0618 // ambient context is deprecated but supported until removal
+        // Stream enumeration happens outside the mediator's dispatch window, so when ambient
+        // access is enabled the context is re-published for the enumeration flow.
+        if (AmbientExecutionContext.IsEnabled)
+        {
+            AmbientExecutionContext.Current = context;
+        }
+#pragma warning restore CS0618
         var handler = messageDependencies
             .Handlers
             .Single()

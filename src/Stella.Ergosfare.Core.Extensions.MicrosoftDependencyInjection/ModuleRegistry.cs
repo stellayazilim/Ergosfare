@@ -56,7 +56,9 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
         services.TryAddSingleton<MessageDescriptorCache>();
        
         services.TryAddSingleton(messageRegistry);
+#pragma warning disable CS0618 // ambient context is deprecated; resolving IExecutionContext from DI requires EnableAmbientExecutionContext()
         services.TryAddTransient(_ => AmbientExecutionContext.Current);
+#pragma warning restore CS0618
         services.TryAddSingleton<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>();
         foreach (var descriptor in messageRegistry)
         {
