@@ -9,32 +9,35 @@ namespace Stella.Ergosfare.Core.Abstractions.Invokers;
 /// </summary>
 internal abstract class AbstractInvoker(
     IMessageDependencies messageDependencies,
-    IResultAdapterService? resultAdapterService)
+    IResultAdapterService? resultAdapterService,
+    IServiceProvider serviceProvider)
 {
     protected IResultAdapterService? ResultAdapterService => resultAdapterService;
+
     /// <summary>
-    /// Gets the total number of pre-interceptors (direct + indirect) for the associated message.
+    /// The provider of the scope the current dispatch runs in; handler references
+    /// resolve their instances from it at invocation time.
     /// </summary>
-    protected ushort PreInterceptorCount = (ushort)(
-        messageDependencies.PreInterceptors.Count + messageDependencies.IndirectPreInterceptors.Count);
-    
+    protected IServiceProvider ServiceProvider { get; } = serviceProvider;
     /// <summary>
-    /// Gets the total number of post-interceptors (direct + indirect) for the associated message.
+    /// Gets the total number of pre-interceptors (direct and indirect are merged) for the associated message.
     /// </summary>
-    protected ushort PostInterceptorCount =  (ushort)(
-        messageDependencies.PostInterceptors.Count + messageDependencies.IndirectPostInterceptors.Count);
-    
+    protected ushort PreInterceptorCount = (ushort) messageDependencies.PreInterceptors.Count;
+
     /// <summary>
-    /// Gets the total number of exception interceptors (direct + indirect) for the associated message.
+    /// Gets the total number of post-interceptors (direct and indirect are merged) for the associated message.
     /// </summary>
-    protected ushort ExceptionInterceptorCount =  (ushort)(
-        messageDependencies.ExceptionInterceptors.Count + messageDependencies.IndirectExceptionInterceptors.Count);
-    
+    protected ushort PostInterceptorCount = (ushort) messageDependencies.PostInterceptors.Count;
+
     /// <summary>
-    /// Gets the total number of final interceptors (direct + indirect) for the associated message.
+    /// Gets the total number of exception interceptors (direct and indirect are merged) for the associated message.
     /// </summary>
-    protected ushort FinalInterceptorCount =  (ushort)(
-        messageDependencies.FinalInterceptors.Count + messageDependencies.IndirectFinalInterceptors.Count);
+    protected ushort ExceptionInterceptorCount = (ushort) messageDependencies.ExceptionInterceptors.Count;
+
+    /// <summary>
+    /// Gets the total number of final interceptors (direct and indirect are merged) for the associated message.
+    /// </summary>
+    protected ushort FinalInterceptorCount = (ushort) messageDependencies.FinalInterceptors.Count;
     
     /// <summary>
     /// Awaits a result returned by an interceptor, handling both synchronous and asynchronous cases.

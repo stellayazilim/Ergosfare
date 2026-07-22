@@ -9,8 +9,9 @@ namespace Stella.Ergosfare.Core.Abstractions.Invokers;
 /// </remarks>
 internal abstract class MainInvoker(
     IMessageDependencies messageDependencies,
-    IResultAdapterService resultAdapterService) 
-    : AbstractInvoker(messageDependencies, resultAdapterService)
+    IResultAdapterService resultAdapterService,
+    IServiceProvider serviceProvider)
+    : AbstractInvoker(messageDependencies, resultAdapterService, serviceProvider)
 {
     /// <summary>
     /// Invokes the main handlers for the specified <paramref name="message"/> 

@@ -40,7 +40,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
     ///     If an exception occurs during any stage, the appropriate error handlers are executed.
     ///     If a <see cref="ExecutionAbortedException" /> is caught, the mediation process is aborted without error.
     /// </remarks>
-    public async Task Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context)
+    public async Task Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context, IServiceProvider serviceProvider)
     {
         if (messageDependencies is null)
         {
@@ -52,23 +52,22 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             throw new MultipleHandlerFoundException(typeof(TMessage), messageDependencies.Handlers.Count);
         }
 
-        var preInterceptorCount = messageDependencies.PreInterceptors.Count + messageDependencies.IndirectPreInterceptors.Count;
-        var postInterceptorCount = messageDependencies.PostInterceptors.Count + messageDependencies.IndirectPostInterceptors.Count;
-        var exceptionInterceptorCount = messageDependencies.ExceptionInterceptors.Count + messageDependencies.IndirectExceptionInterceptors.Count;
-        var finalInterceptorCount = messageDependencies.FinalInterceptors.Count + messageDependencies.IndirectFinalInterceptors.Count;
+        if (messageDependencies.Handlers.Count == 0)
+        {
+            throw new InvalidOperationException($"No handler is registered for {typeof(TMessage).Name}.");
+        }
+
+        var preInterceptorCount = messageDependencies.PreInterceptors.Count;
+        var postInterceptorCount = messageDependencies.PostInterceptors.Count;
+        var exceptionInterceptorCount = messageDependencies.ExceptionInterceptors.Count;
+        var finalInterceptorCount = messageDependencies.FinalInterceptors.Count;
 
         // Fast path: with no interceptors registered, none of the invocation strategies can
         // observe or transform anything — invoke the handler directly. Exceptions propagate
         // unchanged, matching the zero-interceptor rethrow behavior of the full pipeline.
         if ((preInterceptorCount | postInterceptorCount | exceptionInterceptorCount | finalInterceptorCount) == 0)
         {
-            var fastHandler = messageDependencies.Handlers.First().Handler.Value;
-
-            if (fastHandler is null)
-            {
-                throw new InvalidOperationException(
-                    $"Handler for {typeof(TMessage).Name} is not of the expected type.");
-            }
+            var fastHandler = messageDependencies.Handlers[0].Resolve(serviceProvider);
 
             var fastResult = (Task)fastHandler.Handle(message, context);
             await fastResult;
@@ -89,17 +88,11 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
         {
             if (preInterceptorCount > 0)
             {
-                var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
+                var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
                 message = (TMessage) await preInvoker.Invoke(message, context);
             }
 
-            var handler = messageDependencies.Handlers.First().Handler.Value;
-
-            if (handler is null)
-            {
-                throw new InvalidOperationException(
-                    $"Handler for {typeof(TMessage).Name} is not of the expected type.");
-            }
+            var handler = messageDependencies.Handlers[0].Resolve(serviceProvider);
 
             result =  (Task)handler.Handle(message, context);
             await result;
@@ -113,7 +106,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
 
             if (postInterceptorCount > 0)
             {
-                var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
+                var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
                 var invokedPostResult =  (Task?) await postInvoker.Invoke(message, result, context);
                 result = invokedPostResult ?? result;
             }
@@ -127,7 +120,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
                 throw;
             }
 
-            var exceptionInvoker = new TaskExceptionInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
+            var exceptionInvoker = new TaskExceptionInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
             var invokedResult = (Task?) await exceptionInvoker.Invoke(message, result, ExceptionDispatchInfo.Capture(e),
                 context);
             result = invokedResult ?? result;
@@ -137,7 +130,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
         {
             if (finalInterceptorCount > 0)
             {
-                var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
+                var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
                 await finalInvoker.Invoke(message, result, exception, context);
             }
         }

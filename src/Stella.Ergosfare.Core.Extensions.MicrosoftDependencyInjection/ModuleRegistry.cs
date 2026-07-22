@@ -58,9 +58,11 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
         {
             module.Build(moduleConfiguration);
         }
-        // Scoped so that per-dispatch handler resolution binds to the calling scope's
-        // provider; the memoized fast path uses RootServiceProviderAccessor instead.
-        services.TryAddScoped<IMessageDependenciesFactory, MessageDependenciesFactory>();
+        // The factory and its dependency graphs are provider-independent and cached
+        // process-wide; handler instances resolve per invocation from the execution
+        // context's provider. The mediator stays scoped only to capture the calling
+        // scope's provider into that context — it is a thin, cheap wrapper.
+        services.TryAddSingleton<IMessageDependenciesFactory, MessageDependenciesFactory>();
         services.TryAddScoped<IMessageMediator, MessageMediator>();
         services.TryAddSingleton<IDescriptorCacheStrategy, LruCacheStrategy>();
         services.TryAddSingleton<MessageDescriptorCache>();

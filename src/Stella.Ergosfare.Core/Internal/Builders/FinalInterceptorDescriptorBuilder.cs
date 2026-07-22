@@ -13,7 +13,7 @@ namespace Stella.Ergosfare.Core.Internal.Builders;
 /// Handles types that implement <see cref="IFinalInterceptor"/> interfaces,
 /// extracting metadata such as weight, groups, message type, and result type.
 /// </summary>
-public class FinalInterceptorDescriptorBuilder: IHandlerDescriptorBuilder
+internal sealed class FinalInterceptorDescriptorBuilder: IHandlerDescriptorBuilder
 {
     
     /// <summary>

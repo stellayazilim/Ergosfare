@@ -14,7 +14,7 @@ namespace Stella.Ergosfare.Core.Internal.Factories;
 /// and final interceptors. It can build all applicable descriptors for a given type
 /// and supports both synchronous and asynchronous disposal.
 /// </remarks>
-public class HandlerDescriptorBuilderFactory : IDisposable, IAsyncDisposable
+internal class HandlerDescriptorBuilderFactory : IDisposable, IAsyncDisposable
 {
     /// <summary>
     /// Internal list of descriptor builders used by this factory.

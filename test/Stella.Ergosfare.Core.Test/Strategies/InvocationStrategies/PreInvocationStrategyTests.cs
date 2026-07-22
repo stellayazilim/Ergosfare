@@ -29,7 +29,7 @@ public class PreInvocationStrategyTests:
         var resultAdapterService = _resultAdapterFixture.ResultAdapterService;
 
         // Act
-        var strategy = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService);
+        var strategy = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService, _messageDependencyFixture.ServiceProvider);
 
         // Use reflection to access the protected property
         var property = typeof(AbstractInvoker)

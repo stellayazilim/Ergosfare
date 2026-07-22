@@ -10,7 +10,7 @@ namespace Stella.Ergosfare.Core.Internal.Builders;
 /// <summary>
 /// Builds <see cref="ExceptionInterceptorDescriptor"/> instances for types implementing <see cref="IExceptionInterceptor"/>.
 /// </summary>
-public class ExceptionInterceptorDescriptorBuilder: IHandlerDescriptorBuilder
+internal sealed class ExceptionInterceptorDescriptorBuilder: IHandlerDescriptorBuilder
 {
     /// <summary>
     /// Determines whether the specified type implements <see cref="IExceptionInterceptor"/>.

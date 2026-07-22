@@ -65,7 +65,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests:
         Assert.NotEmpty(dependencies.Handlers);
        // act
        var nonExceptionAsync = await Record.ExceptionAsync( async () => 
-           await mediationStrategy.Mediate(message, dependencies, _executionContextFixture.Ctx));
+           await mediationStrategy.Mediate(message, dependencies, _executionContextFixture.Ctx, _messageDependencyFixture.ServiceProvider));
         
        // assert
       Assert.Null(nonExceptionAsync);
@@ -99,7 +99,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests:
         
         // act
         var multipleHandlerExceptionAsync = await Record.ExceptionAsync( async () => 
-            await mediationStrategy.Mediate(message, dependencies, _executionContextFixture.Ctx));
+            await mediationStrategy.Mediate(message, dependencies, _executionContextFixture.Ctx, _messageDependencyFixture.ServiceProvider));
 
         Assert.NotNull(multipleHandlerExceptionAsync);
         Assert.IsType<MultipleHandlerFoundException>(multipleHandlerExceptionAsync);
@@ -132,7 +132,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests:
         
 
         // Act
-        await mediationStrategy.Mediate(message, dependencies, _executionContextFixture.Ctx);
+        await mediationStrategy.Mediate(message, dependencies, _executionContextFixture.Ctx, _messageDependencyFixture.ServiceProvider);
 
         // Assert
         // Final interceptor ran (ensures finally executed)
@@ -140,7 +140,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests:
 
         // Optional: verify the exception interceptor ran
         var executedTypes = dependencies.ExceptionInterceptors
-            .Select(x => x.Handler.Value.GetType())
+            .Select(x => x.HandlerType)
             .ToList();
 
         Assert.Contains(typeof(StubVoidAsyncExceptionInterceptor), executedTypes);

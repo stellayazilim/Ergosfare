@@ -99,7 +99,7 @@ internal sealed class MessageDescriptorCache
                 return shape;
             }
 
-            return _shapesByType.GetOrAdd(messageType, MessagePipelineShape.Create(descriptor, groups));
+            return _shapesByType.GetOrAdd(messageType, MessagePipelineShape.Create(messageType, descriptor, groups));
         }
 
         var key = new GroupedDependenciesKey(messageType, groups);
@@ -109,7 +109,7 @@ internal sealed class MessageDescriptorCache
             return groupedShape;
         }
 
-        return _shapesByTypeAndGroups.GetOrAdd(key, MessagePipelineShape.Create(descriptor, groups));
+        return _shapesByTypeAndGroups.GetOrAdd(key, MessagePipelineShape.Create(messageType, descriptor, groups));
     }
 
     public bool TryGetDependencies(Type messageType, string[] groups, out IMessageDependencies? dependencies)

@@ -157,11 +157,11 @@ public class MessageDependenciesTest:
             messageDescriptor,
             serviceProvider, [GroupAttribute.DefaultGroupName]);
         // Assert: should be StubGenericHandler<string>
-        Assert.Equal(typeof(VoidStubGenericHandler<string>), dependencies.Handlers.First().Handler.Value.GetType());
-        Assert.Equal(typeof(VoidStubGenericPreInterceptor<string>), dependencies.PreInterceptors.First().Handler.Value.GetType());
-        Assert.Equal(typeof(VoidStubGenericPostInterceptor<string>), dependencies.PostInterceptors.First().Handler.Value.GetType());
-        Assert.Equal(typeof(VoidStubGenericExceptionInterceptor<string>),  dependencies.ExceptionInterceptors.First().Handler.Value.GetType());
-        Assert.Equal(typeof(VoidStubGenericFinalInterceptor<string>),  dependencies.FinalInterceptors.First().Handler.Value.GetType());
+        Assert.Equal(typeof(VoidStubGenericHandler<string>), dependencies.Handlers[0].Resolve(serviceProvider).GetType());
+        Assert.Equal(typeof(VoidStubGenericPreInterceptor<string>), dependencies.PreInterceptors[0].Resolve(serviceProvider).GetType());
+        Assert.Equal(typeof(VoidStubGenericPostInterceptor<string>), dependencies.PostInterceptors[0].Resolve(serviceProvider).GetType());
+        Assert.Equal(typeof(VoidStubGenericExceptionInterceptor<string>),  dependencies.ExceptionInterceptors[0].Resolve(serviceProvider).GetType());
+        Assert.Equal(typeof(VoidStubGenericFinalInterceptor<string>),  dependencies.FinalInterceptors[0].Resolve(serviceProvider).GetType());
      }
      
     /// <summary>
@@ -236,11 +236,12 @@ public class MessageDependenciesTest:
              [GroupAttribute.DefaultGroupName]);
          Assert.True(messageType.IsAssignableTo(handlerDescriptor.MessageType));
          Assert.Equal(typeof(StubIndirectMessage),messageDescriptor.MessageType);
-         Assert.Equal(typeof(StubVoidHandler), dependencies.IndirectHandlers.First().Handler.Value.GetType());
-         Assert.Equal(typeof(StubPreInterceptor), dependencies.IndirectPreInterceptors.First().Handler.Value.GetType());
-         Assert.Equal(typeof(StubPostInterceptor), dependencies.IndirectPostInterceptors.First().Handler.Value.GetType());
-         Assert.Equal(typeof(StubExceptionInterceptor), dependencies.IndirectExceptionInterceptors.First().Handler.Value.GetType());
-         Assert.Equal(typeof(StubFinalInterceptor), dependencies.IndirectFinalInterceptors.First().Handler.Value.GetType());
+         Assert.Equal(typeof(StubVoidHandler), dependencies.IndirectHandlers[0].Resolve(serviceProvider).GetType());
+         // Indirect interceptors are merged into the single per-stage lists.
+         Assert.Equal(typeof(StubPreInterceptor), dependencies.PreInterceptors[0].Resolve(serviceProvider).GetType());
+         Assert.Equal(typeof(StubPostInterceptor), dependencies.PostInterceptors[0].Resolve(serviceProvider).GetType());
+         Assert.Equal(typeof(StubExceptionInterceptor), dependencies.ExceptionInterceptors[0].Resolve(serviceProvider).GetType());
+         Assert.Equal(typeof(StubFinalInterceptor), dependencies.FinalInterceptors[0].Resolve(serviceProvider).GetType());
      }
     
     /// <summary>
@@ -315,7 +316,7 @@ public class MessageDependenciesTest:
              messageDescriptor,
              serviceProvider, []);
          // Act
-         var resolvedHandler = deps.Handlers.First().Handler;
+         var resolvedHandler = deps.Handlers[0].Resolve(serviceProvider);
          // Assert
          Assert.NotNull( resolvedHandler);
      }
