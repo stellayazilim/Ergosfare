@@ -18,31 +18,25 @@ on:
 
 jobs:
   release:
+    # Single job with both SDKs: the solution multi-targets net9.0/net10.0, and a
+    # per-SDK matrix packed and pushed every package twice.
     runs-on: ubuntu-latest
     environment: publish
     permissions:
       contents: read
       id-token: write
-    strategy:
-      matrix:
-        dotnet-version: [9.0.x, 10.0.x]
     steps:
-      - name: Determine branch
-        id: resolve_branch
-        run: |
-          if [ -n "${{ github.event.inputs.branch }}" ]; then
-            echo "branch=${{ github.event.inputs.branch }}" >> $GITHUB_ENV
-          else
-            echo "branch=${GITHUB_REF_NAME}" >> $GITHUB_ENV
-          fi
-
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
-          ref: ${{ env.branch }}
+          # Tag pushes check out the tag; manual dispatches check out the given branch.
+          ref: ${{ github.event.inputs.branch || github.ref }}
+          fetch-depth: 0
 
-      - uses: actions/setup-dotnet@v3
+      - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ matrix.dotnet-version }}
+          dotnet-version: |
+            9.0.x
+            10.0.x
 
       - name: Set version
         run: |
@@ -58,13 +52,20 @@ jobs:
 
       - name: Validate release type
         run: |
-          if [[ "${{ env.branch }}" == "main" ]] && [[ "$VERSION" == *-* ]]; then
-            echo "❌ RC tag from main branch is not allowed" && exit 1
+          git fetch origin main --quiet
+          git fetch origin preview --quiet || true
+          if [[ "$VERSION" == *-* ]]; then
+            # Pre-release (-preview.N) tags must come from the preview line.
+            if git rev-parse --verify --quiet origin/preview > /dev/null; then
+              git merge-base --is-ancestor HEAD origin/preview \
+                || { echo "❌ Pre-release tags must point at commits on the preview branch"; exit 1; }
+            fi
+            echo "✔ Pre-release tag validated"
+          else
+            git merge-base --is-ancestor HEAD origin/main \
+              || { echo "❌ Stable tags must point at commits on main"; exit 1; }
+            echo "✔ Stable tag validated"
           fi
-          if [[ "${{ env.branch }}" =~ rc[0-9]+ ]] && [[ "$VERSION" != *-* ]]; then
-            echo "❌ Stable tag from RC branch is not allowed" && exit 1
-          fi
-          echo "✔ Release validation passed"
 
       - name: Restore
         run: dotnet restore ./Stella.Ergosfare.slnx
@@ -102,8 +103,9 @@ jobs:
         with:
           user: ${{ secrets.NUGET_USER }}
 
-      - name: Push packages to NuGet (only stable)
-        if: ${{ !contains(env.VERSION, '-') }}
+      # Pre-release versions are pushed too: nuget.org only surfaces them to users
+      # who opt into "include prerelease", so the stable channel stays clean.
+      - name: Push packages to NuGet
         run: |
           for pkg in ./nupkg-release/*.nupkg; do
             dotnet nuget push "$pkg" \
@@ -111,5 +113,3 @@ jobs:
               --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
               --skip-duplicate
           done
-
-   

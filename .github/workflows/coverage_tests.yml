@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - 'main'
+      - 'preview'
     paths-ignore:
       - '.badges/chore_workflows/coverage.svg'
   pull_request:
