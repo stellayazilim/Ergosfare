@@ -28,6 +28,6 @@ internal class CommandModule : IModule
     {
         _builder(new CommandModuleBuilder(configuration.MessageRegistry));
 
-        configuration.Services.TryAddTransient<ICommandMediator, CommandMediator>();
+        configuration.Services.TryAddSingleton<ICommandMediator, CommandMediator>();
     }
 }

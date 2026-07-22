@@ -23,6 +23,6 @@ internal class QueryModule(
     public void Build(IModuleConfiguration configuration)
     {
         builder(new QueryModuleBuilder(configuration.MessageRegistry));
-        configuration.Services.TryAddTransient<IQueryMediator, QueryMediator>();
+        configuration.Services.TryAddSingleton<IQueryMediator, QueryMediator>();
     }
 }

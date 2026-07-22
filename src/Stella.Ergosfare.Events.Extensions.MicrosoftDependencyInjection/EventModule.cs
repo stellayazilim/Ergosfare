@@ -29,7 +29,7 @@ internal class EventModule(Action<EventModuleBuilder> builder) : IModule
     {
         builder(new EventModuleBuilder(configuration.MessageRegistry));
 
-        configuration.Services.TryAddTransient<IEventMediator, EventMediator>();
-        configuration.Services.TryAddTransient<IPublisher, EventMediator>();
+        configuration.Services.TryAddSingleton<IEventMediator, EventMediator>();
+        configuration.Services.TryAddSingleton<IPublisher, EventMediator>();
     }
 }
