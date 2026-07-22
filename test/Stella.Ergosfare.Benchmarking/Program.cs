@@ -2,6 +2,8 @@
 using BenchmarkDotNet.Running;
 using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare;
+using Stella.Ergosfare.Commands.Abstractions;
+using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Registry;
@@ -27,6 +29,12 @@ public class StellaHandler : IAsyncHandler<StellaMessage>
     public Task HandleAsync(StellaMessage message, IExecutionContext context) => Task.CompletedTask;
 }
 
+public class StellaCommand : ICommand { }
+public class StellaCommandHandler : ICommandHandler<StellaCommand>
+{
+    public Task HandleAsync(StellaCommand message, IExecutionContext context) => Task.CompletedTask;
+}
+
 public class MediatrRequest : IRequest { }
 public class MediatrHandler : IRequestHandler<MediatrRequest>
 {
@@ -38,7 +46,9 @@ public class MediationBenchmark
 {
     private IServiceProvider _stellaProvider;
     private IMessageMediator _stellaMediator;
+    private ICommandMediator _stellaCommandMediator;
     private StellaMessage _stellaMessage;
+    private StellaCommand _stellaCommand;
     private MediateOptions<StellaMessage, Task> _stellaOptions;
 
     private IServiceProvider _mediatrProvider;
@@ -54,10 +64,15 @@ public class MediationBenchmark
             options.AddCoreModule(module => {
                 module.Register<StellaHandler>();
             });
+            options.AddCommandModule(module => {
+                module.Register<StellaCommandHandler>();
+            });
         });
         _stellaProvider = stellaServices.BuildServiceProvider();
         _stellaMediator = _stellaProvider.GetRequiredService<IMessageMediator>();
+        _stellaCommandMediator = _stellaProvider.GetRequiredService<ICommandMediator>();
         _stellaMessage = new StellaMessage();
+        _stellaCommand = new StellaCommand();
 
         _stellaOptions = new MediateOptions<StellaMessage, Task>
         {
@@ -78,15 +93,24 @@ public class MediationBenchmark
     [Benchmark]
     public async Task StellaErgosfare()
     {
-        
-        for (var i = 0; i < 100000; i++) 
+
+        for (var i = 0; i < 100000; i++)
             await _stellaMediator.Mediate(_stellaMessage, _stellaOptions);
+    }
+
+    // Full public API path (settings/options/strategy handling included),
+    // symmetric with the MediatR benchmark which also uses its public Send.
+    [Benchmark]
+    public async Task StellaErgosfare_PublicApi()
+    {
+        for (var i = 0; i < 100000; i++)
+            await _stellaCommandMediator.SendAsync(_stellaCommand);
     }
 
     [Benchmark]
     public async Task MediatR()
     {
-        for (var i = 0; i < 100000; i++) 
+        for (var i = 0; i < 100000; i++)
             await _mediatrMediator.Send(_mediatrRequest);
     }
 }
