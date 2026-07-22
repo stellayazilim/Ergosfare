@@ -51,11 +51,9 @@ public class CommandModuleTests
                     )
             )).BuildServiceProvider();
         var mediator = serviceCollection.GetRequiredService<ICommandMediator>();
-        var result = mediator.SendAsync(new TestCommand());
+        await mediator.SendAsync(new TestCommand());
         var stringResult = mediator.SendAsync<string>(new TestCommandStringResult());
-        
-        Assert.NotNull(result);
-        Assert.NotNull(stringResult);
+
         Assert.Equal(string.Empty, await stringResult);
         
     }

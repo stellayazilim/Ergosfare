@@ -106,16 +106,26 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
     {
         for (var i = 0; i < handlers.Count; i++)
         {
-            // Typed seam: PublishAsync<TEvent> dispatches with the concrete event type, so
-            // the typed check hits (`in TMessage` variance also admits base-typed handlers);
-            // the interface-erased PublishAsync(IEvent) overload falls back to the bridge.
+            // Typed dispatch only — no object bridge. `in TMessage` variance admits handlers
+            // registered for base event types; erased dispatch goes through the executor.
             var handler = handlers[i].Resolve(serviceProvider);
 
-            var handleTask = handler is IHandler<TMessage, ValueTask> typed
-                ? typed.Handle(message, context)
-                : (ValueTask)handler.Handle(message, context);
-
-            await handleTask;
+            switch (handler)
+            {
+                case IAsyncHandler<TMessage> asyncHandler:
+                    await asyncHandler.HandleAsync(message, context);
+                    break;
+                case IHandler<TMessage, ValueTask> valueTaskShaped:
+                    await valueTaskShaped.Handle(message, context);
+                    break;
+                case IHandler<TMessage, object> syncHandler:
+                    syncHandler.Handle(message, context);
+                    break;
+                default:
+                    throw new NotSupportedException(
+                        $"'{handler.GetType()}' does not implement a supported handler contract for event '{typeof(TMessage)}'. " +
+                        "Interface-erased dispatch is not supported; publish with the concrete event type.");
+            }
         }
     }
 }

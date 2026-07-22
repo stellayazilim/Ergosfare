@@ -69,12 +69,14 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
             message =  (TMessage)await preInvoker.Invoke(message, context) ;
 
 
-            // Typed seam: direct typed invocation when the dispatch TMessage satisfies the
-            // handler's message type (`in TMessage` variance; IAsyncEnumerable<out T>
-            // covariance admits derived elements). Erased dispatches use the DIM bridge.
+            // Typed dispatch only — no object bridge. `in TMessage` variance admits handlers
+            // registered for base message types; IAsyncEnumerable<out T> covariance admits
+            // derived elements.
             enumerable = handler is IHandler<TMessage, IAsyncEnumerable<TResult>> typed
                 ? typed.Handle(message, context)
-                : (IAsyncEnumerable<TResult>?)handler.Handle(message, context);
+                : throw new NotSupportedException(
+                    $"'{handler.GetType()}' does not implement a supported stream handler contract for message '{typeof(TMessage)}'. " +
+                    "Interface-erased dispatch is not supported; dispatch with the concrete message type.");
            
 
         }

@@ -1,5 +1,13 @@
 ## Unreleased — v2 preview line
 
+### Executor dispatch — the object bridge is gone
+
+* **Per-message-type pipeline executors.** Dispatch now goes through a pipeline closed over the message's *runtime* type, built once per (message type, result type, group set) and cached process-wide (`IPipelineExecutor`, `IMessageMediator.DispatchAsync`). The mediator facades resolve the executor with a dictionary lookup — no per-call options object, no interface-erased strategy, and the handler's `ValueTask` never crosses an object-typed bridge. Events and streaming queries use the same pattern via per-type invokers that carry their per-call state (settings / cancellation token).
+* **Independent sync/async handler contracts.** `IHandler` is now an empty marker; `IHandler<TMessage, TResult>` is a pure synchronous contract returning `TResult` directly; `IAsyncHandler<TMessage>` / `IAsyncHandler<TMessage, TResult>` are standalone `ValueTask` contracts. All default interface implementations and the object-typed `Handle(object, ...)` root member are removed — the pipeline invokes handlers exclusively through their typed members, and synchronous handlers run with zero async machinery.
+* Interface-erased dispatch (e.g. `Mediate` with `TMessage = ICommand<T>` against concrete-typed handlers) is no longer supported and throws `NotSupportedException` with guidance; all first-party facades dispatch concretely.
+* Benchmark (100k no-op dispatches, 7800X3D/.NET 9): public `SendAsync` **11.4 → 5.34 MB** — byte-identical to the raw mediator path (handler-side allocation is now zero; the remainder is the per-dispatch execution context and transient handler instance); scope-per-dispatch **47.3 → 41.96 MB** after the facades stopped resolving per-scope strategy state. MediatR on the same shapes: 18.31 MB / 33.57 MB.
+* The reflective executor construction (one `MakeGenericType` per message type) is the JIT fallback the source generator will replace with concrete instantiations — completing the Native AOT story.
+
 ### Removed
 
 * `AmbientExecutionContext` and `EnableAmbientExecutionContext()` (deprecated since v1.2.0) are removed. The execution context is passed to every handler and interceptor as a parameter; `IExecutionContext` can no longer be resolved from DI. `NoExecutionContextException` is removed with it, and no `AsyncLocal` publication remains anywhere on the dispatch path.

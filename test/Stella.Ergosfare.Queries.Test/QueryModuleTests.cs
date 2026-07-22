@@ -44,7 +44,6 @@ public class QueryModuleTests
                 ).BuildServiceProvider();
         var mediator = serviceCollection.GetRequiredService<IQueryMediator>();
         var result = mediator.QueryAsync(new StubNonGenericStringResultQuery());
-        Assert.NotNull(result);
         Assert.Equal(string.Empty, await result);
     }
 
