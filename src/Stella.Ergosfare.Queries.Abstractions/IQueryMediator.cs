@@ -26,6 +26,21 @@ public interface IQueryMediator: IMessage
                                                 CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Executes a query under an externally owned execution context — the
+    ///     nested-dispatch path: a handler opens a scope on its own context
+    ///     (<c>using var scope = context.CreateScope();</c>) and passes
+    ///     <c>scope.Context</c> here. The caller owns the context's lifetime;
+    ///     cancellation flows from the context.
+    /// </summary>
+    /// <typeparam name="TQueryResult">The type of the result returned by the query.</typeparam>
+    /// <param name="query">The query to be executed.</param>
+    /// <param name="context">The externally owned execution context to dispatch under.</param>
+    /// <param name="queryMediationSettings">Optional mediation settings (groups etc.).</param>
+    ValueTask<TQueryResult> QueryAsync<TQueryResult>(IQuery<TQueryResult> query,
+                                                Core.Abstractions.IExecutionContext context,
+                                                QueryMediationSettings? queryMediationSettings = null);
+
+    /// <summary>
     ///     Asynchronously streams the results of a query.
     /// </summary>
     /// <typeparam name="TQueryResult">The type of the results returned by the stream query.</typeparam>

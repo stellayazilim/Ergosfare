@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
@@ -38,9 +39,42 @@ internal sealed class MessageMediator(
         ArgumentNullException.ThrowIfNull(message);
 
         var executor = RequireExecutorCache().GetVoidExecutor(message.GetType(), groups);
-        var context = new ErgosfareExecutionContext(items, cancellationToken);
+        var context = ErgosfareExecutionContextPool.Rent(items, cancellationToken);
+        ValueTask task;
 
-        return executor.Execute(message, context, _serviceProvider);
+        try
+        {
+            task = executor.Execute(message, context, _serviceProvider);
+        }
+        catch
+        {
+            ErgosfareExecutionContextPool.Return(context);
+            throw;
+        }
+
+        // Synchronously completed dispatches (the common case) return the context inline —
+        // no async state machine on the hot path. Only a genuinely suspended pipeline pays
+        // for the awaiting helper.
+        if (task.IsCompletedSuccessfully)
+        {
+            ErgosfareExecutionContextPool.Return(context);
+            return default;
+        }
+
+        return AwaitAndReturn(task, context);
+
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
+        static async ValueTask AwaitAndReturn(ValueTask task, ErgosfareExecutionContext context)
+        {
+            try
+            {
+                await task;
+            }
+            finally
+            {
+                ErgosfareExecutionContextPool.Return(context);
+            }
+        }
     }
 
     /// <inheritdoc />
@@ -49,7 +83,62 @@ internal sealed class MessageMediator(
         ArgumentNullException.ThrowIfNull(message);
 
         var executor = RequireExecutorCache().GetExecutor<TResult>(message.GetType(), groups);
-        var context = new ErgosfareExecutionContext(items, cancellationToken);
+        var context = ErgosfareExecutionContextPool.Rent(items, cancellationToken);
+        ValueTask<TResult> task;
+
+        try
+        {
+            task = executor.Execute(message, context, _serviceProvider);
+        }
+        catch
+        {
+            ErgosfareExecutionContextPool.Return(context);
+            throw;
+        }
+
+        if (task.IsCompletedSuccessfully)
+        {
+            var result = task.Result;
+            ErgosfareExecutionContextPool.Return(context);
+            return new ValueTask<TResult>(result);
+        }
+
+        return AwaitAndReturn(task, context);
+
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+        static async ValueTask<TResult> AwaitAndReturn(ValueTask<TResult> task, ErgosfareExecutionContext context)
+        {
+            try
+            {
+                return await task;
+            }
+            finally
+            {
+                ErgosfareExecutionContextPool.Return(context);
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public ValueTask DispatchAsync(object message, IExecutionContext context, IEnumerable<string>? groups = null)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(context);
+
+        // Caller-owned context (typically a scope's child): the caller controls its
+        // lifetime, so nothing is rented or returned here.
+        var executor = RequireExecutorCache().GetVoidExecutor(message.GetType(), groups);
+
+        return executor.Execute(message, context, _serviceProvider);
+    }
+
+    /// <inheritdoc />
+    public ValueTask<TResult> DispatchAsync<TResult>(object message, IExecutionContext context, IEnumerable<string>? groups = null)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(context);
+
+        var executor = RequireExecutorCache().GetExecutor<TResult>(message.GetType(), groups);
 
         return executor.Execute(message, context, _serviceProvider);
     }
@@ -109,7 +198,11 @@ internal sealed class MessageMediator(
 
         ArgumentNullException.ThrowIfNull(options);
 
-        var context = new ErgosfareExecutionContext(options.Items, options.CancellationToken);
+        // An externally owned context (nested dispatch through a scope) is used as-is;
+        // otherwise a fresh, unpooled context is created — this path's completion isn't
+        // observable here (streams enumerate after the call returns), so it cannot pool.
+        var context = options.ExternalContext
+                      ?? new ErgosfareExecutionContext(options.Items, options.CancellationToken);
 
         // Get the actual type of the message
         var messageType = message.GetType();

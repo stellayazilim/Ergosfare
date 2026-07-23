@@ -55,4 +55,18 @@ public class QueryMediator(
         return QueryStreamInvokerCache.Get<TResult>(query.GetType()).Stream(
             query, queryMediationSettings, cancellationToken, messageMediator, messageResolveStrategy);
     }
+
+    /// <summary>
+    /// Executes a query under an externally owned execution context — the nested-dispatch
+    /// path: a handler opens a scope on its own context and passes the child here. The
+    /// caller owns the context's lifetime; cancellation flows from the context.
+    /// </summary>
+    public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, IExecutionContext context,
+        QueryMediationSettings? queryMediationSettings = null)
+    {
+        return messageMediator.DispatchAsync<TResult>(
+            query,
+            context,
+            queryMediationSettings?.Filters.Groups);
+    }
 }

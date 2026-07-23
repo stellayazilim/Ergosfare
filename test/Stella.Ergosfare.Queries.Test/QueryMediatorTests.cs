@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Core;
+using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -30,7 +30,7 @@ public class QueryMediatorTests
         var mediator = new QueryMediator(
             services.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
             messageMediator!);
-        var result = mediator.QueryAsync(new StubNonGenericStringResultQuery(), null);
+        var result = mediator.QueryAsync(new StubNonGenericStringResultQuery(), queryMediationSettings: null);
         Assert.Equal(string.Empty, await result);
     }
     

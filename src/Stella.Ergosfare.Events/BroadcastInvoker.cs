@@ -17,7 +17,7 @@ internal interface IEventBroadcastInvoker
 {
     ValueTask Publish(object @event, EventMediationSettings settings, CancellationToken cancellationToken,
         IMessageMediator mediator, ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
-        IResultAdapterService? resultAdapterService);
+        IResultAdapterService? resultAdapterService, IExecutionContext? externalContext = null);
 }
 
 internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
@@ -27,7 +27,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
 
     public ValueTask Publish(object @event, EventMediationSettings settings, CancellationToken cancellationToken,
         IMessageMediator mediator, ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
-        IResultAdapterService? resultAdapterService)
+        IResultAdapterService? resultAdapterService, IExecutionContext? externalContext = null)
     {
         var options = new MediateOptions<TEvent, ValueTask>
         {
@@ -36,6 +36,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
             CancellationToken = cancellationToken,
             Items = settings.Items,
             Groups = settings.Filters.Groups,
+            ExternalContext = externalContext,
         };
 
         return mediator.Mediate((TEvent)@event, options);
