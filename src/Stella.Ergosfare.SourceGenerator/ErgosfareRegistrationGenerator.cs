@@ -56,6 +56,7 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     private const string AttributeNamespace = "Stella.Ergosfare.Core.Abstractions.Attributes";
 
     private const string MessageRegistryMetadataName = "Stella.Ergosfare.Core.Abstractions.Registry.IMessageRegistry";
+    private const string DispatchRootsMetadataName = "Stella.Ergosfare.Core.Abstractions.GeneratedDispatchRoots";
     private const string DescriptorFactoryMetadataName = "Stella.Ergosfare.Core.Abstractions.Registry.Descriptors.HandlerDescriptors";
     private const string CommandBuilderMetadataName = "Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.CommandModuleBuilder";
     private const string QueryBuilderMetadataName = "Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.QueryModuleBuilder";
@@ -94,7 +95,8 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 HasDescriptorFactory: compilation.GetTypeByMetadataName(DescriptorFactoryMetadataName) is not null,
                 CommandBuilderHasRegisterDescriptors: HasRegisterDescriptors(commandBuilder),
                 QueryBuilderHasRegisterDescriptors: HasRegisterDescriptors(queryBuilder),
-                EventBuilderHasRegisterDescriptors: HasRegisterDescriptors(eventBuilder));
+                EventBuilderHasRegisterDescriptors: HasRegisterDescriptors(eventBuilder),
+                HasDispatchRoots: compilation.GetTypeByMetadataName(DispatchRootsMetadataName) is not null);
         });
 
         // Reference scanning is default-on; consumers opt out per project through the
@@ -150,6 +152,8 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         }
 
         var isAccessible = IsAccessibleFromGeneratedCode(symbol);
+        var descriptors = isAccessible ? BuildDescriptors(symbol) : ImmutableArray<DescriptorModel>.Empty;
+        var isDispatchable = isAccessible && IsDispatchableMessage(symbol, descriptors);
 
         return new RegistrableTypeModel
         {
@@ -162,10 +166,84 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             Location = isAccessible ? null : LocationInfo.From(symbol),
             Weight = GetWeight(symbol),
             GroupsExpression = GetGroupsExpression(symbol),
-            Descriptors = isAccessible ? BuildDescriptors(symbol) : ImmutableArray<DescriptorModel>.Empty,
+            Descriptors = descriptors,
             ReferencedAssemblyName = null,
             DiscoveryKeys = GetDiscoveryKeys(symbol),
+            IsDispatchableMessage = isDispatchable,
+            DispatchResults = isDispatchable ? GetDispatchResults(symbol) : ImmutableArray<DispatchResultModel>.Empty,
         };
+    }
+
+    /// <summary>
+    ///     Whether the type can appear as a dispatched message instance: a concrete,
+    ///     fully closed class or struct with no handler contracts. Only such types get
+    ///     dispatch roots — abstract types and interfaces never carry a runtime message's
+    ///     type, handlers are never dispatched, and open generics cannot be rooted.
+    /// </summary>
+    private static bool IsDispatchableMessage(INamedTypeSymbol symbol, ImmutableArray<DescriptorModel> descriptors)
+    {
+        if (symbol.IsAbstract || descriptors.Length > 0)
+        {
+            return false;
+        }
+
+        if (symbol.TypeKind is not (TypeKind.Class or TypeKind.Struct))
+        {
+            return false;
+        }
+
+        for (var current = symbol; current is not null; current = current.ContainingType)
+        {
+            if (current.Arity > 0)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    ///     Collects the result roots of a dispatchable message from its closed marker
+    ///     contracts: <c>ICommand&lt;T&gt;</c>/<c>IQuery&lt;T&gt;</c> feed the
+    ///     result-executor path, <c>IStreamQuery&lt;T&gt;</c> the streaming path.
+    /// </summary>
+    private static ImmutableArray<DispatchResultModel> GetDispatchResults(INamedTypeSymbol symbol)
+    {
+        ImmutableArray<DispatchResultModel>.Builder? results = null;
+
+        foreach (var iface in symbol.AllInterfaces)
+        {
+            if (iface.Arity != 1)
+            {
+                continue;
+            }
+
+            var isStream = false;
+
+            switch (iface.Name)
+            {
+                case "ICommand" when IsInNamespace(iface, CommandMarkerNamespace):
+                case "IQuery" when IsInNamespace(iface, QueryMarkerNamespace):
+                    break;
+                case "IStreamQuery" when IsInNamespace(iface, QueryMarkerNamespace):
+                    isStream = true;
+                    break;
+                default:
+                    continue;
+            }
+
+            var model = new DispatchResultModel(VerbatimTypeExpression(iface.TypeArguments[0]), isStream);
+
+            results ??= ImmutableArray.CreateBuilder<DispatchResultModel>();
+
+            if (!results.Contains(model))
+            {
+                results.Add(model);
+            }
+        }
+
+        return results?.ToImmutable() ?? ImmutableArray<DispatchResultModel>.Empty;
     }
 
     /// <summary>
@@ -408,6 +486,8 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         }
 
         var isAccessible = IsVisibleToCompilation(symbol, givesAccess) && HasSpellableName(symbol);
+        var descriptors = isAccessible ? BuildDescriptors(symbol) : ImmutableArray<DescriptorModel>.Empty;
+        var isDispatchable = isAccessible && IsDispatchableMessage(symbol, descriptors);
 
         return new RegistrableTypeModel
         {
@@ -420,9 +500,11 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             Location = null,
             Weight = GetWeight(symbol),
             GroupsExpression = GetGroupsExpression(symbol),
-            Descriptors = isAccessible ? BuildDescriptors(symbol) : ImmutableArray<DescriptorModel>.Empty,
+            Descriptors = descriptors,
             ReferencedAssemblyName = assemblyName,
             DiscoveryKeys = GetDiscoveryKeys(symbol),
+            IsDispatchableMessage = isDispatchable,
+            DispatchResults = isDispatchable ? GetDispatchResults(symbol) : ImmutableArray<DispatchResultModel>.Empty,
         };
     }
 
