@@ -165,7 +165,7 @@ public class MessageDependencyFixture : IFixture<MessageDependencyFixture>
     
     
     /// <summary>
-    /// Disposes the fixture, including the underlying <see cref="ServiceProvider"/> and resets the <see cref="SignalHubAccessor"/>.
+    /// Disposes the fixture, including the underlying <see cref="ServiceProvider"/>.
     /// </summary>
     public void Dispose()
     {

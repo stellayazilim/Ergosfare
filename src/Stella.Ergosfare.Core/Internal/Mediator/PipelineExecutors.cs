@@ -72,12 +72,14 @@ internal sealed class PipelineExecutorCache(
 
     public IPipelineExecutor GetVoidExecutor(Type messageType, IEnumerable<string>? groups = null)
     {
-        var key = (messageType, GroupsKey(groups));
+        var materializedGroups = MaterializeGroups(groups);
+        var key = (messageType, GroupsKey(materializedGroups));
+
         if (!_voidExecutors.TryGetValue(key, out var executor))
         {
             executor = _voidExecutors.GetOrAdd(key,
                 static (k, state) => state.Cache.CreateVoidExecutor(k.MessageType, state.Groups),
-                (Cache: this, Groups: MaterializeGroups(groups)));
+                (Cache: this, Groups: materializedGroups));
         }
 
         return executor;
@@ -85,20 +87,27 @@ internal sealed class PipelineExecutorCache(
 
     public IPipelineExecutor<TResult> GetExecutor<TResult>(Type messageType, IEnumerable<string>? groups = null)
     {
-        var key = (messageType, typeof(TResult), GroupsKey(groups));
+        var materializedGroups = MaterializeGroups(groups);
+        var key = (messageType, typeof(TResult), GroupsKey(materializedGroups));
+
         if (!_resultExecutors.TryGetValue(key, out var executor))
         {
             executor = _resultExecutors.GetOrAdd(key,
                 static (k, state) => state.Cache.CreateResultExecutor(k.MessageType, k.ResultType, state.Groups),
-                (Cache: this, Groups: MaterializeGroups(groups)));
+                (Cache: this, Groups: materializedGroups));
         }
 
         return (IPipelineExecutor<TResult>)executor;
     }
 
-    private static string GroupsKey(IEnumerable<string>? groups)
-        => groups is null ? string.Empty : string.Join('\x1f', groups);
+    private static string GroupsKey(string[] groups)
+        => groups.Length == 0 ? string.Empty : string.Join('\x1f', groups);
 
+    /// <summary>
+    /// Snapshots the caller's group sequence exactly once: the same array both builds the
+    /// cache key and flows into the executor, so a lazy or unstable enumerable can never
+    /// produce a key that disagrees with the groups the cached executor was built with.
+    /// </summary>
     private static string[] MaterializeGroups(IEnumerable<string>? groups)
         => groups is null ? EmptyGroups : [.. groups];
 

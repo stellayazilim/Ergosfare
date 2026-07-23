@@ -4,7 +4,7 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 /// <summary>
 /// A descriptor paired with the concrete handler type to resolve for it, computed once
-/// when the pipeline shape is built and reused for every dispatch afterwards.
+/// when the pipeline shape is built and reused for every dispatch afterward.
 /// </summary>
 /// <remarks>
 /// For handlers of generic messages the type is already closed over the message's generic

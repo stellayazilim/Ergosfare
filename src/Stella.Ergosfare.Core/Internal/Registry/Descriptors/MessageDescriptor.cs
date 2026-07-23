@@ -1,3 +1,5 @@
+using System.Reflection;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 
 namespace Stella.Ergosfare.Core.Internal.Registry.Descriptors;
@@ -42,6 +44,14 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
 
 
     /// <summary>
+    /// The message type's <c>[ExcludeFromPipeline]</c> declaration, read once at
+    /// registration — startup-only reflection, shared by both the reflection-based and
+    /// source-generated registration paths.
+    /// </summary>
+    private readonly ExcludeFromPipelineAttribute? _pipelineExclusion =
+        messageType.GetCustomAttribute<ExcludeFromPipelineAttribute>(inherit: false);
+
+    /// <summary>
     /// Gets the message type associated with this descriptor.
     /// </summary>
     public Type MessageType { get; } = messageType;
@@ -50,6 +60,13 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
     /// Gets a value indicating whether the message type is generic.
     /// </summary>
     public bool IsGeneric { get; } = messageType.IsGenericType;
+
+    /// <inheritdoc />
+    public bool ExcludesIndirectInterceptors => _pipelineExclusion is { Groups.Length: 0 };
+
+    /// <inheritdoc />
+    public IReadOnlyCollection<string> ExcludedInterceptorGroups =>
+        _pipelineExclusion is { Groups.Length: > 0 } exclusion ? exclusion.Groups : Array.Empty<string>();
 
     // pre interceptor
     public IReadOnlyCollection<IPreInterceptorDescriptor> PreInterceptors => _preInterceptors ?? Array.Empty<IPreInterceptorDescriptor>();

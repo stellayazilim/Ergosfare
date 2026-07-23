@@ -15,11 +15,12 @@ namespace Stella.Ergosfare.Queries.Abstractions;
 /// narrower return type there is no third parameter anymore; return the base result type.
 /// </typeparam>
 /// <remarks>
-/// The type parameters are deliberately invariant: the pipeline invokes interceptors
-/// through the non-generic root interfaces, so interface variance bought nothing while
-/// forcing the result-returning member onto a separate three-parameter interface.
+/// <typeparamref name="TQuery"/> is contravariant, matching the core
+/// <see cref="IAsyncPostInterceptor{TMessage, TResult}"/> contract the typed dispatch
+/// matches against. <typeparamref name="TResult"/> must stay invariant: the typed member
+/// returns it.
 /// </remarks>
-public interface IQueryPostInterceptor<TQuery, TResult> : IQuery, IAsyncPostInterceptor<TQuery, TResult>
+public interface IQueryPostInterceptor<in TQuery, TResult> : IQuery, IAsyncPostInterceptor<TQuery, TResult>
     where TQuery : IQuery<TResult>
     where TResult : notnull
 {

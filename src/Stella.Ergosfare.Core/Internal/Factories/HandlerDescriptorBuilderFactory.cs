@@ -11,7 +11,7 @@ namespace Stella.Ergosfare.Core.Internal.Factories;
 /// </summary>
 /// <remarks>
 /// The factory internally maintains a list of <see cref="IHandlerDescriptorBuilder"/>
-/// implementations, including handlers, pre/post interceptors, exception interceptors, 
+/// implementations, including handlers, pre- / post-interceptors, exception interceptors, 
 /// and final interceptors. It can build all applicable descriptors for a given type
 /// and supports both synchronous and asynchronous disposal.
 /// </remarks>

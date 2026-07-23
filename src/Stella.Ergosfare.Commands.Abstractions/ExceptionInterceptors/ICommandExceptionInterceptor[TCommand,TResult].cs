@@ -12,16 +12,17 @@ namespace Stella.Ergosfare.Commands.Abstractions;
 /// The command type being intercepted. Must implement <see cref="ICommand{TResult}"/>.
 /// </typeparam>
 /// <typeparam name="TResult">
-/// The result type of the command. Also the type returned by the interceptor — for a
+/// The result type of the command. Also, the type returned by the interceptor — for a
 /// narrower return type there is no third parameter anymore; return the base result type.
 /// </typeparam>
 /// <remarks>
-/// The type parameters are deliberately invariant: the pipeline invokes interceptors
-/// through the non-generic root interfaces, so interface variance bought nothing while
-/// forcing the result-returning member onto a separate three-parameter interface.
+/// <typeparamref name="TCommand"/> is contravariant, matching the core
+/// <see cref="IAsyncExceptionInterceptor{TMessage, TResult}"/> contract the typed dispatch
+/// matches against. <typeparamref name="TResult"/> must stay invariant: the typed member
+/// returns it.
 /// </remarks>
 // ReSharper disable once UnusedType.Global
-public interface ICommandExceptionInterceptor<TCommand, TResult> : ICommand, IAsyncExceptionInterceptor<TCommand, TResult>
+public interface ICommandExceptionInterceptor<in TCommand, TResult> : ICommand, IAsyncExceptionInterceptor<TCommand, TResult>
     where TCommand : ICommand<TResult>
     where TResult : notnull
 {

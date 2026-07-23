@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-
+﻿
 namespace Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 
 
@@ -24,6 +23,20 @@ public interface IMessageDescriptor: IHasMessageType
     /// Gets a value indicating whether the message type is generic.
     /// </summary>
     bool IsGeneric { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether the message excludes every covariantly matched
+    /// (indirect) interceptor via a parameterless <c>[ExcludeFromPipeline]</c>.
+    /// Interceptors registered against the message type itself are unaffected.
+    /// </summary>
+    bool ExcludesIndirectInterceptors { get; }
+
+    /// <summary>
+    /// Gets the interceptor groups the message excludes from covariant matching via
+    /// <c>[ExcludeFromPipeline("group")]</c>; empty when the message declares no
+    /// group-scoped exclusion.
+    /// </summary>
+    IReadOnlyCollection<string> ExcludedInterceptorGroups { get; }
 
     /// <summary>
     /// Gets the main handlers for the message type.

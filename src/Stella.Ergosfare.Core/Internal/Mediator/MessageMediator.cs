@@ -14,7 +14,6 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// </summary>
 /// <remarks>
 /// The <see cref="MessageMediator"/> uses the provided <see cref="IMessageRegistry"/> to track message types,
-/// <see cref="ISignalHub"/> to publish events (if applicable), and <see cref="IMessageDependenciesFactory"/>
 /// to lazily resolve handler dependencies. It ensures that the message mediation occurs
 /// within a controlled execution context scope.
 /// </remarks>
@@ -27,7 +26,7 @@ internal sealed class MessageMediator(
     : IMessageMediator
 {
     /// <summary>
-    /// Process-wide executor cache used by the <see cref="DispatchAsync(object, IDictionary{object, object?}?, CancellationToken)"/>
+    /// Process-wide executor cache used by the <see cref="DispatchAsync(object,IDictionary{object,object?},CancellationToken,IEnumerable{string})"/>
     /// path. Optional so directly-constructed mediators (tests) keep working; the DI
     /// registration always supplies it.
     /// </summary>

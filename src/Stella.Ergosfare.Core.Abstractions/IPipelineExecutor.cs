@@ -1,11 +1,9 @@
-using System;
-using System.Threading.Tasks;
 
 namespace Stella.Ergosfare.Core.Abstractions;
 
 /// <summary>
 /// A message pipeline closed over its concrete message type, built once per message type
-/// and cached process-wide. <see cref="Execute{TResult}"/> receives the message as
+/// and cached process-wide. <see cref="Execute"/> receives the message as
 /// <see cref="object"/> and performs a single cast to the concrete type internally, so the
 /// handler is always invoked through its typed member — no object-typed bridge, no boxing
 /// of the handler's <see cref="ValueTask"/>.
