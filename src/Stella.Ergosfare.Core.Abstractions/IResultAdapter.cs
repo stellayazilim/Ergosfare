@@ -1,4 +1,3 @@
-using System;
 
 namespace Stella.Ergosfare.Core.Abstractions;
 

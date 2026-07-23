@@ -1,7 +1,4 @@
-﻿using System;
-using System.Linq;
-using System.Runtime.ExceptionServices;
-using System.Threading.Tasks;
+﻿using System.Runtime.ExceptionServices;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
@@ -20,36 +17,36 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
 {
     
     /// <summary>
-    /// Mediates the message by invoking the handler along with pre-, post-, exception-, and final interceptors.
-    /// Supports checkpointing to skip already executed handlers, integrates snapshot results, 
-    /// and ensures proper execution sequencing for fire-and-forget or retryable pipelines.
+    /// Mediates the message by invoking the single registered handler along with the pre-,
+    /// post-, exception- and final-interceptor stages, applying optional result adaptation.
     /// </summary>
-    /// <param name="message">The message to be handled. This may be transformed by pre-interceptors.</param>
-    /// <param name="messageDependencies">The dependencies of the message, including registered handlers and interceptors.</param>
-    /// <param name="context">The current execution context containing checkpoints, snapshots, and pipeline state.</param>
+    /// <param name="message">The message to be handled. May be transformed by pre-interceptors.</param>
+    /// <param name="messageDependencies">The dependencies of the message, including the registered handler and interceptor stages.</param>
+    /// <param name="context">The current execution context.</param>
+    /// <param name="serviceProvider">The provider of the scope this dispatch runs in; handlers and interceptors resolve from it.</param>
     /// <returns>
-    /// A <see cref="ValueTask{TResult}"/> representing the asynchronous operation, returning the final result 
+    /// A <see cref="ValueTask{TResult}"/> representing the asynchronous operation, returning the final result
     /// after executing the handler and all applicable interceptors.
     /// </returns>
     /// <exception cref="ArgumentNullException">Thrown if <paramref name="messageDependencies"/> is null.</exception>
     /// <exception cref="MultipleHandlerFoundException">Thrown if more than one handler is registered for the message.</exception>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown if the handler is null or not of the expected type, or if a result is missing after 
-    /// execution when the pipeline is aborted.
-    /// </exception>
+    /// <exception cref="InvalidOperationException">Thrown if no handler is registered for the message.</exception>
     /// <remarks>
     /// <para>The mediation process follows this sequence:</para>
     /// <list type="number">
-    /// <item>Invoke pre-interceptors via <see cref="PreInterceptorInvocationStrategy{TMessage}"/>. Each pre-interceptor
-    /// can transform the message, and results are checkpointed to allow skipping on retries.</item>
-    /// <item>Invoke the main handler. The result is checkpointed, and snapshots may be used to skip execution if already available.</item>
-    /// <item>Invoke post-interceptors via <see cref="PostInterceptorInvocationStrategy{TMessage, TResult}"/>. Post-interceptors always execute
-    /// and are not checkpointed.</item>
-    /// <item>If an exception occurs, invoke <see cref="ExceptionInterceptorInvocationStrategy{TMessage, TResult}"/> to allow exception handling
-    /// or transformation of the result.</item>
-    /// <item>Finally, invoke <see cref="FinalInterceptorInvocationStrategy{TMessage, TResult}"/> for cleanup or final actions,
-    /// which always execute regardless of prior success or failure.</item>
-    /// <item>Checkpoints and snapshots ensure that retries, partial execution, or snapshot-based replay work seamlessly.</item>
+    /// <item>With no interceptors registered, the handler is invoked directly on a fast path
+    /// and exceptions propagate unchanged.</item>
+    /// <item>Pre-interceptors run via <see cref="PreInterceptorInvocationStrategy{TMessage}"/>;
+    /// each may transform the message.</item>
+    /// <item>The main handler runs through its typed contract; the result adapter may surface
+    /// a failure carried inside the result as an exception.</item>
+    /// <item>Post-interceptors run via <see cref="PostInterceptorInvocationStrategy{TMessage, TResult}"/>
+    /// and may replace the result.</item>
+    /// <item>On exception, <see cref="ExceptionInterceptorInvocationStrategy{TMessage, TResult}"/> runs —
+    /// with no exception interceptors registered the exception propagates unchanged; an
+    /// <see cref="ExecutionAbortedException"/> aborts without error.</item>
+    /// <item><see cref="FinalInterceptorInvocationStrategy{TMessage, TResult}"/> always runs last,
+    /// regardless of success or failure.</item>
     /// </list>
     /// </remarks>
     public async ValueTask<TResult> Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context, IServiceProvider serviceProvider)

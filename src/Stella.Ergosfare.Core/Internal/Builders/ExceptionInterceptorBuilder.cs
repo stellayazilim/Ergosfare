@@ -1,4 +1,3 @@
-
 using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;

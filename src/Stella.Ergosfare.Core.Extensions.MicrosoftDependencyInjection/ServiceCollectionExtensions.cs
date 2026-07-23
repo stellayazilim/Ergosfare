@@ -35,7 +35,6 @@ public static class ServiceCollectionExtensions
     ///   <item><description>A singleton <see cref="IResultAdapterService"/> for result adaptation.</description></item>
     ///   <item><description>Transient factories and descriptor builders for message handling.</description></item>
     ///   <item><description>A singleton <see cref="IMessageRegistry"/> for message type discovery.</description></item>
-    ///   <item><description>A singleton event hub for publishing and subscribing to signals.</description></item>
     ///   <item><description>All module-defined handlers, interceptors, and services discovered at initialization.</description></item>
     /// </list>
     /// </para>
@@ -51,11 +50,8 @@ public static class ServiceCollectionExtensions
         var resultAdapterService = new ResultAdapterService();
         services.TryAddSingleton<IResultAdapterService>(resultAdapterService);
         services.TryAddTransient<HandlerDescriptorBuilderFactory>();
-        // Get the singleton registry instance
+        // The process-wide registry singleton, also registered into DI for direct resolution.
         var messageRegistry = MessageRegistryAccessor.Instance;
-
-        // Get the singleton event-hub instance
-        // Register it as a singleton in DI
         services.TryAddSingleton(messageRegistry);
 
         // Create module registry with the shared message registry

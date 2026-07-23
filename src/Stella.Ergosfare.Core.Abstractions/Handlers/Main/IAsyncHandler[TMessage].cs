@@ -1,4 +1,3 @@
-using System.Threading.Tasks;
 
 namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 
@@ -8,7 +7,9 @@ namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 /// </summary>
 /// <typeparam name="TMessage">The type of the message to handle. Must be non-nullable.</typeparam>
 /// <remarks>
-/// This interface extends the generic <see cref="IHandler{TMessage, TResult}"/> with <typeparamref name="TResult"/>
+/// This interface extends the generic <see cref="IHandler{TMessage, TResult}"/> with <typeparamref>
+///     <name>TResult</name>
+/// </typeparamref>
 /// set to <see cref="ValueTask"/>, enabling asynchronous message processing.
 /// Implementations that already hold a <see cref="Task"/> can wrap it allocation-free via
 /// <c>new ValueTask(task)</c>; async method bodies work unchanged.

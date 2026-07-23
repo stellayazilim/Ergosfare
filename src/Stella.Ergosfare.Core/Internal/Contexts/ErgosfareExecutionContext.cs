@@ -18,9 +18,7 @@ internal sealed class ErgosfareExecutionContext(
     /// This token can be used to observe cancellation requests and propagate them to handlers or interceptors.
     /// </summary>
     public CancellationToken CancellationToken { get; } = cancellationToken;
-    
-    
-    private IDictionary<object, object?>? _items = items;
+
 
     /// <summary>
     /// Gets a dictionary of arbitrary key-value pairs stored in the execution context.
@@ -28,7 +26,10 @@ internal sealed class ErgosfareExecutionContext(
     /// The backing dictionary is created lazily on first access so dispatches that never
     /// touch shared items pay no allocation for it.
     /// </summary>
-    public IDictionary<object, object?> Items => _items ??= new Dictionary<object, object?>();
+    public IDictionary<object, object?> Items
+    {
+        get => field ??= new Dictionary<object, object?>();
+    } = items;
 
     /// <summary>
     /// Stores an item in the execution context under the specified key.
@@ -58,15 +59,12 @@ internal sealed class ErgosfareExecutionContext(
     /// </summary>
     /// <typeparam name="TType">The type of the item expected.</typeparam>
     /// <param name="key">The key associated with the item.</param>
-    /// <param name="item">
-    /// When this method returns, contains the retrieved item if found and of the correct type; otherwise, the default value for <typeparamref name="TType"/>.
-    /// </param>
     /// <returns><c>true</c> if an item with the given key exists and is of the correct type; otherwise, <c>false</c>.</returns>
     public TType Get<TType>(string key) where TType : notnull
     {
-        if (!Items.TryGetValue(key, out var ıtem)) 
+        if (!Items.TryGetValue(key, out var item)) 
             throw new InvalidOperationException("Item does not exist");
-        return (TType)ıtem!;
+        return (TType)item!;
     }
 
 
@@ -93,7 +91,7 @@ internal sealed class ErgosfareExecutionContext(
 
     
     /// <summary>
-    /// Sets <see cref="MessageResult"/> and throws <exception cref="ExecutionAbortedException"></exception>
+    /// Sets <see cref="messageResult"/> and throws <exception cref="ExecutionAbortedException"></exception>
     /// </summary>
     /// <param name="messageResult"></param>
     public void Abort(object? messageResult = null)

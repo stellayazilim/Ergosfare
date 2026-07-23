@@ -22,10 +22,8 @@ namespace Stella.Ergosfare.Core.Internal.Factories;
 /// The factory itself is registered as a singleton; every dispatch after the first is a
 /// cache lookup.
 /// </remarks>
-internal sealed class MessageDependenciesFactory : IMessageDependenciesFactory
+internal sealed class MessageDependenciesFactory(IServiceProvider serviceProvider) : IMessageDependenciesFactory
 {
-    private readonly IServiceProvider _serviceProvider;
-
     private MessageDescriptorCache? _cache;
     private IMessageRegistry? _registry;
     private HandlerLifetimeRegistry? _handlerLifetimes;
@@ -33,21 +31,16 @@ internal sealed class MessageDependenciesFactory : IMessageDependenciesFactory
     private IServiceProvider? _memoizedGraphProvider;
     private bool _servicesResolved;
 
-    public MessageDependenciesFactory(IServiceProvider serviceProvider)
-    {
-        _serviceProvider = serviceProvider;
-    }
-
     public IMessageDependencies Create(Type messageType, IMessageDescriptor descriptor, IEnumerable<string> groups)
     {
-        var cache = _cache ??= _serviceProvider.GetRequiredService<MessageDescriptorCache>();
+        var cache = _cache ??= serviceProvider.GetRequiredService<MessageDescriptorCache>();
 
         if (!_servicesResolved)
         {
-            _registry = _serviceProvider.GetService<IMessageRegistry>();
-            _handlerLifetimes = _serviceProvider.GetService<HandlerLifetimeRegistry>();
-            _runtimeOptions = _serviceProvider.GetService<ErgosfareRuntimeOptions>();
-            _memoizedGraphProvider = _serviceProvider.GetService<RootServiceProviderAccessor>()?.RootProvider ?? _serviceProvider;
+            _registry = serviceProvider.GetService<IMessageRegistry>();
+            _handlerLifetimes = serviceProvider.GetService<HandlerLifetimeRegistry>();
+            _runtimeOptions = serviceProvider.GetService<ErgosfareRuntimeOptions>();
+            _memoizedGraphProvider = serviceProvider.GetService<RootServiceProviderAccessor>()?.RootProvider ?? serviceProvider;
             _servicesResolved = true;
         }
 
@@ -75,7 +68,7 @@ internal sealed class MessageDependenciesFactory : IMessageDependenciesFactory
                                || (_handlerLifetimes?.AreAllHandlersSingleton(messageType, descriptor) ?? false);
 
         var dependencies = new MessageDependencies(
-            shape, memoizeInstances ? _memoizedGraphProvider ?? _serviceProvider : null);
+            shape, memoizeInstances ? _memoizedGraphProvider ?? serviceProvider : null);
 
         cache.AddDependencies(messageType, groupsArray, dependencies);
 

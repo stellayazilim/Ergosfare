@@ -1,7 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-
+﻿
 namespace Stella.Ergosfare.Core.Abstractions;
 
 
@@ -13,23 +10,25 @@ public interface IMessageMediator
 {
     /// <summary>
     /// Dispatches <paramref name="message"/> through the cached pipeline executor closed over
-    /// its runtime type. The handler is invoked through its typed member — no object-typed
-    /// bridge. Serves default-group dispatches; group-filtered dispatches go through
-    /// <see cref="Mediate{TMessage, TMessageResult}"/>.
+    /// its runtime type and the requested group set. The handler is invoked through its typed
+    /// member — no object-typed bridge.
     /// </summary>
     /// <param name="message">The message instance to dispatch.</param>
     /// <param name="items">Optional items exposed on the execution context.</param>
     /// <param name="cancellationToken">Cancellation token exposed on the execution context.</param>
+    /// <param name="groups">Pipeline groups to dispatch under; <c>null</c> selects the default group.</param>
     ValueTask DispatchAsync(object message, IDictionary<object, object?>? items = null, CancellationToken cancellationToken = default, IEnumerable<string>? groups = null);
 
     /// <summary>
     /// Dispatches <paramref name="message"/> through the cached result-producing pipeline
-    /// executor closed over its runtime type; see <see cref="DispatchAsync"/>.
+    /// executor closed over its runtime type and the requested group set; see
+    /// <see cref="DispatchAsync"/>.
     /// </summary>
     /// <typeparam name="TResult">The result type produced by the pipeline.</typeparam>
     /// <param name="message">The message instance to dispatch.</param>
     /// <param name="items">Optional items exposed on the execution context.</param>
     /// <param name="cancellationToken">Cancellation token exposed on the execution context.</param>
+    /// <param name="groups">Pipeline groups to dispatch under; <c>null</c> selects the default group.</param>
     ValueTask<TResult> DispatchAsync<TResult>(object message, IDictionary<object, object?>? items = null, CancellationToken cancellationToken = default, IEnumerable<string>? groups = null);
 
     

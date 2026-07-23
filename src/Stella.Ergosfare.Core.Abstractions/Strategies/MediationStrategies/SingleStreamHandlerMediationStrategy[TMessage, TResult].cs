@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.ExceptionServices;
-using System.Threading;
+﻿using System.Runtime.ExceptionServices;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
@@ -39,11 +35,13 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
     /// </summary>
     /// <param name="message">The message to be handled.</param>
     /// <param name="messageDependencies">The dependencies of the message, including the registered handlers and interceptors.</param>
-    /// <param name="executionContext">The current execution context.</param>
+    /// <param name="context">The current execution context.</param>
+    /// <param name="serviceProvider">The provider of the scope this dispatch runs in; handlers and interceptors resolve from it.</param>
     /// <returns>
     /// An <see cref="IAsyncEnumerable{TResult}"/> representing the asynchronous stream of results produced by the handler.
     /// </returns>
     /// <exception cref="MultipleHandlerFoundException">Thrown if more than one handler is registered for the message.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if no handler is registered for the message.</exception>
     public async IAsyncEnumerable<TResult> Mediate(TMessage message, IMessageDependencies messageDependencies,
         IExecutionContext context, IServiceProvider serviceProvider)
     {
