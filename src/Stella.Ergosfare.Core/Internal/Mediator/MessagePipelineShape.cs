@@ -33,17 +33,41 @@ internal sealed class MessagePipelineShape
             IndirectHandlers = Prepare(descriptor.IndirectHandlers, messageType, effectiveGroups),
             PreInterceptors = Merge(
                 Prepare(descriptor.PreInterceptors, messageType, effectiveGroups),
-                Prepare(descriptor.IndirectPreInterceptors, messageType, effectiveGroups)),
+                PrepareIndirect(descriptor, descriptor.IndirectPreInterceptors, messageType, effectiveGroups)),
             PostInterceptors = Merge(
                 Prepare(descriptor.PostInterceptors, messageType, effectiveGroups),
-                Prepare(descriptor.IndirectPostInterceptors, messageType, effectiveGroups)),
+                PrepareIndirect(descriptor, descriptor.IndirectPostInterceptors, messageType, effectiveGroups)),
             ExceptionInterceptors = Merge(
                 Prepare(descriptor.ExceptionInterceptors, messageType, effectiveGroups),
-                Prepare(descriptor.IndirectExceptionInterceptors, messageType, effectiveGroups)),
+                PrepareIndirect(descriptor, descriptor.IndirectExceptionInterceptors, messageType, effectiveGroups)),
             FinalInterceptors = Merge(
                 Prepare(descriptor.FinalInterceptors, messageType, effectiveGroups),
-                Prepare(descriptor.IndirectFinalInterceptors, messageType, effectiveGroups)),
+                PrepareIndirect(descriptor, descriptor.IndirectFinalInterceptors, messageType, effectiveGroups)),
         };
+    }
+
+    /// <summary>
+    /// Prepares a covariantly matched interceptor stage, honoring the message's
+    /// <c>[ExcludeFromPipeline]</c> declaration: a blanket exclusion empties the stage,
+    /// a group-scoped exclusion drops the interceptors carrying an excluded group.
+    /// Directly registered interceptors never pass through here — the attribute cannot
+    /// suppress an interceptor written for the message type itself. Indirect main
+    /// handlers are likewise unaffected: the attribute shapes the interceptor pipeline,
+    /// not dispatch.
+    /// </summary>
+    private static PlannedHandler<TDescriptor>[] PrepareIndirect<TDescriptor>(
+        IMessageDescriptor message,
+        IReadOnlyCollection<TDescriptor> descriptors,
+        Type messageType,
+        List<string> groups)
+        where TDescriptor : IHandlerDescriptor
+    {
+        if (message.ExcludesIndirectInterceptors)
+        {
+            return [];
+        }
+
+        return Prepare(descriptors, messageType, groups, message.ExcludedInterceptorGroups);
     }
 
     /// <summary>
@@ -80,7 +104,8 @@ internal sealed class MessagePipelineShape
     private static PlannedHandler<TDescriptor>[] Prepare<TDescriptor>(
         IReadOnlyCollection<TDescriptor> descriptors,
         Type messageType,
-        List<string> groups)
+        List<string> groups,
+        IReadOnlyCollection<string>? excludedGroups = null)
         where TDescriptor : IHandlerDescriptor
     {
         if (descriptors.Count == 0)
@@ -92,10 +117,17 @@ internal sealed class MessagePipelineShape
 
         foreach (var descriptor in descriptors)
         {
-            if (MatchesAnyGroup(descriptor.Groups, groups))
+            if (!MatchesAnyGroup(descriptor.Groups, groups))
             {
-                matched.Add(descriptor);
+                continue;
             }
+
+            if (excludedGroups is { Count: > 0 } && ContainsAnyGroup(descriptor.Groups, excludedGroups))
+            {
+                continue;
+            }
+
+            matched.Add(descriptor);
         }
 
         if (matched.Count == 0)
@@ -134,9 +166,31 @@ internal sealed class MessagePipelineShape
     {
         foreach (var handlerGroup in handlerGroups)
         {
+            // ReSharper disable once ForCanBeConvertedToForeach
             for (var i = 0; i < groups.Count; i++)
             {
                 if (string.Equals(handlerGroup, groups[i], StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether any of the handler's groups appears in the excluded set.
+    /// </summary>
+    private static bool ContainsAnyGroup(
+        IReadOnlyCollection<string> handlerGroups,
+        IReadOnlyCollection<string> excludedGroups)
+    {
+        foreach (var handlerGroup in handlerGroups)
+        {
+            foreach (var excluded in excludedGroups)
+            {
+                if (string.Equals(handlerGroup, excluded, StringComparison.Ordinal))
                 {
                     return true;
                 }
