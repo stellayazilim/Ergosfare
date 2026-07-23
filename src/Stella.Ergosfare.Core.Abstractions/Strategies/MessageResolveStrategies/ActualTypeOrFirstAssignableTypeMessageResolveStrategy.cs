@@ -19,8 +19,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies;
 /// </remarks>
 public sealed class ActualTypeOrFirstAssignableTypeMessageResolveStrategy(IMessageRegistry messageRegistry) : IMessageResolveStrategy
 {
-    private readonly ConcurrentDictionary<Type, IMessageDescriptor?> _cache = new();
-    private int _cachedRegistryCount;
+    private readonly ConcurrentDictionary<Type, CacheEntry> _cache = new();
 
     /// <summary>
     ///     Finds a message descriptor for the specified message type from the message registry.
@@ -40,25 +39,29 @@ public sealed class ActualTypeOrFirstAssignableTypeMessageResolveStrategy(IMessa
             messageType = messageType.GetGenericTypeDefinition();
         }
 
-        // The registry only ever grows; a change in Count means new message types were
-        // registered and previously-missed lookups may now succeed. Descriptors themselves
-        // are mutated in place when new handlers are added, so cached references stay valid.
+        // Registry Count is the exact-existence token: it changes precisely when a new
+        // message type is registered. Exact-match entries stay valid forever (descriptors
+        // are mutated in place when handlers are added, never replaced), while negative
+        // and assignable-fallback entries are valid only for the registry size they were
+        // computed against — an exact registration arriving later must win. Stamping each
+        // entry instead of clearing the cache on growth also makes concurrent lookups
+        // race-free: a lookup computed against a pre-registration snapshot self-invalidates
+        // on the next read, whereas a cleared-then-reinserted stale entry never would.
         var registryCount = messageRegistry.Count;
-        if (Volatile.Read(ref _cachedRegistryCount) != registryCount)
+
+        if (_cache.TryGetValue(messageType, out var entry)
+            && (entry.IsExact || entry.RegistryCount == registryCount))
         {
-            _cache.Clear();
-            Volatile.Write(ref _cachedRegistryCount, registryCount);
+            return entry.Descriptor;
         }
 
-        if (_cache.TryGetValue(messageType, out var descriptor))
-        {
-            return descriptor;
-        }
+        var (descriptor, isExact) = FindUncached(messageType);
+        _cache[messageType] = new CacheEntry(descriptor, registryCount, isExact);
 
-        return _cache.GetOrAdd(messageType, FindUncached);
+        return descriptor;
     }
 
-    private IMessageDescriptor? FindUncached(Type messageType)
+    private (IMessageDescriptor? Descriptor, bool IsExact) FindUncached(Type messageType)
     {
         IMessageDescriptor? firstAssignable = null;
 
@@ -68,7 +71,7 @@ public sealed class ActualTypeOrFirstAssignableTypeMessageResolveStrategy(IMessa
         {
             if (descriptor.MessageType == messageType)
             {
-                return descriptor;
+                return (descriptor, true);
             }
 
             if (firstAssignable is null && descriptor.MessageType.IsAssignableFrom(messageType))
@@ -77,6 +80,12 @@ public sealed class ActualTypeOrFirstAssignableTypeMessageResolveStrategy(IMessa
             }
         }
 
-        return firstAssignable;
+        return (firstAssignable, false);
     }
+
+    /// <summary>
+    /// A cached resolution: the descriptor (or <c>null</c> for a miss), the registry size
+    /// it was computed against, and whether it was an exact message-type match.
+    /// </summary>
+    private readonly record struct CacheEntry(IMessageDescriptor? Descriptor, int RegistryCount, bool IsExact);
 }
