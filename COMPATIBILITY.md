@@ -1,72 +1,71 @@
-# Ergosfare Versioning & Backward Compatibility Policy
+# Ergosfare Versioning & Compatibility Policy
 
+Ergosfare optimizes for **correctness and development velocity** over bug-for-bug
+compatibility. This document tells you exactly what you can rely on — and what you cannot.
+
+> **SemVer deviations, stated up front.** Ergosfare uses SemVer-style version numbers but
+> deliberately deviates from strict SemVer in two ways:
+>
+> 1. **Defective APIs may be fixed or removed in any release, without an obsolete step.**
+>    Behavior that only exists because of a bug is not part of the contract.
+> 2. **APIs marked `[Obsolete]` may be removed in a minor release** — at the earliest, the
+>    minor release after the one that marked them (section 4).
 
 ## 1. Scope
 
-This document applies to all Ergosfare APIs, including:
+This policy covers the supported public surface of all Ergosfare packages: message and
+handler contracts, mediator facades, interceptors, mediation strategies, and module
+registration APIs.
 
-- Commands, queries, and handlers
-- Mediation strategies
-- Snapshot and caching mechanisms
-- Interceptors and oficial plugins
+## 2. Surface tiers
 
-It defines how versions are incremented, backward compatibility is maintained, and obsolete APIs are handled.
+| Tier | What | Promise |
+|------|------|---------|
+| **Stable** | Public APIs of the module packages (Commands, Queries, Events, Contracts) and the documented registration/dispatch surface | Covered by sections 3–4 |
+| **Internal surface** | `Stella.Ergosfare.Core` / `Stella.Ergosfare.Core.Abstractions` implementation machinery — public only so first-party modules can consume it across assembly boundaries | **No promise.** May change in any release; not a third-party plugin contract |
+| **Experimental** | APIs marked `[Experimental]` (diagnostic IDs prefixed `ERGOEXP`) | **No promise.** May change or disappear in any release; consuming one is a compile-time error until you suppress its diagnostic — opting in is always deliberate |
 
-## 2. Versioning Strategy
+## 3. Versioning rules
 
-1. **Major releases (`vX.0.0`)**
-    - Introduce breaking changes or obsolete APIs that may be removed.
-    - Backward compatibility for previously stable APIs is guaranteed only for the 3-month period after marking them obsolete.
+1. **Major releases (`vX.0.0`)** may change anything. **Major transitions sit entirely
+   outside the compatibility promise.** A major version is a new line: migrate
+   deliberately, or stay on the previous line — previous lines keep receiving fixes for
+   as long as they are maintained, and staying on one is a fully supported choice.
+2. **Minor releases (`vX.Y.0`)** add features and improvements. They do not break healthy,
+   non-obsolete stable APIs — but they may (a) fix or remove **defective** APIs and
+   (b) remove APIs that an earlier minor marked `[Obsolete]`.
+3. **Patch releases (`vX.Y.Z`)** contain fixes only — including fixes that change
+   defective behavior. **Patches never remove APIs.**
+4. **Pre-releases (`vX.Y.Z-preview.N`)** carry no promises of any kind, including between
+   two consecutive previews.
 
-2. **Minor releases (`vX.Y.Z`)**
-    - Add new features or enhancements.
-    - Must **not introduce breaking changes** to stable APIs. Obsolete APIs remain functional.
+Releases are driven by API changes, not a calendar: a major version ships whenever a
+breaking change is worth shipping.
 
-3. **Patch releases (`vX.Y.Z+`)**
-    - Bug fixes, performance improvements, and security patches only.
-    - Do not introduce new APIs or remove existing ones.
+## 4. API lifecycle
 
-**Note:** Ergosfare does **not follow a strict roadmap-based release schedule**. Release type is determined by **API changes**: if a breaking change occurs, the next major version may be released immediately.
+**Defective APIs.** An API that works incorrectly, is unsafe, or cannot fulfil its own
+documented contract may be corrected or removed **immediately, in any release, without an
+obsolete step**. Correctness beats compatibility; bug-for-bug compatibility is never kept.
 
+**Healthy but superseded APIs** follow the deprecation lifecycle:
 
-## 3. Backward Compatibility
+1. The API is marked `[Obsolete]`; the attribute message always names the replacement.
+2. It remains present and functional for the rest of its minor line — **patches never
+   remove APIs**.
+3. **The next minor release is the earliest point it may be removed**; any later minor or
+   major release may also remove it. There is no time-based window — an obsolete API may
+   well survive longer, but plan as if it will not.
 
-### 3.1 Definitions
+The compiler is the contract: aside from the defective-API exception, **a warning-free
+build is safe through every patch update and through the next minor release.**
 
-* **Stable APIs**: Public types, methods, and properties that are published in a stable release (`vX.Y.Z`).
-* **Obsolete APIs**: Stable APIs that are marked as obsolete in a stable release. This starts a **3-month backward compatibility window**.
-* **Preview/RC APIs**: APIs released in preview or release candidate versions that are obsolete before becoming stable **do not receive backward compatibility guarantees**.
+## 5. Experimental APIs
 
-### 3.2 Obsolete API Lifecycle
-
-1. When a new API is introduced or an existing API is being replaced, the old API may be marked as **obsolete** in a stable release.
-2. Once marked obsolete in a stable release:
-
-    * It **remains fully functional** during the backward compatibility window.
-    * Developers are **advised to migrate** to the new API.
-    * The 3-month timer starts **from the stable release date** where the API is marked obsolete.
-3. After the backward compatibility window:
-
-    * The obsolete API **may be removed in the next major release**.
-    * Multiple major, minor or patch releases may occur within these 3 months; removal is only restricted by the backward compatibility duration.
-
-### 3.3 Exceptions
-
-* APIs obsolete in **preview or RC** versions **before a stable release** do **not** get any backward compatibility guarantee.
-* Security patches may require breaking the obsolete API before the 3-month period; in such cases, migration is strongly recommended.
-
-### 3.4 Example
-
-* Suppose `v1.0.0` is stable.
-* `v1.4.0` marks `OldMethod()` as obsolete.
-* Backward compatibility period starts from `v1.4.0`.
-* Any stable release (v1.4.x, v1.5.x, etc.) during the next 3 months must keep `OldMethod()` functional.
-* After 3 months, the **next major release (v2.0.0 or later)** may remove `OldMethod()`.
-
-## 4. Experimental APIs
-
-* APIs marked with `[Experimental]` (diagnostic IDs prefixed `ERGOEXP`, e.g. `ERGOEXP001`) sit **entirely outside the compatibility promise** — even when they ship in a stable release.
-* They may change or be removed in **any** release (major, minor, or patch) without an obsolete period or migration window.
-* Consuming an experimental API is a **compile-time error** unless the consumer explicitly suppresses its diagnostic ID (e.g. `#pragma warning disable ERGOEXP001` or `<NoWarn>`), so opting in is always a deliberate act.
-* An experimental API graduates by having the attribute removed in a stable release; from that release on, it is a stable API covered by Section 3.
-
+* APIs marked `[Experimental]` (diagnostic IDs prefixed `ERGOEXP`, e.g. `ERGOEXP001`) sit
+  **entirely outside this policy** — even when they ship in a stable release.
+* They may change or be removed in **any** release without an obsolete step.
+* Consuming an experimental API is a **compile-time error** unless the consumer explicitly
+  suppresses its diagnostic ID (e.g. `#pragma warning disable ERGOEXP001` or `<NoWarn>`).
+* An experimental API graduates by having the attribute removed in a stable release; from
+  that release on, it is a stable API covered by this policy.
