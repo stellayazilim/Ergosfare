@@ -1,5 +1,12 @@
 ## Unreleased — v2 preview line
 
+### Source generator Phase 2 — pre-computed descriptors, registration without reflection
+
+* **`HandlerDescriptors` factory** (`Stella.Ergosfare.Core.Abstractions.Registry.Descriptors`): public construction surface for pre-built handler descriptors — one method per descriptor kind (`Handler`, `PreInterceptor`, `PostInterceptor`, `ExceptionInterceptor`, `FinalInterceptor`), taking statically known message/result/handler types plus optional weight and groups. Omitted groups fall back to `GroupAttribute.DefaultGroupName`, matching the reflection path.
+* **`RegisterDescriptors` on the module builders.** `CommandModuleBuilder`, `QueryModuleBuilder`, and `EventModuleBuilder` accept pre-built descriptors (validating each handler type against the module marker), mirroring the `IMessageRegistry.RegisterDescriptors` seam.
+* **The generator now emits descriptors instead of `Register(typeof(...))` calls** for every type with handler contracts: message types verbatim for main handlers, generic-definition-normalized for interceptors, `ValueTask`/`ValueTask<TResult>` carriers for asynchronous contracts, `object` for result-agnostic interceptor contracts, `[Weight]`/`[Group]` values read from the attributes — byte-for-byte what the runtime descriptor builders would have computed reflectively, including their ordering and (message, result) dedupe rules. Registration of generated types performs **no reflection over handler types** and no `MakeGenericType` for `ValueTask<TResult>` carriers.
+* Plain messages and open generic types (whose contract type arguments cannot appear in `typeof`) keep the runtime `Register(Type)` fallback; both paths remain mutually idempotent in the registry. Against older Ergosfare packages that predate the descriptor surface, emission degrades gracefully to Phase 1 `Register(Type)` calls.
+
 ### Executor dispatch — the object bridge is gone
 
 * **Per-message-type pipeline executors.** Dispatch now goes through a pipeline closed over the message's *runtime* type, built once per (message type, result type, group set) and cached process-wide (`IPipelineExecutor`, `IMessageMediator.DispatchAsync`). The mediator facades resolve the executor with a dictionary lookup — no per-call options object, no interface-erased strategy, and the handler's `ValueTask` never crosses an object-typed bridge. Events and streaming queries use the same pattern via per-type invokers that carry their per-call state (settings / cancellation token).

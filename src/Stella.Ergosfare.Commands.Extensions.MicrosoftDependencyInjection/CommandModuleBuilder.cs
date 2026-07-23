@@ -2,6 +2,7 @@
 using System.Reflection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Registry;
+using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 
 namespace Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 
@@ -46,6 +47,31 @@ public sealed class CommandModuleBuilder
         }
 
         _messageRegistry.Register(type);
+        return this;
+    }
+
+    /// <summary>
+    ///     Registers pre-built handler descriptors, bypassing reflection-based descriptor
+    ///     construction — the registration path used by source-generated code.
+    /// </summary>
+    /// <param name="descriptors">The descriptors to register; every handler type must be a command construct.</param>
+    /// <returns>The current <see cref="CommandModuleBuilder" /> instance for method chaining.</returns>
+    /// <exception cref="NotSupportedException">Thrown when a descriptor's handler type is not a command construct.</exception>
+    public CommandModuleBuilder RegisterDescriptors(IEnumerable<IHandlerDescriptor> descriptors)
+    {
+        var accepted = new List<IHandlerDescriptor>();
+
+        foreach (var descriptor in descriptors)
+        {
+            if (!descriptor.HandlerType.IsAssignableTo(typeof(ICommand)))
+            {
+                throw new NotSupportedException($"The given type '{descriptor.HandlerType.Name}' is not a command construct and cannot be registered.");
+            }
+
+            accepted.Add(descriptor);
+        }
+
+        _messageRegistry.RegisterDescriptors(accepted);
         return this;
     }
 
