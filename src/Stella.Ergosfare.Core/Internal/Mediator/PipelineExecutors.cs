@@ -114,12 +114,22 @@ internal sealed class PipelineExecutorCache(
     [UnconditionalSuppressMessage("Trimming", "IL2055",
         Justification = "The executor generic is closed over a live message's runtime type; the message roots its type.")]
     [UnconditionalSuppressMessage("AOT", "IL3050",
-        Justification = "Executors close over reference message types (shared generic code under Native AOT); " +
-                        "source-generated dispatch will emit these instantiations concretely.")]
+        Justification = "Generated dispatch roots cover source-generated types; this reflective path is the JIT " +
+                        "fallback for open generics and runtime-only registrations.")]
     [UnconditionalSuppressMessage("Trimming", "IL2077", Justification = "Executor types are constructed from typeof expressions below; their constructors are rooted.")]
     private IPipelineExecutor CreateVoidExecutor(Type messageType, string[] groups)
     {
         var descriptor = FindDescriptor(messageType);
+
+        // Generated dispatch roots close the executor generic at compile time; the
+        // reflective path below only serves types without a root.
+        if (GeneratedDispatchRoots.FindMessage(messageType) is { } root)
+        {
+            return root.Accept(
+                VoidExecutorVisitor.Instance,
+                new ExecutorState(descriptor, dependenciesFactory, resultAdapterService, groups));
+        }
+
         var executorType = typeof(VoidPipelineExecutor<>).MakeGenericType(messageType);
 
         return (IPipelineExecutor)Activator.CreateInstance(executorType, descriptor, dependenciesFactory, resultAdapterService, groups)!;
@@ -128,15 +138,53 @@ internal sealed class PipelineExecutorCache(
     [UnconditionalSuppressMessage("Trimming", "IL2055",
         Justification = "The executor generic is closed over a live message's runtime type; the message roots its type.")]
     [UnconditionalSuppressMessage("AOT", "IL3050",
-        Justification = "Executors close over reference message types (shared generic code under Native AOT); " +
-                        "source-generated dispatch will emit these instantiations concretely.")]
+        Justification = "Generated dispatch roots cover source-generated types; this reflective path is the JIT " +
+                        "fallback for open generics and runtime-only registrations.")]
     [UnconditionalSuppressMessage("Trimming", "IL2077", Justification = "Executor types are constructed from typeof expressions below; their constructors are rooted.")]
     private object CreateResultExecutor(Type messageType, Type resultType, string[] groups)
     {
         var descriptor = FindDescriptor(messageType);
+
+        if (GeneratedDispatchRoots.FindResult(messageType, resultType) is { } root)
+        {
+            return root.Accept(
+                ResultExecutorVisitor.Instance,
+                new ExecutorState(descriptor, dependenciesFactory, resultAdapterService, groups));
+        }
+
         var executorType = typeof(ResultPipelineExecutor<,>).MakeGenericType(messageType, resultType);
 
         return Activator.CreateInstance(executorType, descriptor, dependenciesFactory, resultAdapterService, groups)!;
+    }
+
+    /// <summary>Constructor arguments carried into the generic re-entry of a dispatch root.</summary>
+    private readonly record struct ExecutorState(
+        IMessageDescriptor Descriptor,
+        IMessageDependenciesFactory DependenciesFactory,
+        IResultAdapterService? ResultAdapterService,
+        string[] Groups);
+
+    /// <summary>
+    /// Re-enters a generic context with a root's message type and constructs the closed
+    /// void executor there — no <see cref="Type.MakeGenericType"/>, no reflection.
+    /// </summary>
+    private sealed class VoidExecutorVisitor : IMessageRootVisitor<IPipelineExecutor, ExecutorState>
+    {
+        public static readonly VoidExecutorVisitor Instance = new();
+
+        public IPipelineExecutor Visit<TMessage>(ExecutorState state) where TMessage : IMessage
+            => new VoidPipelineExecutor<TMessage>(
+                state.Descriptor, state.DependenciesFactory, state.ResultAdapterService, state.Groups);
+    }
+
+    /// <summary>Result-executor counterpart of <see cref="VoidExecutorVisitor"/>.</summary>
+    private sealed class ResultExecutorVisitor : IMessageResultRootVisitor<object, ExecutorState>
+    {
+        public static readonly ResultExecutorVisitor Instance = new();
+
+        public object Visit<TMessage, TResult>(ExecutorState state) where TMessage : IMessage
+            => new ResultPipelineExecutor<TMessage, TResult>(
+                state.Descriptor, state.DependenciesFactory, state.ResultAdapterService, state.Groups);
     }
 
     private IMessageDescriptor FindDescriptor(Type messageType)

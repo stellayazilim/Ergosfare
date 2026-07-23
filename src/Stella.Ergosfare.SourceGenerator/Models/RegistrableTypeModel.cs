@@ -77,6 +77,22 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     /// </summary>
     public required ImmutableArray<string> DiscoveryKeys { get; init; }
 
+    /// <summary>
+    ///     Whether the type can appear as a dispatched message instance — concrete
+    ///     (non-abstract class or struct), fully closed, accessible, and carrying no
+    ///     handler contracts — and therefore gets its dispatch generics rooted via
+    ///     <c>GeneratedDispatchRoots</c>.
+    /// </summary>
+    public required bool IsDispatchableMessage { get; init; }
+
+    /// <summary>
+    ///     The result roots to emit for a dispatchable message: one entry per closed
+    ///     <c>ICommand&lt;T&gt;</c>/<c>IQuery&lt;T&gt;</c> (result) and
+    ///     <c>IStreamQuery&lt;T&gt;</c> (stream) contract on the type. Empty for
+    ///     non-dispatchable types.
+    /// </summary>
+    public required ImmutableArray<DispatchResultModel> DispatchResults { get; init; }
+
     public bool Equals(RegistrableTypeModel other)
     {
         if (TypeofExpression != other.TypeofExpression
@@ -89,8 +105,10 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
             || Weight != other.Weight
             || GroupsExpression != other.GroupsExpression
             || ReferencedAssemblyName != other.ReferencedAssemblyName
+            || IsDispatchableMessage != other.IsDispatchableMessage
             || Descriptors.Length != other.Descriptors.Length
-            || DiscoveryKeys.Length != other.DiscoveryKeys.Length)
+            || DiscoveryKeys.Length != other.DiscoveryKeys.Length
+            || DispatchResults.Length != other.DispatchResults.Length)
         {
             return false;
         }
@@ -106,6 +124,14 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
         for (var i = 0; i < DiscoveryKeys.Length; i++)
         {
             if (!string.Equals(DiscoveryKeys[i], other.DiscoveryKeys[i], StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        for (var i = 0; i < DispatchResults.Length; i++)
+        {
+            if (!DispatchResults[i].Equals(other.DispatchResults[i]))
             {
                 return false;
             }

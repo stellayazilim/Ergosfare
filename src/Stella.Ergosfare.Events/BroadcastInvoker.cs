@@ -53,13 +53,35 @@ internal static class EventBroadcastInvokerCache
     [UnconditionalSuppressMessage("Trimming", "IL2055",
         Justification = "The invoker generic is closed over a live event's runtime type; the event roots its type.")]
     [UnconditionalSuppressMessage("AOT", "IL3050",
-        Justification = "Invokers close over reference event types (shared generic code under Native AOT); " +
-                        "source-generated dispatch will emit these instantiations concretely.")]
+        Justification = "Generated dispatch roots cover source-generated event types; this reflective path is the " +
+                        "JIT fallback for runtime-only registrations.")]
     public static IEventBroadcastInvoker Get(Type eventType)
     {
-        return Invokers.TryGetValue(eventType, out var invoker)
-            ? invoker
-            : Invokers.GetOrAdd(eventType,
-                static t => (IEventBroadcastInvoker)Activator.CreateInstance(typeof(EventBroadcastInvoker<>).MakeGenericType(t))!);
+        if (Invokers.TryGetValue(eventType, out var invoker))
+        {
+            return invoker;
+        }
+
+        // Generated dispatch roots close the invoker generic at compile time; the
+        // reflective path below only serves event types without a root.
+        if (GeneratedDispatchRoots.FindMessage(eventType) is { } root)
+        {
+            return Invokers.GetOrAdd(eventType, root.Accept(InvokerVisitor.Instance, state: false));
+        }
+
+        return Invokers.GetOrAdd(eventType,
+            static t => (IEventBroadcastInvoker)Activator.CreateInstance(typeof(EventBroadcastInvoker<>).MakeGenericType(t))!);
+    }
+
+    /// <summary>
+    /// Re-enters a generic context with a root's event type and constructs the closed
+    /// broadcast invoker there — no <see cref="Type.MakeGenericType"/>, no reflection.
+    /// </summary>
+    private sealed class InvokerVisitor : IMessageRootVisitor<IEventBroadcastInvoker, bool>
+    {
+        public static readonly InvokerVisitor Instance = new();
+
+        public IEventBroadcastInvoker Visit<TMessage>(bool state) where TMessage : IMessage
+            => new EventBroadcastInvoker<TMessage>();
     }
 }
