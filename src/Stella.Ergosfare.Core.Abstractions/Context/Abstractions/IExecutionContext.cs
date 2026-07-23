@@ -58,6 +58,19 @@ public interface IExecutionContext
     IDictionary<object, object?> Items { get; }
 
     /// <summary>
+    /// Opens a child execution-context scope for a nested mediator call: the child starts
+    /// with clean items and inherits this context's cancellation token. Dispose the scope
+    /// when the nested call completes; the child must not be used afterwards.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// using var scope = context.CreateScope();
+    /// await commandMediator.SendAsync(new InnerCommand(), scope.Context);
+    /// </code>
+    /// </example>
+    ExecutionContextScope CreateScope();
+
+    /// <summary>
     /// Aborts the execution of the current mediation operation.
     /// </summary>
     /// <param name="messageResult">

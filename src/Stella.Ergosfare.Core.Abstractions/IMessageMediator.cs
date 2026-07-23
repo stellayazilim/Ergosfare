@@ -31,6 +31,26 @@ public interface IMessageMediator
     /// <param name="groups">Pipeline groups to dispatch under; <c>null</c> selects the default group.</param>
     ValueTask<TResult> DispatchAsync<TResult>(object message, IDictionary<object, object?>? items = null, CancellationToken cancellationToken = default, IEnumerable<string>? groups = null);
 
+    /// <summary>
+    /// Dispatches <paramref name="message"/> under an externally owned execution context —
+    /// the nested-dispatch path: a handler opens a scope on its own context and passes the
+    /// child here. The caller owns the context's lifetime.
+    /// </summary>
+    /// <param name="message">The message instance to dispatch.</param>
+    /// <param name="context">The externally owned execution context to dispatch under.</param>
+    /// <param name="groups">Pipeline groups to dispatch under; <c>null</c> selects the default group.</param>
+    ValueTask DispatchAsync(object message, IExecutionContext context, IEnumerable<string>? groups = null);
+
+    /// <summary>
+    /// Result-producing counterpart of
+    /// <see cref="DispatchAsync(object, IExecutionContext, IEnumerable{string})"/>.
+    /// </summary>
+    /// <typeparam name="TResult">The result type produced by the pipeline.</typeparam>
+    /// <param name="message">The message instance to dispatch.</param>
+    /// <param name="context">The externally owned execution context to dispatch under.</param>
+    /// <param name="groups">Pipeline groups to dispatch under; <c>null</c> selects the default group.</param>
+    ValueTask<TResult> DispatchAsync<TResult>(object message, IExecutionContext context, IEnumerable<string>? groups = null);
+
     
     /// <summary>
     /// Dispatches a message of type <typeparamref name="TMessage"/> to the appropriate handler(s)

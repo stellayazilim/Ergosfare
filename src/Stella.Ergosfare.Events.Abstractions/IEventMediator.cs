@@ -34,6 +34,18 @@ public interface IEventMediator
     ValueTask PublishAsync(IEvent @event, EventMediationSettings? eventMediationSettings = null, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Publishes an event under an externally owned execution context — the
+    ///     nested-dispatch path: a handler opens a scope on its own context
+    ///     (<c>using var scope = context.CreateScope();</c>) and passes
+    ///     <c>scope.Context</c> here. The caller owns the context's lifetime;
+    ///     cancellation flows from the context.
+    /// </summary>
+    /// <param name="event">The event to publish.</param>
+    /// <param name="context">The externally owned execution context to publish under.</param>
+    /// <param name="eventMediationSettings">Optional settings for pipeline execution.</param>
+    ValueTask PublishAsync(IEvent @event, Core.Abstractions.IExecutionContext context, EventMediationSettings? eventMediationSettings = null);
+
+    /// <summary>
     ///     Asynchronously publishes an event with a specific type.
     /// </summary>
     /// <typeparam name="TEvent">The type of the event to be published.</typeparam>

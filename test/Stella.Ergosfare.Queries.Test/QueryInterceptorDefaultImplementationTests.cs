@@ -101,6 +101,7 @@ public class QueryInterceptorDefaultImplementationTests
 
         public CancellationToken CancellationToken => CancellationToken.None;
         public IDictionary<object, object?> Items { get; } = new Dictionary<object, object?>();
+        public ExecutionContextScope CreateScope() => new(this);
         public void Set(string key, object item) => Items[key] = item;
         public bool Has(string key) => Items.ContainsKey(key);
         public TType Get<TType>(string key) where TType : notnull => (TType) Items[key]!;
