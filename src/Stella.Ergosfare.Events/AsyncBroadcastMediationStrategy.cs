@@ -29,7 +29,6 @@ namespace Stella.Ergosfare.Events;
 /// </para>
 /// </remarks>
 public sealed class AsyncBroadcastMediationStrategy<TMessage>(
-    IResultAdapterService? resultAdapterService,
     EventMediationSettings settings)
     : IMessageMediationStrategy<TMessage, ValueTask>
     where TMessage : notnull
@@ -53,9 +52,7 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
     public async ValueTask Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context, IServiceProvider serviceProvider)
     {
 
-        var handlers = messageDependencies.Handlers
-            .Where(x => settings.Filters.HandlerPredicate(x.Descriptor.HandlerType))
-            .ToList();
+        var handlers = FilterHandlers(messageDependencies.Handlers);
 
         if (handlers.Count == 0)
         {
@@ -94,7 +91,39 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
         }
     }
 
-    
+    /// <summary>
+    /// Applies the settings' handler filter without LINQ: the common case — a predicate
+    /// that accepts every handler — returns the original list with zero allocation; a
+    /// filtering predicate materializes a list only from the first rejection onward.
+    /// </summary>
+    private IReadOnlyList<IHandlerReference<IHandler, IMainHandlerDescriptor>> FilterHandlers(
+        IReadOnlyList<IHandlerReference<IHandler, IMainHandlerDescriptor>> handlers)
+    {
+        var predicate = settings.Filters.HandlerPredicate;
+        List<IHandlerReference<IHandler, IMainHandlerDescriptor>>? filtered = null;
+
+        for (var i = 0; i < handlers.Count; i++)
+        {
+            var handler = handlers[i];
+
+            if (predicate(handler.Descriptor.HandlerType))
+            {
+                filtered?.Add(handler);
+            }
+            else if (filtered is null)
+            {
+                // First rejection: materialize the accepted prefix and filter from here on.
+                filtered = new List<IHandlerReference<IHandler, IMainHandlerDescriptor>>(handlers.Count - 1);
+                for (var j = 0; j < i; j++)
+                {
+                    filtered.Add(handlers[j]);
+                }
+            }
+        }
+
+        return filtered ?? handlers;
+    }
+
     /// <summary>
     /// Publishes the message sequentially to all resolved handlers.
     /// </summary>

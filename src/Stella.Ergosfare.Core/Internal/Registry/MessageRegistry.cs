@@ -65,9 +65,26 @@ internal sealed class MessageRegistry(
     private readonly Dictionary<Type, MessageDescriptor> _messageIndex = new();
 
     /// <summary>
-    /// Types that have already been processed and registered (as message or handler)
+    /// Types that have already been processed and registered (as message or handler).
+    /// Concurrent so the lock-free fast path of <see cref="Register"/> can consult it;
+    /// authoritative writes happen under <see cref="_gate"/>.
     /// </summary>
     private readonly ConcurrentDictionary<Type, byte> _processedTypes = new();
+
+    /// <summary>
+    /// Serializes all registration work. Dispatch-time readers never take this lock —
+    /// they enumerate <see cref="_snapshot"/>, an immutable array republished after every
+    /// effective registration.
+    /// </summary>
+    private readonly object _gate = new();
+
+    /// <summary>
+    /// Immutable view of the finalized messages, republished at the end of every effective
+    /// registration. The volatile write is the publication point: everything a registration
+    /// mutated (descriptor stage arrays included) happens-before a reader that observes the
+    /// new snapshot or the new <see cref="Version"/>.
+    /// </summary>
+    private volatile IMessageDescriptor[] _snapshot = [];
 
 
     /// <summary>
@@ -75,29 +92,30 @@ internal sealed class MessageRegistry(
     /// Unlike <see cref="Count"/>, this also changes when handlers are added to
     /// already-registered messages, allowing dependency caches to invalidate.
     /// </summary>
-    internal int Version => _version;
+    internal int Version => Volatile.Read(ref _version);
 
     private int _version;
-    
-    
+
+
     /// <summary>
     /// Gets an enumerator that iterates through the collection of registered messages.
     /// </summary>
     /// <returns>An enumerator for the registered messages.</returns>
     /// <remarks>
-    /// This allows enumeration over all registered messages.
+    /// Enumerates an immutable snapshot, so enumeration is safe while another thread
+    /// registers; a concurrent registration becomes visible on the next enumeration.
     /// </remarks>
-    public IEnumerator<IMessageDescriptor> GetEnumerator() => _messages.GetEnumerator();
+    public IEnumerator<IMessageDescriptor> GetEnumerator() => ((IEnumerable<IMessageDescriptor>)_snapshot).GetEnumerator();
 
-    
-    
+
+
     /// <summary>
     /// Gets the number of registered messages.
     /// </summary>
     /// <remarks>
     /// Represents how many unique message types are currently registered.
     /// </remarks>
-    public int Count => _messages.Count;
+    public int Count => _snapshot.Length;
     
     
     /// <summary>
@@ -122,63 +140,85 @@ internal sealed class MessageRegistry(
     /// </remarks>
     public void Register([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type type)
     {
-        
-        // If the type has already been processed, skip registration
+
+        // Lock-free fast path: already-processed types (every dispatch-time re-registration
+        // attempt after the first) never touch the gate.
         if (_processedTypes.ContainsKey(type))
         {
             return;
         }
-        
-        // Use builders to create handler descriptors for the given type
-        // <see cref="MessageDescriptorBuilderFactory" />
 
-        var newDescriptors = handlerDescriptorBuilderFactory.BuildDescriptors(type);
-       
-        
-        // If no handlers were created, assume the type is a message type and register it
-        if (newDescriptors.Count == 0)
+        lock (_gate)
         {
-            RegisterMessage(type);
-        }
-        
-        else
-        {
-            // For each handler descriptor, register its message type and add the handler to the list
-            foreach (var descriptor in newDescriptors)
+            // Re-check under the lock: another thread may have registered the same type
+            // between the fast-path check and lock acquisition.
+            if (_processedTypes.ContainsKey(type))
             {
-                RegisterMessage(descriptor.MessageType);
-                _descriptors.Add(descriptor);
+                return;
             }
-            
-            // If there are new handlers and existing messages, add the handlers to all messages
-            if (newDescriptors.Count > 0 && _messages.Count > 0)
+
+            // Use builders to create handler descriptors for the given type
+            // <see cref="MessageDescriptorBuilderFactory" />
+
+            var newDescriptors = handlerDescriptorBuilderFactory.BuildDescriptors(type);
+
+
+            // If no handlers were created, assume the type is a message type and register it
+            if (newDescriptors.Count == 0)
             {
-                foreach (var messageDescriptor in _messages)
+                RegisterMessage(type);
+            }
+
+            else
+            {
+                // For each handler descriptor, register its message type and add the handler to the list
+                foreach (var descriptor in newDescriptors)
                 {
-                    messageDescriptor.AddDescriptors(newDescriptors);
+                    RegisterMessage(descriptor.MessageType);
+                    _descriptors.Add(descriptor);
+                }
+
+                // If there are new handlers and existing messages, add the handlers to all messages
+                if (newDescriptors.Count > 0 && _messages.Count > 0)
+                {
+                    foreach (var messageDescriptor in _messages)
+                    {
+                        messageDescriptor.AddDescriptors(newDescriptors);
+                    }
                 }
             }
-        }
-        
-        // Sync new messages with all existing handler descriptors (if any)
-        if (_newMessages.Count > 0 && _descriptors.Count > 0)
-        {
-            foreach (var messageDescriptor in _newMessages)
+
+            // Sync new messages with all existing handler descriptors (if any)
+            if (_newMessages.Count > 0 && _descriptors.Count > 0)
             {
-                messageDescriptor.AddDescriptors(_descriptors);
+                foreach (var messageDescriptor in _newMessages)
+                {
+                    messageDescriptor.AddDescriptors(_descriptors);
+                }
             }
-        }
-        // Mark the type as processed to prevent duplicate registration
-        _processedTypes[type] = 0;
+            // Mark the type as processed to prevent duplicate registration
+            _processedTypes[type] = 0;
 
-        // Move all newly registered messages to the main messages list and clear the newMessages list
-        if (_newMessages.Count > 0)
-        {
-            _messages.AddRange(_newMessages);
-            _newMessages.Clear();
-        }
+            // Move all newly registered messages to the main messages list and clear the newMessages list
+            if (_newMessages.Count > 0)
+            {
+                _messages.AddRange(_newMessages);
+                _newMessages.Clear();
+            }
 
+            Publish();
+        }
+    }
+
+    /// <summary>
+    /// Publishes the effects of a registration to lock-free readers: bumps the version
+    /// (dependency caches invalidate on it) and republishes the immutable message snapshot.
+    /// Must be called under <see cref="_gate"/>, after all mutations of the registration.
+    /// </summary>
+    private void Publish()
+    {
         Interlocked.Increment(ref _version);
+        _snapshot = _messages.ToArray();
     }
 
 
@@ -194,56 +234,59 @@ internal sealed class MessageRegistry(
     /// </remarks>
     public void RegisterDescriptors(IEnumerable<IHandlerDescriptor> descriptors)
     {
-        // Collect first, mark processed after: one handler type may legitimately supply
-        // several descriptors in the same batch (it can implement multiple handler roles).
-        List<IHandlerDescriptor>? accepted = null;
-        foreach (var descriptor in descriptors)
+        lock (_gate)
         {
-            if (_processedTypes.ContainsKey(descriptor.HandlerType))
+            // Collect first, mark processed after: one handler type may legitimately supply
+            // several descriptors in the same batch (it can implement multiple handler roles).
+            List<IHandlerDescriptor>? accepted = null;
+            foreach (var descriptor in descriptors)
             {
-                continue;
+                if (_processedTypes.ContainsKey(descriptor.HandlerType))
+                {
+                    continue;
+                }
+
+                (accepted ??= []).Add(descriptor);
             }
 
-            (accepted ??= []).Add(descriptor);
-        }
-
-        if (accepted is null)
-        {
-            return;
-        }
-
-        foreach (var descriptor in accepted)
-        {
-            RegisterMessage(descriptor.MessageType);
-            _descriptors.Add(descriptor);
-            _processedTypes[descriptor.HandlerType] = 0;
-        }
-
-        // Same linking pass as Register(): attach the new descriptors to every existing
-        // message, then give staged messages the full descriptor set before finalizing.
-        if (_messages.Count > 0)
-        {
-            foreach (var messageDescriptor in _messages)
+            if (accepted is null)
             {
-                messageDescriptor.AddDescriptors(accepted);
+                return;
             }
-        }
 
-        if (_newMessages.Count > 0 && _descriptors.Count > 0)
-        {
-            foreach (var messageDescriptor in _newMessages)
+            foreach (var descriptor in accepted)
             {
-                messageDescriptor.AddDescriptors(_descriptors);
+                RegisterMessage(descriptor.MessageType);
+                _descriptors.Add(descriptor);
+                _processedTypes[descriptor.HandlerType] = 0;
             }
-        }
 
-        if (_newMessages.Count > 0)
-        {
-            _messages.AddRange(_newMessages);
-            _newMessages.Clear();
-        }
+            // Same linking pass as Register(): attach the new descriptors to every existing
+            // message, then give staged messages the full descriptor set before finalizing.
+            if (_messages.Count > 0)
+            {
+                foreach (var messageDescriptor in _messages)
+                {
+                    messageDescriptor.AddDescriptors(accepted);
+                }
+            }
 
-        Interlocked.Increment(ref _version);
+            if (_newMessages.Count > 0 && _descriptors.Count > 0)
+            {
+                foreach (var messageDescriptor in _newMessages)
+                {
+                    messageDescriptor.AddDescriptors(_descriptors);
+                }
+            }
+
+            if (_newMessages.Count > 0)
+            {
+                _messages.AddRange(_newMessages);
+                _newMessages.Clear();
+            }
+
+            Publish();
+        }
     }
 
 

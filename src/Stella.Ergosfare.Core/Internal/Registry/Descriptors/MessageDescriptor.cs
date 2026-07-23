@@ -11,31 +11,34 @@ namespace Stella.Ergosfare.Core.Internal.Registry.Descriptors;
 /// This class categorizes descriptors into direct and indirect collections:
 /// - Direct descriptors match the message type exactly.
 /// - Indirect descriptors match assignable message types (base types or interfaces).
-/// The backing lists are created lazily on first add — most messages use only one or
-/// two of the ten collections, so empty stages share <see cref="Array.Empty{T}"/>.
+/// Each stage is an immutable array replaced wholesale on mutation (copy-on-write):
+/// registration-time writers (serialized by the registry's gate) swap in a new array,
+/// so dispatch-time readers building pipeline shapes always observe a consistent stage —
+/// never a list mid-resize. Empty stages share <see cref="Array.Empty{T}"/> via the
+/// null-backed properties; most messages use only one or two of the ten collections.
 /// </remarks>
 internal class MessageDescriptor(Type messageType) : IMessageDescriptor
 {
 
     // pre interceptors
-    private List<IPreInterceptorDescriptor>? _preInterceptors;
-    private List<IPreInterceptorDescriptor>? _indirectPreInterceptors;
+    private IPreInterceptorDescriptor[]? _preInterceptors;
+    private IPreInterceptorDescriptor[]? _indirectPreInterceptors;
 
     // main handlers
-    private List<IMainHandlerDescriptor>? _handlers;
-    private List<IMainHandlerDescriptor>? _indirectHandlers;
+    private IMainHandlerDescriptor[]? _handlers;
+    private IMainHandlerDescriptor[]? _indirectHandlers;
 
     // post interceptors
-    private List<IPostInterceptorDescriptor>? _postInterceptors;
-    private List<IPostInterceptorDescriptor>? _indirectPostInterceptors;
+    private IPostInterceptorDescriptor[]? _postInterceptors;
+    private IPostInterceptorDescriptor[]? _indirectPostInterceptors;
 
     // exception interceptors
-    private List<IExceptionInterceptorDescriptor>? _exceptionInterceptors;
-    private List<IExceptionInterceptorDescriptor>? _indirectExceptionInterceptors;
+    private IExceptionInterceptorDescriptor[]? _exceptionInterceptors;
+    private IExceptionInterceptorDescriptor[]? _indirectExceptionInterceptors;
 
     // final interceptors
-    private List<IFinalInterceptorDescriptor>? _finalInterceptors;
-    private List<IFinalInterceptorDescriptor>? _indirectFinalInterceptors;
+    private IFinalInterceptorDescriptor[]? _finalInterceptors;
+    private IFinalInterceptorDescriptor[]? _indirectFinalInterceptors;
 
 
     /// <summary>
@@ -49,25 +52,25 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
     public bool IsGeneric { get; } = messageType.IsGenericType;
 
     // pre interceptor
-    public IReadOnlyCollection<IPreInterceptorDescriptor> PreInterceptors => _preInterceptors ?? (IReadOnlyCollection<IPreInterceptorDescriptor>)Array.Empty<IPreInterceptorDescriptor>();
-    public IReadOnlyCollection<IPreInterceptorDescriptor> IndirectPreInterceptors => _indirectPreInterceptors ?? (IReadOnlyCollection<IPreInterceptorDescriptor>)Array.Empty<IPreInterceptorDescriptor>();
+    public IReadOnlyCollection<IPreInterceptorDescriptor> PreInterceptors => _preInterceptors ?? Array.Empty<IPreInterceptorDescriptor>();
+    public IReadOnlyCollection<IPreInterceptorDescriptor> IndirectPreInterceptors => _indirectPreInterceptors ?? Array.Empty<IPreInterceptorDescriptor>();
 
     // main handlers
-    public IReadOnlyCollection<IMainHandlerDescriptor> Handlers => _handlers ?? (IReadOnlyCollection<IMainHandlerDescriptor>)Array.Empty<IMainHandlerDescriptor>();
-    public IReadOnlyCollection<IMainHandlerDescriptor> IndirectHandlers => _indirectHandlers ?? (IReadOnlyCollection<IMainHandlerDescriptor>)Array.Empty<IMainHandlerDescriptor>();
+    public IReadOnlyCollection<IMainHandlerDescriptor> Handlers => _handlers ?? Array.Empty<IMainHandlerDescriptor>();
+    public IReadOnlyCollection<IMainHandlerDescriptor> IndirectHandlers => _indirectHandlers ?? Array.Empty<IMainHandlerDescriptor>();
 
     // post interceptors
-    public IReadOnlyCollection<IPostInterceptorDescriptor> PostInterceptors => _postInterceptors ?? (IReadOnlyCollection<IPostInterceptorDescriptor>)Array.Empty<IPostInterceptorDescriptor>();
-    public IReadOnlyCollection<IPostInterceptorDescriptor> IndirectPostInterceptors => _indirectPostInterceptors ?? (IReadOnlyCollection<IPostInterceptorDescriptor>)Array.Empty<IPostInterceptorDescriptor>();
+    public IReadOnlyCollection<IPostInterceptorDescriptor> PostInterceptors => _postInterceptors ?? Array.Empty<IPostInterceptorDescriptor>();
+    public IReadOnlyCollection<IPostInterceptorDescriptor> IndirectPostInterceptors => _indirectPostInterceptors ?? Array.Empty<IPostInterceptorDescriptor>();
 
 
     // exception interceptors
-    public IReadOnlyCollection<IExceptionInterceptorDescriptor> ExceptionInterceptors => _exceptionInterceptors ?? (IReadOnlyCollection<IExceptionInterceptorDescriptor>)Array.Empty<IExceptionInterceptorDescriptor>();
-    public IReadOnlyCollection<IExceptionInterceptorDescriptor> IndirectExceptionInterceptors => _indirectExceptionInterceptors ?? (IReadOnlyCollection<IExceptionInterceptorDescriptor>)Array.Empty<IExceptionInterceptorDescriptor>();
+    public IReadOnlyCollection<IExceptionInterceptorDescriptor> ExceptionInterceptors => _exceptionInterceptors ?? Array.Empty<IExceptionInterceptorDescriptor>();
+    public IReadOnlyCollection<IExceptionInterceptorDescriptor> IndirectExceptionInterceptors => _indirectExceptionInterceptors ?? Array.Empty<IExceptionInterceptorDescriptor>();
 
     // final interceptors
-    public IReadOnlyCollection<IFinalInterceptorDescriptor> FinalInterceptors => _finalInterceptors ?? (IReadOnlyCollection<IFinalInterceptorDescriptor>)Array.Empty<IFinalInterceptorDescriptor>();
-    public IReadOnlyCollection<IFinalInterceptorDescriptor> IndirectFinalInterceptors => _indirectFinalInterceptors ?? (IReadOnlyCollection<IFinalInterceptorDescriptor>)Array.Empty<IFinalInterceptorDescriptor>();
+    public IReadOnlyCollection<IFinalInterceptorDescriptor> FinalInterceptors => _finalInterceptors ?? Array.Empty<IFinalInterceptorDescriptor>();
+    public IReadOnlyCollection<IFinalInterceptorDescriptor> IndirectFinalInterceptors => _indirectFinalInterceptors ?? Array.Empty<IFinalInterceptorDescriptor>();
 
     /// <summary>
     /// Adds multiple handler descriptors to this message descriptor.
@@ -96,19 +99,19 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
             switch (descriptor)
             {
                 case IPreInterceptorDescriptor preInterceptorDescriptor:
-                    (_preInterceptors ??= new()).Add(preInterceptorDescriptor);
+                    Append(ref _preInterceptors, preInterceptorDescriptor);
                     break;
                 case IMainHandlerDescriptor mainHandlerDescriptor :
-                    (_handlers ??= new()).Add(mainHandlerDescriptor);
+                    Append(ref _handlers, mainHandlerDescriptor);
                     break;
                 case IPostInterceptorDescriptor postInterceptorDescriptor:
-                    (_postInterceptors ??= new()).Add(postInterceptorDescriptor);
+                    Append(ref _postInterceptors, postInterceptorDescriptor);
                     break;
                 case IExceptionInterceptorDescriptor exceptionInterceptorDescriptor:
-                    (_exceptionInterceptors ??= new()).Add(exceptionInterceptorDescriptor);
+                    Append(ref _exceptionInterceptors, exceptionInterceptorDescriptor);
                     break;
                 case IFinalInterceptorDescriptor finalInterceptorDescriptor:
-                    (_finalInterceptors ??= new()).Add(finalInterceptorDescriptor);
+                    Append(ref _finalInterceptors, finalInterceptorDescriptor);
                     break;
             }
         }
@@ -118,21 +121,41 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
             switch (descriptor)
             {
                 case IPreInterceptorDescriptor preInterceptorDescriptor:
-                    (_indirectPreInterceptors ??= new()).Add(preInterceptorDescriptor);
+                    Append(ref _indirectPreInterceptors, preInterceptorDescriptor);
                     break;
                 case IMainHandlerDescriptor mainHandlerDescriptor:
-                    (_indirectHandlers ??= new()).Add(mainHandlerDescriptor);
+                    Append(ref _indirectHandlers, mainHandlerDescriptor);
                     break;
                 case IPostInterceptorDescriptor postInterceptorDescriptor:
-                    (_indirectPostInterceptors ??= new()).Add(postInterceptorDescriptor);
+                    Append(ref _indirectPostInterceptors, postInterceptorDescriptor);
                     break;
                 case IExceptionInterceptorDescriptor exceptionInterceptorDescriptor:
-                    (_indirectExceptionInterceptors ??= new()).Add(exceptionInterceptorDescriptor);
+                    Append(ref _indirectExceptionInterceptors, exceptionInterceptorDescriptor);
                     break;
                 case IFinalInterceptorDescriptor finalInterceptorDescriptor:
-                    (_indirectFinalInterceptors ??= new()).Add(finalInterceptorDescriptor);
+                    Append(ref _indirectFinalInterceptors, finalInterceptorDescriptor);
                     break;
             }
         }
+    }
+
+    /// <summary>
+    /// Appends an item to a stage by swapping in a newly built array. The reference
+    /// assignment is atomic, so a concurrent reader observes either the previous or the
+    /// new stage — never a partially built one. Registration is serialized by the
+    /// registry's gate, so writers never race each other here.
+    /// </summary>
+    private static void Append<T>(ref T[]? stage, T item)
+    {
+        if (stage is null)
+        {
+            stage = [item];
+            return;
+        }
+
+        var next = new T[stage.Length + 1];
+        Array.Copy(stage, next, stage.Length);
+        next[^1] = item;
+        stage = next;
     }
 }
