@@ -5,43 +5,40 @@ using Stella.Ergosfare.Test.Fixtures.Stubs.Basic;
 namespace Stella.Ergosfare.Core.Test.Interceptors;
 
 /// <summary>
-/// Contains unit tests for <see cref="IFinalInterceptor"/> implementations,
-/// verifying that the Handle methods correctly return <see cref="Task"/> for asynchronous execution.
+/// Contains unit tests for <see cref="IAsyncFinalInterceptor{TMessage}"/> and
+/// <see cref="IAsyncFinalInterceptor{TMessage, TResult}"/> implementations,
+/// verifying that the typed <c>HandleAsync</c> members complete.
 /// </summary>
 public class FinalInterceptorTests
 {
     /// <summary>
-    /// Tests that a final interceptor handling a message without a result returns a non-null <see cref="Task"/>.
+    /// Tests that a result-agnostic asynchronous final interceptor invoked through its typed
+    /// contract completes without error.
     /// </summary>
     [Fact]
     [Trait("Category", "Coverage")]
     [Trait("Category", "Unit")]
-    public async Task  TestFinalInterceptorTMessageShouldImplement()
+    public async Task TestFinalInterceptorTMessageShouldImplement()
     {
         var fixture = new ExecutionContextFixture();
-        IFinalInterceptor interceptor = new StubVoidAsyncFinalInterceptor();
+        IAsyncFinalInterceptor<StubMessage> interceptor = new StubVoidAsyncFinalInterceptor();
 
-        var result =  interceptor.Handle(new  StubMessage(), null, null, fixture.Ctx);
-
-        Assert.NotNull(result);
-        await Assert.IsType<ValueTask>(result, exactMatch:false);
-
+        await interceptor.HandleAsync(new StubMessage(), null, null, fixture.Ctx);
     }
 
-    
+
     /// <summary>
-    /// Tests that a final interceptor handling a message with a typed result returns a non-null <see cref="Task"/>.
+    /// Tests that a result-typed asynchronous final interceptor invoked through its typed
+    /// contract completes without error.
     /// </summary>
     [Fact]
     [Trait("Category", "Coverage")]
     [Trait("Category", "Unit")]
-    public async Task  TestFinalInterceptorTMessageTResultShouldImplement()
+    public async Task TestFinalInterceptorTMessageTResultShouldImplement()
     {
         var fixture = new ExecutionContextFixture();
-        IFinalInterceptor interceptor = new StubStringAsyncFinalInterceptor();
-        var result =  interceptor.Handle(new  StubMessage(), StubStringAsyncFinalInterceptor.Result, null, fixture.Ctx);
-        Assert.NotNull(result);
-        await Assert.IsType<ValueTask>(result, exactMatch:false);
-    }
+        IAsyncFinalInterceptor<StubMessage, string> interceptor = new StubStringAsyncFinalInterceptor();
 
+        await interceptor.HandleAsync(new StubMessage(), StubStringAsyncFinalInterceptor.Result, null, fixture.Ctx);
+    }
 }

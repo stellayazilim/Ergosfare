@@ -10,9 +10,9 @@ using Xunit.Abstractions;
 namespace Stella.Ergosfare.Core.Test.Strategies.InvocationStrategies;
 
 /// <summary>
-/// Unit tests for <see cref="TaskFinalInterceptorInvocationStrategy"/>.
+/// Unit tests for <see cref="FinalInterceptorInvocationStrategy{TMessage, TResult}"/>.
 /// </summary>
-public class TaskFinalInterceptorInvocationStrategyTests: 
+public class FinalInterceptorInvocationStrategyTests:
     IClassFixture<MessageDependencyFixture>, 
     IClassFixture<DescriptorFixture>,
     IClassFixture<ExecutionContextFixture>
@@ -22,7 +22,7 @@ public class TaskFinalInterceptorInvocationStrategyTests:
     private ExecutionContextFixture _executionContextFixture;
     private readonly ITestOutputHelper _testOutputHelper;
     // ReSharper disable once ConvertToPrimaryConstructor
-    public TaskFinalInterceptorInvocationStrategyTests(
+    public FinalInterceptorInvocationStrategyTests(
         ITestOutputHelper  testOutputHelper,
         MessageDependencyFixture messageDependencyFixture,
         DescriptorFixture descriptorFixture,
@@ -36,7 +36,7 @@ public class TaskFinalInterceptorInvocationStrategyTests:
 
     
     /// <summary>
-    /// Tests that the <see cref="TaskFinalInterceptorInvocationStrategy"/> correctly executes
+    /// Tests that the <see cref="FinalInterceptorInvocationStrategy{TMessage, TResult}"/> correctly executes
     /// both direct and indirect final interceptors for a given message.
     /// </summary>
     /// <remarks>

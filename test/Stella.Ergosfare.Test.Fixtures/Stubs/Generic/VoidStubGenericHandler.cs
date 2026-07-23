@@ -65,9 +65,8 @@ public class VoidStubGenericExceptionInterceptor<TMessage> : IExceptionIntercept
 /// <typeparam name="TMessage">The type parameter for the generic message.</typeparam>
 public class VoidStubGenericFinalInterceptor<TMessage> : IFinalInterceptor<StubGenericMessage<TMessage>, ValueTask>
 {
-    public object Handle(StubGenericMessage<TMessage> message, ValueTask result, Exception? exception, IExecutionContext executionContext)
+    public void Handle(StubGenericMessage<TMessage> message, ValueTask result, Exception? exception, IExecutionContext executionContext)
     {
-        return ValueTask.CompletedTask;
     }
 }
 
@@ -78,8 +77,7 @@ public class VoidStubGenericFinalInterceptor<TMessage> : IFinalInterceptor<StubG
 /// <typeparam name="TMessage">The type parameter for the generic message.</typeparam>
 public class VoidMultiStubGenericFinalInterceptor<TMessage> : IFinalInterceptor<StubGenericMessage<TMessage>, ValueTask>
 {
-    public object Handle(StubGenericMessage<TMessage> message, ValueTask result, Exception? exception, IExecutionContext executionContext)
+    public void Handle(StubGenericMessage<TMessage> message, ValueTask result, Exception? exception, IExecutionContext executionContext)
     {
-        return ValueTask.CompletedTask;
     }
 }

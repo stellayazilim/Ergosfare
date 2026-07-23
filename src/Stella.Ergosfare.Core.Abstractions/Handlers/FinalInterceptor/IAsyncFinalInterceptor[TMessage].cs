@@ -3,46 +3,25 @@ using System.Threading.Tasks;
 
 namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 
-
 /// <summary>
-/// Represents an asynchronous final interceptor for a message pipeline that does not require a strongly-typed result.
+/// Asynchronous final-interceptor contract for messages of type <typeparamref name="TMessage"/>
+/// that is agnostic of the result type. Always executed at the end of the pipeline,
+/// regardless of success or failure — for cleanup, auditing, or logging.
 /// </summary>
-/// <typeparam name="TMessage">The type of the message being intercepted. Must be non-nullable.</typeparam>
+/// <typeparam name="TMessage">The type of message this interceptor handles.</typeparam>
 /// <remarks>
-/// A final interceptor always executes at the end of the pipeline, regardless of whether
-/// the message handling succeeded or an exception occurred.
-/// 
-/// The <c>HandleAsync</c> method provides access to:
-/// <list type="bullet">
-///   <item><description>The original <typeparamref name="TMessage"/>.</description></item>
-///   <item><description>The result produced by the handler, if any. Treated as <see cref="object"/> and may be null.</description></item>
-///   <item><description>The exception thrown during message handling, if any.</description></item>
-///   <item><description>The current execution context (<see cref="IExecutionContext"/>).</description></item>
-/// </list>
-/// 
-/// Implementations cannot modify the result directly, but can perform logging, cleanup,
-/// metrics collection, or other side effects.
-/// 
-/// This version is useful for internal pipeline scenarios where the result type is unknown or heterogeneous.
-/// For strongly-typed results, consider using <see cref="IAsyncFinalInterceptor{TMessage,TResult}"/>.
+/// This is a standalone asynchronous contract — it does not inherit the synchronous
+/// <see cref="IFinalInterceptor{TMessage, TResult}"/>, and there is no object-typed default
+/// implementation: the pipeline invokes <see cref="HandleAsync"/> directly.
 /// </remarks>
-public interface IAsyncFinalInterceptor<in TMessage>: IFinalInterceptor<TMessage, object>
+public interface IAsyncFinalInterceptor<in TMessage> : IFinalInterceptor
 {
-    
-    /// <inheritdoc cref="IFinalInterceptor{TMessage, TResult}"/>
-    object IFinalInterceptor<TMessage, object>.Handle(TMessage message, object? result, Exception? exception,
-        IExecutionContext context)
-    {
-        return HandleAsync((TMessage) message, result, exception, context);
-    }
-    
-    
     /// <summary>
-    /// Asynchronously handles a message at the end of the pipeline.
+    /// Handles the end of the pipeline for the given message.
     /// </summary>
-    /// <param name="message">The message being processed.</param>
-    /// <param name="result">The result produced by the handler, if any. Treated as <see cref="object"/> and may be null.</param>
-    /// <param name="exception">The exception thrown during handling, if any.</param>
+    /// <param name="message">The message that was processed.</param>
+    /// <param name="result">The final result, if any.</param>
+    /// <param name="exception">The exception that terminated the pipeline, if any.</param>
     /// <param name="context">The current execution context.</param>
     /// <returns>A <see cref="ValueTask"/> representing the asynchronous operation.</returns>
     ValueTask HandleAsync(TMessage message, object? result, Exception? exception, IExecutionContext context);

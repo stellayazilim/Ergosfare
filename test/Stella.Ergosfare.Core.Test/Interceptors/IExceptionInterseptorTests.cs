@@ -5,24 +5,24 @@ using Stella.Ergosfare.Test.Fixtures.Stubs.Basic;
 namespace Stella.Ergosfare.Core.Test.Interceptors;
 
 /// <summary>
-/// Contains unit tests for <see cref="IExceptionInterceptor"/> implementations,
-/// verifying that the Handle method correctly returns a <see cref="Task"/> for asynchronous execution.
+/// Contains unit tests for <see cref="IAsyncExceptionInterceptor{TMessage}"/> implementations,
+/// verifying that the typed <c>HandleAsync</c> member flows the pipeline result through.
 /// </summary>
 public class ExceptionInterceptorTests
 {
-    
     /// <summary>
-    /// Tests that an exception interceptor returns a non-null <see cref="Task"/> 
-    /// when handling a message with a result and an exception.
+    /// Tests that an asynchronous exception interceptor invoked through its typed contract
+    /// returns the (unmodified) pipeline result.
     /// </summary>
     [Fact]
     [Trait("Category", "Coverage")]
     public async Task IExceptionInterceptorImplements()
     {
         var fixture = new ExecutionContextFixture();
-        IExceptionInterceptor interceptor = new StubVoidAsyncExceptionInterceptor();
-        var result = interceptor.Handle(new StubMessage(), "not null", new Exception(), fixture.Ctx);
-        Assert.NotNull(result);
-        await Assert.IsType<ValueTask<object>>(result);
+        IAsyncExceptionInterceptor<StubMessage> interceptor = new StubVoidAsyncExceptionInterceptor();
+
+        var result = await interceptor.HandleAsync(new StubMessage(), "not null", new Exception(), fixture.Ctx);
+
+        Assert.Equal("not null", result);
     }
 }
