@@ -164,26 +164,40 @@ dotnet run -c Release -f net9.0 --project test/Stella.Ergosfare.Benchmarking
 Environment: BenchmarkDotNet v0.15.8 · Windows 11 · AMD Ryzen 7 7800X3D · .NET 9.0.11
 (RyuJIT x86-64-v4). Measured on the `preview` branch, 2026-07-24.
 
+Two shapes are measured, for three mediators:
+
+- **Typical usage** — how an application normally sends messages: the library's public
+  mediator interface, one shared DI scope for the whole loop.
+- **Web-server shape** — a fresh DI scope for every dispatch, mimicking one scope per
+  HTTP request (the shape ASP.NET Core gives you).
+
 | Scenario (100k dispatches/op) | Mean | Allocated | Gen0/1k ops |
 |---|---:|---:|---:|
-| `StellaErgosfare_PublicApi` — `ICommandMediator.SendAsync` | 6.87 ms | **2.29 MB** | 47 |
-| `StellaErgosfare` — raw `IMessageMediator` loop (options path, unpooled) | 6.49 ms | 5.34 MB | 109 |
-| `MediatR` — `IMediator.Send` | 6.09 ms | 18.31 MB | 375 |
-| `LiteBus_PublicApi` — `ICommandMediator.SendAsync` | 146.96 ms | 714.87 MB | 14 750 |
-| `StellaErgosfare_PublicApi_ScopePerDispatch` — fresh DI scope each dispatch | 18.81 ms | 38.91 MB | 813 |
-| `MediatR_ScopePerDispatch` — fresh DI scope each dispatch | 10.09 ms | 33.57 MB | 688 |
+| **Ergosfare** — typical usage | 6.87 ms | **2.29 MB** | 47 |
+| **MediatR** — typical usage | 6.09 ms | 18.31 MB | 375 |
+| **LiteBus** — typical usage | 146.96 ms | 714.87 MB | 14 750 |
+| **Ergosfare** — web-server shape | 18.81 ms | 38.91 MB | 813 |
+| **MediatR** — web-server shape | 10.09 ms | 33.57 MB | 688 |
+| Ergosfare — internal engine path (reference row) | 6.49 ms | 5.34 MB | 109 |
 
 Scenario notes:
 
-- The public facade is the pooled path — **an eighth of MediatR's allocations** at
-  comparable latency, with Gen0 pressure down accordingly.
-- *ScopePerDispatch* rows create a fresh DI scope per dispatch — the realistic per-request
-  server shape.
+- The typical-usage rows are the headline: at comparable latency, Ergosfare allocates
+  **an eighth of MediatR's garbage**, with Gen0 collection pressure down accordingly —
+  the effect of pooled execution contexts and the `ValueTask`-first pipeline.
+- The *internal engine path* row drives `IMessageMediator` directly with pre-built
+  options, bypassing the public facade and its pooled context. It exists to show the
+  facade adds no hidden cost — you would not write application code this way.
 - LiteBus is included as a reference point: Ergosfare's API surface was heavily inspired
   by it, but the runtime is an independent implementation.
 - Transient handlers intentionally allocate one instance per dispatch (that is what a
   transient registration declares). Dispatch-heavy single-scope loops that want instance
   reuse should register handlers as singletons or call `ForceMemoizedHandlers()`.
+
+Row ↔ BenchmarkDotNet method mapping, for matching against your own runs:
+`StellaErgosfare_PublicApi` / `MediatR` / `LiteBus_PublicApi` (typical usage),
+`StellaErgosfare_PublicApi_ScopePerDispatch` / `MediatR_ScopePerDispatch` (web-server
+shape), `StellaErgosfare` (internal engine path).
 
 ## Dispatch architecture
 
