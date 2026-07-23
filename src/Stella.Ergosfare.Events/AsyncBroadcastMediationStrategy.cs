@@ -3,6 +3,7 @@ using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
+using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 using Stella.Ergosfare.Events.Abstractions;
 
@@ -34,20 +35,15 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
     where TMessage : notnull
 {
     /// <summary>
-    /// A completed <see cref="ValueTask"/> boxed once and reused as the broadcast's
-    /// (meaningless for events) result object flowing through the interceptor stages.
-    /// </summary>
-    private static readonly object CompletedResultBox = ValueTask.CompletedTask;
-
-    /// <summary>
-    ///     Mediates the given message by broadcasting it to all registered handlers concurrently.
+    ///     Mediates the given message by broadcasting it sequentially to all registered handlers.
     /// </summary>
     /// <param name="message">The message to be processed.</param>
     /// <param name="messageDependencies">
-    ///     The dependencies required for message handling, including registered handlers,
-    ///     pre-handlers, post-handlers, and error handlers.
+    ///     The dependencies required for message handling, including the registered handlers
+    ///     and the pre-, post-, exception- and final-interceptor stages.
     /// </param>
-    /// <param name="context"></param>
+    /// <param name="context">The current execution context.</param>
+    /// <param name="serviceProvider">The provider of the scope this dispatch runs in; handlers and interceptors resolve from it.</param>
     /// <returns>A ValueTask representing the asynchronous operation of the mediation process.</returns>
     public async ValueTask Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context, IServiceProvider serviceProvider)
     {
@@ -73,13 +69,13 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
             // A ValueTask may be awaited only once — the completed ValueTask stands in as the
             // (meaningless for events) result object flowing through the interceptor stages.
             var postInvoker = new PostInterceptorInvocationStrategy<TMessage, ValueTask>(messageDependencies, null, serviceProvider);
-            await postInvoker.Invoke(message, CompletedResultBox, context);
+            await postInvoker.Invoke(message, CompletedResultBox.Instance, context);
         }
         catch (Exception e)
         {
             exception = e;
             var exceptionInvoker = new ExceptionInterceptorInvocationStrategy<TMessage, ValueTask>(messageDependencies, serviceProvider);
-            await exceptionInvoker.Invoke(message, CompletedResultBox,
+            await exceptionInvoker.Invoke(message, CompletedResultBox.Instance,
                 ExceptionDispatchInfo.Capture(e), context);
 
         }
@@ -87,7 +83,7 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
         finally
         {
             var finalInvoker = new FinalInterceptorInvocationStrategy<TMessage, ValueTask>(messageDependencies, serviceProvider);
-            await finalInvoker.Invoke(message, CompletedResultBox, exception, context);
+            await finalInvoker.Invoke(message, CompletedResultBox.Instance, exception, context);
         }
     }
 

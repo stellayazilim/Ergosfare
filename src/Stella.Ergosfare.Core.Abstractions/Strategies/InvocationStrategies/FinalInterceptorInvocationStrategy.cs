@@ -33,6 +33,7 @@ internal sealed class FinalInterceptorInvocationStrategy<TMessage, TResult>(
     {
         var interceptors = messageDependencies.FinalInterceptors;
 
+        // ReSharper disable once ForCanBeConvertedToForeach
         for (var i = 0; i < interceptors.Count; i++)
         {
             var interceptor = interceptors[i].Resolve(serviceProvider);

@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 
 namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 

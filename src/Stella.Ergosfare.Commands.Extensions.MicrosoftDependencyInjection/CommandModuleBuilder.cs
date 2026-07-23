@@ -27,7 +27,7 @@ public sealed class CommandModuleBuilder
     /// <summary>
     ///     Registers a command type for the message registry.
     /// </summary>
-    /// <typeparam name="T">The type of command to register, which must implement <see cref="IRegistrableCommandConstruct" />.</typeparam>
+    /// <typeparam name="T">The type of command to register, which must implement <see cref="ICommand" />.</typeparam>
     /// <returns>The current <see cref="CommandModuleBuilder" /> instance for method chaining.</returns>
     public CommandModuleBuilder Register<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] T>() where T : ICommand
     {
@@ -38,7 +38,7 @@ public sealed class CommandModuleBuilder
     /// <summary>
     ///     Registers a command type for the message registry.
     /// </summary>
-    /// <param name="type">The type of command to register, which must implement <see cref="IRegistrableCommandConstruct" />.</param>
+    /// <param name="type">The type of command to register, which must implement <see cref="ICommand" />.</param>
     /// <returns>The current <see cref="CommandModuleBuilder" /> instance for method chaining.</returns>
     public CommandModuleBuilder Register([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type type)
     {

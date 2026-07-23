@@ -1,7 +1,4 @@
-﻿using System;
-using System.Linq;
-using System.Runtime.ExceptionServices;
-using System.Threading.Tasks;
+﻿using System.Runtime.ExceptionServices;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
@@ -23,29 +20,26 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
     IResultAdapterService? resultAdapterService) : IMessageMediationStrategy<TMessage, ValueTask> where TMessage : IMessage
 {
     /// <summary>
-    /// A completed <see cref="ValueTask"/> boxed once and reused as the void pipeline's
-    /// result object — boxing per dispatch would cost an allocation on the hot path.
-    /// </summary>
-    private static readonly object CompletedResultBox = ValueTask.CompletedTask;
-
-    /// <summary>
     ///     Mediates a message by executing the appropriate handler and orchestrating the handling pipeline.
     /// </summary>
     /// <param name="message">The message to be mediated.</param>
     /// <param name="messageDependencies">
-    ///     The dependencies required for message handling, including handlers, pre-handlers,
-    ///     post-handlers, and error handlers.
+    ///     The dependencies required for message handling, including the handler and the
+    ///     pre-, post-, exception- and final-interceptor stages.
     /// </param>
     /// <param name="context">
     ///     The context in which the mediation is executed, providing access to cancellation tokens,
     ///     shared data, and other execution-related information.
     /// </param>
+    /// <param name="serviceProvider">The provider of the scope this dispatch runs in; handlers and interceptors resolve from it.</param>
     /// <returns>A task representing the asynchronous mediation operation.</returns>
     /// <exception cref="MultipleHandlerFoundException">Thrown when more than one handler is found for the message type.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when no handler is registered for the message type.</exception>
     /// <remarks>
-    ///     The mediation process includes executing pre-handlers, the main handler, and post-handlers in sequence.
-    ///     If an exception occurs during any stage, the appropriate error handlers are executed.
-    ///     If a <see cref="ExecutionAbortedException" /> is caught, the mediation process is aborted without error.
+    ///     Pre-interceptors, the main handler and post-interceptors run in sequence; with no
+    ///     interceptors registered the handler is invoked directly on a fast path. If an
+    ///     exception occurs, the exception interceptors run; final interceptors always run.
+    ///     An <see cref="ExecutionAbortedException" /> aborts the mediation without error.
     /// </remarks>
     public async ValueTask Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context, IServiceProvider serviceProvider)
     {
@@ -81,7 +75,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
 
             await InvokeHandler(fastHandler, message, context);
 
-            var fastEx = resultAdapterService?.LookupException(CompletedResultBox);
+            var fastEx = resultAdapterService?.LookupException(CompletedResultBox.Instance);
 
             if (fastEx != null)
             {
@@ -109,7 +103,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             await InvokeHandler(handler, message, context);
             result = ValueTask.CompletedTask;
 
-            var ex = resultAdapterService?.LookupException(CompletedResultBox);
+            var ex = resultAdapterService?.LookupException(CompletedResultBox.Instance);
 
             if (ex != null)
             {

@@ -76,15 +76,17 @@ internal sealed class MessageRegistry(
     /// they enumerate <see cref="_snapshot"/>, an immutable array republished after every
     /// effective registration.
     /// </summary>
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
 
     /// <summary>
     /// Immutable view of the finalized messages, republished at the end of every effective
     /// registration. The volatile write is the publication point: everything a registration
     /// mutated (descriptor stage arrays included) happens-before a reader that observes the
-    /// new snapshot or the new <see cref="Version"/>.
+    /// new snapshot or the new <see cref="Version"/>. Concrete element type on purpose —
+    /// the array is only ever reassigned wholesale, and the interface view readers get goes
+    /// through <see cref="IEnumerable{T}"/> covariance, not array covariance.
     /// </summary>
-    private volatile IMessageDescriptor[] _snapshot = [];
+    private volatile MessageDescriptor[] _snapshot = [];
 
 
     /// <summary>
@@ -196,8 +198,6 @@ internal sealed class MessageRegistry(
                     messageDescriptor.AddDescriptors(_descriptors);
                 }
             }
-            // Mark the type as processed to prevent duplicate registration
-            _processedTypes[type] = 0;
 
             // Move all newly registered messages to the main messages list and clear the newMessages list
             if (_newMessages.Count > 0)
@@ -207,6 +207,10 @@ internal sealed class MessageRegistry(
             }
 
             Publish();
+
+            // Mark processed only after publishing: a concurrent caller that observes the
+            // fast-path hit must also observe the snapshot containing this registration.
+            _processedTypes[type] = 0;
         }
     }
 
@@ -258,7 +262,6 @@ internal sealed class MessageRegistry(
             {
                 RegisterMessage(descriptor.MessageType);
                 _descriptors.Add(descriptor);
-                _processedTypes[descriptor.HandlerType] = 0;
             }
 
             // Same linking pass as Register(): attach the new descriptors to every existing
@@ -286,6 +289,13 @@ internal sealed class MessageRegistry(
             }
 
             Publish();
+
+            // Mark processed only after publishing: a concurrent Register() caller that
+            // observes the fast-path hit must also observe the published snapshot.
+            foreach (var descriptor in accepted)
+            {
+                _processedTypes[descriptor.HandlerType] = 0;
+            }
         }
     }
 
