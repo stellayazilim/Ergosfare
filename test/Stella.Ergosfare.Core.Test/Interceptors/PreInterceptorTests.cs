@@ -6,32 +6,29 @@ namespace Stella.Ergosfare.Core.Test.Interceptors;
 
 
 /// <summary>
-/// Contains unit tests for <see cref="IPreInterceptor"/> implementations,
-/// verifying that the Handle method correctly returns a <see cref="Task"/> and produces the expected result.
+/// Contains unit tests for <see cref="IAsyncPreInterceptor{TMessage}"/> implementations,
+/// verifying that the typed <c>HandleAsync</c> member produces the expected message.
 /// </summary>
 public class PreInterceptorTests
 {
     /// <summary>
-    /// Tests that a pre-interceptor returns a non-null <see cref="Task{object}"/> 
-    /// and that the
+    /// Tests that an asynchronous pre-interceptor invoked through its typed contract
+    /// returns the message that continues through the pipeline.
     /// </summary>
     [Fact]
     [Trait("Category", "Coverage")]
     [Trait("Category", "Unit")]
-    public async Task TestPostInterceptorsShouldImplement()
+    public async Task TestPreInterceptorsShouldImplement()
     {
-        // arrange 
-        IPreInterceptor interceptor = new StubVoidAsyncPreInterceptor();
+        // arrange
+        IAsyncPreInterceptor<StubMessage> interceptor = new StubVoidAsyncPreInterceptor();
         var fixture = new ExecutionContextFixture();
         var message = new StubMessage();
-        
+
         // act
-        var result = interceptor.Handle(message, fixture.Ctx);
+        var result = await interceptor.HandleAsync(message, fixture.Ctx);
 
         // assert
-        Assert.NotNull(result);
-        var valueTask = Assert.IsType<ValueTask<object>>(result);
-        var awaitedResult = await valueTask;
-        Assert.IsType<StubMessage>(awaitedResult, exactMatch: false );
+        Assert.Same(message, result);
     }
 }

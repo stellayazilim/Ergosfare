@@ -4,43 +4,31 @@ namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 
 
 /// <summary>
-/// Represents an asynchronous post-interceptor for a specific message type and its result type.
-/// Executes after the main handler has processed the message and allows inspecting or modifying the result.
+/// Asynchronous post-interceptor contract for messages of type <typeparamref name="TMessage"/>
+/// producing results of type <typeparamref name="TResult"/>. Executes after the main handler
+/// and may observe or replace the result.
 /// </summary>
 /// <typeparam name="TMessage">The type of the message being handled.</typeparam>
-/// <typeparam name="TResult">The type of the result produced by the main handler.</typeparam>
+/// <typeparam name="TResult">The type of result produced by the handler.</typeparam>
 /// <remarks>
-/// This interface allows performing asynchronous operations after a message has been handled. 
-/// The interceptor can inspect or modify the <typeparamref name="TResult"/> value.
-/// 
-/// The <see cref="IPostInterceptor{TMessage, TResult}.Handle"/> implementation delegates to <see cref="HandleAsync"/>.
-/// Returning <c>null</c> is allowed only if it matches the intended pipeline behavior; otherwise, a meaningful object should be returned.
+/// This is a standalone asynchronous contract — it does not inherit the synchronous
+/// <see cref="IPostInterceptor{TMessage, TResult}"/>, and there is no object-typed default
+/// implementation: the pipeline invokes <see cref="HandleAsync"/> directly.
 /// </remarks>
 public interface IAsyncPostInterceptor<in TMessage, in TResult>
-    :IPostInterceptor<TMessage, TResult>
-    where TMessage : notnull 
-    where TResult: notnull
+    : IPostInterceptor
+    where TMessage : notnull
+    where TResult : notnull
 {
-    /// <inheritdoc cref="IPostInterceptor{TMessage, TResult}.Handle"/>
-    object IPostInterceptor<TMessage, TResult>.Handle(
-        TMessage message,
-        TResult messageResult,
-        IExecutionContext context)
-    {
-        return HandleAsync(message,  messageResult, context);
-    }
-    
-    /// <inheritdoc cref="IPostInterceptor{TMessage,TResult}.Handle"/> 
     /// <summary>
     /// Handles a message asynchronously after it has been processed by the main handler.
     /// </summary>
     /// <param name="message">The message that was handled by the main handler.</param>
-    /// <param name="messageResult">The result produced by the main handler, which can be inspected or modified.</param>
+    /// <param name="messageResult">The result produced by the main handler.</param>
     /// <param name="context">The current execution context.</param>
     /// <returns>
-    /// A <see cref="ValueTask{Object}"/> representing the asynchronous operation.
-    /// The returned object should represent the modified result to continue through the pipeline.
+    /// A <see cref="ValueTask{Object}"/> whose result is the (possibly replaced) result that
+    /// continues through the pipeline.
     /// </returns>
     ValueTask<object> HandleAsync(TMessage message, TResult messageResult, IExecutionContext context);
 }
-

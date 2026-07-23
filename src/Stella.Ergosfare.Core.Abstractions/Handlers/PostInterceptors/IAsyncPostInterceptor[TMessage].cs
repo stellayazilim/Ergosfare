@@ -4,33 +4,28 @@ namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 
 
 /// <summary>
-/// Represents an asynchronous post-interceptor for a specific message type that does not produce a meaningful result.
-/// Executes after the main handler has processed the message.
+/// Asynchronous post-interceptor contract for messages of type <typeparamref name="TMessage"/>
+/// that is agnostic of the result type. Executes after the main handler has processed the message.
 /// </summary>
 /// <typeparam name="TMessage">The type of the message being handled.</typeparam>
 /// <remarks>
-/// This interface allows performing asynchronous side-effects or additional processing after a message has been handled.
-/// The <paramref name="_"/> parameter represents the main handler's result but is ignored, since there is no meaningful result.
-/// The <see cref="IPostInterceptor.Handle"/> implementation delegates to <see cref="HandleAsync"/>.
+/// This is a standalone asynchronous contract — it does not inherit the synchronous
+/// <see cref="IPostInterceptor{TMessage, TResult}"/>, and there is no object-typed default
+/// implementation: the pipeline invokes <see cref="HandleAsync"/> directly.
 /// </remarks>
 public interface IAsyncPostInterceptor<in TMessage>
-    : IPostInterceptor<TMessage, object>
+    : IPostInterceptor
     where TMessage : notnull
 {
-    /// <inheritdoc cref="IPostInterceptor.Handle"/>
-    object IPostInterceptor<TMessage, object>.Handle(TMessage message, object _, IExecutionContext context)
-    {
-        return HandleAsync(message, _, context);
-    }
-    
     /// <summary>
-    /// Handles a message asynchronously after it has been processed by its main handler.
+    /// Handles a message asynchronously after it has been processed by the main handler.
     /// </summary>
     /// <param name="message">The message that was handled by the main handler.</param>
-    /// <param name="_">
-    /// The result produced by the main handler. For messages without a meaningful result, this can be <c>null</c> and should be ignored.
-    /// </param>
+    /// <param name="messageResult">The result produced so far by the pipeline.</param>
     /// <param name="context">The current execution context.</param>
-    /// <returns>A <see cref="ValueTask"/> representing the asynchronous operation.</returns>
-    ValueTask<object> HandleAsync(TMessage message, object _, IExecutionContext context);
+    /// <returns>
+    /// A <see cref="ValueTask{Object}"/> whose result is the (possibly replaced) result that
+    /// continues through the pipeline.
+    /// </returns>
+    ValueTask<object> HandleAsync(TMessage message, object messageResult, IExecutionContext context);
 }

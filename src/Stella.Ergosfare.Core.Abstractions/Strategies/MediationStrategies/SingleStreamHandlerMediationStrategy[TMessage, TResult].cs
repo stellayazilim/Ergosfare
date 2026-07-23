@@ -65,7 +65,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         try
         {
             // run pre interceptors
-            var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
+            var preInvoker = new PreInterceptorInvocationStrategy<TMessage>(messageDependencies, serviceProvider);
             message =  (TMessage)await preInvoker.Invoke(message, context) ;
 
 
@@ -132,7 +132,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         {
             if (_unknownException is null)
             {
-                var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
+                var postInvoker = new PostInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>(messageDependencies, resultAdapterService, serviceProvider);
                 // we can't override result since its chunked
                 await postInvoker.Invoke(message, enumerator, context).ConfigureAwait(false);
             }
@@ -147,7 +147,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         {
             if (_unknownException is not null)
             {
-                var exceptionInvoker = new TaskExceptionInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
+                var exceptionInvoker = new ExceptionInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>(messageDependencies, serviceProvider);
                 // we can't override result since its chunked
                 await exceptionInvoker.Invoke(
                     message,
@@ -162,7 +162,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         }
         finally
         {
-            var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
+            var finalInvoker = new FinalInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>(messageDependencies, serviceProvider);
             await finalInvoker.Invoke(message, enumerator, _unknownException, context);
         }
     }

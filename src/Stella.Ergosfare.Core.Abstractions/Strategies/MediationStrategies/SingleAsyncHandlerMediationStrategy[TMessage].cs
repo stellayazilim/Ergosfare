@@ -100,7 +100,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
         {
             if (preInterceptorCount > 0)
             {
-                var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
+                var preInvoker = new PreInterceptorInvocationStrategy<TMessage>(messageDependencies, serviceProvider);
                 message = (TMessage) await preInvoker.Invoke(message, context);
             }
 
@@ -118,7 +118,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
 
             if (postInterceptorCount > 0)
             {
-                var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
+                var postInvoker = new PostInterceptorInvocationStrategy<TMessage, ValueTask>(messageDependencies, resultAdapterService, serviceProvider);
                 var invokedPostResult =  (ValueTask?) await postInvoker.Invoke(message, result, context);
                 result = invokedPostResult ?? result;
             }
@@ -132,7 +132,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
                 throw;
             }
 
-            var exceptionInvoker = new TaskExceptionInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
+            var exceptionInvoker = new ExceptionInterceptorInvocationStrategy<TMessage, ValueTask>(messageDependencies, serviceProvider);
             var invokedResult = (ValueTask?) await exceptionInvoker.Invoke(message, result, ExceptionDispatchInfo.Capture(e),
                 context);
             result = invokedResult ?? result;
@@ -142,7 +142,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
         {
             if (finalInterceptorCount > 0)
             {
-                var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
+                var finalInvoker = new FinalInterceptorInvocationStrategy<TMessage, ValueTask>(messageDependencies, serviceProvider);
                 await finalInvoker.Invoke(message, result, exception, context);
             }
         }

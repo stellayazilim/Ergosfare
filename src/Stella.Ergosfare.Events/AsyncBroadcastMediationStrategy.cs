@@ -69,19 +69,19 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
         try
         {
             // events doesn't need result adapter, since events intended to not return a result
-            var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, null, serviceProvider);
+            var preInvoker = new PreInterceptorInvocationStrategy<TMessage>(messageDependencies, serviceProvider);
             await preInvoker.Invoke(message, context);
             await PublishSequentially(message, handlers, context, serviceProvider);
 
             // A ValueTask may be awaited only once — the completed ValueTask stands in as the
             // (meaningless for events) result object flowing through the interceptor stages.
-            var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, null, serviceProvider);
+            var postInvoker = new PostInterceptorInvocationStrategy<TMessage, ValueTask>(messageDependencies, null, serviceProvider);
             await postInvoker.Invoke(message, CompletedResultBox, context);
         }
         catch (Exception e)
         {
             exception = e;
-            var exceptionInvoker = new TaskExceptionInterceptorInvocationStrategy(messageDependencies, null, serviceProvider);
+            var exceptionInvoker = new ExceptionInterceptorInvocationStrategy<TMessage, ValueTask>(messageDependencies, serviceProvider);
             await exceptionInvoker.Invoke(message, CompletedResultBox,
                 ExceptionDispatchInfo.Capture(e), context);
 
@@ -89,7 +89,7 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
 
         finally
         {
-            var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
+            var finalInvoker = new FinalInterceptorInvocationStrategy<TMessage, ValueTask>(messageDependencies, serviceProvider);
             await finalInvoker.Invoke(message, CompletedResultBox, exception, context);
         }
     }

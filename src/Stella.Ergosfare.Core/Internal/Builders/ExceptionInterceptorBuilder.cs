@@ -30,18 +30,33 @@ internal sealed class ExceptionInterceptorDescriptorBuilder: IHandlerDescriptorB
     /// <returns>A collection of <see cref="ExceptionInterceptorDescriptor"/> instances representing the handler.</returns>
     public IEnumerable<IHandlerDescriptor> Build([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type handlerType)
     {
-        var interfaces = handlerType.GetInterfacesEqualTo(typeof( IExceptionInterceptor<,>));
+        // The sync and async contracts are independent hierarchies (no object-typed root
+        // member ties them together), so all three patterns are matched; the result-agnostic
+        // async contract maps to a ResultType of object, exactly what its former sync base
+        // interface carried. Duplicate (message, result) pairs yield a single descriptor.
+        var interfaces = handlerType.GetInterfacesEqualTo(typeof(IExceptionInterceptor<,>))
+            .Concat(handlerType.GetInterfacesEqualTo(typeof(IAsyncExceptionInterceptor<,>)))
+            .Concat(handlerType.GetInterfacesEqualTo(typeof(IAsyncExceptionInterceptor<>)));
         var weight = handlerType.GetWeightFromAttribute();
+        var seenPairs = new HashSet<(Type MessageType, Type ResultType)>();
         foreach (var @interface in interfaces)
         {
-            var messageType = @interface.GetGenericArguments()[0];
-            var resultType = @interface.GetGenericArguments()[1];
+            var genericArguments = @interface.GetGenericArguments();
+            var messageType = genericArguments[0];
+            messageType = messageType.IsGenericType ? messageType.GetGenericTypeDefinition() : messageType;
+            var resultType = genericArguments.Length > 1 ? genericArguments[1] : typeof(object);
+
+            if (!seenPairs.Add((messageType, resultType)))
+            {
+                continue;
+            }
+
             var groups = handlerType.GetGroupsFromAttribute();
             yield return new ExceptionInterceptorDescriptor
             {
                 Weight = weight,
                 Groups = groups,
-                MessageType = messageType.IsGenericType ? messageType.GetGenericTypeDefinition() : messageType,
+                MessageType = messageType,
                 ResultType = resultType,
                 HandlerType = handlerType
             };

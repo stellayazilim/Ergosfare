@@ -40,14 +40,14 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
     /// <remarks>
     /// <para>The mediation process follows this sequence:</para>
     /// <list type="number">
-    /// <item>Invoke pre-interceptors via <see cref="TaskPreInterceptorInvocationStrategy"/>. Each pre-interceptor 
+    /// <item>Invoke pre-interceptors via <see cref="PreInterceptorInvocationStrategy{TMessage}"/>. Each pre-interceptor
     /// can transform the message, and results are checkpointed to allow skipping on retries.</item>
     /// <item>Invoke the main handler. The result is checkpointed, and snapshots may be used to skip execution if already available.</item>
-    /// <item>Invoke post-interceptors via <see cref="TaskPostInterceptorInvocationStrategy"/>. Post-interceptors always execute 
+    /// <item>Invoke post-interceptors via <see cref="PostInterceptorInvocationStrategy{TMessage, TResult}"/>. Post-interceptors always execute
     /// and are not checkpointed.</item>
-    /// <item>If an exception occurs, invoke <see cref="TaskExceptionInterceptorInvocationStrategy"/> to allow exception handling 
+    /// <item>If an exception occurs, invoke <see cref="ExceptionInterceptorInvocationStrategy{TMessage, TResult}"/> to allow exception handling
     /// or transformation of the result.</item>
-    /// <item>Finally, invoke <see cref="TaskFinalInterceptorInvocationStrategy"/> for cleanup or final actions, 
+    /// <item>Finally, invoke <see cref="FinalInterceptorInvocationStrategy{TMessage, TResult}"/> for cleanup or final actions,
     /// which always execute regardless of prior success or failure.</item>
     /// <item>Checkpoints and snapshots ensure that retries, partial execution, or snapshot-based replay work seamlessly.</item>
     /// </list>
@@ -98,7 +98,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
         {
             if (preInterceptorCount > 0)
             {
-                var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
+                var preInvoker = new PreInterceptorInvocationStrategy<TMessage>(messageDependencies, serviceProvider);
                 message = (TMessage) await preInvoker.Invoke(message, context);
             }
 
@@ -112,7 +112,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
 
             if (postInterceptorCount > 0)
             {
-                var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
+                var postInvoker = new PostInterceptorInvocationStrategy<TMessage, TResult>(messageDependencies, resultAdapterService, serviceProvider);
 
                 var postResult = (TResult?)await postInvoker.Invoke(message, result, context);
                 result = postResult is null ? result : postResult;
@@ -131,7 +131,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
                 throw;
             }
 
-            var exceptionInvoker = new TaskExceptionInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
+            var exceptionInvoker = new ExceptionInterceptorInvocationStrategy<TMessage, TResult>(messageDependencies, serviceProvider);
             var exceptionResult  = (TResult?)await exceptionInvoker.Invoke(
                 message,
                 result,
@@ -145,7 +145,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
         {
             if (finalInterceptorCount > 0)
             {
-                var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
+                var finalInvoker = new FinalInterceptorInvocationStrategy<TMessage, TResult>(messageDependencies, serviceProvider);
                 await finalInvoker.Invoke(message, result, exception, context);
             }
         }

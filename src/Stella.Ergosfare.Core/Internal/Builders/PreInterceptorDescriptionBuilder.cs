@@ -31,17 +31,29 @@ internal sealed class PreInterceptorDescriptionBuilder: IHandlerDescriptorBuilde
     /// <returns>A collection of <see cref="PreInterceptorDescriptor"/> instances representing the handler.</returns>
     public IEnumerable<IHandlerDescriptor> Build([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type handlerType)
     {
-        var interfaces = handlerType.GetInterfacesEqualTo(typeof(IPreInterceptor<>));
+        // The sync and async contracts are independent hierarchies (no object-typed root
+        // member ties them together), so both patterns are matched; a type implementing
+        // both for the same message yields a single descriptor.
+        var interfaces = handlerType.GetInterfacesEqualTo(typeof(IPreInterceptor<>))
+            .Concat(handlerType.GetInterfacesEqualTo(typeof(IAsyncPreInterceptor<>)));
         var weight = handlerType.GetWeightFromAttribute();
+        var seenMessageTypes = new HashSet<Type>();
         foreach (var @interface in interfaces)
         {
             var messageType = @interface.GetGenericArguments()[0];
+            messageType = messageType.IsGenericType ? messageType.GetGenericTypeDefinition() : messageType;
+
+            if (!seenMessageTypes.Add(messageType))
+            {
+                continue;
+            }
+
             var groups = handlerType.GetGroupsFromAttribute();
             yield return new PreInterceptorDescriptor
             {
                 Weight = weight,
                 Groups = groups,
-                MessageType = messageType.IsGenericType ? messageType.GetGenericTypeDefinition() : messageType,
+                MessageType = messageType,
                 HandlerType = handlerType
             };
         }

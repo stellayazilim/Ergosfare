@@ -107,12 +107,12 @@ public class StubExceptionInterceptor: IExceptionInterceptor<StubMessage, object
     /// <param name="messageResult">The result from the main handler, if any.</param>
     /// <param name="exception">The exception that was thrown.</param>
     /// <param name="context">The execution context.</param>
-    /// <returns>Always returns <c>null</c>.</returns>
-    public object Handle(StubMessage message, object? messageResult, Exception exception, IExecutionContext context)
+    /// <returns>The unchanged <paramref name="messageResult"/>.</returns>
+    public object? Handle(StubMessage message, object? messageResult, Exception exception, IExecutionContext context)
     {
         IsCalled = true;
         Result = messageResult;
-        return ValueTask.FromResult(messageResult);
+        return messageResult;
     }
 }
 
@@ -131,11 +131,9 @@ public class StubFinalInterceptor: IFinalInterceptor<StubMessage, object>
     /// <param name="result">The result from the handler or previous interceptors.</param>
     /// <param name="exception">The exception, if one occurred during handling.</param>
     /// <param name="executionContext">The execution context.</param>
-    /// <returns>Always returns <c>null</c>.</returns>
-    public object Handle(StubMessage message, object? result, Exception? exception, IExecutionContext executionContext)
+    public void Handle(StubMessage message, object? result, Exception? exception, IExecutionContext executionContext)
     {
         IsCalled = true;
-        return null!;
     }
 }
 
@@ -155,11 +153,9 @@ public class StubIndirectFinalInterceptor: IFinalInterceptor<StubIndirectMessage
     /// <param name="result">The result from the handler or previous interceptors.</param>
     /// <param name="exception">The exception, if one occurred during handling.</param>
     /// <param name="executionContext">The execution context.</param>
-    /// <returns>Always returns <c>null</c>.</returns>
-    public object Handle(StubIndirectMessage message, object? result, Exception? exception, IExecutionContext executionContext)
+    public void Handle(StubIndirectMessage message, object? result, Exception? exception, IExecutionContext executionContext)
     {
         IsCalled = true;
-        return null!;
     }
 }
 
