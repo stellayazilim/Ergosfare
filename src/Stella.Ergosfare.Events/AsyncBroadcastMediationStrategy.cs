@@ -19,7 +19,8 @@ namespace Stella.Ergosfare.Events;
 /// <para>
 /// This strategy ensures that:
 /// <list type="bullet">
-///   <item><description>All handlers for the message are invoked sequentially.</description></item>
+///   <item><description>All handlers for the message — including those registered for its
+///   base types and interfaces — are invoked sequentially, direct registrations first.</description></item>
 ///   <item><description>Pre-, post-, exception-, and final-interceptors are executed in the correct order.</description></item>
 ///   <item><description>Exceptions are captured and passed to the configured exception interceptors.</description></item>
 /// </list>
@@ -35,7 +36,9 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
     where TMessage : notnull
 {
     /// <summary>
-    ///     Mediates the given message by broadcasting it sequentially to all registered handlers.
+    ///     Mediates the given message by broadcasting it sequentially to all registered
+    ///     handlers: the event's own handlers first, then the covariantly matched ones
+    ///     (registered against a base type or interface of the event).
     /// </summary>
     /// <param name="message">The message to be processed.</param>
     /// <param name="messageDependencies">
@@ -45,12 +48,18 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
     /// <param name="context">The current execution context.</param>
     /// <param name="serviceProvider">The provider of the scope this dispatch runs in; handlers and interceptors resolve from it.</param>
     /// <returns>A ValueTask representing the asynchronous operation of the mediation process.</returns>
+    /// <remarks>
+    ///     Opting a handler out of broad delivery is a group concern: an indirect handler
+    ///     carrying a non-default <c>[Group]</c> only runs when a publish selects its group —
+    ///     the group filter is applied while the pipeline shape is built.
+    /// </remarks>
     public async ValueTask Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context, IServiceProvider serviceProvider)
     {
 
         var handlers = FilterHandlers(messageDependencies.Handlers);
+        var indirectHandlers = FilterHandlers(messageDependencies.IndirectHandlers);
 
-        if (handlers.Count == 0)
+        if (handlers.Count == 0 && indirectHandlers.Count == 0)
         {
             if (settings.ThrowIfNoHandlerFound)
             {
@@ -65,6 +74,7 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
             var preInvoker = new PreInterceptorInvocationStrategy<TMessage>(messageDependencies, serviceProvider);
             await preInvoker.Invoke(message, context);
             await PublishSequentially(message, handlers, context, serviceProvider);
+            await PublishSequentially(message, indirectHandlers, context, serviceProvider);
 
             // A ValueTask may be awaited only once — the completed ValueTask stands in as the
             // (meaningless for events) result object flowing through the interceptor stages.
