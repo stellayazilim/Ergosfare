@@ -31,7 +31,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     {
         var options = new MediateOptions<TEvent, ValueTask>
         {
-            MessageMediationStrategy = new AsyncBroadcastMediationStrategy<TEvent>(resultAdapterService, settings),
+            MessageMediationStrategy = new AsyncBroadcastMediationStrategy<TEvent>(settings),
             MessageResolveStrategy = resolveStrategy,
             CancellationToken = cancellationToken,
             Items = settings.Items,

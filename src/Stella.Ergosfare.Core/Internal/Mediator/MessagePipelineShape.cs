@@ -72,8 +72,10 @@ internal sealed class MessagePipelineShape
     }
 
     /// <summary>
-    /// Orders descriptors by weight (descending) then handler type name, filters by group,
-    /// and pairs each descriptor with its resolved concrete handler type.
+    /// Filters descriptors by group, orders them by weight (descending) then handler type
+    /// name, and pairs each descriptor with its resolved concrete handler type. Plain loops
+    /// and a single sort — no LINQ iterators and no per-descriptor set allocations
+    /// (the previous <c>Intersect</c> built a hash set per descriptor).
     /// </summary>
     private static PlannedHandler<TDescriptor>[] Prepare<TDescriptor>(
         IReadOnlyCollection<TDescriptor> descriptors,
@@ -86,16 +88,62 @@ internal sealed class MessagePipelineShape
             return [];
         }
 
-        return descriptors
-            .OrderByDescending(d => d.Weight)
-            .ThenBy(d => d.HandlerType.FullName, StringComparer.Ordinal)
-            .Where(d => d.Groups.Intersect(groups).Any())
-            .Select(d => new PlannedHandler<TDescriptor>
+        var matched = new List<TDescriptor>(descriptors.Count);
+
+        foreach (var descriptor in descriptors)
+        {
+            if (MatchesAnyGroup(descriptor.Groups, groups))
             {
-                Descriptor = d,
-                HandlerType = CloseHandlerType(d, messageType),
-            })
-            .ToArray();
+                matched.Add(descriptor);
+            }
+        }
+
+        if (matched.Count == 0)
+        {
+            return [];
+        }
+
+        // Total order (name breaks weight ties), so sort instability cannot reorder equals.
+        matched.Sort(static (x, y) =>
+        {
+            var byWeight = y.Weight.CompareTo(x.Weight);
+
+            return byWeight != 0
+                ? byWeight
+                : string.CompareOrdinal(x.HandlerType.FullName, y.HandlerType.FullName);
+        });
+
+        var planned = new PlannedHandler<TDescriptor>[matched.Count];
+
+        for (var i = 0; i < matched.Count; i++)
+        {
+            planned[i] = new PlannedHandler<TDescriptor>
+            {
+                Descriptor = matched[i],
+                HandlerType = CloseHandlerType(matched[i], messageType),
+            };
+        }
+
+        return planned;
+    }
+
+    /// <summary>
+    /// Whether any of the handler's groups matches any of the requested groups.
+    /// </summary>
+    private static bool MatchesAnyGroup(IReadOnlyCollection<string> handlerGroups, List<string> groups)
+    {
+        foreach (var handlerGroup in handlerGroups)
+        {
+            for (var i = 0; i < groups.Count; i++)
+            {
+                if (string.Equals(handlerGroup, groups[i], StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
