@@ -1,4 +1,6 @@
-﻿namespace Stella.Ergosfare.Contracts.Attributes;
+using System;
+
+namespace Stella.Ergosfare.Core.Abstractions.Attributes;
 
 /// <summary>
 /// Specifies a weight for a class, typically used to influence the execution order or priority of handlers or modules.

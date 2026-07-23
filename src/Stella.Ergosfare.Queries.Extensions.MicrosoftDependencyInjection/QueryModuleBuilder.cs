@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Stella.Ergosfare.Core.Abstractions.Registry;
+using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Queries.Abstractions;
 
 namespace Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
@@ -39,6 +40,31 @@ public sealed class QueryModuleBuilder(IMessageRegistry messageRegistry)
         _messageRegistry.Register(queryType);
         return this;
 
+    }
+
+    /// <summary>
+    /// Registers pre-built handler descriptors, bypassing reflection-based descriptor
+    /// construction — the registration path used by source-generated code.
+    /// </summary>
+    /// <param name="descriptors">The descriptors to register; every handler type must be a query construct.</param>
+    /// <returns>The current <see cref="QueryModuleBuilder"/> instance for fluent chaining.</returns>
+    /// <exception cref="NotSupportedException">Thrown when a descriptor's handler type is not a query construct.</exception>
+    public QueryModuleBuilder RegisterDescriptors(IEnumerable<IHandlerDescriptor> descriptors)
+    {
+        var accepted = new List<IHandlerDescriptor>();
+
+        foreach (var descriptor in descriptors)
+        {
+            if (!descriptor.HandlerType.IsAssignableTo(typeof(IQuery)))
+            {
+                throw new NotSupportedException($"The given type '{descriptor.HandlerType.Name}' is not a query construct and cannot be registered.");
+            }
+
+            accepted.Add(descriptor);
+        }
+
+        _messageRegistry.RegisterDescriptors(accepted);
+        return this;
     }
 
     /// <summary>

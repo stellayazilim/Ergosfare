@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Immutable;
+
 namespace Stella.Ergosfare.SourceGenerator.Models;
 
 /// <summary>
@@ -8,25 +11,96 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 ///     messages, handlers and interceptors alike — mirroring what the reflection-based
 ///     <c>RegisterFromAssembly</c> discovers at runtime.
 /// </summary>
-/// <param name="TypeofExpression">
-///     The <c>typeof</c> argument for the type, fully qualified with <c>global::</c>;
-///     generic definitions use the unbound form (e.g. <c>global::App.Handler&lt;&gt;</c>).
-/// </param>
-/// <param name="DisplayName">Human-readable type name used in diagnostics.</param>
-/// <param name="IsCommand">Whether the type is assignable to the command module marker.</param>
-/// <param name="IsQuery">Whether the type is assignable to the query module marker.</param>
-/// <param name="IsEvent">Whether the type is assignable to the event module marker.</param>
-/// <param name="IsAccessible">
-///     Whether generated code (a sibling type in the same assembly) can reference the type;
-///     private/protected nested and file-local types cannot be registered and are reported
-///     via <c>ERGOSG001</c> instead.
-/// </param>
-/// <param name="Location">Declaration location, captured only for inaccessible types.</param>
-internal readonly record struct RegistrableTypeModel(
-    string TypeofExpression,
-    string DisplayName,
-    bool IsCommand,
-    bool IsQuery,
-    bool IsEvent,
-    bool IsAccessible,
-    LocationInfo? Location);
+/// <remarks>
+///     Equality is implemented manually because <see cref="Descriptors"/> is a sequence;
+///     the incremental pipeline relies on value equality for caching.
+/// </remarks>
+internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
+{
+    /// <summary>
+    ///     The <c>typeof</c> argument for the type, fully qualified with <c>global::</c>;
+    ///     generic definitions use the unbound form (e.g. <c>global::App.Handler&lt;&gt;</c>).
+    /// </summary>
+    public required string TypeofExpression { get; init; }
+
+    /// <summary>Human-readable type name used in diagnostics.</summary>
+    public required string DisplayName { get; init; }
+
+    /// <summary>Whether the type is assignable to the command module marker.</summary>
+    public required bool IsCommand { get; init; }
+
+    /// <summary>Whether the type is assignable to the query module marker.</summary>
+    public required bool IsQuery { get; init; }
+
+    /// <summary>Whether the type is assignable to the event module marker.</summary>
+    public required bool IsEvent { get; init; }
+
+    /// <summary>
+    ///     Whether generated code (a sibling type in the same assembly) can reference the
+    ///     type; private/protected nested and file-local types cannot be registered and are
+    ///     reported via <c>ERGOSG001</c> instead.
+    /// </summary>
+    public required bool IsAccessible { get; init; }
+
+    /// <summary>Declaration location, captured only for inaccessible types.</summary>
+    public required LocationInfo? Location { get; init; }
+
+    /// <summary>The <c>[Weight]</c> attribute value, or 0 when undeclared.</summary>
+    public required uint Weight { get; init; }
+
+    /// <summary>
+    ///     The emitted C# expression for the <c>[Group]</c> names (e.g.
+    ///     <c>new string[] { "a", "b" }</c>), or <c>null</c> when the type declares no
+    ///     groups — the descriptor factory then applies the default group.
+    /// </summary>
+    public required string? GroupsExpression { get; init; }
+
+    /// <summary>
+    ///     The pre-computed descriptors for the type's handler contracts. Empty for plain
+    ///     messages and for open generic types (whose contract type arguments cannot be
+    ///     expressed in <c>typeof</c>) — those fall back to runtime
+    ///     <c>Register(Type)</c> registration.
+    /// </summary>
+    public required ImmutableArray<DescriptorModel> Descriptors { get; init; }
+
+    public bool Equals(RegistrableTypeModel other)
+    {
+        if (TypeofExpression != other.TypeofExpression
+            || DisplayName != other.DisplayName
+            || IsCommand != other.IsCommand
+            || IsQuery != other.IsQuery
+            || IsEvent != other.IsEvent
+            || IsAccessible != other.IsAccessible
+            || !Nullable.Equals(Location, other.Location)
+            || Weight != other.Weight
+            || GroupsExpression != other.GroupsExpression
+            || Descriptors.Length != other.Descriptors.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < Descriptors.Length; i++)
+        {
+            if (!Descriptors[i].Equals(other.Descriptors[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public override bool Equals(object? obj) => obj is RegistrableTypeModel other && Equals(other);
+
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            var hash = TypeofExpression.GetHashCode();
+            hash = (hash * 397) ^ Weight.GetHashCode();
+            hash = (hash * 397) ^ Descriptors.Length;
+            hash = (hash * 397) ^ (GroupsExpression?.GetHashCode() ?? 0);
+            return hash;
+        }
+    }
+}

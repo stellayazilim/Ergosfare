@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Stella.Ergosfare.Core.Abstractions.Registry;
+using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Events.Abstractions;
 
 namespace Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
@@ -47,6 +48,31 @@ public class EventModuleBuilder(
             throw new NotSupportedException($"The given type '{eventType.Name}' is not an event and cannot be registered.");
         
         messageRegistry.Register(eventType);
+        return this;
+    }
+
+    /// <summary>
+    /// Registers pre-built handler descriptors, bypassing reflection-based descriptor
+    /// construction — the registration path used by source-generated code.
+    /// </summary>
+    /// <param name="descriptors">The descriptors to register; every handler type must be an event construct.</param>
+    /// <returns>The current <see cref="EventModuleBuilder"/> instance for fluent chaining.</returns>
+    /// <exception cref="NotSupportedException">Thrown when a descriptor's handler type is not an event construct.</exception>
+    public EventModuleBuilder RegisterDescriptors(IEnumerable<IHandlerDescriptor> descriptors)
+    {
+        var accepted = new List<IHandlerDescriptor>();
+
+        foreach (var descriptor in descriptors)
+        {
+            if (!descriptor.HandlerType.IsAssignableTo(typeof(IEvent)))
+            {
+                throw new NotSupportedException($"The given type '{descriptor.HandlerType.Name}' is not an event and cannot be registered.");
+            }
+
+            accepted.Add(descriptor);
+        }
+
+        messageRegistry.RegisterDescriptors(accepted);
         return this;
     }
 

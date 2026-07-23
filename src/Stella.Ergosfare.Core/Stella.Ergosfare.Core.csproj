@@ -5,7 +5,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Stella.Ergosfare.Contracts\Stella.Ergosfare.Contracts.csproj" />
       <ProjectReference Include="..\Stella.Ergosfare.Core.Abstractions\Stella.Ergosfare.Core.Abstractions.csproj" />
     </ItemGroup>
 

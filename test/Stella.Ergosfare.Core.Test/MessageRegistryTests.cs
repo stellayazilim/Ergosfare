@@ -318,7 +318,7 @@ public class MessageRegistryTests: IClassFixture<MessageDependencyFixture>
             MessageType = typeof(StubMessage),
             HandlerType = typeof(StubVoidHandler),
             ResultType = typeof(object),
-            Groups = [Stella.Ergosfare.Contracts.Attributes.GroupAttribute.DefaultGroupName],
+            Groups = [Stella.Ergosfare.Core.Abstractions.Attributes.GroupAttribute.DefaultGroupName],
             Weight = 0,
         };
 
@@ -352,7 +352,7 @@ public class MessageRegistryTests: IClassFixture<MessageDependencyFixture>
             MessageType = typeof(StubMessage),
             HandlerType = handlerType,
             ResultType = typeof(object),
-            Groups = [Stella.Ergosfare.Contracts.Attributes.GroupAttribute.DefaultGroupName],
+            Groups = [Stella.Ergosfare.Core.Abstractions.Attributes.GroupAttribute.DefaultGroupName],
             Weight = 0,
         };
 

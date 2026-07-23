@@ -8,7 +8,7 @@ using Stella.Ergosfare.Core.Internal.Registry;
 using Stella.Ergosfare.Core.Internal.Registry.Descriptors;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Stella.Ergosfare.Contracts.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Caching;
 using Stella.Ergosfare.Core.Internal.Caching;
 

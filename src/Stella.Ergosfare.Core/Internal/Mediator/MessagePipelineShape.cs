@@ -1,5 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
-using Stella.Ergosfare.Contracts.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 
 namespace Stella.Ergosfare.Core.Internal.Mediator;
