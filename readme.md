@@ -6,6 +6,7 @@
 [![NuGet (preview)](https://img.shields.io/nuget/vpre/Stella.Ergosfare.svg?label=nuget%20preview)](https://www.nuget.org/packages/Stella.Ergosfare)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
 ![Tests](https://img.shields.io/github/actions/workflow/status/stellayazilim/ergosfare/coverage_tests.yml?branch=preview&label=tests)
+[![Coverage](https://raw.githubusercontent.com/stellayazilim/Ergosfare/badges/.badges/coverage.svg)](https://github.com/stellayazilim/Ergosfare/actions/workflows/coverage_tests.yml)
 
 > **You are on the `preview` branch — the Ergosfare v2 line.** Releases from this branch are
 > `v2.0.0-preview.N` pre-releases. The stable v1.x line lives on [`main`](https://github.com/stellayazilim/Ergosfare/tree/main).
