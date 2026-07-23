@@ -343,7 +343,7 @@ public class ErgosfareRegistrationGeneratorTests
         var registrations = assembly.GetType("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
         var registry = Activator.CreateInstance(assembly.GetType("TestApp.RecordingRegistry", throwOnError: true)!)!;
 
-        registrations.GetMethod("RegisterAll")!.Invoke(null, [registry]);
+        registrations.GetMethod("RegisterAll", [typeof(IMessageRegistry)])!.Invoke(null, [registry]);
 
         // Plain messages go through the runtime fallback...
         var registered = (List<Type>)registry.GetType().GetProperty("Registered")!.GetValue(registry)!;

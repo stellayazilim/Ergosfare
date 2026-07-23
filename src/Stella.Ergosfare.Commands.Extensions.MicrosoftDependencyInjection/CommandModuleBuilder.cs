@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Stella.Ergosfare.Commands.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Registry;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 
@@ -76,16 +77,34 @@ public sealed class CommandModuleBuilder
     }
 
     /// <summary>
-    ///     Registers all command types from the specified assembly that implement <see cref="IRegistrableCommandConstruct" />.
+    ///     Registers the assembly's command types that participate in default discovery:
+    ///     types excluded via <see cref="ExcludeFromDiscoveryAttribute"/> or gated behind a
+    ///     <see cref="DiscoveryKeyAttribute"/> are skipped, mirroring source-generated
+    ///     <c>RegisterGenerated()</c>.
     /// </summary>
     /// <param name="assembly">The assembly from which to register command types.</param>
     /// <returns>The current <see cref="CommandModuleBuilder" /> instance for method chaining.</returns>
     [RequiresUnreferencedCode("Assembly scanning discovers command types via reflection; trimming may remove them. Register commands explicitly (or use source-generated registration) in trimmed or AOT applications.")]
     public CommandModuleBuilder RegisterFromAssembly(Assembly assembly)
+        => RegisterFromAssembly(assembly, DiscoveryKeyAttribute.DefaultKey);
+
+    /// <summary>
+    ///     Registers the assembly's command types whose discovery keys match the given
+    ///     pattern — an exact key or a trailing-<c>*</c> prefix glob. See
+    ///     <see cref="DiscoveryKeyAttribute"/> for the key model.
+    /// </summary>
+    /// <param name="assembly">The assembly from which to register command types.</param>
+    /// <param name="discoveryKeyPattern">The discovery key pattern to select types by.</param>
+    /// <returns>The current <see cref="CommandModuleBuilder" /> instance for method chaining.</returns>
+    [RequiresUnreferencedCode("Assembly scanning discovers command types via reflection; trimming may remove them. Register commands explicitly (or use source-generated registration) in trimmed or AOT applications.")]
+    public CommandModuleBuilder RegisterFromAssembly(Assembly assembly, string discoveryKeyPattern)
     {
-        foreach (var registrableCommandConstruct in assembly.GetTypes().Where(t => t.IsAssignableTo(typeof(ICommand))))
+        foreach (var type in assembly.GetTypes())
         {
-            _messageRegistry.Register(registrableCommandConstruct);
+            if (type.IsAssignableTo(typeof(ICommand)) && Discovery.Matches(type, discoveryKeyPattern))
+            {
+                _messageRegistry.Register(type);
+            }
         }
 
         return this;

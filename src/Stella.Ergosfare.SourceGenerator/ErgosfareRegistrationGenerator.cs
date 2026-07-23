@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Text;
@@ -18,6 +19,7 @@ namespace Stella.Ergosfare.SourceGenerator;
 ///     class into the compilation.
 /// </summary>
 /// <remarks>
+///     <para>
 ///     Phase 2: for types with handler contracts, the generator pre-computes the handler
 ///     descriptors (message type, result carrier, weight, groups) that the runtime
 ///     descriptor builders would otherwise derive reflectively, and registers them through
@@ -27,6 +29,18 @@ namespace Stella.Ergosfare.SourceGenerator;
 ///     both paths are mutually idempotent in the registry. Against older Ergosfare packages
 ///     that lack the descriptor surface, emission degrades to pure <c>Register(Type)</c>
 ///     calls.
+///     </para>
+///     <para>
+///     Reference scanning: the generator also walks referenced assemblies for marker
+///     types, replacing cross-assembly <c>RegisterFromAssembly</c> calls — a library's
+///     handlers register through the consuming project's generated code. Only assemblies
+///     that themselves reference Ergosfare are inspected (nothing else can implement a
+///     marker), and Ergosfare's own assemblies are excluded because their handler contract
+///     interfaces inherit the module markers. Types the generated code cannot name —
+///     internal without <c>InternalsVisibleTo</c> covering this compilation — surface as
+///     ERGOSG002 instead of diverging silently from the runtime scan. Opt out per project
+///     with the <c>ErgosfareSourceGeneratorScanReferences=false</c> MSBuild property.
+///     </para>
 /// </remarks>
 [Generator(LanguageNames.CSharp)]
 public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
@@ -48,6 +62,9 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     private const string EventBuilderMetadataName = "Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.EventModuleBuilder";
 
     private const string ValueTaskExpression = "global::System.Threading.Tasks.ValueTask";
+
+    private const string ScanReferencesBuildProperty = "build_property.ErgosfareSourceGeneratorScanReferences";
+    private const string ErgosfareAssemblyNamePrefix = "Stella.Ergosfare";
 
     private static readonly string GeneratorVersion =
         typeof(ErgosfareRegistrationGenerator).Assembly.GetName().Version?.ToString() ?? "1.0.0";
@@ -80,9 +97,22 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 EventBuilderHasRegisterDescriptors: HasRegisterDescriptors(eventBuilder));
         });
 
+        // Reference scanning is default-on; consumers opt out per project through the
+        // ErgosfareSourceGeneratorScanReferences MSBuild property (surfaced to the
+        // generator as a build_property by the package's .props file).
+        var scanReferences = context.AnalyzerConfigOptionsProvider.Select(static (provider, _) =>
+            !provider.GlobalOptions.TryGetValue(ScanReferencesBuildProperty, out var value)
+            || !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase));
+
+        var referencedTypes = context.CompilationProvider
+            .Combine(scanReferences)
+            .Select(static (pair, ct) => pair.Right
+                ? ScanReferencedAssemblies(pair.Left, ct)
+                : ImmutableArray<RegistrableTypeModel>.Empty);
+
         context.RegisterSourceOutput(
-            registrableTypes.Combine(availability),
-            static (spc, pair) => Execute(spc, pair.Left, pair.Right));
+            registrableTypes.Combine(availability).Combine(referencedTypes),
+            static (spc, pair) => Execute(spc, pair.Left.Left, pair.Left.Right, pair.Right));
     }
 
     private static bool HasRegisterDescriptors(INamedTypeSymbol? builder)
@@ -107,9 +137,117 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             return null;
         }
 
-        var isCommand = false;
-        var isQuery = false;
-        var isEvent = false;
+        GetMarkers(symbol, out var isCommand, out var isQuery, out var isEvent);
+
+        if (!isCommand && !isQuery && !isEvent)
+        {
+            return null;
+        }
+
+        if (IsExcludedFromDiscovery(symbol))
+        {
+            return null;
+        }
+
+        var isAccessible = IsAccessibleFromGeneratedCode(symbol);
+
+        return new RegistrableTypeModel
+        {
+            TypeofExpression = BuildTypeofExpression(symbol),
+            DisplayName = symbol.ToDisplayString(),
+            IsCommand = isCommand,
+            IsQuery = isQuery,
+            IsEvent = isEvent,
+            IsAccessible = isAccessible,
+            Location = isAccessible ? null : LocationInfo.From(symbol),
+            Weight = GetWeight(symbol),
+            GroupsExpression = GetGroupsExpression(symbol),
+            Descriptors = isAccessible ? BuildDescriptors(symbol) : ImmutableArray<DescriptorModel>.Empty,
+            ReferencedAssemblyName = null,
+            DiscoveryKeys = GetDiscoveryKeys(symbol),
+        };
+    }
+
+    /// <summary>
+    ///     Whether the type — or its containing assembly — opts out of discovery via
+    ///     <c>[ExcludeFromDiscovery]</c>. Excluded types produce no registration and no
+    ///     diagnostics: the exclusion is deliberate, unlike an inaccessible type.
+    /// </summary>
+    private static bool IsExcludedFromDiscovery(INamedTypeSymbol symbol)
+        => HasExcludeFromDiscovery(symbol.GetAttributes())
+           || HasExcludeFromDiscovery(symbol.ContainingAssembly.GetAttributes());
+
+    private static bool HasExcludeFromDiscovery(ImmutableArray<AttributeData> attributes)
+    {
+        foreach (var attribute in attributes)
+        {
+            if (attribute.AttributeClass is { Name: "ExcludeFromDiscoveryAttribute" } attributeClass
+                && IsInNamespace(attributeClass, AttributeNamespace))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     The type's effective discovery keys: its own <c>[DiscoveryKey]</c> keys when
+    ///     declared, else its assembly's. Empty means default discovery (the implicit
+    ///     empty-string key) — mirroring the runtime <c>Discovery</c> helper.
+    /// </summary>
+    private static ImmutableArray<string> GetDiscoveryKeys(INamedTypeSymbol symbol)
+    {
+        var keys = GetDeclaredDiscoveryKeys(symbol.GetAttributes());
+
+        return keys.IsEmpty ? GetDeclaredDiscoveryKeys(symbol.ContainingAssembly.GetAttributes()) : keys;
+    }
+
+    private static ImmutableArray<string> GetDeclaredDiscoveryKeys(ImmutableArray<AttributeData> attributes)
+    {
+        foreach (var attribute in attributes)
+        {
+            if (attribute.AttributeClass is not { Name: "DiscoveryKeyAttribute" } attributeClass
+                || !IsInNamespace(attributeClass, AttributeNamespace)
+                || attribute.ConstructorArguments.Length != 1)
+            {
+                continue;
+            }
+
+            var values = attribute.ConstructorArguments[0].Values;
+
+            if (values.IsDefaultOrEmpty)
+            {
+                return ImmutableArray<string>.Empty;
+            }
+
+            var builder = ImmutableArray.CreateBuilder<string>(values.Length);
+
+            foreach (var value in values)
+            {
+                if (value.Value is string key)
+                {
+                    builder.Add(key);
+                }
+            }
+
+            return builder.ToImmutable();
+        }
+
+        return ImmutableArray<string>.Empty;
+    }
+
+    /// <summary>
+    ///     Determines which module markers (<c>ICommand</c>, <c>IQuery</c>, <c>IEvent</c>)
+    ///     the type is assignable to. Handlers and interceptors inherit the marker through
+    ///     their contract interfaces, so a single check covers messages, handlers and
+    ///     interceptors alike.
+    /// </summary>
+    private static void GetMarkers(INamedTypeSymbol symbol, out bool isCommand, out bool isQuery, out bool isEvent)
+    {
+        isCommand = false;
+        isQuery = false;
+        isEvent = false;
 
         foreach (var iface in symbol.AllInterfaces)
         {
@@ -131,13 +269,145 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                     break;
             }
         }
+    }
+
+    /// <summary>
+    ///     Discovers registrable marker types in the compilation's referenced assemblies,
+    ///     replacing cross-assembly <c>RegisterFromAssembly</c> calls. Only assemblies that
+    ///     themselves reference an Ergosfare assembly can contain marker types, so
+    ///     everything else is skipped on a metadata-name check without realizing any of its
+    ///     types; Ergosfare's own assemblies are excluded because their handler contract
+    ///     interfaces inherit the module markers and must not be registered as user types.
+    /// </summary>
+    private static ImmutableArray<RegistrableTypeModel> ScanReferencedAssemblies(
+        Compilation compilation,
+        CancellationToken ct)
+    {
+        ImmutableArray<RegistrableTypeModel>.Builder? results = null;
+
+        foreach (var assembly in compilation.SourceModule.ReferencedAssemblySymbols)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            if (IsErgosfareAssemblyName(assembly.Name) || !ReferencesErgosfare(assembly))
+            {
+                continue;
+            }
+
+            // A library can opt out of discovery wholesale.
+            if (HasExcludeFromDiscovery(assembly.GetAttributes()))
+            {
+                continue;
+            }
+
+            var givesAccess = assembly.GivesAccessTo(compilation.Assembly);
+
+            CollectNamespaceTypes(assembly.GlobalNamespace, assembly.Name, givesAccess, ref results, ct);
+        }
+
+        return results?.ToImmutable() ?? ImmutableArray<RegistrableTypeModel>.Empty;
+    }
+
+    /// <summary>
+    ///     Whether the assembly name is Ergosfare's own (<c>Stella.Ergosfare</c> or a
+    ///     dotted child of it).
+    /// </summary>
+    private static bool IsErgosfareAssemblyName(string name)
+        => name.StartsWith(ErgosfareAssemblyNamePrefix, StringComparison.Ordinal)
+           && (name.Length == ErgosfareAssemblyNamePrefix.Length
+               || name[ErgosfareAssemblyNamePrefix.Length] == '.');
+
+    /// <summary>
+    ///     Whether the assembly's metadata records a reference to any Ergosfare assembly —
+    ///     a pure name check over the assembly-reference table, no symbol realization.
+    /// </summary>
+    private static bool ReferencesErgosfare(IAssemblySymbol assembly)
+    {
+        foreach (var module in assembly.Modules)
+        {
+            foreach (var reference in module.ReferencedAssemblies)
+            {
+                if (IsErgosfareAssemblyName(reference.Name))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static void CollectNamespaceTypes(
+        INamespaceSymbol ns,
+        string assemblyName,
+        bool givesAccess,
+        ref ImmutableArray<RegistrableTypeModel>.Builder? results,
+        CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        foreach (var member in ns.GetMembers())
+        {
+            if (member is INamespaceSymbol nestedNamespace)
+            {
+                CollectNamespaceTypes(nestedNamespace, assemblyName, givesAccess, ref results, ct);
+            }
+            else if (member is INamedTypeSymbol type)
+            {
+                CollectTypeAndNested(type, assemblyName, givesAccess, ref results);
+            }
+        }
+    }
+
+    private static void CollectTypeAndNested(
+        INamedTypeSymbol type,
+        string assemblyName,
+        bool givesAccess,
+        ref ImmutableArray<RegistrableTypeModel>.Builder? results)
+    {
+        if (TryCreateReferencedModel(type, assemblyName, givesAccess) is { } model)
+        {
+            (results ??= ImmutableArray.CreateBuilder<RegistrableTypeModel>()).Add(model);
+        }
+
+        foreach (var nested in type.GetTypeMembers())
+        {
+            CollectTypeAndNested(nested, assemblyName, givesAccess, ref results);
+        }
+    }
+
+    /// <summary>
+    ///     Projects a metadata type from a referenced assembly to its registration model,
+    ///     or <c>null</c> when it carries no Ergosfare marker. Mirrors
+    ///     <see cref="Transform"/>; descriptor computation is shared because both operate
+    ///     on <see cref="INamedTypeSymbol"/>. Types the generated code cannot name —
+    ///     internal without an <c>InternalsVisibleTo</c> grant, protected or private
+    ///     nested, or compiler-mangled (file-local) — flow through as inaccessible and
+    ///     surface as ERGOSG002.
+    /// </summary>
+    private static RegistrableTypeModel? TryCreateReferencedModel(
+        INamedTypeSymbol symbol,
+        string assemblyName,
+        bool givesAccess)
+    {
+        if (symbol.IsStatic || symbol.IsImplicitlyDeclared)
+        {
+            return null;
+        }
+
+        GetMarkers(symbol, out var isCommand, out var isQuery, out var isEvent);
 
         if (!isCommand && !isQuery && !isEvent)
         {
             return null;
         }
 
-        var isAccessible = IsAccessibleFromGeneratedCode(symbol);
+        if (IsExcludedFromDiscovery(symbol))
+        {
+            return null;
+        }
+
+        var isAccessible = IsVisibleToCompilation(symbol, givesAccess) && HasSpellableName(symbol);
 
         return new RegistrableTypeModel
         {
@@ -147,39 +417,76 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             IsQuery = isQuery,
             IsEvent = isEvent,
             IsAccessible = isAccessible,
-            Location = isAccessible ? null : LocationInfo.From(symbol),
+            Location = null,
             Weight = GetWeight(symbol),
             GroupsExpression = GetGroupsExpression(symbol),
             Descriptors = isAccessible ? BuildDescriptors(symbol) : ImmutableArray<DescriptorModel>.Empty,
+            ReferencedAssemblyName = assemblyName,
+            DiscoveryKeys = GetDiscoveryKeys(symbol),
         };
+    }
+
+    /// <summary>
+    ///     Whether generated code in the current compilation can name a type declared in a
+    ///     referenced assembly: every level of the containing-type chain must be public, or
+    ///     internal with the assembly granting this compilation
+    ///     <c>InternalsVisibleTo</c> access.
+    /// </summary>
+    private static bool IsVisibleToCompilation(INamedTypeSymbol symbol, bool givesAccess)
+    {
+        for (var current = symbol; current is not null; current = current.ContainingType)
+        {
+            switch (current.DeclaredAccessibility)
+            {
+                case Accessibility.Public:
+                    break;
+                case Accessibility.Internal:
+                case Accessibility.ProtectedOrInternal:
+                    if (!givesAccess)
+                    {
+                        return false;
+                    }
+
+                    break;
+                default:
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    ///     Whether the type's full containing chain uses names spellable in C# source.
+    ///     File-local types survive into metadata as internal types with compiler-mangled
+    ///     names (<c>&lt;File&gt;F...__Type</c>) that a <c>typeof</c> cannot express.
+    /// </summary>
+    private static bool HasSpellableName(INamedTypeSymbol symbol)
+    {
+        for (var current = symbol; current is not null; current = current.ContainingType)
+        {
+            if (!SyntaxFacts.IsValidIdentifier(current.Name))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static void Execute(
         SourceProductionContext context,
-        ImmutableArray<RegistrableTypeModel> models,
-        ModuleBuilderAvailability availability)
+        ImmutableArray<RegistrableTypeModel> sourceModels,
+        ModuleBuilderAvailability availability,
+        ImmutableArray<RegistrableTypeModel> referencedModels)
     {
         var seen = new HashSet<string>();
         var types = new List<RegistrableTypeModel>();
 
-        foreach (var model in models)
-        {
-            if (!seen.Add(model.TypeofExpression))
-            {
-                continue;
-            }
-
-            if (!model.IsAccessible)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    GeneratorDiagnostics.InaccessibleRegistrableType,
-                    model.Location?.ToLocation(),
-                    model.DisplayName));
-                continue;
-            }
-
-            types.Add(model);
-        }
+        // Source-declared types first: on a (pathological) full-name collision with a
+        // referenced type, typeof in the generated file binds to the source declaration.
+        AddModels(context, sourceModels, seen, types);
+        AddModels(context, referencedModels, seen, types);
 
         if (types.Count == 0)
         {
@@ -191,6 +498,38 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
 
         var source = RegistrationEmitter.Emit(types, availability, GeneratorVersion);
         context.AddSource("ErgosfareRegistrations.g.cs", SourceText.From(source, Encoding.UTF8));
+    }
+
+    private static void AddModels(
+        SourceProductionContext context,
+        ImmutableArray<RegistrableTypeModel> models,
+        HashSet<string> seen,
+        List<RegistrableTypeModel> types)
+    {
+        foreach (var model in models)
+        {
+            if (!seen.Add(model.TypeofExpression))
+            {
+                continue;
+            }
+
+            if (!model.IsAccessible)
+            {
+                context.ReportDiagnostic(model.ReferencedAssemblyName is { } referencedAssembly
+                    ? Diagnostic.Create(
+                        GeneratorDiagnostics.InvisibleReferencedRegistrableType,
+                        location: null,
+                        model.DisplayName,
+                        referencedAssembly)
+                    : Diagnostic.Create(
+                        GeneratorDiagnostics.InaccessibleRegistrableType,
+                        model.Location?.ToLocation(),
+                        model.DisplayName));
+                continue;
+            }
+
+            types.Add(model);
+        }
     }
 
     /// <summary>

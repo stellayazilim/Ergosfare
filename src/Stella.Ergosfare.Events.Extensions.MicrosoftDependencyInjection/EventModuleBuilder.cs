@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Registry;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Events.Abstractions;
@@ -77,19 +78,36 @@ public class EventModuleBuilder(
     }
 
     /// <summary>
-    /// Registers all event types from the specified assembly.
+    /// Registers the assembly's event types that participate in default discovery: types
+    /// excluded via <see cref="ExcludeFromDiscoveryAttribute"/> or gated behind a
+    /// <see cref="DiscoveryKeyAttribute"/> are skipped, mirroring source-generated
+    /// <c>RegisterGenerated()</c>.
     /// </summary>
     /// <param name="assembly">The assembly to scan for types implementing <see cref="IEvent"/>.</param>
     /// <returns>The current <see cref="EventModuleBuilder"/> instance for fluent chaining.</returns>
     [RequiresUnreferencedCode("Assembly scanning discovers event types via reflection; trimming may remove them. Register events explicitly (or use source-generated registration) in trimmed or AOT applications.")]
     public EventModuleBuilder RegisterFromAssembly(Assembly assembly)
+        => RegisterFromAssembly(assembly, DiscoveryKeyAttribute.DefaultKey);
+
+    /// <summary>
+    /// Registers the assembly's event types whose discovery keys match the given pattern —
+    /// an exact key or a trailing-<c>*</c> prefix glob. See
+    /// <see cref="DiscoveryKeyAttribute"/> for the key model.
+    /// </summary>
+    /// <param name="assembly">The assembly to scan for types implementing <see cref="IEvent"/>.</param>
+    /// <param name="discoveryKeyPattern">The discovery key pattern to select types by.</param>
+    /// <returns>The current <see cref="EventModuleBuilder"/> instance for fluent chaining.</returns>
+    [RequiresUnreferencedCode("Assembly scanning discovers event types via reflection; trimming may remove them. Register events explicitly (or use source-generated registration) in trimmed or AOT applications.")]
+    public EventModuleBuilder RegisterFromAssembly(Assembly assembly, string discoveryKeyPattern)
     {
-        foreach (var type in assembly.GetTypes()
-                     .Where( t => t.IsAssignableTo(typeof(IEvent))))
+        foreach (var type in assembly.GetTypes())
         {
-            messageRegistry.Register(type);
+            if (type.IsAssignableTo(typeof(IEvent)) && Discovery.Matches(type, discoveryKeyPattern))
+            {
+                messageRegistry.Register(type);
+            }
         }
+
         return this;
     }
-    
 }

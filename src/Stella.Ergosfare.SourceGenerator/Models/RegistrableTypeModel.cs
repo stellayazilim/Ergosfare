@@ -63,6 +63,20 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     /// </summary>
     public required ImmutableArray<DescriptorModel> Descriptors { get; init; }
 
+    /// <summary>
+    ///     Name of the referenced assembly the type was discovered in, or <c>null</c> when
+    ///     the type is declared in the current compilation. Selects between the
+    ///     ERGOSG001 (source) and ERGOSG002 (reference) diagnostics for inaccessible types.
+    /// </summary>
+    public required string? ReferencedAssemblyName { get; init; }
+
+    /// <summary>
+    ///     The type's declared discovery keys (its own <c>[DiscoveryKey]</c>, else its
+    ///     assembly's). Empty means the type participates in default discovery under the
+    ///     implicit default key (the empty string).
+    /// </summary>
+    public required ImmutableArray<string> DiscoveryKeys { get; init; }
+
     public bool Equals(RegistrableTypeModel other)
     {
         if (TypeofExpression != other.TypeofExpression
@@ -74,7 +88,9 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
             || !Nullable.Equals(Location, other.Location)
             || Weight != other.Weight
             || GroupsExpression != other.GroupsExpression
-            || Descriptors.Length != other.Descriptors.Length)
+            || ReferencedAssemblyName != other.ReferencedAssemblyName
+            || Descriptors.Length != other.Descriptors.Length
+            || DiscoveryKeys.Length != other.DiscoveryKeys.Length)
         {
             return false;
         }
@@ -82,6 +98,14 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
         for (var i = 0; i < Descriptors.Length; i++)
         {
             if (!Descriptors[i].Equals(other.Descriptors[i]))
+            {
+                return false;
+            }
+        }
+
+        for (var i = 0; i < DiscoveryKeys.Length; i++)
+        {
+            if (!string.Equals(DiscoveryKeys[i], other.DiscoveryKeys[i], StringComparison.Ordinal))
             {
                 return false;
             }

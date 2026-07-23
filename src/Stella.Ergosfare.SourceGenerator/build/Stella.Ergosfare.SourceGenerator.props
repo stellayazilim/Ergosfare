@@ -1,0 +1,12 @@
+<Project>
+    <!-- Surfaces the reference-scanning opt-out to the source generator. Scanning is on
+         by default (the generator treats an absent value as enabled); set
+
+             <ErgosfareSourceGeneratorScanReferences>false</ErgosfareSourceGeneratorScanReferences>
+
+         in a project to restrict source-generated registration to types declared in that
+         project. -->
+    <ItemGroup>
+        <CompilerVisibleProperty Include="ErgosfareSourceGeneratorScanReferences" />
+    </ItemGroup>
+</Project>

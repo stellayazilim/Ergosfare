@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text;
+using Microsoft.CodeAnalysis.CSharp;
 using Stella.Ergosfare.SourceGenerator.Models;
 
 namespace Stella.Ergosfare.SourceGenerator;
@@ -10,7 +11,12 @@ namespace Stella.Ergosfare.SourceGenerator;
 ///     inside the consumer's project under whatever language version they use.
 /// </summary>
 /// <remarks>
-///     Types with pre-computed descriptors register through
+///     Every registration surface comes in two overloads: the pattern-less form selects
+///     default discovery (types without a <c>[DiscoveryKey]</c>), while the pattern form
+///     cherry-picks keyed types (<c>RegisterGenerated("reporting.*")</c>). Types are
+///     emitted in clusters sharing the same discovery-key set, each guarded by a key-match
+///     check; the registry's idempotence makes overlapping selections across chained calls
+///     safe. Types with pre-computed descriptors register through
 ///     <c>HandlerDescriptors</c> + <c>RegisterDescriptors</c>, bypassing the reflection
 ///     based descriptor builders entirely; plain messages and open generic types fall back
 ///     to direct <c>typeof</c>-based <c>Register</c> calls, which also keep the
@@ -46,11 +52,12 @@ internal static class RegistrationEmitter
         sb.AppendLine("namespace Stella.Ergosfare.Generated");
         sb.AppendLine("{");
         sb.AppendLine("    /// <summary>");
-        sb.AppendLine("    ///     Ergosfare constructs (messages, handlers, interceptors) declared in this assembly,");
-        sb.AppendLine("    ///     discovered at compile time. Handler descriptors are pre-computed, so registration");
-        sb.AppendLine("    ///     performs no reflection over handler types; plain messages and open generic types");
-        sb.AppendLine("    ///     register through the runtime fallback. Trimmed/AOT builds stay warning-free:");
-        sb.AppendLine("    ///     every type is referenced statically via <c>typeof</c>.");
+        sb.AppendLine("    ///     Ergosfare constructs (messages, handlers, interceptors) discovered at compile");
+        sb.AppendLine("    ///     time in this compilation and its scanned references. Handler descriptors are");
+        sb.AppendLine("    ///     pre-computed, so registration performs no reflection over handler types; plain");
+        sb.AppendLine("    ///     messages and open generic types register through the runtime fallback.");
+        sb.AppendLine("    ///     Trimmed/AOT builds stay warning-free: every type is referenced statically via");
+        sb.AppendLine("    ///     <c>typeof</c>.");
         sb.AppendLine("    /// </summary>");
         sb.Append("    [global::System.CodeDom.Compiler.GeneratedCode(\"Stella.Ergosfare.SourceGenerator\", \"")
           .Append(generatorVersion)
@@ -62,46 +69,28 @@ internal static class RegistrationEmitter
 
         if (builders.HasMessageRegistry)
         {
-            EmitRegisterAll(sb, ref wroteMember, types, useDescriptors);
+            EmitRegistrySurface(sb, ref wroteMember, types, useDescriptors);
         }
 
         if (builders.HasCommandModuleBuilder)
         {
-            EmitBuilderExtension(sb, ref wroteMember, CommandBuilderFullName, "command", "CreateCommandDescriptors",
+            EmitBuilderSurface(sb, ref wroteMember, CommandBuilderFullName, "command",
                 Filter(types, static t => t.IsCommand), useDescriptors && builders.CommandBuilderHasRegisterDescriptors);
         }
 
         if (builders.HasQueryModuleBuilder)
         {
-            EmitBuilderExtension(sb, ref wroteMember, QueryBuilderFullName, "query", "CreateQueryDescriptors",
+            EmitBuilderSurface(sb, ref wroteMember, QueryBuilderFullName, "query",
                 Filter(types, static t => t.IsQuery), useDescriptors && builders.QueryBuilderHasRegisterDescriptors);
         }
 
         if (builders.HasEventModuleBuilder)
         {
-            EmitBuilderExtension(sb, ref wroteMember, EventBuilderFullName, "event", "CreateEventDescriptors",
+            EmitBuilderSurface(sb, ref wroteMember, EventBuilderFullName, "event",
                 Filter(types, static t => t.IsEvent), useDescriptors && builders.EventBuilderHasRegisterDescriptors);
         }
 
-        if (builders.HasMessageRegistry && useDescriptors && HasDescriptors(types))
-        {
-            EmitDescriptorFactory(sb, ref wroteMember, "CreateDescriptors", types);
-        }
-
-        if (builders.HasCommandModuleBuilder && useDescriptors && builders.CommandBuilderHasRegisterDescriptors)
-        {
-            EmitDescriptorFactoryIfAny(sb, ref wroteMember, "CreateCommandDescriptors", Filter(types, static t => t.IsCommand));
-        }
-
-        if (builders.HasQueryModuleBuilder && useDescriptors && builders.QueryBuilderHasRegisterDescriptors)
-        {
-            EmitDescriptorFactoryIfAny(sb, ref wroteMember, "CreateQueryDescriptors", Filter(types, static t => t.IsQuery));
-        }
-
-        if (builders.HasEventModuleBuilder && useDescriptors && builders.EventBuilderHasRegisterDescriptors)
-        {
-            EmitDescriptorFactoryIfAny(sb, ref wroteMember, "CreateEventDescriptors", Filter(types, static t => t.IsEvent));
-        }
+        EmitMatchesHelper(sb, ref wroteMember);
 
         sb.AppendLine("    }");
         sb.AppendLine("}");
@@ -139,7 +128,7 @@ internal static class RegistrationEmitter
         return false;
     }
 
-    private static void EmitRegisterAll(
+    private static void EmitRegistrySurface(
         StringBuilder sb,
         ref bool wroteMember,
         IReadOnlyList<RegistrableTypeModel> types,
@@ -147,98 +136,142 @@ internal static class RegistrationEmitter
     {
         StartMember(sb, ref wroteMember);
         sb.AppendLine("        /// <summary>");
-        sb.AppendLine("        ///     Registers every Ergosfare construct declared in this assembly into the given");
-        sb.AppendLine("        ///     registry, regardless of module.");
+        sb.AppendLine("        ///     Registers every discovered construct that participates in default discovery");
+        sb.AppendLine("        ///     (no <c>[DiscoveryKey]</c>) into the given registry, regardless of module.");
         sb.AppendLine("        /// </summary>");
         sb.Append("        public static void RegisterAll(").Append(RegistryFullName).AppendLine(" registry)");
         sb.AppendLine("        {");
+        sb.AppendLine("            RegisterAll(registry, \"\");");
+        sb.AppendLine("        }");
 
-        if (useDescriptors && HasDescriptors(types))
-        {
-            sb.AppendLine("            registry.RegisterDescriptors(CreateDescriptors());");
-        }
-
-        foreach (var type in types)
-        {
-            if (!useDescriptors || type.Descriptors.Length == 0)
-            {
-                sb.Append("            registry.Register(typeof(").Append(type.TypeofExpression).AppendLine("));");
-            }
-        }
-
+        StartMember(sb, ref wroteMember);
+        sb.AppendLine("        /// <summary>");
+        sb.AppendLine("        ///     Registers every discovered construct whose discovery keys match the given");
+        sb.AppendLine("        ///     pattern — an exact key or a trailing-<c>*</c> prefix glob — regardless of");
+        sb.AppendLine("        ///     module. Chained calls with overlapping patterns are safe: the registry is");
+        sb.AppendLine("        ///     idempotent per handler type.");
+        sb.AppendLine("        /// </summary>");
+        sb.Append("        public static void RegisterAll(").Append(RegistryFullName).AppendLine(" registry, string discoveryKeyPattern)");
+        sb.AppendLine("        {");
+        EmitKeyedBody(sb, types, useDescriptors, "registry");
         sb.AppendLine("        }");
     }
 
-    private static void EmitBuilderExtension(
+    private static void EmitBuilderSurface(
         StringBuilder sb,
         ref bool wroteMember,
         string builderFullName,
         string moduleName,
-        string factoryMethodName,
         List<RegistrableTypeModel> moduleTypes,
         bool useDescriptors)
     {
         StartMember(sb, ref wroteMember);
         sb.AppendLine("        /// <summary>");
-        sb.Append("        ///     Registers every ").Append(moduleName).AppendLine("-module construct declared in this");
-        sb.AppendLine("        ///     assembly. Drop-in replacement for <c>RegisterFromAssembly</c>.");
+        sb.Append("        ///     Registers every discovered ").Append(moduleName).AppendLine("-module construct that participates");
+        sb.AppendLine("        ///     in default discovery (no <c>[DiscoveryKey]</c>). Drop-in replacement for");
+        sb.AppendLine("        ///     <c>RegisterFromAssembly</c>.");
         sb.AppendLine("        /// </summary>");
         sb.Append("        public static ").Append(builderFullName).AppendLine(" RegisterGenerated(");
         sb.Append("            this ").Append(builderFullName).AppendLine(" builder)");
         sb.AppendLine("        {");
+        sb.AppendLine("            return RegisterGenerated(builder, \"\");");
+        sb.AppendLine("        }");
 
-        if (useDescriptors && HasDescriptors(moduleTypes))
-        {
-            sb.Append("            builder.RegisterDescriptors(").Append(factoryMethodName).AppendLine("());");
-        }
-
-        foreach (var type in moduleTypes)
-        {
-            if (!useDescriptors || type.Descriptors.Length == 0)
-            {
-                sb.Append("            builder.Register(typeof(").Append(type.TypeofExpression).AppendLine("));");
-            }
-        }
-
+        StartMember(sb, ref wroteMember);
+        sb.AppendLine("        /// <summary>");
+        sb.Append("        ///     Registers every discovered ").Append(moduleName).AppendLine("-module construct whose discovery");
+        sb.AppendLine("        ///     keys match the given pattern — an exact key or a trailing-<c>*</c> prefix");
+        sb.AppendLine("        ///     glob. Chain calls to compose selections; overlapping patterns are safe.");
+        sb.AppendLine("        /// </summary>");
+        sb.Append("        public static ").Append(builderFullName).AppendLine(" RegisterGenerated(");
+        sb.Append("            this ").Append(builderFullName).AppendLine(" builder, string discoveryKeyPattern)");
+        sb.AppendLine("        {");
+        EmitKeyedBody(sb, moduleTypes, useDescriptors, "builder");
         sb.AppendLine("            return builder;");
         sb.AppendLine("        }");
     }
 
-    private static void EmitDescriptorFactoryIfAny(
+    /// <summary>
+    ///     Emits the keyed registration body shared by the registry and builder surfaces:
+    ///     one guarded block per discovery-key cluster, adding descriptors to a local list
+    ///     (registered in one call at the end) and issuing runtime-fallback
+    ///     <c>Register(typeof)</c> calls inline.
+    /// </summary>
+    private static void EmitKeyedBody(
         StringBuilder sb,
-        ref bool wroteMember,
-        string methodName,
-        List<RegistrableTypeModel> types)
+        IReadOnlyList<RegistrableTypeModel> types,
+        bool useDescriptors,
+        string receiver)
     {
-        if (HasDescriptors(types))
+        var emitDescriptors = useDescriptors && HasDescriptors(types);
+
+        if (emitDescriptors)
         {
-            EmitDescriptorFactory(sb, ref wroteMember, methodName, types);
+            sb.Append("            var descriptors = new global::System.Collections.Generic.List<")
+              .Append(DescriptorFullName).AppendLine(">();");
+            sb.AppendLine();
         }
-    }
 
-    private static void EmitDescriptorFactory(
-        StringBuilder sb,
-        ref bool wroteMember,
-        string methodName,
-        IReadOnlyList<RegistrableTypeModel> types)
-    {
-        StartMember(sb, ref wroteMember);
-        sb.Append("        private static ").Append(DescriptorFullName).Append("[] ").Append(methodName).AppendLine("()");
-        sb.Append("            => new ").Append(DescriptorFullName).AppendLine("[]");
-        sb.AppendLine("            {");
+        var clusters = BuildClusters(types);
 
-        foreach (var type in types)
+        for (var i = 0; i < clusters.Count; i++)
         {
-            foreach (var descriptor in type.Descriptors)
+            var cluster = clusters[i];
+
+            if (i > 0)
             {
-                EmitDescriptorEntry(sb, type, descriptor);
+                sb.AppendLine();
             }
+
+            sb.Append("            if (");
+
+            for (var k = 0; k < cluster.Keys.Count; k++)
+            {
+                if (k > 0)
+                {
+                    sb.Append(" || ");
+                }
+
+                sb.Append("MatchesDiscoveryKey(")
+                  .Append(SymbolDisplay.FormatLiteral(cluster.Keys[k], quote: true))
+                  .Append(", discoveryKeyPattern)");
+            }
+
+            sb.AppendLine(")");
+            sb.AppendLine("            {");
+
+            foreach (var type in cluster.Types)
+            {
+                if (useDescriptors && type.Descriptors.Length > 0)
+                {
+                    foreach (var descriptor in type.Descriptors)
+                    {
+                        sb.Append("                descriptors.Add(");
+                        AppendDescriptorExpression(sb, type, descriptor);
+                        sb.AppendLine(");");
+                    }
+                }
+                else
+                {
+                    sb.Append("                ").Append(receiver)
+                      .Append(".Register(typeof(").Append(type.TypeofExpression).AppendLine("));");
+                }
+            }
+
+            sb.AppendLine("            }");
         }
 
-        sb.AppendLine("            };");
+        if (emitDescriptors)
+        {
+            sb.AppendLine();
+            sb.AppendLine("            if (descriptors.Count > 0)");
+            sb.AppendLine("            {");
+            sb.Append("                ").Append(receiver).AppendLine(".RegisterDescriptors(descriptors);");
+            sb.AppendLine("            }");
+        }
     }
 
-    private static void EmitDescriptorEntry(StringBuilder sb, in RegistrableTypeModel type, in DescriptorModel descriptor)
+    private static void AppendDescriptorExpression(StringBuilder sb, in RegistrableTypeModel type, in DescriptorModel descriptor)
     {
         var factoryMethod = descriptor.Kind switch
         {
@@ -250,7 +283,7 @@ internal static class RegistrationEmitter
             _ => "Handler",
         };
 
-        sb.Append("                ").Append(FactoryFullName).Append('.').Append(factoryMethod)
+        sb.Append(FactoryFullName).Append('.').Append(factoryMethod)
           .Append("(typeof(").Append(descriptor.MessageTypeExpression).Append(')');
 
         if (descriptor.ResultTypeExpression is not null)
@@ -272,7 +305,100 @@ internal static class RegistrationEmitter
             sb.Append(", ").Append(type.GroupsExpression);
         }
 
-        sb.AppendLine("),");
+        sb.Append(')');
+    }
+
+    private static void EmitMatchesHelper(StringBuilder sb, ref bool wroteMember)
+    {
+        StartMember(sb, ref wroteMember);
+        sb.AppendLine("        /// <summary>");
+        sb.AppendLine("        ///     Whether a discovery key matches a pattern: ordinal equality, or — when the");
+        sb.AppendLine("        ///     pattern ends with <c>*</c> — an ordinal prefix match on the part before the");
+        sb.AppendLine("        ///     star. Mirrors the runtime <c>Discovery</c> helper.");
+        sb.AppendLine("        /// </summary>");
+        sb.AppendLine("        private static bool MatchesDiscoveryKey(string key, string discoveryKeyPattern)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            if (discoveryKeyPattern.Length > 0 && discoveryKeyPattern[discoveryKeyPattern.Length - 1] == '*')");
+        sb.AppendLine("            {");
+        sb.AppendLine("                return key.Length >= discoveryKeyPattern.Length - 1");
+        sb.AppendLine("                    && string.CompareOrdinal(key, 0, discoveryKeyPattern, 0, discoveryKeyPattern.Length - 1) == 0;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            return string.Equals(key, discoveryKeyPattern, global::System.StringComparison.Ordinal);");
+        sb.AppendLine("        }");
+    }
+
+    /// <summary>
+    ///     A group of types sharing the same effective discovery-key set, emitted under a
+    ///     single key-match guard. Untagged types form the default cluster (the implicit
+    ///     empty-string key), which sorts first.
+    /// </summary>
+    private sealed class Cluster
+    {
+        public Cluster(string signature, List<string> keys)
+        {
+            Signature = signature;
+            Keys = keys;
+        }
+
+        public string Signature { get; }
+
+        public List<string> Keys { get; }
+
+        public List<RegistrableTypeModel> Types { get; } = [];
+    }
+
+    private static List<Cluster> BuildClusters(IReadOnlyList<RegistrableTypeModel> types)
+    {
+        var bySignature = new Dictionary<string, Cluster>(System.StringComparer.Ordinal);
+        var clusters = new List<Cluster>();
+
+        foreach (var type in types)
+        {
+            var keys = EffectiveKeys(type);
+            var signature = string.Join("\u001f", keys);
+
+            if (!bySignature.TryGetValue(signature, out var cluster))
+            {
+                cluster = new Cluster(signature, keys);
+                bySignature.Add(signature, cluster);
+                clusters.Add(cluster);
+            }
+
+            cluster.Types.Add(type);
+        }
+
+        // Deterministic block order; the default cluster's empty signature sorts first.
+        clusters.Sort(static (x, y) => string.CompareOrdinal(x.Signature, y.Signature));
+
+        return clusters;
+    }
+
+    /// <summary>
+    ///     The type's effective discovery keys for emission: the implicit default key when
+    ///     it declares none, else its declared keys sorted and deduplicated so equivalent
+    ///     declarations cluster together.
+    /// </summary>
+    private static List<string> EffectiveKeys(in RegistrableTypeModel type)
+    {
+        if (type.DiscoveryKeys.IsEmpty)
+        {
+            return [""];
+        }
+
+        var keys = new List<string>(type.DiscoveryKeys.Length);
+
+        foreach (var key in type.DiscoveryKeys)
+        {
+            if (!keys.Contains(key))
+            {
+                keys.Add(key);
+            }
+        }
+
+        keys.Sort(static (x, y) => string.CompareOrdinal(x, y));
+
+        return keys;
     }
 
     private static void StartMember(StringBuilder sb, ref bool wroteMember)
