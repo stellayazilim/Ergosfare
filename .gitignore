@@ -21,3 +21,6 @@ docs/**
 docs/**
 BenchmarkDotNet.Artifacts/
 
+
+# Local playground — personal sandbox, intentionally untracked
+examples/Playground/

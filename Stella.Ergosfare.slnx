@@ -1,8 +1,4 @@
 ﻿<Solution>
-  <Folder Name="/docs/">
-    <Project Path="changelog\Ergosfare.Changelog.njsproj" />
-    <Project Path="docs\Ergosfare.Docs.njsproj" />
-  </Folder>
   <Folder Name="/RepositoryItems/">
     <File Path="readme.md" />
     <File Path="CHANGELOG.md" />
@@ -24,6 +20,7 @@
     <Project Path="src\Stella.Ergosfare.Queries.Abstractions\Stella.Ergosfare.Queries.Abstractions.csproj" />
     <Project Path="src\Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.csproj" />
     <Project Path="src\Stella.Ergosfare.Queries\Stella.Ergosfare.Queries.csproj" />
+    <Project Path="src\Stella.Ergosfare.SourceGenerator\Stella.Ergosfare.SourceGenerator.csproj" />
     <Project Path="src\Stella.Ergosfare\Stella.Ergosfare.csproj" />
   </Folder>
   <Folder Name="/test/">
@@ -35,6 +32,7 @@
     <Project Path="test\Stella.Ergosfare.Core.Test\Stella.Ergosfare.Core.Test.csproj" />
     <Project Path="test\Stella.Ergosfare.Events.Test\Stella.Ergosfare.Events.Test.csproj" />
     <Project Path="test\Stella.Ergosfare.Queries.Test\Stella.Ergosfare.Queries.Test.csproj" />
+    <Project Path="test\Stella.Ergosfare.SourceGenerator.Test\Stella.Ergosfare.SourceGenerator.Test.csproj" />
     <Project Path="test\Stella.Ergosfare.Test.Fixtures\Stella.Ergosfare.Test.Fixtures.csproj" />
     <Project Path="test\Stella.Ergosfare.Test\Stella.Ergosfare.Test.csproj" />
   </Folder>

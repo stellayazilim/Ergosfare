@@ -89,6 +89,7 @@ jobs:
             ./src/Stella.Ergosfare.Events/Stella.Ergosfare.Events.csproj
             ./src/Stella.Ergosfare.Events.Abstractions/Stella.Ergosfare.Events.Abstractions.csproj
             ./src/Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection/Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj
+            ./src/Stella.Ergosfare.SourceGenerator/Stella.Ergosfare.SourceGenerator.csproj
           )
 
           for proj in "${projects[@]}"; do
