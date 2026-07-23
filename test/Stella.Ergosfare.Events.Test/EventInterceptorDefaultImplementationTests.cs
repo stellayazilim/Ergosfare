@@ -66,10 +66,16 @@ public class EventInterceptorDefaultImplementationTests
     public async Task PreInterceptorDefaultImplementation_ShouldForwardToTypedHandleAsync()
     {
         var interceptor = new TestPreInterceptor();
+        var @event = new TestEvent();
 
-        await ((IAsyncPreInterceptor<IEvent>) interceptor).HandleAsync(new TestEvent(), CreateContext());
+        var result = await ((IAsyncPreInterceptor<IEvent>) interceptor).HandleAsync(@event, CreateContext());
 
         Assert.True(interceptor.Called);
+
+        // Regression: the default implementation used to return ValueTask.CompletedTask,
+        // which the pipeline then cast to the message type and crashed — a pre-interceptor's
+        // return value is the message the rest of the pipeline continues with.
+        Assert.Same(@event, result);
     }
 
     [Fact]
