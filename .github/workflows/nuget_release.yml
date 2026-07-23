@@ -77,7 +77,6 @@ jobs:
         run: |
           projects=(
             ./src/Stella.Ergosfare/Stella.Ergosfare.csproj
-            ./src/Stella.Ergosfare.Contracts/Stella.Ergosfare.Contracts.csproj
             ./src/Stella.Ergosfare.Core/Stella.Ergosfare.Core.csproj
             ./src/Stella.Ergosfare.Core.Abstractions/Stella.Ergosfare.Core.Abstractions.csproj
             ./src/Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection/Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj

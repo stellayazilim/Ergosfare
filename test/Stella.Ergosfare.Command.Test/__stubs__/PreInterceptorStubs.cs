@@ -1,5 +1,5 @@
 using Stella.Ergosfare.Commands.Abstractions;
-using Stella.Ergosfare.Contracts.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions;
 // ReSharper disable ClassNeverInstantiated.Global
 

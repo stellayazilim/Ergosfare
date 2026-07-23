@@ -7,7 +7,7 @@ using Stella.Ergosfare.Test.Fixtures;
 using Stella.Ergosfare.Test.Fixtures.Stubs.Basic;
 using Stella.Ergosfare.Test.Fixtures.Stubs.Generic;
 using Microsoft.Extensions.DependencyInjection;
-using Stella.Ergosfare.Contracts.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Xunit.Abstractions;
 // ReSharper disable ConvertToPrimaryConstructor
 

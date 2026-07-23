@@ -10,6 +10,7 @@
 
 ### Removed
 
+* **`Stella.Ergosfare.Contracts` is folded into Core.Abstractions.** The package carried exactly two attributes (`GroupAttribute`, `WeightAttribute`) — not worth an assembly. They now live in `Stella.Ergosfare.Core.Abstractions.Attributes`, flowing transitively to every consumer; the `Stella.Ergosfare.Contracts` package is no longer produced. Migration: update the `using Stella.Ergosfare.Contracts.Attributes;` directive and drop the package reference.
 * `AmbientExecutionContext` and `EnableAmbientExecutionContext()` (deprecated since v1.2.0) are removed. The execution context is passed to every handler and interceptor as a parameter; `IExecutionContext` can no longer be resolved from DI. `NoExecutionContextException` is removed with it, and no `AsyncLocal` publication remains anywhere on the dispatch path.
 * The obsolete three-parameter `TModifiedResult` interceptor interfaces — `ICommandPostInterceptor<TCommand, TResult, TModifiedResult>`, `ICommandExceptionInterceptor<TCommand, TResult, TModifiedResult>`, `IQueryPostInterceptor<TQuery, TResult, TModifiedResult>`, `IQueryExceptionInterceptor<TQuery, TResult, TModifiedResult>` — are removed. Use the two-parameter variants introduced in v1.4.0; they expose the typed `HandleAsync` directly.
 * The unused internal `MainInvoker` base class is removed.

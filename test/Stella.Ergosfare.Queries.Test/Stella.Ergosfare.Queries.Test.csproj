@@ -24,7 +24,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\src\Stella.Ergosfare.Contracts\Stella.Ergosfare.Contracts.csproj" />
       <ProjectReference Include="..\..\src\Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.csproj" />
       <ProjectReference Include="..\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test.csproj" />
     </ItemGroup>
