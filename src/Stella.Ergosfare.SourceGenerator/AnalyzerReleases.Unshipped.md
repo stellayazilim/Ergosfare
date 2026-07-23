@@ -6,3 +6,4 @@
 Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
 ERGOSG001 | Usage | Warning | Registrable type is not accessible from generated registration code
+ERGOSG002 | Usage | Warning | Registrable type in a referenced assembly is not visible to generated registration code

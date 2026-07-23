@@ -33,5 +33,10 @@
 
     <ItemGroup>
         <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+
+        <!-- NuGet auto-imports build/<PackageId>.props into consuming projects; it makes
+             the ErgosfareSourceGeneratorScanReferences MSBuild property visible to the
+             generator as a build_property analyzer-config key. -->
+        <None Include="build\Stella.Ergosfare.SourceGenerator.props" Pack="true" PackagePath="build" />
     </ItemGroup>
 </Project>
