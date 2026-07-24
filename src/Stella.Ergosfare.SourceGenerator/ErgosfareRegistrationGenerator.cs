@@ -67,6 +67,13 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     private const string ScanReferencesBuildProperty = "build_property.ErgosfareSourceGeneratorScanReferences";
     private const string ErgosfareAssemblyNamePrefix = "Stella.Ergosfare";
 
+    // Per-assembly opt-in that force-includes an assembly matching the reserved prefix.
+    // Surfaced from the ErgosfareSourceGeneratorForceScanReferences MSBuild property as
+    // [assembly: AssemblyMetadata("ErgosfareSourceGeneratorForceScanReferences", "true")].
+    private const string ForceScanReferencesMetadataKey = "ErgosfareSourceGeneratorForceScanReferences";
+    private const string AssemblyMetadataAttributeName = "AssemblyMetadataAttribute";
+    private const string AssemblyMetadataAttributeNamespace = "System.Reflection";
+
     private static readonly string GeneratorVersion =
         typeof(ErgosfareRegistrationGenerator).Assembly.GetName().Version?.ToString() ?? "1.0.0";
 
@@ -356,6 +363,9 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     ///     everything else is skipped on a metadata-name check without realizing any of its
     ///     types; Ergosfare's own assemblies are excluded because their handler contract
     ///     interfaces inherit the module markers and must not be registered as user types.
+    ///     A downstream assembly that deliberately lives under the reserved prefix can opt
+    ///     back in per-assembly (see <see cref="HasForceScanReferencesOptIn"/>); the
+    ///     library's own assemblies never do, so their contracts stay unregistered.
     /// </summary>
     private static ImmutableArray<RegistrableTypeModel> ScanReferencedAssemblies(
         Compilation compilation,
@@ -367,7 +377,14 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         {
             ct.ThrowIfCancellationRequested();
 
-            if (IsErgosfareAssemblyName(assembly.Name) || !ReferencesErgosfare(assembly))
+            if (!ReferencesErgosfare(assembly))
+            {
+                continue;
+            }
+
+            // The reserved-prefix exclusion is per-assembly opt-out-able in reverse: an
+            // assembly under the prefix is skipped unless it explicitly force-opts-in.
+            if (IsErgosfareAssemblyName(assembly.Name) && !HasForceScanReferencesOptIn(assembly))
             {
                 continue;
             }
@@ -394,6 +411,33 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         => name.StartsWith(ErgosfareAssemblyNamePrefix, StringComparison.Ordinal)
            && (name.Length == ErgosfareAssemblyNamePrefix.Length
                || name[ErgosfareAssemblyNamePrefix.Length] == '.');
+
+    /// <summary>
+    ///     Whether the assembly force-opts back into reference scanning despite matching the
+    ///     reserved <c>Stella.Ergosfare</c> name prefix. The opt-in is a per-assembly marker —
+    ///     <c>[assembly: AssemblyMetadata("ErgosfareSourceGeneratorForceScanReferences", "true")]</c>,
+    ///     surfaced from the same-named MSBuild property — so only assemblies that set it are
+    ///     scanned. The library's own assemblies never declare it, which is what keeps their
+    ///     marker-inheriting contract interfaces out of the generated registrations.
+    /// </summary>
+    private static bool HasForceScanReferencesOptIn(IAssemblySymbol assembly)
+    {
+        foreach (var attribute in assembly.GetAttributes())
+        {
+            if (attribute.AttributeClass is { Name: AssemblyMetadataAttributeName } attributeClass
+                && IsInNamespace(attributeClass, AssemblyMetadataAttributeNamespace)
+                && attribute.ConstructorArguments.Length == 2
+                && attribute.ConstructorArguments[0].Value is string key
+                && string.Equals(key, ForceScanReferencesMetadataKey, StringComparison.Ordinal)
+                && attribute.ConstructorArguments[1].Value is string value
+                && string.Equals(value, "true", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     ///     Whether the assembly's metadata records a reference to any Ergosfare assembly —

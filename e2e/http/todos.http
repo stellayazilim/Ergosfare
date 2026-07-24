@@ -1,0 +1,123 @@
+# End-to-end flow for the Todo app, asserted with ijhttp response handlers.
+# Every `> {% ... %}` block runs client.test assertions; a failed assertion fails the run.
+# `host` comes from http-client.env.json (the `e2e` environment).
+
+### Readiness probe
+GET {{host}}/health
+Accept: application/json
+
+> {%
+    client.test("health returns 200", function () {
+        client.assert(response.status === 200, "expected 200, got " + response.status);
+    });
+%}
+
+### Create a todo — the title is deliberately padded so the pre-interceptor has to trim it
+POST {{host}}/todos
+Content-Type: application/json
+
+{
+  "title": "  buy milk  "
+}
+
+> {%
+    client.test("create returns 201", function () {
+        client.assert(response.status === 201, "expected 201, got " + response.status);
+    });
+    client.test("create returns an id", function () {
+        client.assert(response.body.id !== undefined && response.body.id !== null, "no id in body");
+    });
+    client.global.set("todoId", response.body.id);
+%}
+
+### Read it back — the interceptor (which lives in a separate assembly) must have trimmed the title
+GET {{host}}/todos/{{todoId}}
+Accept: application/json
+
+> {%
+    client.test("get returns 200", function () {
+        client.assert(response.status === 200, "expected 200, got " + response.status);
+    });
+    client.test("title was trimmed by the pre-interceptor", function () {
+        client.assert(response.body.title === "buy milk",
+            "expected 'buy milk', got '" + response.body.title + "'");
+    });
+    client.test("not completed yet", function () {
+        client.assert(response.body.isCompleted === false, "expected isCompleted=false");
+    });
+%}
+
+### Complete it (a result-less command)
+POST {{host}}/todos/{{todoId}}/complete
+
+> {%
+    client.test("complete returns 204", function () {
+        client.assert(response.status === 204, "expected 204, got " + response.status);
+    });
+%}
+
+### Read again — now completed
+GET {{host}}/todos/{{todoId}}
+Accept: application/json
+
+> {%
+    client.test("todo is now completed", function () {
+        client.assert(response.body.isCompleted === true, "expected isCompleted=true");
+    });
+%}
+
+### List — the todo is present (query returning a collection)
+GET {{host}}/todos
+Accept: application/json
+
+> {%
+    client.test("list returns 200", function () {
+        client.assert(response.status === 200, "expected 200, got " + response.status);
+    });
+    client.test("list contains the created todo", function () {
+        var id = client.global.get("todoId");
+        var found = response.body.filter(function (t) { return t.id === id; });
+        client.assert(found.length === 1, "created todo not present in list");
+    });
+%}
+
+### Stats — both event styles ran: the explicit IEvent (created) and the POCO domain event
+### (completed), the latter raised by the aggregate and published by the DbContext on commit
+GET {{host}}/stats
+Accept: application/json
+
+> {%
+    client.test("stats counted the created IEvent", function () {
+        client.assert(response.status === 200, "expected 200, got " + response.status);
+        client.assert(response.body.created >= 1,
+            "expected created >= 1, got " + response.body.created);
+    });
+    client.test("stats counted the completed POCO domain event", function () {
+        client.assert(response.body.completed >= 1,
+            "expected completed >= 1, got " + response.body.completed);
+    });
+%}
+
+### Validation — an empty title is rejected by the interceptor and mapped to 400
+POST {{host}}/todos
+Content-Type: application/json
+
+{
+  "title": "   "
+}
+
+> {%
+    client.test("blank title is rejected with 400", function () {
+        client.assert(response.status === 400, "expected 400, got " + response.status);
+    });
+%}
+
+### Unknown id — 404
+GET {{host}}/todos/11111111-1111-1111-1111-111111111111
+Accept: application/json
+
+> {%
+    client.test("unknown todo returns 404", function () {
+        client.assert(response.status === 404, "expected 404, got " + response.status);
+    });
+%}
