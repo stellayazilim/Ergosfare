@@ -1,0 +1,116 @@
+# Local docs workflow for the Ergosfare superproject.
+#
+# The docs site is the `docs/` submodule, and it documents two lines: stable v1
+# from `main` at the site root, and v2 from `preview` under /preview. Because the
+# .NET sources sit right here, the whole API-reference chain runs locally — the
+# ref that is not checked out is built from a git worktree under `.worktrees/`,
+# so a full run never has to touch GitHub. In CI the two halves are split across
+# repositories (see .github/workflows/api_reference.yml and
+# docs/.github/workflows/deploy.yml).
+#
+# Install go-task once:
+#   winget install Task.Task          # Windows
+#   brew install go-task/tap/go-task  # macOS
+#
+# Then:
+#   task              # list the common tasks
+#   task docs:serve   # regenerate both API references and open the dev server
+#
+# go-task ships its own POSIX shell interpreter, so these recipes behave the same
+# on Windows, macOS and Linux. It does NOT ship coreutils, though — anything
+# needing logic lives in a Node script under docs/scripts/.
+
+version: '3'
+
+vars:
+  DOCS: docs
+
+tasks:
+  default:
+    desc: List the common tasks.
+    silent: true
+    cmds:
+      - task --list
+
+  # ---------------------------------------------------------------- api reference
+
+  api:generate:
+    desc: "Stage 1 — run docfx for every documented line into docs/.api-cache/."
+    deps: [docs:install]
+    cmds:
+      # docfx runs once per version, in the superproject for the checked-out ref
+      # and in a `.worktrees/<ref>` worktree for the others, then places the
+      # ManagedReference YAML in that version's cache directory.
+      - npm --prefix {{.DOCS}} run gen_api_ref -- --fetch-only
+
+  api:convert:
+    desc: "Stage 2 — convert the cached YAML into Starlight pages and the sidebar."
+    deps: [docs:install]
+    cmds:
+      - npm --prefix {{.DOCS}} run gen_api_ref -- --skip-fetch
+
+  api:
+    desc: Refresh both API references end to end.
+    deps: [docs:install]
+    cmds:
+      - npm --prefix {{.DOCS}} run gen_api_ref
+
+  api:clean:
+    desc: Remove the docfx output, the metadata cache and the generated pages.
+    cmds:
+      - rm -rf api {{.DOCS}}/.api-cache
+      - rm -rf {{.DOCS}}/src/content/docs/api {{.DOCS}}/src/content/docs/preview/api
+      - rm -rf {{.DOCS}}/src/generated
+
+  # ---------------------------------------------------------------- docs site
+
+  docs:install:
+    desc: Install the docs site's npm dependencies (skipped when present).
+    status:
+      - test -d {{.DOCS}}/node_modules
+    cmds:
+      - npm --prefix {{.DOCS}} install
+
+  docs:build:
+    desc: Build the docs site, refreshing both API references first.
+    deps: [api]
+    cmds:
+      - npm --prefix {{.DOCS}} run build
+
+  docs:build:fast:
+    desc: Build the docs site using whatever API reference is already generated.
+    deps: [docs:install]
+    cmds:
+      - npm --prefix {{.DOCS}} run build
+
+  docs:serve:
+    desc: Refresh both API references, then run the dev server with hot reload.
+    deps: [api]
+    cmds:
+      - npm --prefix {{.DOCS}} run dev
+
+  docs:serve:fast:
+    desc: Dev server without regenerating the API references.
+    deps: [docs:install]
+    cmds:
+      - npm --prefix {{.DOCS}} run dev
+
+  docs:preview:
+    desc: Serve the built site exactly as GitHub Pages will (run docs:build first).
+    deps: [docs:install]
+    cmds:
+      - npm --prefix {{.DOCS}} run preview
+
+  docs:check:
+    desc: Build and fail on any broken internal link.
+    deps: [docs:build]
+    cmds:
+      - node {{.DOCS}}/scripts/check-links.mjs {{.DOCS}}/docs
+
+  # ---------------------------------------------------------------- mcp
+
+  mcp:
+    desc: Run the docs MCP server on stdio (for wiring into an MCP client).
+    deps: [docs:install]
+    cmds:
+      - node {{.DOCS}}/mcp/server.mjs

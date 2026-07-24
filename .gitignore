@@ -21,6 +21,23 @@ docs/**
 docs/**
 BenchmarkDotNet.Artifacts/
 
+# docfx output — the API reference is generated on demand (see
+# .github/workflows/api_reference.yml) and consumed by the docs site, never committed.
+# `api/` holds the ManagedReference YAML plus docfx's own `.manifest` and xrefmap;
+# `_site/` is the (unused) rendered-site target from docfx.json's build section.
+/api/
+/_site/
+docfx.log
+xrefmap.yml
+
+# Worktrees the docs pipeline checks out to build the other line's API metadata
+# locally (docs/scripts/api-ref/fetch.ts). Full source trees plus their own docfx
+# output — never part of a commit here.
+/.worktrees/
+
+# go-task's source fingerprints, used to skip an unchanged docfx run.
+/.task/
+
 
 # Local playground — personal sandbox, intentionally untracked
 examples/Playground/
