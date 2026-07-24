@@ -8,22 +8,15 @@
 /// <typeparam name="TMessage">The type of the message to handle. Must be non-nullable.</typeparam>
 /// <typeparam name="TResult">The type of the result produced by the handler. Must be non-nullable.</typeparam>
 /// <remarks>
-/// Implementations of this interface should provide the synchronous handling logic for a message and return
-/// a strongly typed result. The non-generic <see cref="IHandler"/> interface is implemented explicitly to allow
-/// type-agnostic invocation, mapping the <paramref name="message"/> to <typeparamref name="TMessage"/> and returning
-/// the typed <typeparamref name="TResult"/> as <see cref="object"/>.
+/// Implementations of this interface provide synchronous handling logic and return the
+/// typed result directly — there is no object-typed bridge member; the pipeline invokes
+/// handlers exclusively through their typed members.
 /// </remarks>
 public interface IHandler<in TMessage, out TResult> : IHandler
     where TMessage : notnull
     where TResult : notnull
 {
-    
-    /// <inheritdoc cref="IHandler.Handle"/>
-    object IHandler.Handle(object message, IExecutionContext context)
-    {
-        return Handle((TMessage) message, context);
-    }
-    
+
     /// <summary>
     /// Handles a message of type <typeparamref name="TMessage"/> and returns a strongly-typed result.
     /// </summary>

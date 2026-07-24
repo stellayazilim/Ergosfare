@@ -18,10 +18,10 @@ public class StubNonGenericEventHandler1: IEventHandler<StubNonGenericEvent>
     /// <summary>
     /// Handles the event and sets <see cref="IsRuned"/> to true.
     /// </summary>
-    public async Task HandleAsync(StubNonGenericEvent message, IExecutionContext context)
+    public async ValueTask HandleAsync(StubNonGenericEvent message, IExecutionContext context)
     {
         IsRuned = true;
-        await Task.CompletedTask;
+        await ValueTask.CompletedTask;
     }
 }
 
@@ -39,10 +39,10 @@ public class StubNonGenericEventHandler2: IEventHandler<StubNonGenericEvent>
     /// <summary>
     /// Handles the event and sets <see cref="IsRuned"/> to true.
     /// </summary>
-    public async Task HandleAsync(StubNonGenericEvent message, IExecutionContext context)
+    public async ValueTask HandleAsync(StubNonGenericEvent message, IExecutionContext context)
     {
         IsRuned = true;
-        await Task.CompletedTask;
+        await ValueTask.CompletedTask;
     }
 }
 
@@ -59,7 +59,7 @@ public sealed class StubNonGenericEventHandlerThrows: IEventHandler<StubNonGener
     /// <summary>
     /// Handles the event and throws an exception to simulate a failing handler.
     /// </summary>
-    public Task HandleAsync(StubNonGenericEventThrows message, IExecutionContext context)
+    public ValueTask HandleAsync(StubNonGenericEventThrows message, IExecutionContext context)
     {
         IsRuned = true;
         throw new Exception("Throw exception");
@@ -80,9 +80,9 @@ public sealed class StubNonGenericEventExceptionInterceptor: IEventExceptionInte
     /// <summary>
     /// Handles an exception thrown by an event handler and sets <see cref="IsRuned"/> to true.
     /// </summary>
-    public async Task HandleAsync(StubNonGenericEventThrows @event, Task? result, Exception exception, IExecutionContext context)
+    public async ValueTask HandleAsync(StubNonGenericEventThrows @event, ValueTask result, Exception exception, IExecutionContext context)
     {
         IsRuned = true;
-        await Task.CompletedTask;
+        await ValueTask.CompletedTask;
     }
 }

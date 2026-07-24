@@ -1,0 +1,117 @@
+name: ApiReference
+
+# Produces the DocFX ManagedReference metadata that the docs site turns into its
+# API Reference sections — one per documented line: `main` (stable v1) and
+# `preview` (v2). Only metadata is produced here; the YAML -> Starlight markdown
+# conversion lives in Ergosfare.Docs (`npm run gen_api_ref`). Split that way, the
+# docs site never needs a .NET SDK and this repo never needs Node.
+#
+# Both refs are built in one run from a single workflow definition, so the file
+# does not have to be kept in sync across branches. The docfx configuration is
+# always taken from the ref that triggered the run and copied into each checkout,
+# which also lets `main` be documented with settings it does not carry itself.
+#
+# Triggered by Ergosfare.Docs before it builds; also runnable by hand from the
+# Actions tab when you want to inspect the metadata.
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: [preview, main]
+    paths:
+      - "src/**"
+      - "docfx.json"
+      - "docfx.filter.yml"
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    strategy:
+      # One job per documented line. `fail-fast: false` so a broken stable branch
+      # does not also deny the docs site its preview metadata.
+      fail-fast: false
+      matrix:
+        include:
+          - ref: main
+            artifact: api-mref-v1
+          - ref: preview
+            artifact: api-mref-v2
+
+    steps:
+      - name: Checkout docfx configuration
+        uses: actions/checkout@v4
+        with:
+          path: config
+          sparse-checkout: |
+            docfx.json
+            docfx.filter.yml
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout ${{ matrix.ref }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.ref }}
+          path: source
+
+      - name: Apply docfx configuration
+        # `main` predates these files; using the triggering ref's copy keeps both
+        # lines filtered and laid out identically.
+        run: cp config/docfx.json config/docfx.filter.yml source/
+
+      - name: Setup .NET
+        # docfx builds the projects to read their symbols, so it needs the same
+        # SDK pair the solutions multi-target.
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            9.0.x
+            10.0.x
+
+      - name: Install DocFX
+        run: dotnet tool install --global docfx --version 2.78.3
+
+      - name: Generate API metadata
+        working-directory: source
+        run: docfx metadata docfx.json --warningsAsErrors false
+
+      - name: Verify metadata is non-empty
+        # A silently empty api/ would publish an empty API Reference section
+        # rather than failing the docs build, so fail loudly here instead.
+        working-directory: source
+        run: |
+          count=$(find api -name '*.yml' | wc -l)
+          echo "Generated $count ManagedReference files for ${{ matrix.ref }}."
+          if [ "$count" -lt 2 ]; then
+            echo "::error::docfx produced $count file(s); expected the full API surface."
+            exit 1
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: source/api/
+          retention-days: 7
+          if-no-files-found: error
+
+  notify-docs:
+    # Tells the docs site to rebuild so the published API reference tracks the
+    # sources. Skipped on manual/called runs — those already have a consumer.
+    needs: metadata
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Ergosfare.Docs rebuild
+        env:
+          GH_TOKEN: ${{ secrets.ERGOSFARE_DOCS_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::ERGOSFARE_DOCS_TOKEN not set; skipping docs rebuild trigger."
+            exit 0
+          fi
+          gh api repos/stellayazilim/Ergosfare.Docs/dispatches \
+            -f event_type=api-changed

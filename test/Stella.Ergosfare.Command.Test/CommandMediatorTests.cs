@@ -27,7 +27,7 @@ public class CommandMediatorTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public void ShouldResolveCommandTCommand()
+    public async Task ShouldResolveCommandTCommand()
     {
         var serviceCollection = new ServiceCollection()
             .AddErgosfare(options =>
@@ -39,14 +39,9 @@ public class CommandMediatorTests
             }).BuildServiceProvider();
 
         var messageMediator = serviceCollection.GetService<IMessageMediator>();
-        var mediator = new CommandMediator(
-            serviceCollection.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
-            new ResultAdapterService(),
-            messageMediator!);
+        var mediator = new CommandMediator(messageMediator!);
 
-        var result = mediator.SendAsync(new StubNonGenericCommand(), null, CancellationToken.None);
-
-        Assert.NotNull(result);
+        await mediator.SendAsync(new StubNonGenericCommand(), null, CancellationToken.None);
     }
 
     /// <summary>
@@ -72,14 +67,10 @@ public class CommandMediatorTests
             }).BuildServiceProvider();
 
         var messageMediator = serviceCollection.GetRequiredService<IMessageMediator>();
-        var mediator = new CommandMediator(
-            serviceCollection.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
-            new ResultAdapterService(),
-            messageMediator!);
+        var mediator = new CommandMediator(messageMediator!);
 
         var result = mediator.SendAsync(new StubNonGenericCommandStringResult(), StubDefaultMediationSetting.CommandDefaultSetting, CancellationToken.None);
 
-        Assert.NotNull(result);
         Assert.Equal(string.Empty, await result);
     }
 }

@@ -1,3 +1,64 @@
+## v2.0.0-preview – '2026-07-24'
+
+First preview of the v2 line. The theme: **all dispatch-shape work moves to compile time
+or to a once-per-message-type plan** — registration is source-generated, dispatch generics
+close at compile time, execution contexts are pooled, and the dispatch path carries no
+reflection, no `MakeGenericType`, no registry scan and no `AsyncLocal`.
+
+### Source-generated registration (`Stella.Ergosfare.SourceGenerator`)
+
+* New incremental Roslyn generator discovers every Ergosfare construct in the compilation and emits `RegisterGenerated()` extensions on the module builders (plus a DI-agnostic `RegisterAll(IMessageRegistry)`) — drop-in replacements for `RegisterFromAssembly(...)`, with **pre-computed handler descriptors**: registration performs no reflection over handler types. Plain messages and open generics keep the runtime `Register(Type)` fallback; both paths are mutually idempotent, so generated and runtime registration can coexist.
+* **Reference scanning:** the consuming project's generator also walks referenced assemblies — a library's handlers register through the app's generated code with zero registration code in the library. Internal types participate via `InternalsVisibleTo`; types generated code cannot name surface as **ERGOSG002** (marker types the runtime scan would have caught). Opt out per project with `<ErgosfareSourceGeneratorScanReferences>false</ErgosfareSourceGeneratorScanReferences>`. Assemblies named under the reserved `Stella.Ergosfare.*` prefix are skipped by default (their contract interfaces inherit the module markers); an app deliberately named under that prefix opts back in per-assembly with `<ErgosfareSourceGeneratorForceScanReferences>true</ErgosfareSourceGeneratorForceScanReferences>` — only assemblies that set it are scanned, so the library's own contracts are never registered.
+* **Discovery keys:** `[DiscoveryKey("reporting.daily")]` gates a type out of default discovery until a registration call selects it — `RegisterGenerated()` takes untagged types, `RegisterGenerated("reporting.*")` cherry-picks by exact key or trailing-`*` prefix glob, and calls chain safely. `[assembly: DiscoveryKey]` tags a whole library; `[ExcludeFromDiscovery]` (type or assembly) removes a construct from discovery entirely. The reflection path (`RegisterFromAssembly`, now with a pattern overload) honors the same attributes.
+* **Generated dispatch roots:** the generator emits compile-time generic closures (`GeneratedDispatchRoots.AddMessage<M>` / `AddResult<M, R>` / `AddStream<Q, R>`), letting the executor, event-broadcast and stream-invoker caches construct their pipelines **without `MakeGenericType`** — and giving Native AOT a static anchor for every instantiation, value-type messages included. The reflective path remains only as the fallback for open generics and runtime-only registrations.
+* Diagnostics: `ERGOSG001` (inaccessible registrable type), `ERGOSG002` (invisible referenced type).
+
+### Dispatch engine
+
+* **Per-message-type pipeline executors.** Dispatch goes through a pipeline closed over the message's runtime type, built once per (message type, result type, group set) and cached process-wide; the facades resolve executors with a dictionary lookup. No per-call options object, no interface-erased strategy, no object-typed bridge — interface-erased dispatch throws `NotSupportedException` with guidance.
+* **Independent sync/async contracts, typed end to end.** `IHandler` and the four interceptor roots are empty markers; typed synchronous and `ValueTask`-based asynchronous contracts are standalone hierarchies invoked exclusively through their typed members (generic invocation strategies, contravariant in message/result). All DIM bridges and object-typed root members are gone; synchronous typed interceptors actually work now (the old bridge crashed them with `InvalidCastException`).
+* **`ValueTask`-first surface** across handlers, interceptors and facades; synchronously completing handlers allocate nothing.
+* **Thread-safe registration.** Registration is serialized behind a gate with lock-free snapshot readers (immutable descriptor-array snapshots, copy-on-write stage arrays, version-stamped resolve caching — fixing registration races, mid-registration enumeration crashes, and a resolve-cache poisoning bug). Hot-path LINQ removed from event broadcast and pipeline-shape building.
+
+### Execution context — scopes, pooling, nested dispatch
+
+* **Nested dispatch as a first-class pattern:** `context.CreateScope()` returns a struct scope wrapping a clean, pooled child context — isolated items, inherited cancellation token. Facades accept the child (`SendAsync`/`QueryAsync`/`PublishAsync` overloads taking `IExecutionContext`; `MediateOptions.ExternalContext` for the options paths). An inner `Abort()` ends only the inner pipeline; parallel inner dispatches with separate scopes are safe.
+* **Pooled execution contexts:** dispatches rent and return contexts through a `[ThreadStatic]`-first pool with a synchronous fast path (no async state machine when the pipeline completes synchronously). A context is valid only for the duration of its dispatch. Public-facade allocations drop **5.34 → 2.29 MB per 100k dispatches** with Gen0 pressure halved, at time parity.
+* Context fixes: `Has`/`TryGet`/`Get` no longer allocate the items dictionary on an empty context; `Get` throws the documented `KeyNotFoundException`.
+
+### Pipeline control
+
+* **`[ExcludeFromPipeline]`** on a message type excludes covariantly matched interceptors — blanket or per group (`[ExcludeFromPipeline("logging")]`). Interceptors registered for the message type itself always run; main handlers are never affected.
+* **Event broadcast delivers to covariantly matched handlers** (registered against a base type or interface of the event) — the event's own handlers first, then indirect ones. Opting out of broad delivery is a group concern.
+* The two-parameter command/query post-/exception-interceptor contracts are now contravariant in their message parameter, matching the core contracts.
+* The single-parameter pre-interceptor contracts (`ICommandPreInterceptor<TCommand>`, `IQueryPreInterceptor<TQuery>`, `IEventPreInterceptor<TEvent>`) now return the typed message (`ValueTask<TMessage>`) instead of `ValueTask<object>` — a pre-interceptor carries no result, so the message type is all there is to return. The non-generic contracts still return `object` (they intercept any message); the two-parameter variants still return the modified message type. `TMessage` is invariant because it is now returned.
+* Fixed: the void-flavored `IEventPreInterceptor` default implementation returned `ValueTask.CompletedTask` as the pipeline's message-replacement value, crashing event pipelines running an event-wide pre-interceptor.
+
+### Removed
+
+* **`Stella.Ergosfare.Contracts` folded into Core.Abstractions** (`GroupAttribute`/`WeightAttribute` now in `Stella.Ergosfare.Core.Abstractions.Attributes`); the package is no longer produced.
+* **`AmbientExecutionContext`** and `EnableAmbientExecutionContext()` (deprecated since v1.2.0): the context parameter is the only access path; no `AsyncLocal` remains on the dispatch path. `NoExecutionContextException` removed with it.
+* The obsolete three-parameter `TModifiedResult` interceptor interfaces (deprecated in v1.4.0) — use the two-parameter typed variants.
+* `IAsyncValueTaskHandler<TMessage, TResult>` (experimental) — `IAsyncHandler` itself now carries the `ValueTask` shape. The `[Experimental]` gate (`ERGOEXP`) stays in place for future APIs.
+* Internal cleanups: `MainInvoker`, the `AbstractInvoker` layer, and the interceptor object roots.
+
+### Benchmark (100k no-op dispatches, Ryzen 7 7800X3D, .NET 9, 2026-07-24)
+
+| Scenario | Mean | Allocated |
+|---|---:|---:|
+| Ergosfare — typical usage (`SendAsync`, shared scope) | 6.87 ms | **2.29 MB** |
+| MediatR — typical usage | 6.09 ms | 18.31 MB |
+| Ergosfare — fresh DI scope per dispatch | 18.81 ms | 38.91 MB |
+| MediatR — fresh DI scope per dispatch | 10.09 ms | 33.57 MB |
+
+### Migration notes
+
+* `using Stella.Ergosfare.Contracts.Attributes;` → `using Stella.Ergosfare.Core.Abstractions.Attributes;`; drop the `Stella.Ergosfare.Contracts` package reference.
+* Handler/interceptor signatures: `Task`/`Task<T>` → `ValueTask`/`ValueTask<T>` (mechanical; `async` bodies need only the signature change).
+* `AmbientExecutionContext.Current` → the `IExecutionContext` parameter your handler already receives.
+* Prefer `RegisterGenerated()` (with the `Stella.Ergosfare.SourceGenerator` package) over `RegisterFromAssembly(...)`; the latter remains for runtime-loaded plugins.
+* Do not hold an `IExecutionContext` reference beyond the dispatch it belongs to — contexts are pooled.
+
 ## v1.4.0 – '2026-07-22'
 
 ### Features & Improvements

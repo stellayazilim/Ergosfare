@@ -28,13 +28,13 @@ public class Program
 public class StellaMessage : IMessage { }
 public class StellaHandler : IAsyncHandler<StellaMessage>
 {
-    public Task HandleAsync(StellaMessage message, IExecutionContext context) => Task.CompletedTask;
+    public ValueTask HandleAsync(StellaMessage message, IExecutionContext context) => ValueTask.CompletedTask;
 }
 
 public class StellaCommand : ICommand { }
 public class StellaCommandHandler : ICommandHandler<StellaCommand>
 {
-    public Task HandleAsync(StellaCommand message, IExecutionContext context) => Task.CompletedTask;
+    public ValueTask HandleAsync(StellaCommand message, IExecutionContext context) => ValueTask.CompletedTask;
 }
 
 public class LiteBusCommand : LiteBus.Commands.Abstractions.ICommand { }
@@ -57,7 +57,7 @@ public class MediationBenchmark
     private ICommandMediator _stellaCommandMediator = null!;
     private StellaMessage _stellaMessage = null!;
     private StellaCommand _stellaCommand = null!;
-    private MediateOptions<StellaMessage, Task> _stellaOptions = null!;
+    private MediateOptions<StellaMessage, ValueTask> _stellaOptions = null!;
 
     private IServiceProvider _mediatrProvider = null!;
     private IMediator _mediatrMediator = null!;
@@ -86,7 +86,7 @@ public class MediationBenchmark
         _stellaMessage = new StellaMessage();
         _stellaCommand = new StellaCommand();
 
-        _stellaOptions = new MediateOptions<StellaMessage, Task>
+        _stellaOptions = new MediateOptions<StellaMessage, ValueTask>
         {
             CancellationToken = CancellationToken.None,
             Groups = [],

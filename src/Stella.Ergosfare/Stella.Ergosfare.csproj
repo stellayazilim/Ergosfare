@@ -8,7 +8,6 @@
       <ProjectReference Include="..\Stella.Ergosfare.Commands.Abstractions\Stella.Ergosfare.Commands.Abstractions.csproj" />
       <ProjectReference Include="..\Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj" />
       <ProjectReference Include="..\Stella.Ergosfare.Commands\Stella.Ergosfare.Commands.csproj" />
-      <ProjectReference Include="..\Stella.Ergosfare.Contracts\Stella.Ergosfare.Contracts.csproj" />
       <ProjectReference Include="..\Stella.Ergosfare.Core.Abstractions\Stella.Ergosfare.Core.Abstractions.csproj" />
       <ProjectReference Include="..\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj" />
       <ProjectReference Include="..\Stella.Ergosfare.Core\Stella.Ergosfare.Core.csproj" />

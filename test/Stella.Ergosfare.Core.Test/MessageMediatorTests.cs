@@ -10,7 +10,6 @@ using Stella.Ergosfare.Test.Fixtures.Stubs.Basic;
 using Moq;
 using Stella.Ergosfare.Core.Abstractions.Caching;
 using Stella.Ergosfare.Core.Internal.Caching;
-#pragma warning disable CS0618 // deliberately exercising the deprecated ambient context until its removal
 
 namespace Stella.Ergosfare.Core.Test;
 
@@ -69,65 +68,10 @@ public class MessageMediatorTests
         // act && assert
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
             mediator
-                .Mediate<StubMessage, Task>(
-                    new StubMessage(), null!));
+                .Mediate<StubMessage, ValueTask>(
+                    new StubMessage(), null!).AsTask());
     }
     
-    /// <summary>
-    /// Tests that <see cref="MessageMediator.Mediate{TMessage,TResult}"/> sets the <see cref="AmbientExecutionContext"/>
-    /// correctly during mediation.
-    /// </summary>    
-    [Fact]
-    [Trait("Category", "Coverage")]
-    [Trait("Category", "Blackbox")]
-    public void MessageMediatr_Mediate_ShouldSetExecutionContext()
-    {
-        var registry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
-
-        var provider = new ServiceCollection()
-            .AddSingleton<IDescriptorCacheStrategy, LruCacheStrategy>()
-            .AddSingleton<MessageDescriptorCache>()
-            .BuildServiceProvider();
-        registry.Register(typeof(StubVoidHandler));
-        registry.Register(typeof(StubPreInterceptor));
-        //registry.Register(typeof(StubIndirectInterceptor));
-        //registry.Register(typeof(StubNonGenericDerivedPreInterceptor));
-        //registry.Register(typeof(StubNonGenericDerivedPreInterceptor2));
-        registry.Register(typeof(StubPostInterceptor));
-        //registry.Register(typeof(StubNonGenericPostInterceptor2));
-        //registry.Register(typeof(StubNonGenericDerivedPostInterceptor));
-        //registry.Register(typeof(StubNonGenericDerivedPostInterceptor2));
-        var mediator = new MessageMediator(
-            registry,
-            new MessageDependenciesFactory(provider),
-            provider
-        );
-        var message = new StubMessage();
-        var options = new MediateOptions<StubMessage, Task>
-        {
-            CancellationToken = CancellationToken.None,
-            Items = new Dictionary<object, object?>(),
-            MessageResolveStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry)!,
-            MessageMediationStrategy = 
-                new SingleAsyncHandlerMediationStrategy<StubMessage>(new ResultAdapterService()),
-            Groups = []
-        };
-        // Act
-        #pragma warning disable CS4014
-        mediator.Mediate(message, options);
-        #pragma warning restore CS4014 
-
-        
-        // assert, 
-        // since we dont awaited mediate call, capture when context set and assert
-        while (AmbientExecutionContext.GetCurrentOrDefault() != null)
-        {
-            var currentContext = AmbientExecutionContext.GetCurrentOrDefault();
-            Assert.Equal(options.CancellationToken, AmbientExecutionContext.Current.CancellationToken);
-            Assert.Equal(options.Items, currentContext!.Items);
-        }
-    }
-
     /// <summary>
     /// Tests that <see cref="MessageMediator.Mediate{TMessage,TResult}"/> throws <see cref="NoHandlerFoundException"/>
     /// when attempting to mediate a message that is not registered and <c>RegisterPlainMessagesOnSpot</c> is false.
@@ -142,7 +86,7 @@ public class MessageMediatorTests
             new MessageDependenciesFactory(null!),
             new ServiceCollection().BuildServiceProvider()
         );
-        var options = new MediateOptions<StubMessage, Task>
+        var options = new MediateOptions<StubMessage, ValueTask>
         {
             RegisterPlainMessagesOnSpot = false,
             CancellationToken = CancellationToken.None,
@@ -154,7 +98,7 @@ public class MessageMediatorTests
         };
         // Act & assert
         await Assert.ThrowsAsync<NoHandlerFoundException>(() => mediator
-            .Mediate(new StubIndirectMessage(), options));
+            .Mediate(new StubIndirectMessage(), options).AsTask());
     }
 
     /// <summary>
@@ -169,9 +113,9 @@ public class MessageMediatorTests
         // Arrange
         var registry = new Mock<IMessageRegistry>();
         var mediationstrategy = new Mock<IMessageMediationStrategy<
-            StubMessage, Task>>();
+            StubMessage, ValueTask>>();
         var messageResolveStrategy = new Mock<IMessageResolveStrategy>();
-        var options = new MediateOptions<StubMessage, Task>
+        var options = new MediateOptions<StubMessage, ValueTask>
         {
             MessageResolveStrategy = messageResolveStrategy.Object,
             MessageMediationStrategy = mediationstrategy.Object,
@@ -181,6 +125,6 @@ public class MessageMediatorTests
         };
         var mediator = new MessageMediator(registry.Object, new MessageDependenciesFactory(null!), new ServiceCollection().BuildServiceProvider());
         // act & assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() => mediator.Mediate(new StubIndirectMessage(), options));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => mediator.Mediate(new StubIndirectMessage(), options).AsTask());
     }
 }

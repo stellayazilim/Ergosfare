@@ -1,5 +1,4 @@
-﻿using System;
-
+﻿
 namespace Stella.Ergosfare.Core.Abstractions.Exceptions;
 
 /// <summary>

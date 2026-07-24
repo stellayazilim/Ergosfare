@@ -29,11 +29,11 @@ public class HandlerLifetimeResolutionTests
 
     public sealed class ScopedDepCommandHandler(ScopedProbe probe) : ICommandHandler<ScopedDepCommand>
     {
-        public Task HandleAsync(ScopedDepCommand message, IExecutionContext context)
+        public ValueTask HandleAsync(ScopedDepCommand message, IExecutionContext context)
         {
             message.ObservedDepId = probe.Id;
             message.ObservedProbe = probe;
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
     }
 
@@ -46,10 +46,10 @@ public class HandlerLifetimeResolutionTests
     {
         private readonly Guid _id = Guid.NewGuid();
 
-        public Task HandleAsync(SingletonCommand message, IExecutionContext context)
+        public ValueTask HandleAsync(SingletonCommand message, IExecutionContext context)
         {
             message.ObservedHandlerId = _id;
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
     }
 
@@ -60,10 +60,10 @@ public class HandlerLifetimeResolutionTests
 
     public sealed class ForcedCommandHandler(ScopedProbe probe) : ICommandHandler<ForcedCommand>
     {
-        public Task HandleAsync(ForcedCommand message, IExecutionContext context)
+        public ValueTask HandleAsync(ForcedCommand message, IExecutionContext context)
         {
             message.ObservedDepId = probe.Id;
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
     }
 

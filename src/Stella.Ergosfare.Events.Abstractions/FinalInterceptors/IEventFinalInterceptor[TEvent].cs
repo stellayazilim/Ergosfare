@@ -16,7 +16,7 @@ namespace Stella.Ergosfare.Events.Abstractions;
 /// </para>
 /// <para>
 /// This interface inherits from <see cref="IAsyncFinalInterceptor{TEvent, TResult}"/>,
-/// so final-interceptor logic can be asynchronous and return a <see cref="Task"/>.
+/// so final-interceptor logic can be asynchronous and return a <see cref="ValueTask"/>.
 /// </para>
 /// <para>
 /// The <typeparamref name="TEvent"/> type must implement <see cref="IEvent"/>.
@@ -24,4 +24,4 @@ namespace Stella.Ergosfare.Events.Abstractions;
 /// </remarks>
 // ReSharper disable once UnusedType.Global
 public interface IEventFinalInterceptor<in TEvent>:
-    IEvent, IAsyncFinalInterceptor<TEvent, Task> where TEvent : IEvent;
+    IEvent, IAsyncFinalInterceptor<TEvent, ValueTask> where TEvent : IEvent;

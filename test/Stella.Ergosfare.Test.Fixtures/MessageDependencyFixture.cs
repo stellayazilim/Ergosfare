@@ -8,7 +8,7 @@ using Stella.Ergosfare.Core.Internal.Registry;
 using Stella.Ergosfare.Core.Internal.Registry.Descriptors;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Stella.Ergosfare.Contracts.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Caching;
 using Stella.Ergosfare.Core.Internal.Caching;
 
@@ -165,7 +165,7 @@ public class MessageDependencyFixture : IFixture<MessageDependencyFixture>
     
     
     /// <summary>
-    /// Disposes the fixture, including the underlying <see cref="ServiceProvider"/> and resets the <see cref="SignalHubAccessor"/>.
+    /// Disposes the fixture, including the underlying <see cref="ServiceProvider"/>.
     /// </summary>
     public void Dispose()
     {

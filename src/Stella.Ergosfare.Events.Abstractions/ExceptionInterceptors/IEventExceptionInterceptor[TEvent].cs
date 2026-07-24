@@ -24,16 +24,16 @@ namespace Stella.Ergosfare.Events.Abstractions;
 /// </para>
 /// </remarks>
 // ReSharper disable once UnusedType.Global
-public interface IEventExceptionInterceptor<in TEvent> : IEvent, IAsyncExceptionInterceptor<TEvent, Task>
+public interface IEventExceptionInterceptor<in TEvent> : IEvent, IAsyncExceptionInterceptor<TEvent, ValueTask>
     where TEvent : notnull
 {
     
     /// <inheritdoc cref="IAsyncExceptionInterceptor{TEvent}.HandleAsync"/>
-    async Task<object?> IAsyncExceptionInterceptor<TEvent, Task>.HandleAsync(TEvent @event, Task? result,
+    async ValueTask<object?> IAsyncExceptionInterceptor<TEvent, ValueTask>.HandleAsync(TEvent @event, ValueTask result,
         Exception exception, IExecutionContext context)
     {
         await HandleAsync(@event, result, exception, context);
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
     
     
@@ -46,8 +46,8 @@ public interface IEventExceptionInterceptor<in TEvent> : IEvent, IAsyncException
     /// </param>
     /// <param name="exception">The exception thrown during event handling.</param>
     /// <param name="context">The execution context for the current mediation pipeline.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous exception handling operation.</returns>
-    new Task HandleAsync(TEvent @event, Task? result, Exception exception, IExecutionContext context);
+    /// <returns>A <see cref="ValueTask"/> representing the asynchronous exception handling operation.</returns>
+    new ValueTask HandleAsync(TEvent @event, ValueTask result, Exception exception, IExecutionContext context);
 }
 
 

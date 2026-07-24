@@ -7,7 +7,7 @@ using Stella.Ergosfare.Test.Fixtures;
 using Stella.Ergosfare.Test.Fixtures.Stubs.Basic;
 using Stella.Ergosfare.Test.Fixtures.Stubs.Generic;
 using Microsoft.Extensions.DependencyInjection;
-using Stella.Ergosfare.Contracts.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Xunit.Abstractions;
 // ReSharper disable ConvertToPrimaryConstructor
 
@@ -113,7 +113,7 @@ public class MessageDependenciesTest:
             Groups = [GroupAttribute.DefaultGroupName],
             MessageType = typeof(StubGenericMessage<>),
             HandlerType = typeof(VoidStubGenericHandler<>),
-            ResultType = typeof(Task)
+            ResultType = typeof(ValueTask)
         }; 
         var preInterceptorDescriptor = new PreInterceptorDescriptor()
         {
@@ -128,7 +128,7 @@ public class MessageDependenciesTest:
             Groups = [GroupAttribute.DefaultGroupName],
             MessageType = typeof(StubGenericMessage<>),
             HandlerType = typeof(VoidStubGenericPostInterceptor<>),
-            ResultType = typeof(Task)
+            ResultType = typeof(ValueTask)
         };
         var exceptionInterceptorDescriptor = new ExceptionInterceptorDescriptor()
         {
@@ -136,7 +136,7 @@ public class MessageDependenciesTest:
             Groups = [GroupAttribute.DefaultGroupName],
             MessageType = typeof(StubGenericMessage<>),
             HandlerType = typeof(VoidStubGenericExceptionInterceptor<>),
-            ResultType = typeof(Task)
+            ResultType = typeof(ValueTask)
         };
         var finalInterceptorDescriptor = new FinalInterceptorDescriptor()
         {
@@ -144,7 +144,7 @@ public class MessageDependenciesTest:
             Groups = [GroupAttribute.DefaultGroupName],
             MessageType = typeof(StubGenericMessage<>),
             HandlerType = typeof(VoidStubGenericFinalInterceptor<>),
-            ResultType = typeof(Task)
+            ResultType = typeof(ValueTask)
         };
         var messageDescriptor = new MessageDescriptor(typeof(StubGenericMessage<>));
         messageDescriptor.AddDescriptor(handlerDescriptor);
@@ -189,7 +189,7 @@ public class MessageDependenciesTest:
              Groups = [GroupAttribute.DefaultGroupName],
              MessageType = indirectMessageType,
              HandlerType = typeof(StubVoidHandler),
-             ResultType = typeof(Task)
+             ResultType = typeof(ValueTask)
              
          }; 
          var preInterceptorDescriptor = new PreInterceptorDescriptor()
@@ -205,7 +205,7 @@ public class MessageDependenciesTest:
              Groups = [GroupAttribute.DefaultGroupName],
              MessageType = indirectMessageType,
              HandlerType = typeof(StubPostInterceptor),
-             ResultType = typeof(Task)
+             ResultType = typeof(ValueTask)
          };
          var exceptionInterceptorDescriptor = new ExceptionInterceptorDescriptor()
          {
@@ -213,7 +213,7 @@ public class MessageDependenciesTest:
              Groups = [GroupAttribute.DefaultGroupName],
              MessageType = indirectMessageType,
              HandlerType = typeof(StubExceptionInterceptor),
-             ResultType = typeof(Task)
+             ResultType = typeof(ValueTask)
          };
          var finalInterceptorDescriptor = new FinalInterceptorDescriptor()
          {
@@ -221,7 +221,7 @@ public class MessageDependenciesTest:
              Groups = [GroupAttribute.DefaultGroupName],
              MessageType = indirectMessageType,
              HandlerType = typeof(StubFinalInterceptor),
-             ResultType = typeof(Task)
+             ResultType = typeof(ValueTask)
          };
          var messageDescriptor = new MessageDescriptor(messageType);
          messageDescriptor.AddDescriptor(handlerDescriptor);

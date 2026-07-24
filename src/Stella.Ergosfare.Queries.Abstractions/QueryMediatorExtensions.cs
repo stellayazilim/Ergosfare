@@ -13,8 +13,8 @@ public static class QueryMediatorExtensions
     /// <param name="queryMediator">The query mediator used to handle the query.</param>
     /// <param name="query">The query to be dispatched.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
-    /// <returns>A <see cref="Task{TResult}"/> representing the asynchronous operation.</returns>
-    public static Task<TResult> QueryAsync<TResult>(
+    /// <returns>A <see cref="ValueTask{TResult}"/> representing the asynchronous operation.</returns>
+    public static ValueTask<TResult> QueryAsync<TResult>(
         this IQueryMediator queryMediator,
         IQuery<TResult> query,
         CancellationToken cancellationToken = default
@@ -33,8 +33,8 @@ public static class QueryMediatorExtensions
     /// <param name="query">The query to be dispatched.</param>
     /// <param name="groups">An array of groups to filter which handlers are invoked.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
-    /// <returns>A <see cref="Task{TResult}"/> representing the asynchronous operation.</returns>
-    public static Task<TResult> QueryAsync<TResult>(
+    /// <returns>A <see cref="ValueTask{TResult}"/> representing the asynchronous operation.</returns>
+    public static ValueTask<TResult> QueryAsync<TResult>(
         this IQueryMediator queryMediator,
         IQuery<TResult> query,
         string[] groups,

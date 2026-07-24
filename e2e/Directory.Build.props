@@ -1,0 +1,25 @@
+<Project>
+    <!-- Deliberately does NOT import the repo-root Directory.Build.props. The root pins a
+         multi-TFM (net10.0;net9.0); the e2e harness targets the .NET 10 LTS runtime only,
+         and EF Core 10 has no net9.0 asset. Being the nearest Directory.Build.props, this
+         file stops MSBuild's upward walk, so that multi-TFM never reaches these projects. -->
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <LangVersion>latest</LangVersion>
+
+        <!-- The e2e app is deliberately named under the reserved Stella.Ergosfare.* prefix,
+             which the source generator skips during cross-assembly discovery by default.
+             Opt back in so the handlers in the UseCases/Contracts assemblies are still
+             found by the Api's RegisterGenerated(). This exercises the generator's
+             force-scan path end to end. -->
+        <ErgosfareSourceGeneratorForceScanReferences>true</ErgosfareSourceGeneratorForceScanReferences>
+    </PropertyGroup>
+
+    <!-- Project references don't import the generator package's build props, so translate
+         the property into the assembly-metadata opt-in the generator reads here too. -->
+    <ItemGroup Condition="'$(ErgosfareSourceGeneratorForceScanReferences)' == 'true'">
+        <AssemblyMetadata Include="ErgosfareSourceGeneratorForceScanReferences" Value="true" />
+    </ItemGroup>
+</Project>

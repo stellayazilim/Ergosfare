@@ -45,7 +45,7 @@ public class StubStreamHandler : IStreamHandler<StubStreamMessage, string>
     public async IAsyncEnumerable<string> StreamAsync(StubStreamMessage message, IExecutionContext context)
     {
         // simulate async operation
-        await Task.CompletedTask;
+        await ValueTask.CompletedTask;
 
         // yield each predefined result
         foreach (var result in Results)

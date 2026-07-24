@@ -150,7 +150,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
 
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
             strategy.Mediate(
-                new StubMessage(), null!, _executionContextFixture.Ctx, EmptyServiceProviderStub.Instance));
+                new StubMessage(), null!, _executionContextFixture.Ctx, EmptyServiceProviderStub.Instance).AsTask());
     }
 
     /// <summary>

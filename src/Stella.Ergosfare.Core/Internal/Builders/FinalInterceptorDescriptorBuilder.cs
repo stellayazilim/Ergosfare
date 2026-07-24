@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Extensions;
@@ -23,7 +24,7 @@ internal sealed class FinalInterceptorDescriptorBuilder: IHandlerDescriptorBuild
     /// <returns>
     /// <c>true</c> if the type implements <see cref="IFinalInterceptor"/>; otherwise <c>false</c>.
     /// </returns>
-    public bool CanBuild(Type type)
+    public bool CanBuild([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type type)
     {
         return type.IsAssignableTo(typeof(IFinalInterceptor));
     }
@@ -36,27 +37,37 @@ internal sealed class FinalInterceptorDescriptorBuilder: IHandlerDescriptorBuild
     /// A sequence of <see cref="FinalInterceptorDescriptor"/> objects describing the handler,
     /// including its weight, groups, message type, result type, and handler type.
     /// </returns>
-    public IEnumerable<IHandlerDescriptor> Build(Type handlerType)
+    public IEnumerable<IHandlerDescriptor> Build([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type handlerType)
     {
-        // Identify the interfaces on the handler that match IFinalInterceptor<TMessage, TResult>
-        var interfaces = handlerType.GetInterfacesEqualTo(typeof( IFinalInterceptor<,>));
-        
-        // Get weight from [Weight] attribute if present
+        // The sync and async contracts are independent hierarchies (no object-typed root
+        // member ties them together), so all three patterns are matched; the result-agnostic
+        // async contract maps to a ResultType of object, exactly what its former sync base
+        // interface carried. Duplicate (message, result) pairs yield a single descriptor.
+        var interfaces = handlerType.GetInterfacesEqualTo(typeof(IFinalInterceptor<,>))
+            .Concat(handlerType.GetInterfacesEqualTo(typeof(IAsyncFinalInterceptor<,>)))
+            .Concat(handlerType.GetInterfacesEqualTo(typeof(IAsyncFinalInterceptor<>)));
+
         var weight = handlerType.GetWeightFromAttribute();
+        var seenPairs = new HashSet<(Type MessageType, Type ResultType)>();
         foreach (var @interface in interfaces)
         {
-            var messageType = @interface.GetGenericArguments()[0];
-            var resultType = @interface.GetGenericArguments()[1];
-            
-            // Extract group metadata from [Group] attribute(s)
+            var genericArguments = @interface.GetGenericArguments();
+            var messageType = genericArguments[0];
+            messageType = messageType.IsGenericType ? messageType.GetGenericTypeDefinition() : messageType;
+            var resultType = genericArguments.Length > 1 ? genericArguments[1] : typeof(object);
+
+            if (!seenPairs.Add((messageType, resultType)))
+            {
+                continue;
+            }
+
             var groups = handlerType.GetGroupsFromAttribute();
-            
-            // Construct and yield the descriptor
+
             yield return new FinalInterceptorDescriptor()
             {
                 Weight = weight,
                 Groups = groups,
-                MessageType = messageType.IsGenericType ? messageType.GetGenericTypeDefinition() : messageType,
+                MessageType = messageType,
                 ResultType = resultType,
                 HandlerType = handlerType
             };

@@ -148,59 +148,6 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests:
     //
     //
     // [Fact]
-    // [Trait("Category", "Coverage")]
-    // public async Task SingleAsyncHandlerMediationStrategyTMessage_Mediate_ShouldRunAsyncPreInterceptors()
-    // {
-    //     
-    //     var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubNonGenericMessage>(
-    //         [GroupAttribute.DefaultGroupName],
-    //         typeof(StubNonGenericHandler),
-    //         typeof(StubNonGenericPostInterceptor),
-    //         typeof(StubNonGenericStreamExceptionInterceptor),
-    //         typeof(StubNonGenericFinalInterceptor));
-    //
-    //     var strategy = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>(new ResultAdapterService());
-    //     
-    //     await using var _ = AmbientExecutionContext.CreateScope(
-    //         StubExecutionContext.Create()
-    //     );
-    //
-    //     var result =  strategy.Mediate(new StubNonGenericMessage(), dependencies, AmbientExecutionContext.Current);
-    //
-    //     Assert.NotNull(result);
-    // }
-    
-    //
-    //
-    // [Fact]
-    // [Trait("Category", "Coverage")]
-    // public async Task SingleAsyncHandlerMediationStrategyTMessage_Mediate_ShouldRunAsyncExceptionInterceptors()
-    // {
-    //
-    //     
-    //     var (_, _, dependencies) = MessageDependencyFixture.CreateMessageDependencies<StubNonGenericMessage>(
-    //         [GroupAttribute.DefaultGroupName],
-    //         typeof(StubNonGenericHandler),
-    //         typeof(StubNonGenericPostInterceptor),
-    //         typeof(StubNonGenericStreamExceptionInterceptor),
-    //         typeof(StubNonGenericFinalInterceptor));
-    //     
-    //    
-    //     
-    //     var strategy = new SingleAsyncHandlerMediationStrategy<StubNonGenericMessage>(new ResultAdapterService());
-    //     
-    //     await using var _ = AmbientExecutionContext.CreateScope(
-    //         StubExecutionContext.Create()
-    //     );
-    //
-    //     var result =  strategy.Mediate(new StubNonGenericMessage(), dependencies, AmbientExecutionContext.Current);
-    //
-    //     Assert.NotNull(result);
-    // }
-    //
-    //
-    //
-    // [Fact]
     // public async Task Mediate_ShouldThrowMultipleHandlerFoundException_WhenMultipleHandlersExist()
     // {
     //     // Arrange

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Extensions;
@@ -17,7 +18,7 @@ internal sealed class PostHandlerDescriptorBuilder: IHandlerDescriptorBuilder
     /// </summary>
     /// <param name="type">The type to evaluate.</param>
     /// <returns><c>true</c> if the type implements <see cref="IPostInterceptor"/>; otherwise, <c>false</c>.</returns>
-    public bool CanBuild(Type type)
+    public bool CanBuild([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type type)
     {
         return type.IsAssignableTo(typeof(IPostInterceptor));
     }
@@ -27,20 +28,35 @@ internal sealed class PostHandlerDescriptorBuilder: IHandlerDescriptorBuilder
     /// </summary>
     /// <param name="handlerType">The handler type from which to build descriptors.</param>
     /// <returns>A collection of <see cref="PostInterceptorDescriptor"/> instances representing the handler.</returns>
-    public IEnumerable<IHandlerDescriptor> Build(Type handlerType)
+    public IEnumerable<IHandlerDescriptor> Build([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type handlerType)
     {
-        var interfaces = handlerType.GetInterfacesEqualTo(typeof(IPostInterceptor<,>));
+        // The sync and async contracts are independent hierarchies (no object-typed root
+        // member ties them together), so all three patterns are matched; the result-agnostic
+        // async contract maps to a ResultType of object, exactly what its former sync base
+        // interface carried. Duplicate (message, result) pairs yield a single descriptor.
+        var interfaces = handlerType.GetInterfacesEqualTo(typeof(IPostInterceptor<,>))
+            .Concat(handlerType.GetInterfacesEqualTo(typeof(IAsyncPostInterceptor<,>)))
+            .Concat(handlerType.GetInterfacesEqualTo(typeof(IAsyncPostInterceptor<>)));
         var weight = handlerType.GetWeightFromAttribute();
+        var seenPairs = new HashSet<(Type MessageType, Type ResultType)>();
         foreach (var @interface in interfaces)
         {
-            var messageType = @interface.GetGenericArguments()[0];
-            var resultType = @interface.GetGenericArguments()[1];
+            var genericArguments = @interface.GetGenericArguments();
+            var messageType = genericArguments[0];
+            messageType = messageType.IsGenericType ? messageType.GetGenericTypeDefinition() : messageType;
+            var resultType = genericArguments.Length > 1 ? genericArguments[1] : typeof(object);
+
+            if (!seenPairs.Add((messageType, resultType)))
+            {
+                continue;
+            }
+
             var groups = handlerType.GetGroupsFromAttribute();
             yield return new PostInterceptorDescriptor
             {
                 Weight = weight,
                 Groups = groups,
-                MessageType = messageType.IsGenericType   ? messageType.GetGenericTypeDefinition() : messageType,
+                MessageType = messageType,
                 ResultType = resultType,
                 HandlerType = handlerType
             };

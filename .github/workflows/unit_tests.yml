@@ -8,6 +8,7 @@ on:
   pull_request:
     branches:
       - main
+      - preview
 
 jobs:
   unit-tests:

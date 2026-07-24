@@ -9,9 +9,9 @@ namespace Stella.Ergosfare.Core.Internal.Caching;
 /// <summary>
 /// Cache for MessageDescriptor and MessageDependencies instances.
 /// </summary>
-internal sealed class MessageDescriptorCache
+internal sealed class MessageDescriptorCache(IDescriptorCacheStrategy strategy)
 {
-    private readonly IDescriptorCacheStrategy _strategy;
+    private readonly IDescriptorCacheStrategy _strategy = strategy ?? throw new ArgumentNullException(nameof(strategy));
 
     /// <summary>
     /// Hot-path cache for resolved dependencies keyed by message type (no groups —
@@ -32,11 +32,6 @@ internal sealed class MessageDescriptorCache
     private readonly ConcurrentDictionary<GroupedDependenciesKey, MessagePipelineShape> _shapesByTypeAndGroups = new();
 
     private int _registryVersion = -1;
-
-    public MessageDescriptorCache(IDescriptorCacheStrategy strategy)
-    {
-        _strategy = strategy ?? throw new ArgumentNullException(nameof(strategy));
-    }
 
     public bool TryGet<T>(string key, out T? value) where T : class
     {

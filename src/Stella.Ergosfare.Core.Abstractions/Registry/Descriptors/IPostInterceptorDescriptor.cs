@@ -1,3 +1,4 @@
+
 namespace Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 
 

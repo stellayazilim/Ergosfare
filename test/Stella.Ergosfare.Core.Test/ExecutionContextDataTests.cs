@@ -67,7 +67,7 @@ public class ExecutionContextDataTests
     {
         var context = CreateContext();
 
-        Assert.Throws<InvalidOperationException>(() => context.Get<string>("missing"));
+        Assert.Throws<KeyNotFoundException>(() => context.Get<string>("missing"));
     }
 
     [Fact]

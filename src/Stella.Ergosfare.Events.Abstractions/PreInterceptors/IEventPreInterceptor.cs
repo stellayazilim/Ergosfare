@@ -25,10 +25,15 @@ namespace Stella.Ergosfare.Events.Abstractions;
 public interface IEventPreInterceptor : IEvent, IAsyncPreInterceptor<IEvent>
 {
     /// <inheritdoc cref="IAsyncPreInterceptor{TEvent}.HandleAsync"/>
-    async Task<object> IAsyncPreInterceptor<IEvent>.HandleAsync(IEvent @event, IExecutionContext executionContext)
+    /// <remarks>
+    /// A pre-interceptor's return value is the (possibly replaced) message the rest of
+    /// the pipeline continues with — this void-flavored convenience contract passes the
+    /// event through unchanged.
+    /// </remarks>
+    async ValueTask<object> IAsyncPreInterceptor<IEvent>.HandleAsync(IEvent @event, IExecutionContext executionContext)
     {
         await HandleAsync(@event, executionContext);
-        return Task.CompletedTask;
+        return @event;
     }
     
     /// <summary>
@@ -36,6 +41,6 @@ public interface IEventPreInterceptor : IEvent, IAsyncPreInterceptor<IEvent>
     /// </summary>
     /// <param name="event">The event to be processed.</param>
     /// <param name="executionContext">The execution context for the current mediation pipeline.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous pre-processing operation.</returns>
-    new Task HandleAsync(IEvent @event, IExecutionContext executionContext);
+    /// <returns>A <see cref="ValueTask"/> representing the asynchronous pre-processing operation.</returns>
+    new ValueTask HandleAsync(IEvent @event, IExecutionContext executionContext);
 }

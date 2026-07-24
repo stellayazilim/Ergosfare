@@ -11,8 +11,8 @@ namespace Stella.Ergosfare.Commands.Abstractions;
 /// <typeparam name="TCommand">The type of command this interceptor handles. Must implement <see cref="ICommand"/>.</typeparam>
 /// <remarks>
 /// Use this interface to register post-interceptors in the command pipeline without specifying a strongly-typed result. 
-/// For type-safe scenarios, prefer using the generic version: 
-/// <see cref="ICommandPostInterceptor{TCommand, TResult, TModifiedResult}"/>.
+/// For type-safe scenarios, prefer using the generic version:
+/// <see cref="ICommandPostInterceptor{TCommand, TResult}"/>.
 /// </remarks>
 // ReSharper disable once UnusedType.Global
 public interface ICommandPostInterceptor<in TCommand>: ICommand, IAsyncPostInterceptor<TCommand>  where TCommand : ICommand;

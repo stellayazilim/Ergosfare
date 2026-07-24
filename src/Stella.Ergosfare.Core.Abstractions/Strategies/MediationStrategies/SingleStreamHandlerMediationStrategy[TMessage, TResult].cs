@@ -1,9 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.ExceptionServices;
-using System.Threading;
+﻿using System.Runtime.ExceptionServices;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
+using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 
 namespace Stella.Ergosfare.Core.Abstractions.Strategies;
@@ -38,11 +35,13 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
     /// </summary>
     /// <param name="message">The message to be handled.</param>
     /// <param name="messageDependencies">The dependencies of the message, including the registered handlers and interceptors.</param>
-    /// <param name="executionContext">The current execution context.</param>
+    /// <param name="context">The current execution context.</param>
+    /// <param name="serviceProvider">The provider of the scope this dispatch runs in; handlers and interceptors resolve from it.</param>
     /// <returns>
     /// An <see cref="IAsyncEnumerable{TResult}"/> representing the asynchronous stream of results produced by the handler.
     /// </returns>
     /// <exception cref="MultipleHandlerFoundException">Thrown if more than one handler is registered for the message.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if no handler is registered for the message.</exception>
     public async IAsyncEnumerable<TResult> Mediate(TMessage message, IMessageDependencies messageDependencies,
         IExecutionContext context, IServiceProvider serviceProvider)
     {
@@ -56,31 +55,26 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
             throw new InvalidOperationException($"No handler is registered for {typeof(TMessage).Name}.");
         }
 
-#pragma warning disable CS0618 // ambient context is deprecated but supported until removal
-        // Stream enumeration happens outside the mediator's dispatch window, so when ambient
-        // access is enabled the context is re-published for the enumeration flow.
-        if (AmbientExecutionContext.IsEnabled)
-        {
-            AmbientExecutionContext.Current = context;
-        }
-#pragma warning restore CS0618
         var handler = messageDependencies.Handlers[0].Resolve(serviceProvider);
-        
 
-        
-        
         // enumerator to consume
         IAsyncEnumerable<TResult>? enumerable = null;
 
         try
         {
             // run pre interceptors
-            var preInvoker = new TaskPreInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
+            var preInvoker = new PreInterceptorInvocationStrategy<TMessage>(messageDependencies, serviceProvider);
             message =  (TMessage)await preInvoker.Invoke(message, context) ;
 
 
-
-            enumerable = (IAsyncEnumerable<TResult>?)handler.Handle(message, context);
+            // Typed dispatch only — no object bridge. `in TMessage` variance admits handlers
+            // registered for base message types; IAsyncEnumerable<out T> covariance admits
+            // derived elements.
+            enumerable = handler is IHandler<TMessage, IAsyncEnumerable<TResult>> typed
+                ? typed.Handle(message, context)
+                : throw new NotSupportedException(
+                    $"'{handler.GetType()}' does not implement a supported stream handler contract for message '{typeof(TMessage)}'. " +
+                    "Interface-erased dispatch is not supported; dispatch with the concrete message type.");
            
 
         }
@@ -136,7 +130,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         {
             if (_unknownException is null)
             {
-                var postInvoker = new TaskPostInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
+                var postInvoker = new PostInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>(messageDependencies, resultAdapterService, serviceProvider);
                 // we can't override result since its chunked
                 await postInvoker.Invoke(message, enumerator, context).ConfigureAwait(false);
             }
@@ -151,7 +145,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         {
             if (_unknownException is not null)
             {
-                var exceptionInvoker = new TaskExceptionInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
+                var exceptionInvoker = new ExceptionInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>(messageDependencies, serviceProvider);
                 // we can't override result since its chunked
                 await exceptionInvoker.Invoke(
                     message,
@@ -166,7 +160,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         }
         finally
         {
-            var finalInvoker = new TaskFinalInterceptorInvocationStrategy(messageDependencies, resultAdapterService, serviceProvider);
+            var finalInvoker = new FinalInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>(messageDependencies, serviceProvider);
             await finalInvoker.Invoke(message, enumerator, _unknownException, context);
         }
     }

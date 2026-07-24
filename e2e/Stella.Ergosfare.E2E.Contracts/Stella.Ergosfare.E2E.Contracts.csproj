@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Stella.Ergosfare.E2E.Domain\Stella.Ergosfare.E2E.Domain.csproj" />
+        <!-- Messages depend only on the abstraction surface, never the runtime. -->
+        <ProjectReference Include="..\..\src\Stella.Ergosfare.Commands.Abstractions\Stella.Ergosfare.Commands.Abstractions.csproj" />
+        <ProjectReference Include="..\..\src\Stella.Ergosfare.Queries.Abstractions\Stella.Ergosfare.Queries.Abstractions.csproj" />
+        <ProjectReference Include="..\..\src\Stella.Ergosfare.Events.Abstractions\Stella.Ergosfare.Events.Abstractions.csproj" />
+    </ItemGroup>
+
+</Project>

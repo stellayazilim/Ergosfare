@@ -15,20 +15,21 @@ namespace Stella.Ergosfare.Commands.Abstractions;
 /// narrower return type there is no third parameter anymore; return the base result type.
 /// </typeparam>
 /// <remarks>
-/// The type parameters are deliberately invariant: the pipeline invokes interceptors
-/// through the non-generic root interfaces, so interface variance bought nothing while
-/// forcing the result-returning member onto a separate three-parameter interface.
+/// <typeparamref name="TCommand"/> is contravariant, matching the core
+/// <see cref="IAsyncPostInterceptor{TMessage, TResult}"/> contract the typed dispatch
+/// matches against. <typeparamref name="TResult"/> must stay invariant: the typed member
+/// returns it.
 /// </remarks>
-public interface ICommandPostInterceptor<TCommand, TResult> :
+public interface ICommandPostInterceptor<in TCommand, TResult> :
     ICommand,
     IAsyncPostInterceptor<TCommand, TResult>
     where TCommand : ICommand<TResult>
     where TResult : notnull
 {
     /// <inheritdoc />
-    async Task<object> IAsyncPostInterceptor<TCommand, TResult>.HandleAsync(
+    async ValueTask<object> IAsyncPostInterceptor<TCommand, TResult>.HandleAsync(
         TCommand command, TResult messageResult, IExecutionContext context)
-        => (await HandleAsync(command, messageResult, context))!;
+        => (await HandleAsync(command, messageResult, context));
 
     /// <summary>
     /// Handles the post-processing of a command asynchronously.
@@ -37,8 +38,8 @@ public interface ICommandPostInterceptor<TCommand, TResult> :
     /// <param name="commandResult">The result produced by the command handler.</param>
     /// <param name="context">The current execution context.</param>
     /// <returns>
-    /// A <see cref="Task{TResult}"/> producing the (possibly modified) result that
+    /// A <see cref="ValueTask{TResult}"/> producing the (possibly modified) result that
     /// continues through the pipeline.
     /// </returns>
-    new Task<TResult> HandleAsync(TCommand command, TResult commandResult, IExecutionContext context);
+    new ValueTask<TResult> HandleAsync(TCommand command, TResult commandResult, IExecutionContext context);
 }

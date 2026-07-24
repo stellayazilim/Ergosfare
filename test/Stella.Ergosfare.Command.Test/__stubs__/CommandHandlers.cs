@@ -1,5 +1,5 @@
 using Stella.Ergosfare.Commands.Abstractions;
-using Stella.Ergosfare.Contracts.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions;
 // ReSharper disable ClassNeverInstantiated.Global
 #pragma warning disable CS0618 // Type or member is obsolete
@@ -27,10 +27,10 @@ public class StubNonGenericCommandHandler: ICommandHandler<StubNonGenericCommand
     /// <param name="message">The command message to handle.</param>
     /// <param name="context">The execution context for the handler.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-    public Task HandleAsync(StubNonGenericCommand message, IExecutionContext context)
+    public ValueTask HandleAsync(StubNonGenericCommand message, IExecutionContext context)
     {
         HasCalled = true;
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 }
 
@@ -54,9 +54,9 @@ public class StubNonGenericCommandStringResultHandler: ICommandHandler<StubNonGe
     /// <param name="message">The command message to handle.</param>
     /// <param name="context">The execution context for the handler.</param>
     /// <returns>A <see cref="Task{TResult}"/> with a string result.</returns>
-    public Task<string> HandleAsync(StubNonGenericCommandStringResult message, IExecutionContext context)
+    public ValueTask<string> HandleAsync(StubNonGenericCommandStringResult message, IExecutionContext context)
     {
         HasCalled = true;
-        return Task.FromResult(string.Empty);
+        return ValueTask.FromResult(string.Empty);
     }
 }

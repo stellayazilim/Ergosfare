@@ -1,23 +1,34 @@
+using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 
 namespace Stella.Ergosfare.Queries.Abstractions;
 
-
 /// <summary>
-/// Represents a pre-interceptor for query messages in the Stella.Ergosfare pipeline.
+/// Represents a type-safe pre-interceptor for query messages. It runs before the query
+/// handler and returns the query that continues through the pipeline — the original, or a
+/// rewritten one.
 /// </summary>
-/// <typeparam name="TQuery">
-/// The type of query to be intercepted. Must implement <see cref="IQuery"/>.
-/// </typeparam>
+/// <typeparam name="TQuery">The type of query to be intercepted. Must implement <see cref="IQuery"/>.</typeparam>
 /// <remarks>
-/// Pre-interceptors execute before the main query handler is invoked. They can be used to:
-/// <list type="bullet">
-/// <item>Validate or modify the query.</item>
-/// <item>Perform logging or auditing.</item>
-/// <item>Inject additional context or metadata.</item>
-/// </list>
-/// This interface inherits from <see cref="IAsyncPreInterceptor{TQuery}"/> to allow asynchronous
-/// pre-processing, and from <see cref="IQuery"/> to associate it with a specific query type.
+/// A pre-interceptor carries no result, so the single-parameter form returns the query type
+/// directly rather than <see cref="object"/>. Use the non-generic
+/// <see cref="IQueryPreInterceptor"/> to intercept any query, or
+/// <see cref="IQueryPreInterceptor{TQuery, TModifiedQuery}"/> to return a different, derived
+/// query type. <typeparamref name="TQuery"/> is invariant because it is returned.
 /// </remarks>
 // ReSharper disable once UnusedType.Global
-public interface IQueryPreInterceptor<in TQuery>: IQuery, IAsyncPreInterceptor<TQuery> where TQuery : IQuery;
+public interface IQueryPreInterceptor<TQuery> : IQuery, IAsyncPreInterceptor<TQuery>
+    where TQuery : IQuery
+{
+    /// <inheritdoc cref="IAsyncPreInterceptor{TMessage}.HandleAsync(TMessage,IExecutionContext)"/>
+    async ValueTask<object> IAsyncPreInterceptor<TQuery>.HandleAsync(TQuery query, IExecutionContext context)
+        => await HandleAsync(query, context);
+
+    /// <summary>
+    /// Handles the query before its handler runs and returns the query that continues through
+    /// the pipeline (the original, or a rewritten instance).
+    /// </summary>
+    /// <param name="query">The query to intercept.</param>
+    /// <param name="context">The current execution context.</param>
+    new ValueTask<TQuery> HandleAsync(TQuery query, IExecutionContext context);
+}

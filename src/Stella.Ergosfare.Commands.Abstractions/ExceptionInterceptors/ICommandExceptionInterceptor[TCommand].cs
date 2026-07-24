@@ -14,7 +14,7 @@ namespace Stella.Ergosfare.Commands.Abstractions;
 /// The type of command being intercepted. Must implement <see cref="ICommand"/>
 /// </typeparam>
 /// <remarks>
-/// <c>ICommandExceptionInterceptor&lt;in TCommand, in Task, Task&gt;</c>
+/// <c>ICommandExceptionInterceptor&lt;in TCommand, in ValueTask, ValueTask&gt;</c>
 /// or other type-safe variants, which preserve the exact result type.
 /// </remarks>
 // ReSharper disable once UnusedType.Global

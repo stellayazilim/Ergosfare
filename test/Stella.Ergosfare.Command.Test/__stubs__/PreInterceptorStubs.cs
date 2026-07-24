@@ -1,5 +1,5 @@
 using Stella.Ergosfare.Commands.Abstractions;
-using Stella.Ergosfare.Contracts.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions;
 // ReSharper disable ClassNeverInstantiated.Global
 
@@ -31,11 +31,11 @@ public class StubCommandPreInterceptor1: ICommandPreInterceptor<StubNonGenericCo
     /// <param name="context">The execution context for the pipeline.</param>
     /// <returns>The original command as an <see cref="object"/>.</returns>
 #pragma warning disable CS0618 // Type or member is obsolete
-    public virtual Task<object> HandleAsync(StubNonGenericCommand message, IExecutionContext context)
+    public virtual ValueTask<StubNonGenericCommand> HandleAsync(StubNonGenericCommand message, IExecutionContext context)
 #pragma warning restore CS0618 // Type or member is obsolete
     {
         HasCalled = true;
-        return Task.FromResult<object>(message);
+        return ValueTask.FromResult(message);
     }
 }
 
@@ -62,10 +62,10 @@ public class StubCommandPreInterceptor2: ICommandPreInterceptor<StubNonGenericCo
     /// <param name="context">The execution context for the pipeline.</param>
     /// <returns>The original command as an <see cref="object"/>.</returns>
 #pragma warning disable CS0618 // Type or member is obsolete
-    public virtual Task<object>  HandleAsync(StubNonGenericCommand message, IExecutionContext context)
+    public virtual ValueTask<StubNonGenericCommand>  HandleAsync(StubNonGenericCommand message, IExecutionContext context)
 #pragma warning restore CS0618 // Type or member is obsolete
     {
         HasCalled = true;
-        return Task.FromResult<object>(message);
+        return ValueTask.FromResult(message);
     }
 }

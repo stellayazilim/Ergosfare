@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Threading;
-
+﻿
 namespace Stella.Ergosfare.Core.Abstractions;
 
 /// <summary>
@@ -40,6 +38,15 @@ public sealed class MediateOptions<TMessage, TResult>
     /// Gets or sets the cancellation token used to observe cancellation during message mediation.
     /// </summary>
     public required CancellationToken CancellationToken { get; init; } = CancellationToken.None;
+
+    /// <summary>
+    /// Gets or sets an externally owned execution context to mediate under. When set, the
+    /// mediator uses it instead of creating one — the nested-dispatch path: a handler
+    /// opens a scope on its own context and passes the child here. The caller owns the
+    /// context's lifetime; <see cref="Items"/> and <see cref="CancellationToken"/> are
+    /// ignored in favor of the context's own state.
+    /// </summary>
+    public IExecutionContext? ExternalContext { get; init; }
 
     /// <summary>
     /// Gets or sets a value indicating whether to register plain messages on the spot.

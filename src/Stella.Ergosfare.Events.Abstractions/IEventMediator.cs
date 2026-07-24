@@ -31,7 +31,19 @@ public interface IEventMediator
     ///     By default, if no handlers are found for the event, the operation completes successfully
     ///     without any action. This behavior can be changed using the <see cref="EventMediationSettings" />.
     /// </remarks>
-    Task PublishAsync(IEvent @event, EventMediationSettings? eventMediationSettings = null, CancellationToken cancellationToken = default);
+    ValueTask PublishAsync(IEvent @event, EventMediationSettings? eventMediationSettings = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Publishes an event under an externally owned execution context — the
+    ///     nested-dispatch path: a handler opens a scope on its own context
+    ///     (<c>using var scope = context.CreateScope();</c>) and passes
+    ///     <c>scope.Context</c> here. The caller owns the context's lifetime;
+    ///     cancellation flows from the context.
+    /// </summary>
+    /// <param name="event">The event to publish.</param>
+    /// <param name="context">The externally owned execution context to publish under.</param>
+    /// <param name="eventMediationSettings">Optional settings for pipeline execution.</param>
+    ValueTask PublishAsync(IEvent @event, Core.Abstractions.IExecutionContext context, EventMediationSettings? eventMediationSettings = null);
 
     /// <summary>
     ///     Asynchronously publishes an event with a specific type.
@@ -53,6 +65,6 @@ public interface IEventMediator
     ///     By default, if no handlers are found for the event, the operation completes successfully
     ///     without any action. This behavior can be changed using the <see cref="EventMediationSettings" />.
     /// </remarks>
-    Task PublishAsync<TEvent>(TEvent @event, EventMediationSettings? eventMediationSettings = null, CancellationToken cancellationToken = default)
+    ValueTask PublishAsync<TEvent>(TEvent @event, EventMediationSettings? eventMediationSettings = null, CancellationToken cancellationToken = default)
         where TEvent : notnull;
 }

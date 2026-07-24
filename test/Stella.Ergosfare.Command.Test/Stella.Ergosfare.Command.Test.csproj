@@ -26,7 +26,6 @@
     <ItemGroup>
       <ProjectReference Include="..\..\src\Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj" />
       <ProjectReference Include="..\..\src\Stella.Ergosfare.Commands\Stella.Ergosfare.Commands.csproj" />
-      <ProjectReference Include="..\..\src\Stella.Ergosfare.Contracts\Stella.Ergosfare.Contracts.csproj" />
       <ProjectReference Include="..\..\src\Stella.Ergosfare.Core\Stella.Ergosfare.Core.csproj" />
       <ProjectReference Include="..\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test.csproj" />
     </ItemGroup>

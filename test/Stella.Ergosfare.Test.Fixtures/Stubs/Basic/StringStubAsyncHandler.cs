@@ -20,10 +20,10 @@ public class StubStringAsyncHandler : IAsyncHandler<StubMessage, string>
     /// </summary>
     /// <param name="message">The message to handle.</param>
     /// <param name="context">The execution context.</param>
-    /// <returns>A <see cref="Task{TResult}"/> with the result string.</returns>
-    public async Task<string> HandleAsync(StubMessage message, IExecutionContext context)
+    /// <returns>A <see cref="ValueTask{TResult}"/> with the result string.</returns>
+    public async ValueTask<string> HandleAsync(StubMessage message, IExecutionContext context)
     {
-        await Task.CompletedTask;
+        await ValueTask.CompletedTask;
         return Result;
     }
 }
@@ -48,9 +48,9 @@ public class StubStringAsyncFinalInterceptor : IAsyncFinalInterceptor<StubMessag
     /// <param name="exception">Any exception thrown during handling, if any.</param>
     /// <param name="context">The current execution context.</param>
     /// <returns>A completed task.</returns>
-    public Task HandleAsync(StubMessage message, string? result, Exception? exception, IExecutionContext context)
+    public ValueTask HandleAsync(StubMessage message, string? result, Exception? exception, IExecutionContext context)
     {
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 }
 
@@ -69,8 +69,8 @@ public class StubStringAsyncExceptionInterceptorModifiesResult : IAsyncException
     /// <param name="exception">The exception that occurred during handling.</param>
     /// <param name="context">The current execution context.</param>
     /// <returns>A task that completes with the modified result.</returns>
-    public Task<object?> HandleAsync(StubMessage message, string? result, Exception exception, IExecutionContext context)
+    public ValueTask<object?> HandleAsync(StubMessage message, string? result, Exception exception, IExecutionContext context)
     {
-        return Task.FromResult<object?>("modified result");
+        return ValueTask.FromResult<object?>("modified result");
     }
 }

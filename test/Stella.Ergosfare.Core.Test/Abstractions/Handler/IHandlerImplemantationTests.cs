@@ -30,12 +30,12 @@ public class IHandlerImplementationTests(ExecutionContextFixture executionContex
     public void IHandlerShouldImplementIHandlerTMessageTResult()
     {
         // arrange
-        var ctx = ExecutionContextFixture.PropagateAmbientContext().Ctx;
-   
-        IHandler handler = new StubVoidHandler();
+        var ctx = ExecutionContextFixture.Ctx;
+
+        IHandler<StubMessage, object> handler = new StubVoidHandler();
         // act
         var result = handler.Handle(Message, ctx);
         // assert
-        Assert.Null(result); 
+        Assert.Null(result);
     }
 }

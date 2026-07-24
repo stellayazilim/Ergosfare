@@ -5,7 +5,7 @@ using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Internal.Factories;
 using Stella.Ergosfare.Core.Internal.Registry.Descriptors;
 using Microsoft.Extensions.DependencyInjection;
-using Stella.Ergosfare.Contracts.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 
 namespace Stella.Ergosfare.Test.Fixtures;
 

@@ -1,4 +1,5 @@
-﻿using Stella.Ergosfare.Core.Abstractions.Handlers;
+using System.Diagnostics.CodeAnalysis;
+using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Extensions;
 using Stella.Ergosfare.Core.Internal.Abstractions;
@@ -17,7 +18,7 @@ internal sealed class HandlerDescriptorBuilder: IHandlerDescriptorBuilder
     /// </summary>
     /// <param name="type">The type to evaluate.</param>
     /// <returns><c>true</c> if the type implements <see cref="IHandler"/>; otherwise, <c>false</c>.</returns>
-    public bool CanBuild(Type type)
+    public bool CanBuild([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type type)
     {
         return type.IsAssignableTo(typeof(IHandler));
     }
@@ -28,23 +29,50 @@ internal sealed class HandlerDescriptorBuilder: IHandlerDescriptorBuilder
     /// </summary>
     /// <param name="handlerType">The handler type from which to build descriptors.</param>
     /// <returns>A collection of <see cref="MainHandlerDescriptor"/> instances representing the handler.</returns>
-    public IEnumerable<IHandlerDescriptor> Build(Type handlerType)
+    [UnconditionalSuppressMessage("AOT", "IL3050",
+        Justification = "ValueTask<TResult> descriptor result types are metadata only; the pipeline never instantiates them reflectively.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2055",
+        Justification = "ValueTask<TResult> descriptor result types are metadata only; the pipeline never instantiates them reflectively.")]
+    public IEnumerable<IHandlerDescriptor> Build([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type handlerType)
     {
-        var interfaces = handlerType.GetInterfacesEqualTo(typeof(IHandler<,>));
-
         var weight = handlerType.GetWeightFromAttribute();
-        
-        foreach (var @interface in interfaces)
+
+        // Synchronous handlers: the second argument IS the result type.
+        foreach (var @interface in handlerType.GetInterfacesEqualTo(typeof(IHandler<,>)))
         {
-            var messageType = @interface.GetGenericArguments()[0];
-            var resultType = @interface.GetGenericArguments()[1];
-            var groups = handlerType.GetGroupsFromAttribute();
             yield return new MainHandlerDescriptor
             {
                 Weight = weight,
-                Groups = groups,
-                MessageType = messageType,
-                ResultType = resultType,
+                Groups = handlerType.GetGroupsFromAttribute(),
+                MessageType = @interface.GetGenericArguments()[0],
+                ResultType = @interface.GetGenericArguments()[1],
+                HandlerType = handlerType,
+            };
+        }
+
+        // Asynchronous handlers are standalone contracts (no object-typed root); their
+        // descriptors record the ValueTask carrier as the result type for parity with the
+        // pre-severance descriptor shape.
+        foreach (var @interface in handlerType.GetInterfacesEqualTo(typeof(IAsyncHandler<>)))
+        {
+            yield return new MainHandlerDescriptor
+            {
+                Weight = weight,
+                Groups = handlerType.GetGroupsFromAttribute(),
+                MessageType = @interface.GetGenericArguments()[0],
+                ResultType = typeof(ValueTask),
+                HandlerType = handlerType,
+            };
+        }
+
+        foreach (var @interface in handlerType.GetInterfacesEqualTo(typeof(IAsyncHandler<,>)))
+        {
+            yield return new MainHandlerDescriptor
+            {
+                Weight = weight,
+                Groups = handlerType.GetGroupsFromAttribute(),
+                MessageType = @interface.GetGenericArguments()[0],
+                ResultType = typeof(ValueTask<>).MakeGenericType(@interface.GetGenericArguments()[1]),
                 HandlerType = handlerType,
             };
         }

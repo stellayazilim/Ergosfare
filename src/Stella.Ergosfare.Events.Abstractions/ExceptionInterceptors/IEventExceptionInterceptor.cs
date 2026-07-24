@@ -21,4 +21,4 @@ namespace Stella.Ergosfare.Events.Abstractions;
 /// </para>
 /// </remarks>
 // ReSharper disable once UnusedType.Global
-public interface IEventExceptionInterceptor: IEvent, IAsyncExceptionInterceptor<IEvent, Task>;
+public interface IEventExceptionInterceptor: IEvent, IAsyncExceptionInterceptor<IEvent, ValueTask>;

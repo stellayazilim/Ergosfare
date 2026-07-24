@@ -6,25 +6,25 @@ namespace Stella.Ergosfare.Core.Test.Interceptors;
 
 
 /// <summary>
-/// Contains unit tests for <see cref="IPostInterceptor"/> implementations,
-/// verifying that the Handle method correctly returns a <see cref="Task"/> for asynchronous execution.
+/// Contains unit tests for <see cref="IAsyncPostInterceptor{TMessage}"/> implementations,
+/// verifying that the typed <c>HandleAsync</c> member flows the pipeline result through.
 /// </summary>
 public class PostInterceptorTests
 {
     /// <summary>
-    /// Tests that a post-interceptor returns a non-null <see cref="Task"/> 
-    /// when handling a message with a result.
+    /// Tests that an asynchronous post-interceptor invoked through its typed contract
+    /// returns the (unmodified) pipeline result.
     /// </summary>
     [Fact]
     [Trait("Category", "Coverage")]
     [Trait("Category", "Unit")]
     public async Task TestPostInterceptorsShouldImplement()
     {
-        var fixture = new ExecutionContextFixture().PropagateAmbientContext();
-        IPostInterceptor interceptor = new StubVoidAsyncPostInterceptor();
-        var result =  interceptor.Handle(new StubMessage(), StubPostInterceptor.Result,  fixture.Ctx);
-        Assert.NotNull(result);
-        await Assert.IsType<Task>(result, exactMatch:false);
+        var fixture = new ExecutionContextFixture();
+        IAsyncPostInterceptor<StubMessage> interceptor = new StubVoidAsyncPostInterceptor();
 
+        var result = await interceptor.HandleAsync(new StubMessage(), StubPostInterceptor.Result, fixture.Ctx);
+
+        Assert.Equal(StubPostInterceptor.Result, result);
     }
 }

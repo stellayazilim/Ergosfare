@@ -3,11 +3,22 @@
     {
       "src": [
         {
-          "files": ["**/*.csproj"],
-          "exclude": ["**/bin/**", "**/obj/**", "**/Test*/**"]
+          "files": ["src/**/*.csproj"],
+          "exclude": [
+            "**/bin/**",
+            "**/obj/**",
+            "src/Stella.Ergosfare.SourceGenerator/**"
+          ]
         }
       ],
-      "dest": "api"
+      "dest": "api",
+      "outputFormat": "mref",
+      "namespaceLayout": "nested",
+      "memberLayout": "samePage",
+      "filter": "docfx.filter.yml",
+      "properties": {
+        "TargetFramework": "net10.0"
+      }
     }
   ],
   "build": {

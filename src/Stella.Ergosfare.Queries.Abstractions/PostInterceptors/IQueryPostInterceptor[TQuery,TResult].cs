@@ -15,16 +15,17 @@ namespace Stella.Ergosfare.Queries.Abstractions;
 /// narrower return type there is no third parameter anymore; return the base result type.
 /// </typeparam>
 /// <remarks>
-/// The type parameters are deliberately invariant: the pipeline invokes interceptors
-/// through the non-generic root interfaces, so interface variance bought nothing while
-/// forcing the result-returning member onto a separate three-parameter interface.
+/// <typeparamref name="TQuery"/> is contravariant, matching the core
+/// <see cref="IAsyncPostInterceptor{TMessage, TResult}"/> contract the typed dispatch
+/// matches against. <typeparamref name="TResult"/> must stay invariant: the typed member
+/// returns it.
 /// </remarks>
-public interface IQueryPostInterceptor<TQuery, TResult> : IQuery, IAsyncPostInterceptor<TQuery, TResult>
+public interface IQueryPostInterceptor<in TQuery, TResult> : IQuery, IAsyncPostInterceptor<TQuery, TResult>
     where TQuery : IQuery<TResult>
     where TResult : notnull
 {
     /// <inheritdoc />
-    async Task<object> IAsyncPostInterceptor<TQuery, TResult>.HandleAsync(
+    async ValueTask<object> IAsyncPostInterceptor<TQuery, TResult>.HandleAsync(
         TQuery query, TResult messageResult, IExecutionContext context)
         => (await HandleAsync(query, messageResult, context))!;
 
@@ -35,8 +36,8 @@ public interface IQueryPostInterceptor<TQuery, TResult> : IQuery, IAsyncPostInte
     /// <param name="queryResult">The result produced by the query handler.</param>
     /// <param name="context">The current execution context.</param>
     /// <returns>
-    /// A <see cref="Task{TResult}"/> producing the (possibly modified) result that
+    /// A <see cref="ValueTask{TResult}"/> producing the (possibly modified) result that
     /// continues through the pipeline.
     /// </returns>
-    new Task<TResult> HandleAsync(TQuery query, TResult queryResult, IExecutionContext context);
+    new ValueTask<TResult> HandleAsync(TQuery query, TResult queryResult, IExecutionContext context);
 }
