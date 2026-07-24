@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Stella.MinimalApi" Version="1.0.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Stella.Ergosfare.E2E.Contracts\Stella.Ergosfare.E2E.Contracts.csproj" />
+        <ProjectReference Include="..\Stella.Ergosfare.E2E.Infrastructure\Stella.Ergosfare.E2E.Infrastructure.csproj" />
+        <ProjectReference Include="..\Stella.Ergosfare.E2E.UseCases\Stella.Ergosfare.E2E.UseCases.csproj" />
+
+        <!-- The whole Ergosfare runtime + DI extensions, wired from local src (not NuGet)
+             so e2e exercises the code on this branch. -->
+        <ProjectReference Include="..\..\src\Stella.Ergosfare\Stella.Ergosfare.csproj" />
+        <!-- The source generator as an analyzer: it emits RegisterGenerated() into this
+             compilation, discovering handlers in the referenced UseCases assembly. -->
+        <ProjectReference Include="..\..\src\Stella.Ergosfare.SourceGenerator\Stella.Ergosfare.SourceGenerator.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+</Project>

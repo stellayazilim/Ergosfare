@@ -75,7 +75,7 @@ public class ReferenceScanningTests
                         [Group("lib")]
                         public sealed class LibAudit : ICommandPreInterceptor<LibPing>
                         {
-                            public ValueTask<object> HandleAsync(LibPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                            public ValueTask<LibPing> HandleAsync(LibPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
                                 => new(message);
                         }
                     }

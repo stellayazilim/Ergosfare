@@ -89,7 +89,7 @@ public class ErgosfareRegistrationGeneratorTests
                 [Group("audit", "ops")]
                 public sealed class AuditPre : ICommandPreInterceptor<Ping>
                 {
-                    public ValueTask<object> HandleAsync(Ping message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<Ping> HandleAsync(Ping message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
                         => new(message);
                 }
 
@@ -137,7 +137,7 @@ public class ErgosfareRegistrationGeneratorTests
 
                 public sealed class WrappedIntPre : ICommandPreInterceptor<Wrapped<int>>
                 {
-                    public ValueTask<object> HandleAsync(Wrapped<int> message, IExecutionContext context) => new(message);
+                    public ValueTask<Wrapped<int>> HandleAsync(Wrapped<int> message, IExecutionContext context) => new(message);
                 }
             }
             """);
@@ -188,7 +188,7 @@ public class ErgosfareRegistrationGeneratorTests
                 public sealed class AuditPreInterceptor<TCommand> : ICommandPreInterceptor<TCommand>
                     where TCommand : ICommand
                 {
-                    public ValueTask<object> HandleAsync(TCommand message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<TCommand> HandleAsync(TCommand message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
                         => new(message);
                 }
             }

@@ -57,7 +57,7 @@ public class ExcludeFromPipelineTests
     [ExcludeFromDiscovery]
     public sealed class QuietExactPre : IEventPreInterceptor<QuietEvent>
     {
-        public ValueTask<object> HandleAsync(QuietEvent @event, IExecutionContext context)
+        public ValueTask<QuietEvent> HandleAsync(QuietEvent @event, IExecutionContext context)
         {
             @event.Trace.Add("exact");
             return new(@event);
