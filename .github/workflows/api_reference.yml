@@ -1,15 +1,18 @@
 name: ApiReference
 
 # Produces the DocFX ManagedReference metadata that the docs site turns into its
-# API Reference sections — one per documented line: `main` (stable v1) and
-# `preview` (v2). Only metadata is produced here; the YAML -> Starlight markdown
-# conversion lives in Ergosfare.Docs (`npm run gen_api_ref`). Split that way, the
-# docs site never needs a .NET SDK and this repo never needs Node.
+# API Reference sections — one per documented line: `main` (the stable line) and
+# `preview` (the preview line). Both carry v2 since the promotion, so today the
+# two come out identical; they are still built separately because the next
+# preview will diverge again. Only metadata is produced here; the YAML ->
+# Starlight markdown conversion lives in Ergosfare.Docs (`npm run gen_api_ref`).
+# Split that way, the docs site never needs a .NET SDK and this repo never needs
+# Node.
 #
 # Both refs are built in one run from a single workflow definition, so the file
 # does not have to be kept in sync across branches. The docfx configuration is
 # always taken from the ref that triggered the run and copied into each checkout,
-# which also lets `main` be documented with settings it does not carry itself.
+# so a line is never documented with stale settings of its own.
 #
 # Triggered by Ergosfare.Docs before it builds; also runnable by hand from the
 # Actions tab when you want to inspect the metadata.
@@ -58,8 +61,8 @@ jobs:
           path: source
 
       - name: Apply docfx configuration
-        # `main` predates these files; using the triggering ref's copy keeps both
-        # lines filtered and laid out identically.
+        # Using the triggering ref's copy keeps both lines filtered and laid out
+        # identically, whatever each branch happens to carry.
         run: cp config/docfx.json config/docfx.filter.yml source/
 
       - name: Setup .NET

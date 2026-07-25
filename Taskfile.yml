@@ -1,11 +1,13 @@
 # Local docs workflow for the Ergosfare superproject.
 #
-# The docs site is the `docs/` submodule, and it documents two lines: stable v1
-# from `main` at the site root, and v2 from `preview` under /preview. Because the
-# .NET sources sit right here, the whole API-reference chain runs locally — the
-# ref that is not checked out is built from a git worktree under `.worktrees/`,
-# so a full run never has to touch GitHub. In CI the two halves are split across
-# repositories (see .github/workflows/api_reference.yml and
+# The docs site is the `docs/` submodule, and it documents two lines: the stable
+# line from `main` at the site root, and the preview line from `preview` under
+# /preview. Both carry v2 since the promotion, so the two references come out
+# identical — they stay separate because the next preview will diverge again.
+# Because the .NET sources sit right here, the whole API-reference chain runs
+# locally — the ref that is not checked out is built from a git worktree under
+# `.worktrees/`, so a full run never has to touch GitHub. In CI the two halves
+# are split across repositories (see .github/workflows/api_reference.yml and
 # docs/.github/workflows/deploy.yml).
 #
 # Install go-task once:
@@ -118,9 +120,13 @@ tasks:
       - node e2e/run.mjs
 
   # ---------------------------------------------------------------- mcp
-
-  mcp:
-    desc: Run the docs MCP server on stdio (for wiring into an MCP client).
-    deps: [docs:install]
-    cmds:
-      - node {{.DOCS}}/mcp/server.mjs
+  #
+  # The docs MCP server is no longer part of this repository — it was generalised
+  # into `@stellayazilim/mcp-starlight`, which is wired into the site as an Astro
+  # integration (see docs/astro.config.mjs). It writes its own `mcp-catalog.json`
+  # during `docs:build` and serves that over stdio, so there is nothing to run
+  # here. Point an MCP client at it directly:
+  #
+  #   npx -y @stellayazilim/mcp-starlight
+  #
+  # Run `task docs:build` first if you want it reading the local catalog.
