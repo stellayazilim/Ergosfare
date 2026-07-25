@@ -3,15 +3,15 @@
 
 ![Ergosfare Logo](./7101c7df-6cac-4b25-994a-60e2adbdc546.png)
 
-[![NuGet](https://img.shields.io/nuget/v/Stella.Ergosfare.svg?label=nuget)](https://www.nuget.org/packages/Stella.Ergosfare)
+[![NuGet (preview)](https://img.shields.io/nuget/vpre/Stella.Ergosfare.svg?label=nuget%20preview)](https://www.nuget.org/packages/Stella.Ergosfare/absoluteLatest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
-![Tests](https://img.shields.io/github/actions/workflow/status/stellayazilim/ergosfare/coverage_tests.yml?branch=main&label=tests)
+![Tests](https://img.shields.io/github/actions/workflow/status/stellayazilim/Ergosfare/coverage_tests.yml?branch=preview&label=tests)
 [![Coverage](https://raw.githubusercontent.com/stellayazilim/Ergosfare/badges/.badges/coverage.svg)](https://github.com/stellayazilim/Ergosfare/actions/workflows/coverage_tests.yml)
 
-> **v2 is the stable line**, released from [`main`](https://github.com/stellayazilim/Ergosfare/tree/main).
-> Work in progress lands on [`preview`](https://github.com/stellayazilim/Ergosfare/tree/preview)
-> first and ships as `-preview` pre-releases; see [Versioning & release model](#versioning--release-model).
-> Coming from v1? See [Migrating from v1 to v2](https://stellayazilim.github.io/ergosfare.docs/migration/v1-to-v2).
+> **You are on the `preview` branch.** Releases from here are `-preview` pre-releases and
+> APIs may change between them; install with `--prerelease`. The stable line is
+> [`main`](https://github.com/stellayazilim/Ergosfare/tree/main) — see
+> [Versioning & release model](#versioning--release-model).
 
 - **Docs** → https://stellayazilim.github.io/ergosfare.docs
 - **Changelog** → https://stellayazilim.github.io/ergosfare.changelog
@@ -44,8 +44,8 @@ registry scan, no `AsyncLocal`, and no per-dispatch context allocation on the ho
 ## Quick start
 
 ```bash
-dotnet add package Stella.Ergosfare
-dotnet add package Stella.Ergosfare.SourceGenerator
+dotnet add package Stella.Ergosfare --prerelease
+dotnet add package Stella.Ergosfare.SourceGenerator --prerelease
 ```
 
 ```csharp
@@ -269,10 +269,10 @@ Current experimental surface: none — the gate is in place for future experimen
 
 ## Installation
 
-Packages are published to nuget.org and GitHub Packages:
+Pre-release packages are published to nuget.org and GitHub Packages:
 
 ```bash
-dotnet add package Stella.Ergosfare
+dotnet add package Stella.Ergosfare --prerelease
 ```
 
 Module packages (`Stella.Ergosfare.Commands`, `.Queries`, `.Events`, plus their
