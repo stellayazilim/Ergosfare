@@ -1,16 +1,17 @@
 
-# Ergosfare — v2 preview line
+# Ergosfare
 
 ![Ergosfare Logo](./7101c7df-6cac-4b25-994a-60e2adbdc546.png)
 
-[![NuGet (preview)](https://img.shields.io/nuget/vpre/Stella.Ergosfare.svg?label=nuget%20preview)](https://www.nuget.org/packages/Stella.Ergosfare)
+[![NuGet](https://img.shields.io/nuget/v/Stella.Ergosfare.svg?label=nuget)](https://www.nuget.org/packages/Stella.Ergosfare)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
-![Tests](https://img.shields.io/github/actions/workflow/status/stellayazilim/ergosfare/coverage_tests.yml?branch=preview&label=tests)
+![Tests](https://img.shields.io/github/actions/workflow/status/stellayazilim/ergosfare/coverage_tests.yml?branch=main&label=tests)
 [![Coverage](https://raw.githubusercontent.com/stellayazilim/Ergosfare/badges/.badges/coverage.svg)](https://github.com/stellayazilim/Ergosfare/actions/workflows/coverage_tests.yml)
 
-> **You are on the `preview` branch — the Ergosfare v2 line.** Releases from this branch are
-> `v2.0.0-preview.N` pre-releases. The stable v1.x line lives on [`main`](https://github.com/stellayazilim/Ergosfare/tree/main).
-> APIs here may still change between previews; see [Versioning & release model](#versioning--release-model).
+> **v2 is the stable line**, released from [`main`](https://github.com/stellayazilim/Ergosfare/tree/main).
+> Work in progress lands on [`preview`](https://github.com/stellayazilim/Ergosfare/tree/preview)
+> first and ships as `-preview` pre-releases; see [Versioning & release model](#versioning--release-model).
+> Coming from v1? See [Migrating from v1 to v2](https://stellayazilim.github.io/Ergosfare.Docs/migration/v1-to-v2).
 
 - **Docs** → https://stellayazilim.github.io/Ergosfare.Docs
 - **Changelog** → https://stellayazilim.github.io/ergosfare.changelog
@@ -43,8 +44,8 @@ registry scan, no `AsyncLocal`, and no per-dispatch context allocation on the ho
 ## Quick start
 
 ```bash
-dotnet add package Stella.Ergosfare --prerelease
-dotnet add package Stella.Ergosfare.SourceGenerator --prerelease
+dotnet add package Stella.Ergosfare
+dotnet add package Stella.Ergosfare.SourceGenerator
 ```
 
 ```csharp
@@ -163,7 +164,7 @@ dotnet run -c Release -f net9.0 --project test/Stella.Ergosfare.Benchmarking
 ```
 
 Environment: BenchmarkDotNet v0.15.8 · Windows 11 · AMD Ryzen 7 7800X3D · .NET 9.0.11
-(RyuJIT x86-64-v4). Measured on the `preview` branch, 2026-07-24.
+(RyuJIT x86-64-v4). Measured 2026-07-24, on the tree released as v2.0.0.
 
 Two shapes are measured, for three mediators:
 
@@ -224,9 +225,9 @@ source generator          ──►    MessageRegistry ──► descriptor ─�
   plan. Handler resolution belongs to the dispatcher — the execution context deliberately
   exposes **no** service provider.
 
-## What changes on the v2 line
+## What changed in v2
 
-Tracked in [CHANGELOG.md](CHANGELOG.md) under *Unreleased — v2 preview line*. Highlights:
+Tracked in [CHANGELOG.md](CHANGELOG.md) under *v2.0.0*. Highlights:
 
 - **Source-generated registration** (`Stella.Ergosfare.SourceGenerator`): compile-time
   discovery with pre-computed descriptors, cross-assembly reference scanning, discovery
@@ -268,10 +269,10 @@ Current experimental surface: none — the gate is in place for future experimen
 
 ## Installation
 
-Preview packages are published to nuget.org (and GitHub Packages) as pre-releases:
+Packages are published to nuget.org and GitHub Packages:
 
 ```bash
-dotnet add package Stella.Ergosfare --prerelease
+dotnet add package Stella.Ergosfare
 ```
 
 Module packages (`Stella.Ergosfare.Commands`, `.Queries`, `.Events`, plus their
@@ -283,8 +284,8 @@ only declare messages or handlers need just the relevant `.Abstractions` package
 
 | Branch | Line | Tags | NuGet |
 |--------|------|------|-------|
-| `main` | stable v1.x | `vX.Y.Z` | stable |
-| `preview` | v2 | `v2.0.0-preview.N` | pre-release |
+| `main` | stable v2 | `vX.Y.Z` | stable |
+| `preview` | in development | `vX.Y.Z-preview` | pre-release |
 
 - **No release candidates.** Features mature on `preview` and graduate to stable
   individually (rolling graduation) — there is no big-bang RC freeze.

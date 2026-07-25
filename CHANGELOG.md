@@ -1,6 +1,6 @@
-## v2.0.0-preview – '2026-07-24'
+## v2.0.0 – '2026-07-25'
 
-First preview of the v2 line. The theme: **all dispatch-shape work moves to compile time
+First stable release of the v2 line. The theme: **all dispatch-shape work moves to compile time
 or to a once-per-message-type plan** — registration is source-generated, dispatch generics
 close at compile time, execution contexts are pooled, and the dispatch path carries no
 reflection, no `MakeGenericType`, no registry scan and no `AsyncLocal`.
