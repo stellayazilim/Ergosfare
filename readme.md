@@ -11,9 +11,9 @@
 > **v2 is the stable line**, released from [`main`](https://github.com/stellayazilim/Ergosfare/tree/main).
 > Work in progress lands on [`preview`](https://github.com/stellayazilim/Ergosfare/tree/preview)
 > first and ships as `-preview` pre-releases; see [Versioning & release model](#versioning--release-model).
-> Coming from v1? See [Migrating from v1 to v2](https://stellayazilim.github.io/Ergosfare.Docs/migration/v1-to-v2).
+> Coming from v1? See [Migrating from v1 to v2](https://stellayazilim.github.io/ergosfare.docs/migration/v1-to-v2).
 
-- **Docs** → https://stellayazilim.github.io/Ergosfare.Docs
+- **Docs** → https://stellayazilim.github.io/ergosfare.docs
 - **Changelog** → https://stellayazilim.github.io/ergosfare.changelog
 - **Compatibility policy** → [COMPATIBILITY.md](COMPATIBILITY.md)
 
