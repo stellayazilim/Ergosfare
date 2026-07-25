@@ -6,9 +6,14 @@
 # identical — they stay separate because the next preview will diverge again.
 # Because the .NET sources sit right here, the whole API-reference chain runs
 # locally — the ref that is not checked out is built from a git worktree under
-# `.worktrees/`, so a full run never has to touch GitHub. In CI the two halves
-# are split across repositories (see .github/workflows/api_reference.yml and
-# docs/.github/workflows/deploy.yml).
+# `.worktrees/`, so a full run never has to touch GitHub.
+#
+# `task api` is the ONLY way the reference gets refreshed. It used to also be
+# generated during the docs Pages deploy, which needed a cross-repo token; that
+# token was never set, so the step silently skipped and /api 404'd in production
+# for three deploys. The generated pages are committed now and the deploy just
+# builds them, so after changing the public API surface: run `task api`, then
+# commit the result in the `docs/` submodule.
 #
 # Install go-task once:
 #   winget install Task.Task          # Windows
