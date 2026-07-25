@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>WinExe</OutputType>
+        <TargetFramework>net9.0-windows</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UseWPF>true</UseWPF>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\SMacro.Application\SMacro.Application.csproj" />
+      <ProjectReference Include="..\SMacro.Core\SMacro.Core.csproj" />
+      <ProjectReference Include="..\SMacro.Domain\SMacro.Domain.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Page Update="View\TestView.xaml">
+        <Generator>MSBuild:Compile</Generator>
+        <XamlRuntime>Wpf</XamlRuntime>
+        <SubType>Designer</SubType>
+      </Page>
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0-rc.1.25451.107" />
+      <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0-rc.1.25451.107" />
+      <PackageReference Include="Stella.Ergosfare.Commands.Abstractions" Version="0.2.0-e" />
+    </ItemGroup>
+
+</Project>

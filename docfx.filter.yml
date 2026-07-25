@@ -1,0 +1,31 @@
+# DocFX API filter for the published API reference.
+#
+# The generated pages are consumer-facing: what you can reference from your own
+# code after installing a Stella.Ergosfare package. Anything the compiler, the
+# test projects or the source generator needs but a consumer never names is
+# filtered out here rather than in the converter, so `docfx metadata` output and
+# the published site cannot drift.
+apiRules:
+  # Members deliberately hidden from IntelliSense are hidden from the docs too.
+  - exclude:
+      hasAttribute:
+        uid: System.ComponentModel.EditorBrowsableAttribute
+        ctorArguments:
+          - System.ComponentModel.EditorBrowsableState.Never
+
+  # Compiler-emitted members (record `<Clone>$`, `EqualityContract`, iterator
+  # state machines) carry this attribute and are never hand-written surface.
+  - exclude:
+      hasAttribute:
+        uid: System.Runtime.CompilerServices.CompilerGeneratedAttribute
+
+  # `InternalsVisibleTo` opens every assembly's internals to its `.Test` twin
+  # (see src/Directory.Build.props); that is a test affordance, not public API.
+  - exclude:
+      uidRegex: ^Stella\.Ergosfare\..*\.Test(\.|$)
+
+  # The source generator is a compile-time Roslyn component shipped under
+  # analyzers/ with no runtime assembly. Its user-facing surface is the
+  # attributes in Stella.Ergosfare.Core.Abstractions.Attributes, documented there.
+  - exclude:
+      uidRegex: ^Stella\.Ergosfare\.SourceGenerator(\.|$)

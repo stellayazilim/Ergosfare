@@ -1,0 +1,34 @@
+﻿<Window x:Class="SMacro.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        xmlns:vm="clr-namespace:SMacro.ViewModel"
+        xmlns:page="clr-namespace:SMacro.Pages"
+        xmlns:view="clr-namespace:SMacro.View"
+        xmlns:layout="clr-namespace:SMacro.Layouts"
+        d:DataContext="{d:DesignInstance vm:MainWindowBaseViewModel, IsDesignTimeCreatable=True}"
+        Title="MainWindow" Height="450" Width="400">
+    
+  
+    <Grid>
+        <ContentControl Content="{Binding CurrentViewModel}" >
+            <ContentControl.Resources>
+                <DataTemplate DataType="{x:Type vm:MacroEditorVm}">
+                    <layout:EditorLayout>
+                        <page:MacroEditor />
+                    </layout:EditorLayout>
+                </DataTemplate>
+                <DataTemplate DataType="{x:Type vm:HomeViewModel}">
+                    <layout:EditorLayout>
+                         <view:HomeView />
+                    </layout:EditorLayout>
+                </DataTemplate>
+                <DataTemplate DataType="{x:Type vm:TestViewModel}">
+                    <view:TestView />
+                </DataTemplate>
+            </ContentControl.Resources>
+        </ContentControl>
+    </Grid>
+</Window>

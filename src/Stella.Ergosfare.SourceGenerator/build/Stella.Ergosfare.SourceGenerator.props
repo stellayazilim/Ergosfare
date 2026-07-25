@@ -1,0 +1,26 @@
+<Project>
+    <!-- Surfaces the reference-scanning opt-out to the source generator. Scanning is on
+         by default (the generator treats an absent value as enabled); set
+
+             <ErgosfareSourceGeneratorScanReferences>false</ErgosfareSourceGeneratorScanReferences>
+
+         in a project to restrict source-generated registration to types declared in that
+         project. -->
+    <ItemGroup>
+        <CompilerVisibleProperty Include="ErgosfareSourceGeneratorScanReferences" />
+    </ItemGroup>
+
+    <!-- Force-opts an assembly back into cross-assembly discovery even though its name
+         matches Ergosfare's reserved "Stella.Ergosfare" prefix (which is otherwise skipped,
+         because the library's own contract interfaces inherit the module markers). Set
+
+             <ErgosfareSourceGeneratorForceScanReferences>true</ErgosfareSourceGeneratorForceScanReferences>
+
+         in a project you deliberately named under that prefix. The property is baked into
+         the assembly as [assembly: AssemblyMetadata(...)] so the generator reads the opt-in
+         per referenced assembly — only assemblies that set it are scanned, so the library's
+         own contracts are never registered. -->
+    <ItemGroup Condition="'$(ErgosfareSourceGeneratorForceScanReferences)' == 'true'">
+        <AssemblyMetadata Include="ErgosfareSourceGeneratorForceScanReferences" Value="true" />
+    </ItemGroup>
+</Project>

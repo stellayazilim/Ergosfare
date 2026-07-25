@@ -1,0 +1,20 @@
+using Stella.Ergosfare.Core.Abstractions.Handlers;
+
+namespace Stella.Ergosfare.Commands.Abstractions;
+
+/// <summary>
+/// Represents a post-processing interceptor for commands that executes after any <see cref="ICommand"/> is handled.
+/// </summary>
+/// <remarks>
+/// This interceptor is non-generic and non-type-safe. It can be registered to run for multiple command types
+/// without specifying a particular result type. The <see>
+///     <cref>HandleAsync</cref>
+/// </see>
+/// method returns <see cref="object"/>,
+/// so any result modifications are handled via object references and casting.
+/// 
+/// For scenarios where type safety is required, use the generic version:
+/// <see cref="ICommandPostInterceptor{TCommand,TResult}"/>.
+/// </remarks>
+// ReSharper disable once UnusedType.Global
+public interface ICommandPostInterceptor: ICommand, IAsyncPostInterceptor<ICommand>;

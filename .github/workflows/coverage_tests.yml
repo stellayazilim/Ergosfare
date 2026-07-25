@@ -1,0 +1,83 @@
+name: Coverage
+permissions:
+  contents: write
+on:
+  push:
+    branches:
+      - 'main'
+      - 'preview'
+    paths-ignore:
+      - '.badges/chore_workflows/coverage.svg'
+  pull_request:
+    branches:
+      - '*'
+    paths-ignore:
+      - '.badges/chore_workflows/coverage.svg'
+
+jobs:
+  Coverage:
+    # Single job with both SDKs installed: the solution multi-targets net9.0 and
+    # net10.0, so a per-SDK matrix cannot build it — and two parallel jobs racing
+    # to push the badge branch caused non-fast-forward failures.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            9.0.x
+            10.0.x
+
+      - name: Install Coverlet global tool
+        run: dotnet tool install --global coverlet.console
+
+      - name: Restore dependencies
+        run: dotnet restore Stella.Ergosfare.slnx
+
+      - name: Run Unit & Coverage Tests
+        shell: bash
+        run: |
+          dotnet test Stella.Ergosfare.slnx --settings coverlet.runsettings /p:CoverletOutput=./.coverage/coverage.cobertura.xml /p:MergeWith=""  --logger "trx;LogFileName=TestResults.trx"
+
+      - name: Install Report Generator
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool
+
+      - name: Merge coverage reports
+        shell: bash
+        run: reportgenerator -reports:./**/coverage.cobertura.xml -targetdir:./.coverage -reporttypes:Cobertura
+
+      - name: Fail if coverage < 90%
+        shell: bash
+        run: |
+          COVERAGE=$(grep -oP '(?<=line-rate=")[0-9.]+' ./.coverage/Cobertura.xml)
+          echo "Total line coverage: $COVERAGE"
+          COVERAGE_INT=$(echo "$COVERAGE * 100 / 1" | bc)
+          if [ "$COVERAGE_INT" -lt 90 ]; then
+            echo "Coverage $COVERAGE% is below 90%!"
+            exit 1
+          fi
+
+      # The badge reflects main's coverage: only publish it from pushes to main.
+      # Publishing from pull requests both raced the branch ref and overwrote the
+      # badge with PR coverage.
+      - uses: action-badges/create-orphan-branch@0.1.1
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          branch-name: badges
+
+      # 0.5.0 is the node24-native build; 0.3.1's node20 bundle crashed once GitHub
+      # started forcing Node 24. The file-name/badge-branch/github-token inputs are
+      # consumed by the action even though its action.yml does not declare them — the
+      # runner's "unexpected input" warning is cosmetic, but omitting github-token
+      # makes the badge upload crash.
+      - name: Generate coverage badge
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: action-badges/cobertura-coverage-xml-badges@0.5.0
+        with:
+          coverage-file-name: ./.coverage/Cobertura.xml
+          file-name: coverage.svg
+          badge-branch: badges
+          github-token: ${{ secrets.GITHUB_TOKEN }}

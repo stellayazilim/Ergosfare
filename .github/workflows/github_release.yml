@@ -1,0 +1,127 @@
+name: GitHubPackagesRelease
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to release from'
+        required: true
+        default: 'main'
+      tag:
+        description: 'Version tag (must start with v)'
+        required: true
+
+jobs:
+  release:
+    # Single job with both SDKs: the per-SDK matrix ran every step twice, and the
+    # duplicated release steps raced each other uploading the same assets — the
+    # cause of the v1.4.0 failure.
+    runs-on: ubuntu-latest
+    environment: publish
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Tag pushes check out the tag; manual dispatches check out the given branch.
+          ref: ${{ github.event.inputs.branch || github.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            9.0.x
+            10.0.x
+
+      - name: Set version
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG_NAME="${{ github.event.inputs.tag }}"
+          else
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+          fi
+
+          [[ "$TAG_NAME" == v* ]] || { echo "❌ Tag must start with v"; exit 1; }
+
+          VERSION=${TAG_NAME#v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "RELEASE_SHA=$(git rev-parse HEAD)" >> $GITHUB_ENV
+          echo "Using version: $VERSION"
+
+      - name: Validate release type
+        run: |
+          git fetch origin main --quiet
+          git fetch origin preview --quiet || true
+          if [[ "$VERSION" == *-* ]]; then
+            # Pre-release (-preview.N) tags must come from the preview line.
+            if git rev-parse --verify --quiet origin/preview > /dev/null; then
+              git merge-base --is-ancestor HEAD origin/preview \
+                || { echo "❌ Pre-release tags must point at commits on the preview branch"; exit 1; }
+            fi
+            echo "✔ Pre-release tag validated"
+          else
+            git merge-base --is-ancestor HEAD origin/main \
+              || { echo "❌ Stable tags must point at commits on main"; exit 1; }
+            echo "✔ Stable tag validated"
+          fi
+
+      - name: Restore & Build
+        run: |
+          dotnet restore ./Stella.Ergosfare.slnx
+          dotnet build ./Stella.Ergosfare.slnx -c Release
+
+      - name: Pack all GitHub packages
+        run: |
+          projects=(
+            ./src/Stella.Ergosfare/Stella.Ergosfare.csproj
+            ./src/Stella.Ergosfare.Core/Stella.Ergosfare.Core.csproj
+            ./src/Stella.Ergosfare.Core.Abstractions/Stella.Ergosfare.Core.Abstractions.csproj
+            ./src/Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection/Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj
+            ./src/Stella.Ergosfare.Queries/Stella.Ergosfare.Queries.csproj
+            ./src/Stella.Ergosfare.Queries.Abstractions/Stella.Ergosfare.Queries.Abstractions.csproj
+            ./src/Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection/Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.csproj
+            ./src/Stella.Ergosfare.Commands/Stella.Ergosfare.Commands.csproj
+            ./src/Stella.Ergosfare.Commands.Abstractions/Stella.Ergosfare.Commands.Abstractions.csproj
+            ./src/Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection/Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj
+            ./src/Stella.Ergosfare.Events/Stella.Ergosfare.Events.csproj
+            ./src/Stella.Ergosfare.Events.Abstractions/Stella.Ergosfare.Events.Abstractions.csproj
+            ./src/Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection/Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj
+            ./src/Stella.Ergosfare.SourceGenerator/Stella.Ergosfare.SourceGenerator.csproj
+          )
+
+          for proj in "${projects[@]}"; do
+            echo "Packing $proj"
+            dotnet pack "$proj" -c Release -o ./nupkg-github /p:Version=${{ env.VERSION }} /p:IncludeSymbols=true /p:IncludeSource=true --no-build
+          done
+
+      - name: Pack test fixtures (GitHub only)
+        run: |
+          dotnet pack ./test/Stella.Ergosfare.Test.Fixtures/Stella.Ergosfare.Test.Fixtures.csproj \
+            -c Release -o ./nupkg-github /p:Version=${{ env.VERSION }} \
+            /p:IncludeSymbols=true /p:IncludeSource=true --no-build
+
+      - name: Push packages to GitHub Packages
+        run: |
+          for pkg in ./nupkg-github/*.nupkg; do
+            dotnet nuget push "$pkg" \
+              --api-key ${{ secrets.GITHUB_TOKEN }} \
+              --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+              --skip-duplicate
+          done
+
+      - name: Create GitHub Release (with pkg attachments)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          # Manual dispatches may create the tag at release time; without this it
+          # would be created on the default branch instead of the built commit.
+          target_commitish: ${{ env.RELEASE_SHA }}
+          files: ./nupkg-github/*.nupkg
+          prerelease: ${{ contains(env.VERSION, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

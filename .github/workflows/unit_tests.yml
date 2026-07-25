@@ -1,0 +1,36 @@
+name: UnitTests
+permissions:
+  contents: read
+on:
+  push:
+    branches:
+      - "*"
+  pull_request:
+    branches:
+      - main
+      - preview
+
+jobs:
+  unit-tests:
+    # Single job with both SDKs installed: the solution multi-targets net9.0 and
+    # net10.0, so a per-SDK matrix cannot restore/build it with only one SDK.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            9.0.x
+            10.0.x
+
+      - name: Restore Dependencies
+        run: dotnet restore Stella.Ergosfare.slnx
+
+      - name: Run Unit Tests
+        run: |
+          dotnet test Stella.Ergosfare.slnx \
+            --logger "trx;LogFileName=unit-tests.trx" \
+            --filter "Category=Unit"

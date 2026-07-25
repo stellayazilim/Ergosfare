@@ -1,0 +1,44 @@
+﻿<Solution>
+  <Folder Name="/RepositoryItems/">
+    <File Path="readme.md" />
+    <File Path="CHANGELOG.md" />
+    <File Path="LICENSE" />
+    <File Path="SECURITY.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <File Path="src\Directory.Build.props" />
+    <Project Path="src\Stella.Ergosfare.Commands.Abstractions\Stella.Ergosfare.Commands.Abstractions.csproj" />
+    <Project Path="src\Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj" />
+    <Project Path="src\Stella.Ergosfare.Commands\Stella.Ergosfare.Commands.csproj" />
+    <Project Path="src\Stella.Ergosfare.Core.Abstractions\Stella.Ergosfare.Core.Abstractions.csproj" />
+    <Project Path="src\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj" />
+    <Project Path="src\Stella.Ergosfare.Core\Stella.Ergosfare.Core.csproj" />
+    <Project Path="src\Stella.Ergosfare.Events.Abstractions\Stella.Ergosfare.Events.Abstractions.csproj" />
+    <Project Path="src\Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj" />
+    <Project Path="src\Stella.Ergosfare.Events\Stella.Ergosfare.Events.csproj" />
+    <Project Path="src\Stella.Ergosfare.Queries.Abstractions\Stella.Ergosfare.Queries.Abstractions.csproj" />
+    <Project Path="src\Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.csproj" />
+    <Project Path="src\Stella.Ergosfare.Queries\Stella.Ergosfare.Queries.csproj" />
+    <Project Path="src\Stella.Ergosfare.SourceGenerator\Stella.Ergosfare.SourceGenerator.csproj" />
+    <Project Path="src\Stella.Ergosfare\Stella.Ergosfare.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <File Path="test\Directory.Packages.props" />
+    <File Path="coverlet.runsettings" />
+    <Project Path="test/Stella.Ergosfare.Benchmarking/Stella.Ergosfare.Benchmarking.csproj" />
+    <Project Path="test\Stella.Ergosfare.Command.Test\Stella.Ergosfare.Command.Test.csproj" />
+    <Project Path="test\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test.csproj" />
+    <Project Path="test\Stella.Ergosfare.Core.Test\Stella.Ergosfare.Core.Test.csproj" />
+    <Project Path="test\Stella.Ergosfare.Events.Test\Stella.Ergosfare.Events.Test.csproj" />
+    <Project Path="test\Stella.Ergosfare.Queries.Test\Stella.Ergosfare.Queries.Test.csproj" />
+    <Project Path="test\Stella.Ergosfare.SourceGenerator.Test\Stella.Ergosfare.SourceGenerator.Test.csproj" />
+    <Project Path="test\Stella.Ergosfare.Test.Fixtures\Stella.Ergosfare.Test.Fixtures.csproj" />
+    <Project Path="test\Stella.Ergosfare.Test\Stella.Ergosfare.Test.csproj" />
+  </Folder>
+  <Folder Name="/workflows/">
+    <File Path=".github\workflows\coverage_tests.yml" />
+    <File Path=".github\workflows\github_release.yml" />
+    <File Path=".github\workflows\nuget_release.yml" />
+    <File Path=".github\workflows\unit_tests.yml" />
+  </Folder>
+</Solution>
