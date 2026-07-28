@@ -17,6 +17,7 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// strategy's typed seam always hits — the handler is invoked through its typed member and
 /// its <see cref="ValueTask{TResult}"/> never crosses an object-typed bridge.
 /// </summary>
+#pragma warning disable CS8714 // TResult is used as a pattern type argument; handler contracts declare notnull results
 internal sealed class ResultPipelineExecutor<TMessage, TResult>(
     IMessageDescriptor descriptor,
     IMessageDependenciesFactory dependenciesFactory,
@@ -92,6 +93,8 @@ internal sealed class ResultPipelineExecutor<TMessage, TResult>(
         return dependenciesFactory.Create(typeof(TMessage), descriptor, groups);
     }
 }
+
+#pragma warning restore CS8714
 
 /// <summary>
 /// Void pipeline closed over the concrete <typeparamref name="TMessage"/>; see
