@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
+using Stella.Ergosfare.Core.Internal.Contexts;
 using Stella.Ergosfare.Events.Abstractions;
 
 namespace Stella.Ergosfare.Events;
@@ -15,7 +17,7 @@ namespace Stella.Ergosfare.Events;
 /// </summary>
 internal interface IEventBroadcastInvoker
 {
-    ValueTask Publish(object @event, EventMediationSettings settings, CancellationToken cancellationToken,
+    ValueTask Publish(object @event, EventMediationSettings? settings, CancellationToken cancellationToken,
         IMessageMediator mediator, ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
         IResultAdapterService? resultAdapterService, IExecutionContext? externalContext = null);
 }
@@ -25,21 +27,88 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
 {
     private static readonly string[] EmptyGroups = [];
 
-    public ValueTask Publish(object @event, EventMediationSettings settings, CancellationToken cancellationToken,
+    /// <summary>
+    /// Shared strategy for publishes without caller-supplied settings. Safe to share: the
+    /// settings instance is private and never mutated, and the strategy keeps all
+    /// per-publish state in locals — one instance serves concurrent publishes.
+    /// </summary>
+    private static readonly EventMediationSettings DefaultSettings = new();
+    private static readonly AsyncBroadcastMediationStrategy<TEvent> DefaultStrategy = new(DefaultSettings);
+
+    public ValueTask Publish(object @event, EventMediationSettings? settings, CancellationToken cancellationToken,
         IMessageMediator mediator, ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
         IResultAdapterService? resultAdapterService, IExecutionContext? externalContext = null)
     {
+        // Null settings (the common publish) reuse the cached default strategy — no
+        // EventMediationSettings, no Filters/List/Dictionary, no strategy allocation.
+        var strategy = settings is null
+            ? DefaultStrategy
+            : new AsyncBroadcastMediationStrategy<TEvent>(settings);
+
+        if (externalContext is not null)
+        {
+            // Caller-owned context (nested publish): the caller controls its lifetime —
+            // nothing is rented here, so nothing may be returned here.
+            return mediator.Mediate((TEvent)@event, new MediateOptions<TEvent, ValueTask>
+            {
+                MessageMediationStrategy = strategy,
+                MessageResolveStrategy = resolveStrategy,
+                CancellationToken = cancellationToken,
+                Groups = settings is null ? EmptyGroups : settings.Filters.Groups,
+                ExternalContext = externalContext,
+            });
+        }
+
+        // Root publish: rent a pooled context and hand it to Mediate as an external
+        // context. This invoker is the completion observer — the broadcast strategy is a
+        // plain async ValueTask that awaits every handler and interceptor sequentially, so
+        // the returned task's completion really is the end of all context use.
+        // Adopting the settings' items dictionary keeps handler writes visible to the
+        // caller exactly as the unpooled path did; on return the context detaches the
+        // dictionary instead of wiping it.
+        var context = ErgosfareExecutionContextPool.Rent(settings?.Items, cancellationToken);
+
         var options = new MediateOptions<TEvent, ValueTask>
         {
-            MessageMediationStrategy = new AsyncBroadcastMediationStrategy<TEvent>(settings),
+            MessageMediationStrategy = strategy,
             MessageResolveStrategy = resolveStrategy,
             CancellationToken = cancellationToken,
-            Items = settings.Items,
-            Groups = settings.Filters.Groups,
-            ExternalContext = externalContext,
+            Groups = settings is null ? EmptyGroups : settings.Filters.Groups,
+            ExternalContext = context,
         };
 
-        return mediator.Mediate((TEvent)@event, options);
+        ValueTask task;
+
+        try
+        {
+            task = mediator.Mediate((TEvent)@event, options);
+        }
+        catch
+        {
+            ErgosfareExecutionContextPool.Return(context);
+            throw;
+        }
+
+        if (task.IsCompletedSuccessfully)
+        {
+            ErgosfareExecutionContextPool.Return(context);
+            return default;
+        }
+
+        return AwaitAndReturn(task, context);
+
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
+        static async ValueTask AwaitAndReturn(ValueTask task, ErgosfareExecutionContext context)
+        {
+            try
+            {
+                await task;
+            }
+            finally
+            {
+                ErgosfareExecutionContextPool.Return(context);
+            }
+        }
     }
 }
 
