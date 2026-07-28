@@ -1,4 +1,5 @@
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Registry;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -264,6 +265,12 @@ public class BroadcastFastLaneTests
 
     public sealed class LateEvent : IEvent { }
 
+    /// <summary>
+    /// Excluded from discovery: the fact below registers this type at runtime to observe
+    /// the version bump — another test's assembly scan (the registry is process-wide)
+    /// must not slip it into the pipeline before the warm publishes run.
+    /// </summary>
+    [ExcludeFromDiscovery]
     public sealed class LateEventHandler : IEventHandler<LateEvent>
     {
         public ValueTask HandleAsync(LateEvent @event, IExecutionContext context)

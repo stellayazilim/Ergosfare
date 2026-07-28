@@ -67,6 +67,12 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
         // insert that a fresh scope per dispatch would pay on every single dispatch.
         services.TryAddSingleton<IMessageDependenciesFactory, MessageDependenciesFactory>();
         services.TryAddSingleton<PipelineExecutorCache>();
+        // Factory registration because the engine's constructor is internal (the type is
+        // only meaningful wired to the executor cache); singleton, so the cost is paid once
+        // per container while every facade resolution ctor-injects it as a constant.
+        services.TryAddSingleton(static sp => new MessageDispatchEngine(
+            sp.GetRequiredService<PipelineExecutorCache>(),
+            sp.GetRequiredService<IMessageDependenciesFactory>()));
         services.TryAddTransient<IMessageMediator, MessageMediator>();
         services.TryAddSingleton<IDescriptorCacheStrategy, LruCacheStrategy>();
         services.TryAddSingleton<MessageDescriptorCache>();
