@@ -93,6 +93,7 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             var commandBuilder = compilation.GetTypeByMetadataName(CommandBuilderMetadataName);
             var queryBuilder = compilation.GetTypeByMetadataName(QueryBuilderMetadataName);
             var eventBuilder = compilation.GetTypeByMetadataName(EventBuilderMetadataName);
+            var dispatchRoots = compilation.GetTypeByMetadataName(DispatchRootsMetadataName);
 
             return new ModuleBuilderAvailability(
                 HasMessageRegistry: compilation.GetTypeByMetadataName(MessageRegistryMetadataName) is not null,
@@ -103,7 +104,8 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 CommandBuilderHasRegisterDescriptors: HasRegisterDescriptors(commandBuilder),
                 QueryBuilderHasRegisterDescriptors: HasRegisterDescriptors(queryBuilder),
                 EventBuilderHasRegisterDescriptors: HasRegisterDescriptors(eventBuilder),
-                HasDispatchRoots: compilation.GetTypeByMetadataName(DispatchRootsMetadataName) is not null);
+                HasDispatchRoots: dispatchRoots is not null,
+                DispatchRootsHasVoidPlans: dispatchRoots is not null && !dispatchRoots.GetMembers("AddVoidPlan").IsEmpty);
         });
 
         // Reference scanning is default-on; consumers opt out per project through the
@@ -622,8 +624,85 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         // Deterministic output regardless of declaration/discovery order.
         types.Sort(static (x, y) => string.CompareOrdinal(x.TypeofExpression, y.TypeofExpression));
 
-        var source = RegistrationEmitter.Emit(types, availability, GeneratorVersion);
+        var voidPlans = availability.DispatchRootsHasVoidPlans
+            ? ComputeVoidPlans(types)
+            : (IReadOnlyList<VoidPlanModel>)Array.Empty<VoidPlanModel>();
+
+        var source = RegistrationEmitter.Emit(types, availability, voidPlans, GeneratorVersion);
         context.AddSource("ErgosfareRegistrations.g.cs", SourceText.From(source, Encoding.UTF8));
+    }
+
+    /// <summary>
+    ///     Computes the compile-time void pipeline plans: a dispatchable command message
+    ///     qualifies when the whole discovered pipeline for it is exactly one main-handler
+    ///     descriptor, that descriptor is the result-less async contract
+    ///     (<c>IAsyncHandler&lt;TMessage&gt;</c>), its handler participates in default
+    ///     discovery in the default group, and no discovered interceptor targets the
+    ///     message directly. The check is deliberately conservative and only ever costs
+    ///     the speedup when wrong: the runtime executor re-validates the actual pipeline
+    ///     per registry version and falls back to the runtime dispatch shape on any
+    ///     mismatch (covariant handlers or interceptors registered for base contracts,
+    ///     keyed selections, runtime registrations).
+    /// </summary>
+    private static List<VoidPlanModel> ComputeVoidPlans(List<RegistrableTypeModel> types)
+    {
+        var handlerCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        var soleHandlers = new Dictionary<string, (RegistrableTypeModel Model, DescriptorModel Descriptor)>(StringComparer.Ordinal);
+        var interceptedMessages = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var type in types)
+        {
+            foreach (var descriptor in type.Descriptors)
+            {
+                if (descriptor.Kind == DescriptorKind.MainHandler)
+                {
+                    handlerCounts.TryGetValue(descriptor.MessageTypeExpression, out var count);
+                    handlerCounts[descriptor.MessageTypeExpression] = count + 1;
+                    soleHandlers[descriptor.MessageTypeExpression] = (type, descriptor);
+                }
+                else
+                {
+                    interceptedMessages.Add(descriptor.MessageTypeExpression);
+                }
+            }
+        }
+
+        var plans = new List<VoidPlanModel>();
+
+        foreach (var type in types)
+        {
+            if (!type.IsDispatchableMessage || !type.IsCommand)
+            {
+                continue;
+            }
+
+            if (!handlerCounts.TryGetValue(type.TypeofExpression, out var count) || count != 1)
+            {
+                continue;
+            }
+
+            if (interceptedMessages.Contains(type.TypeofExpression))
+            {
+                continue;
+            }
+
+            var (handler, descriptor) = soleHandlers[type.TypeofExpression];
+
+            // The sole handler must be the async void contract, discoverable by default
+            // (an unkeyed, ungrouped registration — anything else may not be registered,
+            // or not in the default-group pipeline the plan serves).
+            if (descriptor.ResultTypeExpression != ValueTaskExpression
+                || !handler.IsAccessible
+                || !handler.DiscoveryKeys.IsEmpty
+                || handler.GroupsExpression is not null)
+            {
+                continue;
+            }
+
+            plans.Add(new VoidPlanModel(type.TypeofExpression, handler.TypeofExpression));
+        }
+
+        return plans;
     }
 
     private static void AddModels(

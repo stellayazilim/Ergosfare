@@ -17,6 +17,7 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 /// <param name="QueryBuilderHasRegisterDescriptors">Whether the query builder exposes <c>RegisterDescriptors</c>.</param>
 /// <param name="EventBuilderHasRegisterDescriptors">Whether the event builder exposes <c>RegisterDescriptors</c>.</param>
 /// <param name="HasDispatchRoots">Whether the <c>GeneratedDispatchRoots</c> store is resolvable.</param>
+/// <param name="DispatchRootsHasVoidPlans">Whether the store exposes <c>AddVoidPlan</c> (compile-time pipeline plans).</param>
 internal readonly record struct ModuleBuilderAvailability(
     bool HasMessageRegistry,
     bool HasCommandModuleBuilder,
@@ -26,4 +27,5 @@ internal readonly record struct ModuleBuilderAvailability(
     bool CommandBuilderHasRegisterDescriptors,
     bool QueryBuilderHasRegisterDescriptors,
     bool EventBuilderHasRegisterDescriptors,
-    bool HasDispatchRoots);
+    bool HasDispatchRoots,
+    bool DispatchRootsHasVoidPlans);
