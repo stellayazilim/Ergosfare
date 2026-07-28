@@ -76,7 +76,11 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
             {
                 // events doesn't need result adapter, since events intended to not return a result
                 var preInvoker = new PreInterceptorInvocationStrategy<TMessage>(messageDependencies, serviceProvider);
-                await preInvoker.Invoke(message, context);
+
+                // Pre-interceptors may transform the event — including returning a brand new
+                // instance — so the broadcast continues with the returned message, exactly as
+                // the single-handler strategies do.
+                message = (TMessage) await preInvoker.Invoke(message, context);
             }
 
             if (handlers.Count > 0)
