@@ -1,6 +1,7 @@
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Registry;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
@@ -79,6 +80,12 @@ public class DispatchItemsAndInvalidationTests
             => ValueTask.CompletedTask;
     }
 
+    /// <summary>
+    /// Excluded from discovery: the fact below registers this type at runtime to observe
+    /// the version bump — another test's assembly scan (the registry is process-wide)
+    /// must not slip it into the pipeline before the warm dispatches run.
+    /// </summary>
+    [ExcludeFromDiscovery]
     public sealed class LateRegisteredInterceptor : ICommandPreInterceptor<LateInterceptedCommand>
     {
         public ValueTask<LateInterceptedCommand> HandleAsync(LateInterceptedCommand command, IExecutionContext context)
