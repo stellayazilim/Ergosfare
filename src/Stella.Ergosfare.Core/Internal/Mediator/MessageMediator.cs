@@ -1,5 +1,4 @@
 ﻿using System.Diagnostics.CodeAnalysis;
-using System.Runtime.CompilerServices;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
@@ -23,58 +22,16 @@ internal sealed class MessageMediator(
     IMessageRegistry messageRegistry,
     IMessageDependenciesFactory messageDependenciesFactory,
     IServiceProvider serviceProvider,
-    PipelineExecutorCache? executorCache = null)
+    PipelineExecutorCache? executorCache = null,
+    MessageDispatchEngine? engine = null)
     : IMessageMediator
 {
-    /// <summary>
-    /// Process-wide executor cache used by the <see cref="DispatchAsync(object,IDictionary{object,object?},CancellationToken,IEnumerable{string})"/>
-    /// path. Optional so directly-constructed mediators (tests) keep working; the DI
-    /// registration always supplies it.
-    /// </summary>
-    private readonly PipelineExecutorCache? _executorCache = executorCache;
-
     /// <inheritdoc />
     public ValueTask DispatchAsync(object message, IDictionary<object, object?>? items = null, CancellationToken cancellationToken = default, IEnumerable<string>? groups = null)
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        var executor = RequireExecutorCache().GetVoidExecutor(message.GetType(), groups);
-        var context = ErgosfareExecutionContextPool.Rent(items, cancellationToken);
-        ValueTask task;
-
-        try
-        {
-            task = executor.Execute(message, context, _serviceProvider);
-        }
-        catch
-        {
-            ErgosfareExecutionContextPool.Return(context);
-            throw;
-        }
-
-        // Synchronously completed dispatches (the common case) return the context inline —
-        // no async state machine on the hot path. Only a genuinely suspended pipeline pays
-        // for the awaiting helper.
-        if (task.IsCompletedSuccessfully)
-        {
-            ErgosfareExecutionContextPool.Return(context);
-            return default;
-        }
-
-        return AwaitAndReturn(task, context);
-
-        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
-        static async ValueTask AwaitAndReturn(ValueTask task, ErgosfareExecutionContext context)
-        {
-            try
-            {
-                await task;
-            }
-            finally
-            {
-                ErgosfareExecutionContextPool.Return(context);
-            }
-        }
+        return RequireEngine().DispatchAsync(message, _serviceProvider, items, cancellationToken, groups);
     }
 
     /// <inheritdoc />
@@ -82,41 +39,7 @@ internal sealed class MessageMediator(
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        var executor = RequireExecutorCache().GetExecutor<TResult>(message.GetType(), groups);
-        var context = ErgosfareExecutionContextPool.Rent(items, cancellationToken);
-        ValueTask<TResult> task;
-
-        try
-        {
-            task = executor.Execute(message, context, _serviceProvider);
-        }
-        catch
-        {
-            ErgosfareExecutionContextPool.Return(context);
-            throw;
-        }
-
-        if (task.IsCompletedSuccessfully)
-        {
-            var result = task.Result;
-            ErgosfareExecutionContextPool.Return(context);
-            return new ValueTask<TResult>(result);
-        }
-
-        return AwaitAndReturn(task, context);
-
-        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
-        static async ValueTask<TResult> AwaitAndReturn(ValueTask<TResult> task, ErgosfareExecutionContext context)
-        {
-            try
-            {
-                return await task;
-            }
-            finally
-            {
-                ErgosfareExecutionContextPool.Return(context);
-            }
-        }
+        return RequireEngine().DispatchAsync<TResult>(message, _serviceProvider, items, cancellationToken, groups);
     }
 
     /// <inheritdoc />
@@ -125,11 +48,7 @@ internal sealed class MessageMediator(
         ArgumentNullException.ThrowIfNull(message);
         ArgumentNullException.ThrowIfNull(context);
 
-        // Caller-owned context (typically a scope's child): the caller controls its
-        // lifetime, so nothing is rented or returned here.
-        var executor = RequireExecutorCache().GetVoidExecutor(message.GetType(), groups);
-
-        return executor.Execute(message, context, _serviceProvider);
+        return RequireEngine().DispatchAsync(message, context, _serviceProvider, groups);
     }
 
     /// <inheritdoc />
@@ -138,9 +57,7 @@ internal sealed class MessageMediator(
         ArgumentNullException.ThrowIfNull(message);
         ArgumentNullException.ThrowIfNull(context);
 
-        var executor = RequireExecutorCache().GetExecutor<TResult>(message.GetType(), groups);
-
-        return executor.Execute(message, context, _serviceProvider);
+        return RequireEngine().DispatchAsync<TResult>(message, context, _serviceProvider, groups);
     }
 
     /// <summary>
@@ -154,8 +71,8 @@ internal sealed class MessageMediator(
     /// </summary>
     internal IMessageDependenciesFactory DependenciesFactory => _messageDependenciesFactory;
 
-    private PipelineExecutorCache RequireExecutorCache()
-        => _executorCache ?? throw new InvalidOperationException(
+    private MessageDispatchEngine RequireEngine()
+        => _engine ?? throw new InvalidOperationException(
             "Executor dispatch requires the PipelineExecutorCache; register Ergosfare through AddErgosfare or use Mediate with explicit options.");
 
 
@@ -175,6 +92,16 @@ internal sealed class MessageMediator(
     /// strategy on each dispatch so handlers resolve against the calling scope.
     /// </summary>
     private readonly IServiceProvider _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+
+    /// <summary>
+    /// The dispatch engine the executor overloads delegate to. DI injects the container's
+    /// singleton; directly-constructed mediators (tests) that supply only an executor cache
+    /// get a private engine wrapping it, preserving the original optional-cache contract.
+    /// Declared after the null-validated fields above so a null factory still fails their
+    /// argument checks first.
+    /// </summary>
+    private readonly MessageDispatchEngine? _engine =
+        engine ?? (executorCache is null ? null : new MessageDispatchEngine(executorCache, messageDependenciesFactory));
 
     
     /// <summary>

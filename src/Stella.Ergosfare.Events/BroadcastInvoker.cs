@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
+using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
@@ -22,6 +23,18 @@ internal interface IEventBroadcastInvoker
 {
     ValueTask Publish(object @event, EventMediationSettings? settings, CancellationToken cancellationToken,
         IMessageMediator mediator, ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
+        IResultAdapterService? resultAdapterService, IExecutionContext? externalContext = null);
+
+    /// <summary>
+    /// Engine-backed publish: the concrete dispatch machinery is known by construction, so
+    /// the group-less publish takes the fast lane directly against the engine's plan and
+    /// the caller's scope provider. Non-fast shapes (grouped filters, external contexts)
+    /// resolve the scope's <see cref="IMessageMediator"/> on demand and run the original
+    /// overload — semantics unchanged.
+    /// </summary>
+    ValueTask Publish(object @event, EventMediationSettings? settings, CancellationToken cancellationToken,
+        MessageDispatchEngine engine, IServiceProvider serviceProvider,
+        ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
         IResultAdapterService? resultAdapterService, IExecutionContext? externalContext = null);
 }
 
@@ -82,7 +95,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
             if ((settings is null || settings.Filters.Groups is List<string> { Count: 0 } or string[] { Length: 0 })
                 && mediator is MessageMediator concreteMediator)
             {
-                var dependencies = GetPlan(concreteMediator, resolveStrategy);
+                var dependencies = GetPlan(concreteMediator.DependenciesFactory, resolveStrategy);
 
                 // Straight-through broadcast: with no interceptor stages and no handler
                 // filtering requested, loop the handler arrays directly — synchronously
@@ -143,6 +156,89 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     }
 
     /// <summary>
+    /// Engine-backed counterpart of the mediator overload: the engine is the concrete
+    /// dispatch machinery by construction, so the group-less publish runs the fast lane
+    /// directly against its plan and the caller's scope provider. Grouped publishes and
+    /// externally owned contexts resolve the scope's <see cref="IMessageMediator"/> on
+    /// demand and take the original overload, preserving the Mediate path's semantics
+    /// exactly.
+    /// </summary>
+    public ValueTask Publish(object @event, EventMediationSettings? settings, CancellationToken cancellationToken,
+        MessageDispatchEngine engine, IServiceProvider serviceProvider,
+        ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
+        IResultAdapterService? resultAdapterService, IExecutionContext? externalContext = null)
+    {
+        if (externalContext is not null
+            || !(settings is null || settings.Filters.Groups is List<string> { Count: 0 } or string[] { Length: 0 }))
+        {
+            return Publish(@event, settings, cancellationToken,
+                ResolveMediator(serviceProvider), resolveStrategy, resultAdapterService, externalContext);
+        }
+
+        var context = ErgosfareExecutionContextPool.Rent(settings?.Items, cancellationToken);
+
+        ValueTask task;
+
+        try
+        {
+            var dependencies = GetPlan(engine.DependenciesFactory, resolveStrategy);
+
+            if (dependencies is MessageDependencies { HasNoInterceptors: true } plan
+                && (settings is null
+                    || ReferenceEquals(settings.Filters.HandlerPredicate,
+                        EventMediationSettings.EventMediationFilters.AcceptAllHandlers)))
+            {
+                task = PublishStraightThrough(
+                    (TEvent)@event, plan, context, serviceProvider,
+                    settings?.ThrowIfNoHandlerFound ?? false);
+            }
+            else
+            {
+                var strategy = settings is null
+                    ? DefaultStrategy
+                    : new AsyncBroadcastMediationStrategy<TEvent>(settings);
+
+                task = strategy.Mediate((TEvent)@event, dependencies, context, serviceProvider);
+            }
+        }
+        catch
+        {
+            ErgosfareExecutionContextPool.Return(context);
+            throw;
+        }
+
+        if (task.IsCompletedSuccessfully)
+        {
+            ErgosfareExecutionContextPool.Return(context);
+            return default;
+        }
+
+        return AwaitAndReturn(task, context);
+
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
+        static async ValueTask AwaitAndReturn(ValueTask task, ErgosfareExecutionContext context)
+        {
+            try
+            {
+                await task;
+            }
+            finally
+            {
+                ErgosfareExecutionContextPool.Return(context);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The scope's mediator registration, needed only for the non-fast shapes of the
+    /// engine overload — they run the Mediate path a mediator instance owns.
+    /// </summary>
+    private static IMessageMediator ResolveMediator(IServiceProvider serviceProvider)
+        => (IMessageMediator?)serviceProvider.GetService(typeof(IMessageMediator))
+           ?? throw new InvalidOperationException(
+               "Grouped or externally-scoped publishes resolve IMessageMediator from the scope; register Ergosfare through AddErgosfare.");
+
+    /// <summary>
     /// The group-less pipeline plan for <typeparamref name="TEvent"/>, cached on the
     /// invoker and re-validated against the registry version — runtime registrations
     /// invalidate it exactly as they invalidate the executors' caches. Races are benign:
@@ -153,10 +249,10 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     private int _cachedVersion = int.MinValue;
 
     private IMessageDependencies GetPlan(
-        MessageMediator mediator,
+        Core.Abstractions.Factories.IMessageDependenciesFactory dependenciesFactory,
         ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy)
     {
-        if (mediator.DependenciesFactory is MessageDependenciesFactory typedFactory)
+        if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
             var cached = _cachedDependencies;
 
@@ -180,7 +276,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
             return dependencies;
         }
 
-        return BuildPlan(mediator.DependenciesFactory, resolveStrategy);
+        return BuildPlan(dependenciesFactory, resolveStrategy);
     }
 
     /// <summary>

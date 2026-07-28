@@ -26,7 +26,8 @@ internal class QueryModule(
         // Transient, not scoped: the mediator is stateless and a transient service is handed
         // the resolving scope's provider all the same, so per-dispatch handler resolution
         // still binds to the calling scope. Scoped would add a scope lock and a
-        // resolved-services dictionary insert to every dispatch for no benefit.
-        configuration.Services.TryAddTransient<IQueryMediator, QueryMediator>();
+        // resolved-services dictionary insert to every dispatch for no benefit. The
+        // engine-backed shape makes the facade the only object built per resolution.
+        configuration.Services.TryAddTransient<IQueryMediator, EngineBackedQueryMediator>();
     }
 }
