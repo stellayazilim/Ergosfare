@@ -118,11 +118,19 @@ public class EventMediator : IPublisher
                                      EventMediationSettings? eventMediationSettings = null,
                                      CancellationToken cancellationToken = default) where TEvent : notnull
     {
+        // When the runtime type is exactly TEvent (the overwhelmingly common typed
+        // publish), the static-generic holder hands back the invoker without a dictionary
+        // lookup. A base-typed generic call keeps resolving by the runtime type — the
+        // holder for a base TEvent would dispatch the wrong closed pipeline.
+        var invoker = @event.GetType() == typeof(TEvent)
+            ? EventBroadcastInvokerCache.Holder<TEvent>.Instance
+            : EventBroadcastInvokerCache.Get(@event.GetType());
+
         return _engine is not null
-            ? EventBroadcastInvokerCache.Get(@event.GetType()).Publish(
+            ? invoker.Publish(
                 @event, eventMediationSettings, cancellationToken,
                 _engine, _serviceProvider!, _messageResolveStrategy, _resultAdapterService)
-            : EventBroadcastInvokerCache.Get(@event.GetType()).Publish(
+            : invoker.Publish(
                 @event, eventMediationSettings, cancellationToken,
                 _messageMediator!, _messageResolveStrategy, _resultAdapterService);
     }

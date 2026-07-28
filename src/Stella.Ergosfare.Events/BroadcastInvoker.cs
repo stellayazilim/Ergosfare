@@ -403,6 +403,20 @@ internal static class EventBroadcastInvokerCache
 {
     private static readonly ConcurrentDictionary<Type, IEventBroadcastInvoker> Invokers = new();
 
+    /// <summary>
+    /// Static-generic view of the cache for callers that know the event's concrete type at
+    /// compile time: the invoker resolves once per closed type into a static readonly
+    /// field, so the typed publish overload skips the per-call dictionary lookup. Shares
+    /// the dictionary's instance, keeping the plan cache one-per-event-type (and
+    /// factory-keyed, so container isolation is unchanged). Callers must guard with
+    /// <c>@event.GetType() == typeof(TEvent)</c> — a base-typed generic call must keep
+    /// resolving by the runtime type.
+    /// </summary>
+    internal static class Holder<TEvent> where TEvent : notnull
+    {
+        public static readonly IEventBroadcastInvoker Instance = Get(typeof(TEvent));
+    }
+
     [UnconditionalSuppressMessage("Trimming", "IL2055",
         Justification = "The invoker generic is closed over a live event's runtime type; the event roots its type.")]
     [UnconditionalSuppressMessage("AOT", "IL3050",
