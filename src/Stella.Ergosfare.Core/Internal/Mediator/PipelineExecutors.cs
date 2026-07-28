@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
@@ -212,7 +213,10 @@ internal sealed class PipelineExecutorCache(
         {
             if (_resultExecutorsByType.TryGetValue((messageType, typeof(TResult)), out var fast))
             {
-                return (IPipelineExecutor<TResult>)fast;
+                // Entries are only ever created as IPipelineExecutor<TResult> for their
+                // (message, result) key, so the interface cast can skip the runtime
+                // covariance check — a measurable cost on the hot path.
+                return Unsafe.As<IPipelineExecutor<TResult>>(fast);
             }
 
             return (IPipelineExecutor<TResult>)_resultExecutorsByType.GetOrAdd((messageType, typeof(TResult)),

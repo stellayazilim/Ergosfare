@@ -143,6 +143,17 @@ internal sealed class MessageMediator(
         return executor.Execute(message, context, _serviceProvider);
     }
 
+    /// <summary>
+    /// The provider of the scope this mediator was resolved from — the broadcast fast lane
+    /// (events assembly, via InternalsVisibleTo) dispatches strategies against it directly.
+    /// </summary>
+    internal IServiceProvider ScopeProvider => _serviceProvider;
+
+    /// <summary>
+    /// The dependencies factory backing this mediator; see <see cref="ScopeProvider"/>.
+    /// </summary>
+    internal IMessageDependenciesFactory DependenciesFactory => _messageDependenciesFactory;
+
     private PipelineExecutorCache RequireExecutorCache()
         => _executorCache ?? throw new InvalidOperationException(
             "Executor dispatch requires the PipelineExecutorCache; register Ergosfare through AddErgosfare or use Mediate with explicit options.");

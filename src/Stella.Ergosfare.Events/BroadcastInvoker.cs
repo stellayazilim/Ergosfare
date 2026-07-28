@@ -2,8 +2,11 @@ using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Internal.Contexts;
+using Stella.Ergosfare.Core.Internal.Factories;
+using Stella.Ergosfare.Core.Internal.Mediator;
 using Stella.Ergosfare.Events.Abstractions;
 
 namespace Stella.Ergosfare.Events;
@@ -59,29 +62,40 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
             });
         }
 
-        // Root publish: rent a pooled context and hand it to Mediate as an external
-        // context. This invoker is the completion observer — the broadcast strategy is a
-        // plain async ValueTask that awaits every handler and interceptor sequentially, so
-        // the returned task's completion really is the end of all context use.
-        // Adopting the settings' items dictionary keeps handler writes visible to the
-        // caller exactly as the unpooled path did; on return the context detaches the
-        // dictionary instead of wiping it.
+        // Root publish: rent a pooled context; this invoker is the completion observer —
+        // the broadcast strategy is a plain async ValueTask that awaits every handler and
+        // interceptor sequentially, so the returned task's completion really is the end of
+        // all context use. Adopting the settings' items dictionary keeps handler writes
+        // visible to the caller exactly as the unpooled path did; on return the context
+        // detaches the dictionary instead of wiping it.
         var context = ErgosfareExecutionContextPool.Rent(settings?.Items, cancellationToken);
-
-        var options = new MediateOptions<TEvent, ValueTask>
-        {
-            MessageMediationStrategy = strategy,
-            MessageResolveStrategy = resolveStrategy,
-            CancellationToken = cancellationToken,
-            Groups = settings is null ? EmptyGroups : settings.Filters.Groups,
-            ExternalContext = context,
-        };
 
         ValueTask task;
 
         try
         {
-            task = mediator.Mediate((TEvent)@event, options);
+            // Fast lane: for the group-less publish against the concrete mediator, run the
+            // broadcast strategy directly against the invoker-cached pipeline plan (the
+            // executors' registry-version-guarded pattern) — no MediateOptions, no
+            // per-publish descriptor lookup, no Mediate wrapper. Grouped publishes and
+            // foreign mediator implementations keep the original Mediate path.
+            if ((settings is null || settings.Filters.Groups is List<string> { Count: 0 } or string[] { Length: 0 })
+                && mediator is MessageMediator concreteMediator)
+            {
+                var dependencies = GetPlan(concreteMediator, resolveStrategy);
+                task = strategy.Mediate((TEvent)@event, dependencies, context, concreteMediator.ScopeProvider);
+            }
+            else
+            {
+                task = mediator.Mediate((TEvent)@event, new MediateOptions<TEvent, ValueTask>
+                {
+                    MessageMediationStrategy = strategy,
+                    MessageResolveStrategy = resolveStrategy,
+                    CancellationToken = cancellationToken,
+                    Groups = settings is null ? EmptyGroups : settings.Filters.Groups,
+                    ExternalContext = context,
+                });
+            }
         }
         catch
         {
@@ -109,6 +123,50 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
                 ErgosfareExecutionContextPool.Return(context);
             }
         }
+    }
+
+    /// <summary>
+    /// The group-less pipeline plan for <typeparamref name="TEvent"/>, cached on the
+    /// invoker and re-validated against the registry version — runtime registrations
+    /// invalidate it exactly as they invalidate the executors' caches. Races are benign:
+    /// concurrent writers publish equivalent, idempotent state.
+    /// </summary>
+    private IMessageDependencies? _cachedDependencies;
+    private int _cachedVersion = int.MinValue;
+
+    private IMessageDependencies GetPlan(
+        MessageMediator mediator,
+        ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy)
+    {
+        if (mediator.DependenciesFactory is MessageDependenciesFactory typedFactory)
+        {
+            var cached = _cachedDependencies;
+
+            if (cached is not null && _cachedVersion == typedFactory.CurrentRegistryVersion)
+            {
+                return cached;
+            }
+
+            var dependencies = BuildPlan(typedFactory, resolveStrategy);
+            _cachedDependencies = dependencies;
+            _cachedVersion = typedFactory.CurrentRegistryVersion;
+            return dependencies;
+        }
+
+        return BuildPlan(mediator.DependenciesFactory, resolveStrategy);
+    }
+
+    private static IMessageDependencies BuildPlan(
+        Core.Abstractions.Factories.IMessageDependenciesFactory factory,
+        ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy)
+    {
+        // Mirrors MessageMediator.Mediate's descriptor handling for the options the old
+        // path used: RegisterPlainMessagesOnSpot was never set for events, so an
+        // unregistered event type throws NoHandlerFoundException here as it did there.
+        var descriptor = resolveStrategy.Find(typeof(TEvent))
+                         ?? throw new NoHandlerFoundException(typeof(TEvent));
+
+        return factory.Create(typeof(TEvent), descriptor, EmptyGroups);
     }
 }
 
