@@ -34,7 +34,7 @@ registry scan, no `AsyncLocal`, and no per-dispatch context allocation on the ho
 |----------|-----------|
 | Compile-time registration | Source generator discovers handlers in your compilation **and referenced assemblies**, pre-computes descriptors, emits `RegisterGenerated()` |
 | Reflection-free dispatch | Generated dispatch roots close executor generics at compile time; pipeline plans pre-close generic handler types |
-| ~2.3 MB / 100k dispatches | Pooled execution contexts, `ValueTask`-first surface, synchronous fast paths (MediatR: 18.3 MB) |
+| ~3.0 ms · ~2.3 MB / 100k dispatches | Pooled execution contexts, `ValueTask`-first surface, straight-through dispatch for single-handler pipelines (MediatR: ~5.8 ms · 18.3 MB) |
 | Nested dispatch | `context.CreateScope()` — isolated child context with inherited cancellation for mediator calls inside handlers |
 | DI-lifetime correctness | Instances resolve per dispatch from the calling scope: singleton → container-cached, scoped → one per scope, transient → one per dispatch |
 | Native AOT & trimming | Every construct referenced statically via `typeof`; dispatch roots anchor all generic instantiations, value-type messages included |
@@ -164,7 +164,7 @@ dotnet run -c Release -f net9.0 --project test/Stella.Ergosfare.Benchmarking
 ```
 
 Environment: BenchmarkDotNet v0.15.8 · Windows 11 · AMD Ryzen 7 7800X3D · .NET 9.0.11
-(RyuJIT x86-64-v4). Measured 2026-07-24, on the tree released as v2.0.0.
+(RyuJIT x86-64-v4). Measured 2026-07-28, on the tree released as v2.2.0-preview.
 
 Two shapes are measured, for three mediators:
 
@@ -175,21 +175,28 @@ Two shapes are measured, for three mediators:
 
 | Scenario (100k dispatches/op) | Mean | Allocated | Gen0/1k ops |
 |---|---:|---:|---:|
-| **Ergosfare** — typical usage | 6.87 ms | **2.29 MB** | 47 |
-| **MediatR** — typical usage | 6.09 ms | 18.31 MB | 375 |
-| **LiteBus** — typical usage | 146.96 ms | 714.87 MB | 14 750 |
-| **Ergosfare** — web-server shape | 18.81 ms | 38.91 MB | 813 |
-| **MediatR** — web-server shape | 10.09 ms | 33.57 MB | 688 |
-| Ergosfare — internal engine path (reference row) | 6.49 ms | 5.34 MB | 109 |
+| **Ergosfare** — typical usage | **2.97 ms** | **2.29 MB** | 47 |
+| **MediatR** — typical usage | 5.79 ms | 18.31 MB | 375 |
+| **LiteBus** — typical usage | 139.62 ms | 714.87 MB | 14 750 |
+| **Ergosfare** — web-server shape | **8.46 ms** | **21.36 MB** | 438 |
+| **MediatR** — web-server shape | 10.28 ms | 33.57 MB | 688 |
+| Ergosfare — internal engine path (reference row) | 6.31 ms | 5.34 MB | 109 |
 
 Scenario notes:
 
-- The typical-usage rows are the headline: at comparable latency, Ergosfare allocates
-  **an eighth of MediatR's garbage**, with Gen0 collection pressure down accordingly —
-  the effect of pooled execution contexts and the `ValueTask`-first pipeline.
-- The *internal engine path* row drives `IMessageMediator` directly with pre-built
-  options, bypassing the public facade and its pooled context. It exists to show the
-  facade adds no hidden cost — you would not write application code this way.
+- The typical-usage rows are the headline: Ergosfare runs the loop in **about half
+  MediatR's time** while allocating **an eighth of its garbage**, with Gen0 collection
+  pressure down accordingly — pooled execution contexts and the `ValueTask`-first
+  pipeline for the allocation, straight-through dispatch and the executor's cached plan
+  for the time.
+- The web-server shape is the closer race. Ergosfare leads on both axes, but by ~18% on
+  time against ~36% on allocation, and that row is dominated by DI scope creation, which
+  both libraries pay identically. It read 18.81 ms / 38.91 MB before v2.2.0-preview.
+- The *internal engine path* row drives `IMessageMediator.Mediate` with pre-built
+  `MediateOptions` — a separate entry point that runs its own resolve and mediation
+  strategies, so it reaches neither the executor's cached plan nor the straight-through
+  path. That is why it now trails the public facade. It remains supported for custom
+  mediation strategies; you would not write ordinary application code this way.
 - LiteBus is included as a reference point: Ergosfare's API surface was heavily inspired
   by it, but the runtime is an independent implementation.
 - Transient handlers intentionally allocate one instance per dispatch (that is what a
