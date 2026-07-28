@@ -184,6 +184,23 @@ internal sealed class PipelineExecutorCache(
     private readonly ConcurrentDictionary<Type, IPipelineExecutor> _voidExecutorsByType = new();
     private readonly ConcurrentDictionary<(Type MessageType, Type ResultType), object> _resultExecutorsByType = new();
 
+    // Last-used result executor per message type: one Type-keyed lookup plus a reference
+    // equality check replaces the composite (message, result) key's tuple hashing on the
+    // result hot path — a message type practically has a single result type. A slot miss
+    // falls back to the composite store above, which stays authoritative so executor
+    // identity (and its dependency cache) is preserved even when result types alternate.
+    private readonly ConcurrentDictionary<Type, ResultExecutorSlot> _resultSlotsByType = new();
+
+    /// <summary>
+    /// Immutable (result type, executor) pair — immutability makes the racy slot refresh
+    /// safe: a reader that observes the reference sees both fields.
+    /// </summary>
+    private sealed class ResultExecutorSlot(Type resultType, object executor)
+    {
+        public readonly Type ResultType = resultType;
+        public readonly object Executor = executor;
+    }
+
     public IPipelineExecutor GetVoidExecutor(Type messageType, IEnumerable<string>? groups = null)
     {
         if (groups is null)
@@ -214,16 +231,16 @@ internal sealed class PipelineExecutorCache(
     {
         if (groups is null)
         {
-            if (_resultExecutorsByType.TryGetValue((messageType, typeof(TResult)), out var fast))
+            if (_resultSlotsByType.TryGetValue(messageType, out var slot)
+                && ReferenceEquals(slot.ResultType, typeof(TResult)))
             {
-                // Entries are only ever created as IPipelineExecutor<TResult> for their
-                // (message, result) key, so the interface cast can skip the runtime
+                // Slot entries are only ever created as IPipelineExecutor<TResult> for
+                // their recorded result type, so the interface cast can skip the runtime
                 // covariance check — a measurable cost on the hot path.
-                return Unsafe.As<IPipelineExecutor<TResult>>(fast);
+                return Unsafe.As<IPipelineExecutor<TResult>>(slot.Executor);
             }
 
-            return (IPipelineExecutor<TResult>)_resultExecutorsByType.GetOrAdd((messageType, typeof(TResult)),
-                static (k, cache) => cache.CreateResultExecutor(k.MessageType, k.ResultType, EmptyGroups), this);
+            return GetExecutorSlow<TResult>(messageType);
         }
 
         var materializedGroups = MaterializeGroups(groups);
@@ -237,6 +254,23 @@ internal sealed class PipelineExecutorCache(
         }
 
         return (IPipelineExecutor<TResult>)executor;
+    }
+
+    /// <summary>
+    /// Slot miss for the group-less result dispatch: resolve (or create) the executor in
+    /// the authoritative composite store, then refresh the message type's last-used slot.
+    /// Rare by construction — first dispatch per message type, or alternating result
+    /// types on one message type.
+    /// </summary>
+    private IPipelineExecutor<TResult> GetExecutorSlow<TResult>(Type messageType)
+    {
+        var executor = (IPipelineExecutor<TResult>)_resultExecutorsByType.GetOrAdd(
+            (messageType, typeof(TResult)),
+            static (k, cache) => cache.CreateResultExecutor(k.MessageType, k.ResultType, EmptyGroups), this);
+
+        _resultSlotsByType[messageType] = new ResultExecutorSlot(typeof(TResult), executor);
+
+        return executor;
     }
 
     private static string GroupsKey(string[] groups)
