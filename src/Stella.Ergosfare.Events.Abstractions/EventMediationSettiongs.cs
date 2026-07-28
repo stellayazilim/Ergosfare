@@ -33,6 +33,13 @@ public sealed class EventMediationSettings
     {
    
         /// <summary>
+        /// The canonical accept-everything predicate. Publish paths compare against this
+        /// instance by reference to recognize "no filtering requested" and skip the
+        /// per-handler predicate loop entirely.
+        /// </summary>
+        internal static readonly Func<Type, bool> AcceptAllHandlers = static _ => true;
+
+        /// <summary>
         /// Gets or sets the collection of group names used to filter event handlers.
         /// Only handlers belonging to these groups will receive the event.
         /// </summary>
@@ -43,6 +50,6 @@ public sealed class EventMediationSettings
         /// Gets or sets a predicate function to filter handlers by their type.
         /// By default, all handler types are included.
         /// </summary>
-        public Func<Type, bool> HandlerPredicate { get; set; } = _ => true;
+        public Func<Type, bool> HandlerPredicate { get; set; } = AcceptAllHandlers;
     }
 }

@@ -64,8 +64,10 @@ internal sealed class MessageDependencies : IMessageDependencies
     /// </param>
     public MessageDependencies(MessagePipelineShape shape, IServiceProvider? memoizedProvider)
     {
-        Handlers = Materialize<IHandler, IMainHandlerDescriptor>(shape.Handlers, memoizedProvider);
-        IndirectHandlers = Materialize<IHandler, IMainHandlerDescriptor>(shape.IndirectHandlers, memoizedProvider);
+        HandlerArray = Materialize<IHandler, IMainHandlerDescriptor>(shape.Handlers, memoizedProvider);
+        IndirectHandlerArray = Materialize<IHandler, IMainHandlerDescriptor>(shape.IndirectHandlers, memoizedProvider);
+        Handlers = HandlerArray;
+        IndirectHandlers = IndirectHandlerArray;
         PreInterceptors = Materialize<IPreInterceptor, IPreInterceptorDescriptor>(shape.PreInterceptors, memoizedProvider);
         PostInterceptors = Materialize<IPostInterceptor, IPostInterceptorDescriptor>(shape.PostInterceptors, memoizedProvider);
         ExceptionInterceptors = Materialize<IExceptionInterceptor, IExceptionInterceptorDescriptor>(shape.ExceptionInterceptors, memoizedProvider);
@@ -74,15 +76,28 @@ internal sealed class MessageDependencies : IMessageDependencies
         // Precomputed once per (message type, groups): the exact condition the single-handler
         // strategies use for their zero-interceptor fast path. Executors read this to invoke
         // the handler directly, without entering the strategy's async machinery.
-        FastSingleHandler =
-            Handlers.Count == 1
-            && PreInterceptors.Count == 0
+        HasNoInterceptors =
+            PreInterceptors.Count == 0
             && PostInterceptors.Count == 0
             && ExceptionInterceptors.Count == 0
-            && FinalInterceptors.Count == 0
-                ? Handlers[0]
-                : null;
+            && FinalInterceptors.Count == 0;
+
+        FastSingleHandler = HasNoInterceptors && Handlers.Count == 1 ? Handlers[0] : null;
     }
+
+    /// <summary>
+    /// The main-handler stages as concrete arrays, so hot loops index without interface
+    /// dispatch. Same instances the <see cref="Handlers"/>/<see cref="IndirectHandlers"/>
+    /// properties expose.
+    /// </summary>
+    internal IHandlerReference<IHandler, IMainHandlerDescriptor>[] HandlerArray { get; }
+    internal IHandlerReference<IHandler, IMainHandlerDescriptor>[] IndirectHandlerArray { get; }
+
+    /// <summary>
+    /// Whether all four interceptor stages are empty — the broadcast fast path's
+    /// eligibility condition, computed once at construction.
+    /// </summary>
+    internal bool HasNoInterceptors { get; }
 
     /// <summary>
     /// The sole main handler when the pipeline has exactly one handler and no interceptor
