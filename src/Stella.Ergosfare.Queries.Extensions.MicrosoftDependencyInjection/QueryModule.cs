@@ -23,7 +23,10 @@ internal class QueryModule(
     public void Build(IModuleConfiguration configuration)
     {
         builder(new QueryModuleBuilder(configuration.MessageRegistry));
-        // Scoped so per-dispatch handler resolution binds to the calling scope's provider.
-        configuration.Services.TryAddScoped<IQueryMediator, QueryMediator>();
+        // Transient, not scoped: the mediator is stateless and a transient service is handed
+        // the resolving scope's provider all the same, so per-dispatch handler resolution
+        // still binds to the calling scope. Scoped would add a scope lock and a
+        // resolved-services dictionary insert to every dispatch for no benefit.
+        configuration.Services.TryAddTransient<IQueryMediator, QueryMediator>();
     }
 }
