@@ -149,6 +149,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     /// concurrent writers publish equivalent, idempotent state.
     /// </summary>
     private IMessageDependencies? _cachedDependencies;
+    private MessageDependenciesFactory? _cachedFactory;
     private int _cachedVersion = int.MinValue;
 
     private IMessageDependencies GetPlan(
@@ -159,13 +160,22 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
         {
             var cached = _cachedDependencies;
 
-            if (cached is not null && _cachedVersion == typedFactory.CurrentRegistryVersion)
+            // The invoker is process-wide (one per event type) while factories are
+            // per-container — the factory reference is part of the cache key, so one
+            // container's plan (which may pin that container's root provider for
+            // memoized, all-singleton pipelines) is never served to another container.
+            // Multiple containers ping-ponging simply rebuild the single slot; the
+            // factory's own per-container cache keeps that cheap.
+            if (cached is not null
+                && ReferenceEquals(_cachedFactory, typedFactory)
+                && _cachedVersion == typedFactory.CurrentRegistryVersion)
             {
                 return cached;
             }
 
             var dependencies = BuildPlan(typedFactory, resolveStrategy);
             _cachedDependencies = dependencies;
+            _cachedFactory = typedFactory;
             _cachedVersion = typedFactory.CurrentRegistryVersion;
             return dependencies;
         }

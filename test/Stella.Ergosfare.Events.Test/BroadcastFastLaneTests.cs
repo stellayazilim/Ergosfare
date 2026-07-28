@@ -343,6 +343,51 @@ public class BroadcastFastLaneTests
         }
     }
 
+    public sealed class IsolatedEvent : IEvent { }
+
+    public sealed class IsolatedEventHandler : IEventHandler<IsolatedEvent>
+    {
+        public ValueTask HandleAsync(IsolatedEvent @event, IExecutionContext context)
+        {
+            context.Set("handlerInstance", this);
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task Publish_WithMemoizedPipeline_ShouldNeverServeAnotherContainersPlan()
+    {
+        // Singleton-registered handler => memoized pipeline, whose plan pins the creating
+        // container's root provider. The process-wide invoker must key its cached plan by
+        // factory, so two containers publishing the same event type each hit their own
+        // handler instance.
+        static ServiceProvider BuildContainer() => new ServiceCollection()
+            .AddSingleton<IsolatedEventHandler>()
+            .AddErgosfare(x => x.AddEventModule(e => e.Register<IsolatedEventHandler>()))
+            .BuildServiceProvider();
+
+        await using var first = BuildContainer();
+        await using var second = BuildContainer();
+
+        var firstInstance = first.GetRequiredService<IsolatedEventHandler>();
+        var secondInstance = second.GetRequiredService<IsolatedEventHandler>();
+        Assert.NotSame(firstInstance, secondInstance);
+
+        var settings = new EventMediationSettings();
+        await first.GetRequiredService<IEventMediator>().PublishAsync(new IsolatedEvent(), settings);
+        Assert.Same(firstInstance, settings.Items["handlerInstance"]);
+
+        settings = new EventMediationSettings();
+        await second.GetRequiredService<IEventMediator>().PublishAsync(new IsolatedEvent(), settings);
+        Assert.Same(secondInstance, settings.Items["handlerInstance"]);
+
+        settings = new EventMediationSettings();
+        await first.GetRequiredService<IEventMediator>().PublishAsync(new IsolatedEvent(), settings);
+        Assert.Same(firstInstance, settings.Items["handlerInstance"]);
+    }
+
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
