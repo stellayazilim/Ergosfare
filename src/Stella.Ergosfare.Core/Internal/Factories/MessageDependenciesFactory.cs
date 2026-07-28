@@ -31,6 +31,21 @@ internal sealed class MessageDependenciesFactory(IServiceProvider serviceProvide
     private IServiceProvider? _memoizedGraphProvider;
     private bool _servicesResolved;
 
+    /// <summary>
+    /// The current registry version, or <see cref="int.MinValue"/> before the first
+    /// <see cref="Create"/> resolves the registry. Executors compare this against the
+    /// version their cached dependencies were built at and skip <see cref="Create"/>
+    /// entirely on a match.
+    /// </summary>
+    internal int CurrentRegistryVersion
+        => !_servicesResolved
+            ? int.MinValue
+            : _registry is null
+                ? int.MinValue
+                : _registry is MessageRegistry typedRegistry
+                    ? typedRegistry.Version
+                    : _registry.Count;
+
     public IMessageDependencies Create(Type messageType, IMessageDescriptor descriptor, IEnumerable<string> groups)
     {
         var cache = _cache ??= serviceProvider.GetRequiredService<MessageDescriptorCache>();

@@ -4,7 +4,9 @@ using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
+using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
+using Stella.Ergosfare.Core.Internal.Factories;
 
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
@@ -23,13 +25,70 @@ internal sealed class ResultPipelineExecutor<TMessage, TResult>(
 {
     private readonly SingleAsyncHandlerMediationStrategy<TMessage, TResult> _strategy = new(resultAdapterService);
 
+    // Adapter service split by shape: the concrete service can report emptiness cheaply,
+    // a foreign implementation always routes through the strategy (which consults it).
+    private readonly ResultAdapterService? _concreteAdapters = resultAdapterService as ResultAdapterService;
+    private readonly bool _foreignAdapters = resultAdapterService is not null and not ResultAdapterService;
+
+    // Dependencies cached per executor (executors are already per message type + groups),
+    // re-validated against the registry version — turns the per-dispatch factory call and
+    // cache lookup into a single field read + version compare.
+    private IMessageDependencies? _cachedDependencies;
+    private MessageDependencies? _cachedFastDependencies;
+    private int _cachedVersion = int.MinValue;
+
     public ValueTask<TResult> Execute(object message, IExecutionContext context, IServiceProvider serviceProvider)
     {
-        // The factory caches per (message type, groups) and re-validates against the
-        // registry version, mirroring the Mediate path's per-dispatch behavior.
-        var dependencies = dependenciesFactory.Create(typeof(TMessage), descriptor, groups);
+        var dependencies = GetDependencies();
+
+        // Zero-interceptor, single-handler, no-adapter dispatch: invoke the handler's typed
+        // member directly and hand its ValueTask straight back — no async state machine,
+        // no interface-dispatched Count checks. Mirrors the strategy's fast path exactly.
+        if (_cachedFastDependencies?.FastSingleHandler is { } handlerReference
+            && !_foreignAdapters
+            && (_concreteAdapters is null || _concreteAdapters.IsEmpty))
+        {
+            var handler = handlerReference.Resolve(serviceProvider);
+
+            switch (handler)
+            {
+                case IAsyncHandler<TMessage, TResult> asyncHandler:
+                    return asyncHandler.HandleAsync((TMessage)message, context);
+                case IHandler<TMessage, ValueTask<TResult>> valueTaskShaped:
+                    return valueTaskShaped.Handle((TMessage)message, context);
+                case IHandler<TMessage, TResult> syncHandler:
+                    return ValueTask.FromResult(syncHandler.Handle((TMessage)message, context));
+            }
+
+            // Unsupported handler contract: fall through so the strategy raises its
+            // canonical NotSupportedException.
+        }
 
         return _strategy.Mediate((TMessage)message, dependencies, context, serviceProvider);
+    }
+
+    private IMessageDependencies GetDependencies()
+    {
+        if (dependenciesFactory is MessageDependenciesFactory typedFactory)
+        {
+            var cached = _cachedDependencies;
+
+            if (cached is not null && _cachedVersion == typedFactory.CurrentRegistryVersion)
+            {
+                return cached;
+            }
+
+            // Create runs the registry-version invalidation and rebuilds; races are benign —
+            // both writers publish equivalent, idempotent state.
+            var dependencies = typedFactory.Create(typeof(TMessage), descriptor, groups);
+            _cachedFastDependencies = dependencies as MessageDependencies;
+            _cachedDependencies = dependencies;
+            _cachedVersion = typedFactory.CurrentRegistryVersion;
+            return dependencies;
+        }
+
+        // Foreign factory implementations keep the original per-dispatch behavior.
+        return dependenciesFactory.Create(typeof(TMessage), descriptor, groups);
     }
 }
 
@@ -46,11 +105,57 @@ internal sealed class VoidPipelineExecutor<TMessage>(
 {
     private readonly SingleAsyncHandlerMediationStrategy<TMessage> _strategy = new(resultAdapterService);
 
+    private readonly ResultAdapterService? _concreteAdapters = resultAdapterService as ResultAdapterService;
+    private readonly bool _foreignAdapters = resultAdapterService is not null and not ResultAdapterService;
+
+    private IMessageDependencies? _cachedDependencies;
+    private MessageDependencies? _cachedFastDependencies;
+    private int _cachedVersion = int.MinValue;
+
     public ValueTask Execute(object message, IExecutionContext context, IServiceProvider serviceProvider)
     {
-        var dependencies = dependenciesFactory.Create(typeof(TMessage), descriptor, groups);
+        var dependencies = GetDependencies();
+
+        if (_cachedFastDependencies?.FastSingleHandler is { } handlerReference
+            && !_foreignAdapters
+            && (_concreteAdapters is null || _concreteAdapters.IsEmpty))
+        {
+            var handler = handlerReference.Resolve(serviceProvider);
+
+            switch (handler)
+            {
+                case IAsyncHandler<TMessage> asyncHandler:
+                    return asyncHandler.HandleAsync((TMessage)message, context);
+                case IHandler<TMessage, ValueTask> valueTaskShaped:
+                    return valueTaskShaped.Handle((TMessage)message, context);
+                case IHandler<TMessage, object> syncHandler:
+                    syncHandler.Handle((TMessage)message, context);
+                    return ValueTask.CompletedTask;
+            }
+        }
 
         return _strategy.Mediate((TMessage)message, dependencies, context, serviceProvider);
+    }
+
+    private IMessageDependencies GetDependencies()
+    {
+        if (dependenciesFactory is MessageDependenciesFactory typedFactory)
+        {
+            var cached = _cachedDependencies;
+
+            if (cached is not null && _cachedVersion == typedFactory.CurrentRegistryVersion)
+            {
+                return cached;
+            }
+
+            var dependencies = typedFactory.Create(typeof(TMessage), descriptor, groups);
+            _cachedFastDependencies = dependencies as MessageDependencies;
+            _cachedDependencies = dependencies;
+            _cachedVersion = typedFactory.CurrentRegistryVersion;
+            return dependencies;
+        }
+
+        return dependenciesFactory.Create(typeof(TMessage), descriptor, groups);
     }
 }
 
@@ -70,8 +175,24 @@ internal sealed class PipelineExecutorCache(
     private readonly ConcurrentDictionary<(Type MessageType, string GroupsKey), IPipelineExecutor> _voidExecutors = new();
     private readonly ConcurrentDictionary<(Type MessageType, Type ResultType, string GroupsKey), object> _resultExecutors = new();
 
+    // Group-less dispatch (the overwhelmingly common case) is keyed by message type alone:
+    // no group materialization, no composite-key hashing on the hot path.
+    private readonly ConcurrentDictionary<Type, IPipelineExecutor> _voidExecutorsByType = new();
+    private readonly ConcurrentDictionary<(Type MessageType, Type ResultType), object> _resultExecutorsByType = new();
+
     public IPipelineExecutor GetVoidExecutor(Type messageType, IEnumerable<string>? groups = null)
     {
+        if (groups is null)
+        {
+            if (_voidExecutorsByType.TryGetValue(messageType, out var fast))
+            {
+                return fast;
+            }
+
+            return _voidExecutorsByType.GetOrAdd(messageType,
+                static (t, cache) => cache.CreateVoidExecutor(t, EmptyGroups), this);
+        }
+
         var materializedGroups = MaterializeGroups(groups);
         var key = (messageType, GroupsKey(materializedGroups));
 
@@ -87,6 +208,17 @@ internal sealed class PipelineExecutorCache(
 
     public IPipelineExecutor<TResult> GetExecutor<TResult>(Type messageType, IEnumerable<string>? groups = null)
     {
+        if (groups is null)
+        {
+            if (_resultExecutorsByType.TryGetValue((messageType, typeof(TResult)), out var fast))
+            {
+                return (IPipelineExecutor<TResult>)fast;
+            }
+
+            return (IPipelineExecutor<TResult>)_resultExecutorsByType.GetOrAdd((messageType, typeof(TResult)),
+                static (k, cache) => cache.CreateResultExecutor(k.MessageType, k.ResultType, EmptyGroups), this);
+        }
+
         var materializedGroups = MaterializeGroups(groups);
         var key = (messageType, typeof(TResult), GroupsKey(materializedGroups));
 

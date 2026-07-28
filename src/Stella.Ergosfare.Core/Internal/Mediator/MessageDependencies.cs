@@ -70,7 +70,25 @@ internal sealed class MessageDependencies : IMessageDependencies
         PostInterceptors = Materialize<IPostInterceptor, IPostInterceptorDescriptor>(shape.PostInterceptors, memoizedProvider);
         ExceptionInterceptors = Materialize<IExceptionInterceptor, IExceptionInterceptorDescriptor>(shape.ExceptionInterceptors, memoizedProvider);
         FinalInterceptors = Materialize<IFinalInterceptor, IFinalInterceptorDescriptor>(shape.FinalInterceptors, memoizedProvider);
+
+        // Precomputed once per (message type, groups): the exact condition the single-handler
+        // strategies use for their zero-interceptor fast path. Executors read this to invoke
+        // the handler directly, without entering the strategy's async machinery.
+        FastSingleHandler =
+            Handlers.Count == 1
+            && PreInterceptors.Count == 0
+            && PostInterceptors.Count == 0
+            && ExceptionInterceptors.Count == 0
+            && FinalInterceptors.Count == 0
+                ? Handlers[0]
+                : null;
     }
+
+    /// <summary>
+    /// The sole main handler when the pipeline has exactly one handler and no interceptor
+    /// stages; <c>null</c> otherwise. Computed once at construction.
+    /// </summary>
+    internal IHandlerReference<IHandler, IMainHandlerDescriptor>? FastSingleHandler { get; }
 
     /// <summary>
     /// Wraps the shape's planned handlers in resolvable references. Runs once per
