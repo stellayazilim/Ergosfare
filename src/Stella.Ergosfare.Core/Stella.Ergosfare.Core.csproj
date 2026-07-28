@@ -14,5 +14,7 @@
      
     <ItemGroup>
         <InternalsVisibleTo Include="Ergosfare.Core.Extensions.MicrosoftDependencyInjection" />
+        <!-- The event broadcast invoker rents/returns pooled execution contexts directly. -->
+        <InternalsVisibleTo Include="Stella.Ergosfare.Events" />
     </ItemGroup>
 </Project>

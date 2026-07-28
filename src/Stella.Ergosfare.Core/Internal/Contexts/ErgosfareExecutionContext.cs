@@ -22,6 +22,15 @@ internal sealed class ErgosfareExecutionContext(
     private IDictionary<object, object?>? _items = items;
 
     /// <summary>
+    /// Whether <see cref="_items"/> was created lazily by this context (owned) as opposed
+    /// to adopted from the caller (a settings object's dictionary). Owned dictionaries are
+    /// cleared and kept across pool reuses for their capacity; adopted ones are detached
+    /// untouched on <see cref="Clear"/> — the caller keeps whatever handlers wrote, and the
+    /// pool can never hand one dispatch's dictionary to the next.
+    /// </summary>
+    private bool _ownsItems;
+
+    /// <summary>
     /// Gets the <see cref="CancellationToken"/> associated with the current execution context.
     /// This token can be used to observe cancellation requests and propagate them to handlers or interceptors.
     /// </summary>
@@ -33,7 +42,19 @@ internal sealed class ErgosfareExecutionContext(
     /// The backing dictionary is created lazily on first access so dispatches that never
     /// touch shared items pay no allocation for it.
     /// </summary>
-    public IDictionary<object, object?> Items => _items ??= new Dictionary<object, object?>();
+    public IDictionary<object, object?> Items
+    {
+        get
+        {
+            if (_items is null)
+            {
+                _items = new Dictionary<object, object?>();
+                _ownsItems = true;
+            }
+
+            return _items;
+        }
+    }
 
     /// <summary>Re-initializes a pooled instance for a new dispatch.</summary>
     public void Reset(IDictionary<object, object?>? items, CancellationToken cancellationToken)
@@ -41,6 +62,7 @@ internal sealed class ErgosfareExecutionContext(
         if (items is not null)
         {
             _items = items;
+            _ownsItems = false;
         }
 
         CancellationToken = cancellationToken;
@@ -53,7 +75,23 @@ internal sealed class ErgosfareExecutionContext(
     /// </summary>
     public void Clear()
     {
-        _items?.Clear();
+        if (_items is not null)
+        {
+            if (_ownsItems)
+            {
+                // Lazily created here: clear and keep, so the capacity is reused.
+                _items.Clear();
+            }
+            else
+            {
+                // Adopted from the caller: detach without touching its contents — the
+                // caller reads results from it, and clearing it here would silently wipe
+                // their settings object (and retaining it would leak it into the next
+                // dispatch that rents this context).
+                _items = null;
+            }
+        }
+
         CancellationToken = default;
     }
 

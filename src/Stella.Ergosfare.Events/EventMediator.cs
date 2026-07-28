@@ -29,7 +29,7 @@ public sealed class EventMediator(
                              CancellationToken cancellationToken = default)
     {
         return EventBroadcastInvokerCache.Get(@event.GetType()).Publish(
-            @event, eventMediationSettings ?? new EventMediationSettings(), cancellationToken,
+            @event, eventMediationSettings, cancellationToken,
             messageMediator, messageResolveStrategy, resultAdapterService);
     }
 
@@ -46,7 +46,7 @@ public sealed class EventMediator(
                                      CancellationToken cancellationToken = default) where TEvent : notnull
     {
         return EventBroadcastInvokerCache.Get(@event.GetType()).Publish(
-            @event, eventMediationSettings ?? new EventMediationSettings(), cancellationToken,
+            @event, eventMediationSettings, cancellationToken,
             messageMediator, messageResolveStrategy, resultAdapterService);
     }
 
@@ -63,7 +63,7 @@ public sealed class EventMediator(
                              EventMediationSettings? eventMediationSettings = null)
     {
         return EventBroadcastInvokerCache.Get(@event.GetType()).Publish(
-            @event, eventMediationSettings ?? new EventMediationSettings(), context.CancellationToken,
+            @event, eventMediationSettings, context.CancellationToken,
             messageMediator, messageResolveStrategy, resultAdapterService, context);
     }
 }

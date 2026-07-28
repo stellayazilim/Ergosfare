@@ -8,4 +8,8 @@
       <ProjectReference Include="..\Stella.Ergosfare.Core.Abstractions\Stella.Ergosfare.Core.Abstractions.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+        <!-- The broadcast fast lane reads the canonical accept-all predicate by reference. -->
+        <InternalsVisibleTo Include="Stella.Ergosfare.Events" />
+    </ItemGroup>
 </Project>
