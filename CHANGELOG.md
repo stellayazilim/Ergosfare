@@ -1,3 +1,72 @@
+## v2.3.0-preview – '2026-07-28'
+
+Preview release. The theme: **event publishing joins the fast lane, and resolving a mediator stops
+costing more than dispatching through it.** v2.2.0-preview put commands and queries on the
+executor fast path; this release brings event broadcasting onto the same footing, collapses every
+facade resolution to a single object over a shared dispatch engine, and ships the source
+generator's first compile-time pipeline plans. Behavior is unchanged on every path; the public API
+grows (see Notes) but nothing breaks.
+
+### Broadcast fast lane
+
+* **Pooled publish contexts and allocation-free default publishes.** A group-less `PublishAsync` without settings rents a pooled execution context and reuses a cached default broadcast strategy — no `EventMediationSettings`, no filter list, no strategy allocation. Caller-supplied settings items are adopted for the dispatch and detached untouched on return, so handler writes stay visible to the caller exactly as before.
+* **Invoker-cached pipeline plan.** The broadcast invoker holds the event's resolved pipeline directly, re-validated against the registry version — the executors' pattern applied to publishing. The plan is keyed by the dependencies-factory reference, so one container's plan (which may pin that container's provider for memoized pipelines) is never served to another container.
+* **Straight-through broadcast.** An unfiltered publish over an interceptor-free pipeline loops the handler arrays directly — synchronously while handlers complete synchronously, bailing to an awaiting helper on the first suspension, preserving strict sequential order. Exceptions propagate raw; `ThrowIfNoHandlerFound` is honored.
+* **Fixed:** a broadcast now continues with the event instance a pre-interceptor returns, matching the documented pre-interceptor contract.
+* Grouped publishes, handler-predicate filters, externally owned contexts and foreign `IMessageMediator` implementations keep the original `Mediate` path unchanged.
+
+### Single-object facades: `MessageDispatchEngine`
+
+* Resolving a facade used to build two transients per scope — the facade plus its `IMessageMediator` — while MediatR builds one. The executor dispatch bodies now live in **`MessageDispatchEngine`**, a process-wide singleton that takes the calling scope's provider per call; `IMessageMediator`'s executor overloads delegate to it unchanged.
+* `CommandMediator`, `QueryMediator` and `EventMediator` gain a public engine constructor, and DI binds single-constructor engine-backed shapes — constructor injection compiles the engine into a constant callsite, avoiding both MS.DI's ambiguous-constructor rejection and the per-resolution service lookup a factory registration would pay. The original `IMessageMediator` constructors remain for direct construction and foreign mediator implementations; `EventMediator` is unsealed to admit its DI shape.
+* Scoped handler resolution still binds to the calling scope (verified under `ValidateScopes = true`); the streaming and grouped paths resolve the scope's `IMessageMediator` on demand and are otherwise untouched.
+
+### Cheaper result-executor lookup
+
+* Group-less result dispatch paid a (message type, result type) composite-key hash per call while the void path got by on a single `Type`-keyed lookup. A per-message-type **last-used result-executor slot** closes the gap: one `Type` lookup plus a reference check on the recorded result type. Misses fall back to the composite store, which stays authoritative, so executor identity — and its registry-version-guarded dependency cache — is preserved.
+
+### Typed publish without the dictionary
+
+* The generic `PublishAsync<TEvent>` overload resolves its invoker from a static-generic holder (`Holder<TEvent>.Instance`), guarded by `@event.GetType() == typeof(TEvent)` — a base-typed generic call keeps resolving by runtime type, so polymorphic publishes dispatch exactly as before. The interface-erased overload keeps the dictionary path.
+
+### Compile-time pipeline plans (source generator)
+
+* When the generator can prove a dispatchable command's whole discovered pipeline is a single default-discovery, default-group async handler, it emits `GeneratedDispatchRoots.AddVoidPlan<TMessage, THandler>()` alongside the dispatch roots. The executor cache closes an executor over both types, so the fast path invokes the handler **devirtualized** — no contract pattern match, inlineable for sealed handlers.
+* The plan is advisory, never authoritative: the registry-version-guarded dependency cache re-validates the pipeline, so runtime registrations invalidate generated plans exactly as they invalidate runtime executors; a plan whose handler no longer matches falls through to the ordinary contract switch, then the strategy — behavior identical, only the speedup is lost. Grouped pipelines and `RegisterFromAssembly`/manual-registration users never see a plan.
+* Eligibility is conservative by design: one main-handler descriptor for the message across the compilation and scanned references, async void contract, unkeyed and ungrouped handler, no interceptor targeting the message, and a referenced package that exposes the plan surface (older packages keep the previous emission).
+
+### Benchmark
+
+Per-operation BenchmarkDotNet numbers (v0.15.8, Windows 11, AMD Ryzen 7 7800X3D, .NET 9.0.11,
+RyuJIT x86-64-v4), measured 2026-07-28. *Root* resolves mediators once; *Scoped* creates a fresh
+DI scope per dispatch and includes resolution in the measurement. MediatR columns are from the
+same runs.
+
+| Method | Cat | Mean | Alloc |
+|---|---|---:|---:|
+| Engine_Void | Root | 30.26 ns | 24 B |
+| Command_Void | Root | 30.52 ns | 24 B |
+| Command_Void_Generated | Root | **26.49 ns** | 24 B |
+| Query_Result | Root | 34.43 ns | 24 B |
+| Event_Publish | Root | 49.32 ns | 48 B |
+| MediatR_Send_Void / _Result / _Publish | Root | 60.29 / 53.79 / 83.42 ns | 192 / 192 / 440 B |
+| Engine_Void_Scoped | Scoped | 86.08 ns | 200 B |
+| Command_Void_Scoped | Scoped | 81.72 ns | 192 B |
+| Query_Result_Scoped | Scoped | 85.89 ns | 200 B |
+| Event_Publish_Scoped | Scoped | 100.90 ns | 232 B |
+| MediatR_Send_Void_Scoped / _Result_Scoped / _Publish_Scoped | Scoped | 101.48 / 115.76 / 130.32 ns | 352 / 352 / 600 B |
+
+Across this release cycle the scoped rows moved: command 91.4 → 81.7 ns (224 → 192 B), query
+109.7 → 85.9 ns (232 → 200 B), event publish 117.7 → 100.9 ns (264 → 232 B). The scoped query —
+the one row that still trailed MediatR when the cycle started — now leads it comfortably. The
+generated void-command plan beats the hand-written fast path by ~12%.
+
+### Notes
+
+* **Public API additions:** `MessageDispatchEngine` (constructed by DI only); engine-accepting public constructors on `CommandMediator`, `QueryMediator`, `EventMediator`; `GeneratedDispatchRoots.AddVoidPlan`/`FindVoidPlan` with `VoidPlanRoot`/`IVoidPlanRootVisitor`. `EventMediator` is no longer sealed. Nothing is removed or changed in shape; applications resolving mediators from DI see identical behavior with no migration steps.
+* A result-producing counterpart of the void plan was implemented and measured during the cycle: it showed no gain (the runtime contract switch's first arm already matches the async contract, and tiered PGO devirtualizes it), so it was deliberately not shipped.
+* Two runtime-registration test facts were shielded from assembly-scan pollution with `[ExcludeFromDiscovery]` — the registry is process-wide, and another test's `RegisterFromAssembly` sweep could slip a late-registered type into a pipeline before its fact warmed the cache. Test-only; no product change.
+
 ## v2.2.0-preview – '2026-07-28'
 
 Preview release. The theme: **the dispatch path stops re-deriving what it already knows.** v2.0.0
