@@ -138,6 +138,14 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
         IReadOnlyList<IHandlerReference<IHandler, IMainHandlerDescriptor>> handlers)
     {
         var predicate = settings.Filters.HandlerPredicate;
+
+        // The canonical accept-all predicate can be recognized by reference — no filtering
+        // requested, so skip the per-handler predicate loop entirely.
+        if (ReferenceEquals(predicate, EventMediationSettings.EventMediationFilters.AcceptAllHandlers))
+        {
+            return handlers;
+        }
+
         List<IHandlerReference<IHandler, IMainHandlerDescriptor>>? filtered = null;
 
         for (var i = 0; i < handlers.Count; i++)

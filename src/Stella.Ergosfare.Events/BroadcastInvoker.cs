@@ -83,7 +83,24 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
                 && mediator is MessageMediator concreteMediator)
             {
                 var dependencies = GetPlan(concreteMediator, resolveStrategy);
-                task = strategy.Mediate((TEvent)@event, dependencies, context, concreteMediator.ScopeProvider);
+
+                // Straight-through broadcast: with no interceptor stages and no handler
+                // filtering requested, loop the handler arrays directly — synchronously
+                // while handlers complete synchronously, bailing to an awaiting helper on
+                // the first suspension. No strategy or per-stage async frames.
+                if (dependencies is MessageDependencies { HasNoInterceptors: true } plan
+                    && (settings is null
+                        || ReferenceEquals(settings.Filters.HandlerPredicate,
+                            EventMediationSettings.EventMediationFilters.AcceptAllHandlers)))
+                {
+                    task = PublishStraightThrough(
+                        (TEvent)@event, plan, context, concreteMediator.ScopeProvider,
+                        settings?.ThrowIfNoHandlerFound ?? false);
+                }
+                else
+                {
+                    task = strategy.Mediate((TEvent)@event, dependencies, context, concreteMediator.ScopeProvider);
+                }
             }
             else
             {
@@ -154,6 +171,108 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
         }
 
         return BuildPlan(mediator.DependenciesFactory, resolveStrategy);
+    }
+
+    /// <summary>
+    /// Broadcasts sequentially over the direct then indirect handler arrays without any
+    /// async machinery while handlers complete synchronously; the first suspension hands
+    /// the remainder to an awaiting helper, preserving strict sequential order. Semantics
+    /// match <see cref="AsyncBroadcastMediationStrategy{TMessage}"/> for the
+    /// zero-interceptor, unfiltered case: exceptions propagate raw, and an empty pipeline
+    /// throws only when <paramref name="throwIfNoHandlerFound"/> asks for it.
+    /// </summary>
+    private static ValueTask PublishStraightThrough(
+        TEvent @event,
+        MessageDependencies plan,
+        IExecutionContext context,
+        IServiceProvider serviceProvider,
+        bool throwIfNoHandlerFound)
+    {
+        var direct = plan.HandlerArray;
+        var indirect = plan.IndirectHandlerArray;
+
+        if (direct.Length == 0 && indirect.Length == 0)
+        {
+            return throwIfNoHandlerFound
+                ? ValueTask.FromException(new NoHandlerFoundException(typeof(TEvent)))
+                : default;
+        }
+
+        for (var i = 0; i < direct.Length; i++)
+        {
+            var pending = Invoke(direct[i], @event, context, serviceProvider);
+
+            if (!pending.IsCompletedSuccessfully)
+            {
+                return AwaitRemaining(pending, @event, plan, context, serviceProvider, i + 1, inIndirect: false);
+            }
+        }
+
+        for (var i = 0; i < indirect.Length; i++)
+        {
+            var pending = Invoke(indirect[i], @event, context, serviceProvider);
+
+            if (!pending.IsCompletedSuccessfully)
+            {
+                return AwaitRemaining(pending, @event, plan, context, serviceProvider, i + 1, inIndirect: true);
+            }
+        }
+
+        return default;
+
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
+        static async ValueTask AwaitRemaining(
+            ValueTask pending, TEvent @event, MessageDependencies plan, IExecutionContext context,
+            IServiceProvider serviceProvider, int next, bool inIndirect)
+        {
+            await pending;
+
+            var direct = plan.HandlerArray;
+            var indirect = plan.IndirectHandlerArray;
+
+            if (!inIndirect)
+            {
+                for (var i = next; i < direct.Length; i++)
+                {
+                    await Invoke(direct[i], @event, context, serviceProvider);
+                }
+
+                next = 0;
+            }
+
+            for (var i = next; i < indirect.Length; i++)
+            {
+                await Invoke(indirect[i], @event, context, serviceProvider);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Invokes one handler through its typed contract — the same dispatch rules the
+    /// broadcast strategy applies.
+    /// </summary>
+    private static ValueTask Invoke(
+        Core.Abstractions.IHandlerReference<Core.Abstractions.Handlers.IHandler, Core.Abstractions.Registry.Descriptors.IMainHandlerDescriptor> reference,
+        TEvent @event,
+        IExecutionContext context,
+        IServiceProvider serviceProvider)
+    {
+        var handler = reference.Resolve(serviceProvider);
+
+        switch (handler)
+        {
+            case Core.Abstractions.Handlers.IAsyncHandler<TEvent> asyncHandler:
+                return asyncHandler.HandleAsync(@event, context);
+            case Core.Abstractions.Handlers.IHandler<TEvent, ValueTask> valueTaskShaped:
+                return valueTaskShaped.Handle(@event, context);
+            case Core.Abstractions.Handlers.IHandler<TEvent, object> syncHandler:
+                syncHandler.Handle(@event, context);
+                return ValueTask.CompletedTask;
+            default:
+                throw new NotSupportedException(
+                    $"'{handler.GetType()}' does not implement a supported handler contract for event '{typeof(TEvent)}'. " +
+                    "Interface-erased dispatch is not supported; publish with the concrete event type.");
+        }
     }
 
     private static IMessageDependencies BuildPlan(
