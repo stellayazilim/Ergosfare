@@ -40,6 +40,7 @@ internal static class RegistrationEmitter
     public static string Emit(
         IReadOnlyList<RegistrableTypeModel> types,
         ModuleBuilderAvailability builders,
+        IReadOnlyList<VoidPlanModel> voidPlans,
         string generatorVersion)
     {
         var useDescriptors = builders.HasDescriptorFactory;
@@ -97,7 +98,7 @@ internal static class RegistrationEmitter
 
         if (emitDispatchRoots)
         {
-            EmitDispatchRoots(sb, ref wroteMember, types);
+            EmitDispatchRoots(sb, ref wroteMember, types, voidPlans);
         }
 
         EmitMatchesHelper(sb, ref wroteMember);
@@ -241,7 +242,8 @@ internal static class RegistrationEmitter
     private static void EmitDispatchRoots(
         StringBuilder sb,
         ref bool wroteMember,
-        IReadOnlyList<RegistrableTypeModel> types)
+        IReadOnlyList<RegistrableTypeModel> types,
+        IReadOnlyList<VoidPlanModel> voidPlans)
     {
         StartMember(sb, ref wroteMember);
         sb.AppendLine("        private static void RootDispatchInstantiations()");
@@ -264,6 +266,17 @@ internal static class RegistrationEmitter
                   .Append(type.TypeofExpression).Append(", ").Append(result.ResultTypeExpression)
                   .AppendLine(">();");
             }
+        }
+
+        // Compile-time pipeline plans: the runtime re-validates each one against the
+        // registry per version, so a plan can only lose its speedup, never change
+        // behavior.
+        foreach (var plan in voidPlans)
+        {
+            sb.Append("            ").Append(DispatchRootsFullName)
+              .Append(".AddVoidPlan<").Append(plan.MessageTypeExpression)
+              .Append(", ").Append(plan.HandlerTypeExpression)
+              .AppendLine(">();");
         }
 
         sb.AppendLine("        }");

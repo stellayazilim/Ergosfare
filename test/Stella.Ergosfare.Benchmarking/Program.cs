@@ -8,6 +8,7 @@ using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Events.Abstractions;
 using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
+using Stella.Ergosfare.Generated;
 using Stella.Ergosfare.Queries.Abstractions;
 using Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
 using MediatR;
@@ -100,10 +101,12 @@ public sealed class SecondMediatrPingHandler : INotificationHandler<MediatrPingN
 public class MediationBenchmark
 {
     private ServiceProvider _ergosfare = null!;
+    private ServiceProvider _ergosfareGenerated = null!;
     private ServiceProvider _mediatr = null!;
 
     private IMessageMediator _engine = null!;
     private ICommandMediator _commands = null!;
+    private ICommandMediator _generatedCommands = null!;
     private IQueryMediator _queries = null!;
     private IEventMediator _events = null!;
     private IMediator _mediator = null!;
@@ -150,6 +153,28 @@ public class MediationBenchmark
         _mediatr.Dispose();
     }
 
+    /// <summary>
+    /// Source-generated registration variant, isolated to its own benchmark process via
+    /// targets: <c>RegisterGenerated()</c> installs the compile-time dispatch roots and
+    /// void pipeline plans process-wide, and the targeted setup keeps that installation
+    /// away from the runtime-registration rows' processes so the comparison stays honest.
+    /// </summary>
+    [GlobalSetup(Targets = [nameof(Command_Void_Generated)])]
+    public void SetupGenerated()
+    {
+        _ergosfareGenerated = new ServiceCollection()
+            .AddErgosfare(options => options.AddCommandModule(commands => commands.RegisterGenerated()))
+            .BuildServiceProvider();
+
+        _generatedCommands = _ergosfareGenerated.GetRequiredService<ICommandMediator>();
+    }
+
+    [GlobalCleanup(Targets = [nameof(Command_Void_Generated)])]
+    public void CleanupGenerated()
+    {
+        _ergosfareGenerated.Dispose();
+    }
+
     // ------------------------------------------------------------------
     // Root — mediators resolved once, no per-dispatch scope
     // ------------------------------------------------------------------
@@ -159,6 +184,9 @@ public class MediationBenchmark
 
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask Command_Void() => _commands.SendAsync(_voidCommand);
+
+    [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask Command_Void_Generated() => _generatedCommands.SendAsync(_voidCommand);
 
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask<int> Query_Result() => _queries.QueryAsync(_intQuery);

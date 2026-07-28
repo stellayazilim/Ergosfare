@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using Stella.Ergosfare.Core.Abstractions.Handlers;
 
 namespace Stella.Ergosfare.Core.Abstractions;
 
@@ -18,6 +19,7 @@ public static class GeneratedDispatchRoots
     private static readonly ConcurrentDictionary<Type, MessageRoot> Messages = new();
     private static readonly ConcurrentDictionary<(Type MessageType, Type ResultType), MessageResultRoot> Results = new();
     private static readonly ConcurrentDictionary<(Type MessageType, Type ResultType), MessageResultRoot> Streams = new();
+    private static readonly ConcurrentDictionary<Type, VoidPlanRoot> VoidPlans = new();
 
     /// <summary>Roots the void dispatch generics of a message type. Idempotent.</summary>
     public static void AddMessage<TMessage>() where TMessage : IMessage
@@ -42,6 +44,24 @@ public static class GeneratedDispatchRoots
     /// <summary>The stream dispatch root of the (message, result) pair, or <c>null</c> when none was generated.</summary>
     public static MessageResultRoot? FindStream(Type messageType, Type resultType)
         => Streams.TryGetValue((messageType, resultType), out var root) ? root : null;
+
+    /// <summary>
+    /// Roots a compile-time pipeline plan for a void message whose entire pipeline is a
+    /// single async handler: the dispatch executor closes over both the message and the
+    /// handler type, so the handler is invoked devirtualized — no contract pattern match.
+    /// The plan is advisory: the executor re-validates the actual pipeline against the
+    /// registry on every version change and falls back to the runtime dispatch shape
+    /// whenever the pipeline no longer matches (interceptors registered at runtime, a
+    /// different handler resolved, adapters configured). Idempotent.
+    /// </summary>
+    public static void AddVoidPlan<TMessage, THandler>()
+        where TMessage : notnull, IMessage
+        where THandler : class, IAsyncHandler<TMessage>
+        => VoidPlans.TryAdd(typeof(TMessage), new VoidPlanRoot<TMessage, THandler>());
+
+    /// <summary>The void pipeline plan of the message type, or <c>null</c> when none was generated.</summary>
+    public static VoidPlanRoot? FindVoidPlan(Type messageType)
+        => VoidPlans.TryGetValue(messageType, out var root) ? root : null;
 }
 
 /// <summary>
@@ -94,4 +114,34 @@ public interface IMessageResultRootVisitor<out TReturn, in TState>
 {
     /// <summary>Called with the root's message and result types as the generic arguments.</summary>
     TReturn Visit<TMessage, TResult>(TState state) where TMessage : IMessage;
+}
+
+/// <summary>
+/// A compile-time pipeline plan closed over a void message and its sole async handler;
+/// see <see cref="GeneratedDispatchRoots.AddVoidPlan{TMessage, THandler}"/> and
+/// <see cref="MessageRoot"/> for the visitor re-entry pattern.
+/// </summary>
+public abstract class VoidPlanRoot
+{
+    /// <summary>Invokes the visitor with this plan's message and handler types as the generic arguments.</summary>
+    public abstract TReturn Accept<TReturn, TState>(IVoidPlanRootVisitor<TReturn, TState> visitor, TState state);
+}
+
+/// <summary>The concrete closure of <see cref="VoidPlanRoot"/>; instantiated by generated code.</summary>
+public sealed class VoidPlanRoot<TMessage, THandler> : VoidPlanRoot
+    where TMessage : notnull, IMessage
+    where THandler : class, IAsyncHandler<TMessage>
+{
+    /// <inheritdoc />
+    public override TReturn Accept<TReturn, TState>(IVoidPlanRootVisitor<TReturn, TState> visitor, TState state)
+        => visitor.Visit<TMessage, THandler>(state);
+}
+
+/// <summary>Generic re-entry point for consumers of <see cref="VoidPlanRoot"/>.</summary>
+public interface IVoidPlanRootVisitor<out TReturn, in TState>
+{
+    /// <summary>Called with the plan's message and handler types as the generic arguments.</summary>
+    TReturn Visit<TMessage, THandler>(TState state)
+        where TMessage : notnull, IMessage
+        where THandler : class, IAsyncHandler<TMessage>;
 }

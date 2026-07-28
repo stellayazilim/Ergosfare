@@ -164,6 +164,90 @@ internal sealed class VoidPipelineExecutor<TMessage>(
 }
 
 /// <summary>
+/// Void pipeline closed over both the message and its compile-time-known sole handler —
+/// the executor a generated void plan constructs. The fast path resolves the handler
+/// reference exactly like <see cref="VoidPipelineExecutor{TMessage}"/> but invokes it
+/// through the closed <typeparamref name="THandler"/> type, so the call devirtualizes
+/// (and inlines for sealed handlers) instead of walking the contract pattern match. The
+/// plan is advisory: the same registry-version-guarded dependency cache re-validates the
+/// pipeline, and any mismatch — interceptors registered at runtime, a differently-typed
+/// handler instance, configured adapters — falls back to the runtime dispatch shape,
+/// preserving semantics exactly.
+/// </summary>
+internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
+    IMessageDescriptor descriptor,
+    IMessageDependenciesFactory dependenciesFactory,
+    IResultAdapterService? resultAdapterService,
+    string[] groups) : IPipelineExecutor
+    where TMessage : notnull, IMessage
+    where THandler : class, IAsyncHandler<TMessage>
+{
+    private readonly SingleAsyncHandlerMediationStrategy<TMessage> _strategy = new(resultAdapterService);
+
+    private readonly ResultAdapterService? _concreteAdapters = resultAdapterService as ResultAdapterService;
+    private readonly bool _foreignAdapters = resultAdapterService is not null and not ResultAdapterService;
+
+    private IMessageDependencies? _cachedDependencies;
+    private MessageDependencies? _cachedFastDependencies;
+    private int _cachedVersion = int.MinValue;
+
+    public ValueTask Execute(object message, IExecutionContext context, IServiceProvider serviceProvider)
+    {
+        var dependencies = GetDependencies();
+
+        if (_cachedFastDependencies?.FastSingleHandler is { } handlerReference
+            && !_foreignAdapters
+            && (_concreteAdapters is null || _concreteAdapters.IsEmpty))
+        {
+            var handler = handlerReference.Resolve(serviceProvider);
+
+            // The compile-time plan's handler type: a devirtualized call, no pattern
+            // match. A runtime re-registration can put a differently-typed handler here;
+            // the contract switch below then dispatches it exactly as the runtime
+            // executor would.
+            if (handler is THandler planned)
+            {
+                return planned.HandleAsync((TMessage)message, context);
+            }
+
+            switch (handler)
+            {
+                case IAsyncHandler<TMessage> asyncHandler:
+                    return asyncHandler.HandleAsync((TMessage)message, context);
+                case IHandler<TMessage, ValueTask> valueTaskShaped:
+                    return valueTaskShaped.Handle((TMessage)message, context);
+                case IHandler<TMessage, object> syncHandler:
+                    syncHandler.Handle((TMessage)message, context);
+                    return ValueTask.CompletedTask;
+            }
+        }
+
+        return _strategy.Mediate((TMessage)message, dependencies, context, serviceProvider);
+    }
+
+    private IMessageDependencies GetDependencies()
+    {
+        if (dependenciesFactory is MessageDependenciesFactory typedFactory)
+        {
+            var cached = _cachedDependencies;
+
+            if (cached is not null && _cachedVersion == typedFactory.CurrentRegistryVersion)
+            {
+                return cached;
+            }
+
+            var dependencies = typedFactory.Create(typeof(TMessage), descriptor, groups);
+            _cachedFastDependencies = dependencies as MessageDependencies;
+            _cachedDependencies = dependencies;
+            _cachedVersion = typedFactory.CurrentRegistryVersion;
+            return dependencies;
+        }
+
+        return dependenciesFactory.Create(typeof(TMessage), descriptor, groups);
+    }
+}
+
+/// <summary>
 /// Process-wide cache of pipeline executors, one per (message runtime type, result type,
 /// group set). Executor construction closes the generic executor over the message's runtime
 /// type — one <see cref="Type.MakeGenericType"/> per message type, consistent with the
@@ -294,6 +378,17 @@ internal sealed class PipelineExecutorCache(
     {
         var descriptor = FindDescriptor(messageType);
 
+        // Generated void plan: closed over (message, handler) at compile time, so the
+        // fast path calls the handler devirtualized. Group-less pipelines only — a
+        // grouped pipeline may exclude the planned handler, and the plain executor
+        // serves that shape without the plan's permanently-missing fast check.
+        if (groups.Length == 0 && GeneratedDispatchRoots.FindVoidPlan(messageType) is { } plan)
+        {
+            return plan.Accept(
+                GeneratedVoidExecutorVisitor.Instance,
+                new ExecutorState(descriptor, dependenciesFactory, resultAdapterService, groups));
+        }
+
         // Generated dispatch roots close the executor generic at compile time; the
         // reflective path below only serves types without a root.
         if (GeneratedDispatchRoots.FindMessage(messageType) is { } root)
@@ -357,6 +452,22 @@ internal sealed class PipelineExecutorCache(
 
         public object Visit<TMessage, TResult>(ExecutorState state) where TMessage : IMessage
             => new ResultPipelineExecutor<TMessage, TResult>(
+                state.Descriptor, state.DependenciesFactory, state.ResultAdapterService, state.Groups);
+    }
+
+    /// <summary>
+    /// Re-enters a generic context with a generated void plan's (message, handler) pair
+    /// and constructs the plan-closed executor there — no reflection, and the handler
+    /// call devirtualizes inside the closed generic.
+    /// </summary>
+    private sealed class GeneratedVoidExecutorVisitor : IVoidPlanRootVisitor<IPipelineExecutor, ExecutorState>
+    {
+        public static readonly GeneratedVoidExecutorVisitor Instance = new();
+
+        public IPipelineExecutor Visit<TMessage, THandler>(ExecutorState state)
+            where TMessage : notnull, IMessage
+            where THandler : class, IAsyncHandler<TMessage>
+            => new GeneratedVoidPipelineExecutor<TMessage, THandler>(
                 state.Descriptor, state.DependenciesFactory, state.ResultAdapterService, state.Groups);
     }
 
