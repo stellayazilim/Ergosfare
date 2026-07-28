@@ -1,3 +1,51 @@
+## v2.2.0-preview – '2026-07-28'
+
+Preview release. The theme: **the dispatch path stops re-deriving what it already knows.** v2.0.0
+moved dispatch-shape work off the per-call path and onto compile time or a once-per-message-type
+plan; this release removes what was left — the per-dispatch lookup of that plan, the pipeline
+machinery around a pipeline that has exactly one stage, and a DI lifetime that charged the
+dispatch path for a scope entry it never used. No public API changes and no behavioral changes.
+
+### Dispatch fast path
+
+* **Executor-level dependency cache.** A pipeline executor is already per (message type, result type, group set), so it now holds its resolved `IMessageDependencies` directly, re-validated against the registry version on each dispatch. The per-dispatch factory call and its `ConcurrentDictionary` lookup collapse to a field read and an integer compare. Runtime registrations bump the version and the next dispatch rebuilds, so late registration keeps working; concurrent rebuilds are benign, since both writers publish equivalent state.
+* **Straight-through dispatch.** When a message's plan resolves to exactly one main handler, no interceptors in any of the four stages, and no registered result adapters, the executor invokes the handler's typed member and returns its `ValueTask` unchanged — no mediation-strategy object, no async state machine, no interface-dispatched stage-count checks. The condition is precomputed once when the plan is built (`MessageDependencies.FastSingleHandler`), not evaluated per dispatch. Adding a single interceptor returns the message to the full staged pipeline; a handler contract the fast path does not recognize falls through to the strategy, which raises its canonical `NotSupportedException`.
+* **Group-less executor lookup keyed by message type alone.** Dispatches that pass no groups — nearly all of them — skip group materialization and composite-key hashing entirely, hitting a `ConcurrentDictionary<Type, …>` instead.
+* **Adapter check split by shape.** `ResultAdapterService` exposes an internal emptiness check, read live so a late `AddAdapter` is observed, letting the fast path skip adapter consultation when none are registered. A foreign `IResultAdapterService` implementation always routes through the strategy.
+* **Which entry points this covers.** Both optimizations live in the pipeline executors, so they apply to `ICommandMediator.SendAsync`, `IQueryMediator.QueryAsync` and `IMessageMediator.DispatchAsync`. Event publishing (`IEventMediator`/`IPublisher.PublishAsync`, which broadcasts through `AsyncBroadcastMediationStrategy`) and streaming queries (`IQueryMediator.StreamAsync`) still dispatch through the options path, as does `IMessageMediator.Mediate` itself — they resolve dependencies per dispatch and build an unpooled context. Bringing those onto the executor path is future work.
+
+### Mediator lifetime
+
+* **The mediator facades are registered transient instead of scoped** — `ICommandMediator`, `IQueryMediator`, `IEventMediator`, `IPublisher` and `IMessageMediator`. A facade is stateless; the only thing it captures is the provider that resolved it, and DI hands a transient service the resolving scope's provider exactly as it does a scoped one, so handlers still resolve from the calling scope and scoped handler dependencies are honored unchanged (verified under `ValidateScopes = true`).
+* What changes is cost. Resolving a scoped service takes the scope's lock and writes the instance into the scope's resolved-services dictionary. That amortizes across a long-lived scope and never amortizes at all when every dispatch creates its own scope — and because `ICommandMediator` → `IMessageMediator` were both scoped, the scope-per-dispatch path paid it twice. This is the single largest contributor to the web-server-shape numbers below.
+
+### Benchmark
+
+100k sequential no-op dispatches per operation. BenchmarkDotNet v0.15.8, Windows 11, AMD Ryzen 7
+7800X3D, .NET 9.0.11 (RyuJIT x86-64-v4), measured 2026-07-28.
+
+| Scenario | v2.1.0-preview | v2.2.0-preview | MediatR (same runs) |
+|---|---:|---:|---:|
+| Typical usage — mean | 6.76 ms | **2.97 ms** | 5.79 ms |
+| Typical usage — allocated | 2.29 MB | 2.29 MB | 18.31 MB |
+| Web-server shape (scope per dispatch) — mean | 20.11 ms | **8.46 ms** | 10.28 ms |
+| Web-server shape — allocated | 38.91 MB | **21.36 MB** | 33.57 MB |
+
+The two Ergosfare columns are back-to-back runs on the same machine. The web-server shape was the
+one scenario v2.0.0 documented as a loss against MediatR; it is now a win on both axes, though the
+time margin there (~18%) is narrower than the allocation margin (~36%) and that row is dominated by
+DI scope creation for both libraries.
+
+The internal engine path (`IMessageMediator.Mediate` with pre-built `MediateOptions`) is unchanged
+at ~6.3 ms and now trails the public facade: it is a separate entry point that runs its own resolve
+and mediation strategies, so it reaches neither the executor's cached plan nor the straight-through
+path. It remains supported for custom mediation strategies.
+
+### Notes
+
+* No public API changes; no migration steps. Applications resolving mediators from DI see identical behavior.
+* Custom modules registering their own facade should follow suit and use `TryAddTransient`; see the plugins guide.
+
 ## v2.0.0 – '2026-07-25'
 
 First stable release of the v2 line. The theme: **all dispatch-shape work moves to compile time

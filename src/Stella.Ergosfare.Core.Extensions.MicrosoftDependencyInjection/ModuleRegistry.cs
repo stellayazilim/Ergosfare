@@ -61,11 +61,13 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
         }
         // The factory and its dependency graphs are provider-independent and cached
         // process-wide; handler instances resolve per invocation from the execution
-        // context's provider. The mediator stays scoped only to capture the calling
-        // scope's provider into that context — it is a thin, cheap wrapper.
+        // context's provider. The mediator exists only to capture the calling scope's
+        // provider — a transient does that too (DI hands it the resolving scope's
+        // provider), without the scoped-resolution lock and resolved-services dictionary
+        // insert that a fresh scope per dispatch would pay on every single dispatch.
         services.TryAddSingleton<IMessageDependenciesFactory, MessageDependenciesFactory>();
         services.TryAddSingleton<PipelineExecutorCache>();
-        services.TryAddScoped<IMessageMediator, MessageMediator>();
+        services.TryAddTransient<IMessageMediator, MessageMediator>();
         services.TryAddSingleton<IDescriptorCacheStrategy, LruCacheStrategy>();
         services.TryAddSingleton<MessageDescriptorCache>();
         services.TryAddSingleton<RootServiceProviderAccessor>();
