@@ -1,3 +1,14 @@
+## v2.1.0 – '2026-08-07'
+
+Stable release. Promotes the entire preview cycle since v2.0.0 to the stable channel — the
+contents of the v2.2.0-preview, v2.3.0-preview and v2.4.0-preview entries below, exactly as
+shipped there: the dispatch fast path (executor-level dependency caches, sync fast path,
+transient facades), the shared dispatch engine with single-object facades and the broadcast
+fast lane, compile-time pipeline plans — void and result — with direct handler construction,
+the grouped and streaming fast lanes, the typed dispatch holders, and the NativeAOT smoke
+gate in CI. (v2.1.0-preview carried repository chores only.) No API or behavior changes
+beyond those entries; see them for the full details and benchmark tables.
+
 ## v2.4.0-preview – '2026-08-07'
 
 Preview release. The theme: **the remaining lanes join the fast path.** v2.3.0-preview left three
