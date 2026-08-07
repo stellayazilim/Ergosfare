@@ -1,3 +1,60 @@
+## v2.5.0-preview – '2026-08-08'
+
+Preview release. The theme: **group filtering becomes first-class, and manual registration
+drops its reflection.** Grouped dispatch got fast in v2.4.0-preview but still asked callers
+to build a settings object per call and asked the caches to compare group names; canonical
+`GroupSet` filters remove both. And `Register<THandler>()` — the manual registration path —
+now consults compile-time descriptors instead of reflecting, wherever the source generator
+ran. Behavior is preserved everywhere; one narrow source-compat edge is called out in Notes.
+
+### `GroupSet` — canonical group filters
+
+* `GroupSet.Of("reporting")` interns equal group sequences (ordinal, order-sensitive,
+  bounded cap) to one immutable instance. Define filters once, statically, and reuse them:
+  every grouped cache — the executor slots, the broadcast and stream plan slots — matches a
+  reused filter with a **single reference check**, and a slot refresh reuses the set's
+  immutable name array and precomputed joined key.
+* **Every mediator gains group-filter overloads:** `SendAsync(command, groups)` (void and
+  result), `QueryAsync(query, groups)`, `StreamAsync(query, groups)`, and
+  `PublishAsync(event, groups)` (erased and typed) — added as default interface members
+  routing through the settings overloads, so foreign mediator implementations keep working
+  unchanged. The engine-backed facades override them to dispatch with **no settings
+  allocation**; `GroupSet.Empty` routes to the group-less fast lane.
+* The legacy lane recognizes the type too: a `GroupSet` assigned to `Filters.Groups` takes
+  the same reference fast path.
+* Measured (7800X3D, .NET 9.0.11): grouped command dispatch 36.2 → 34.0 ns — the grouped
+  premium over a plain dispatch (31.7 ns) drops from 4.5 to 2.3 ns; grouped event publish
+  55.1 → 52.1 ns, effective parity with the group-less publish (51.8 ns). Callers building
+  a settings object per grouped dispatch additionally drop ~3 allocations per call.
+
+### Precomputed descriptor catalog
+
+* The generator emits a module initializer handing `GeneratedDescriptorCatalog` one
+  compile-time descriptor factory per modeled handler type. `MessageRegistry.Register` —
+  behind every manual `Register<THandler>()` — consults the catalog first; the
+  reflection-based descriptor builders remain the fallback for types no generator saw
+  (runtime-loaded plugin assemblies, manually registered open generics, foreign assemblies
+  without the analyzer).
+* Manual-registration users benefit **without calling `RegisterGenerated()`**: the
+  initializer populates the lookup on assembly load, and it is purely a lookup
+  contribution — nothing registers at module load, discovery-key gating and both
+  registration idempotence contracts are untouched.
+* Interchangeability rests on the generator's pinned parity contract (its descriptor
+  computation mirrors the runtime builders exactly); the runtime test asserts the registry
+  serves the catalog's very descriptor instance — proof the reflective builders never ran.
+
+### Notes
+
+* **Public API additions:** `GroupSet` (with `Of`/`Empty`, an `IReadOnlyList<string>`);
+  the six group-filter mediator overloads above; `GeneratedDescriptorCatalog.Add`.
+  Nothing is removed or changed in shape.
+* **Source-compat edge:** a literal-null second argument (`SendAsync(cmd, null)`) is now
+  ambiguous between the settings and `GroupSet` overloads (CS0121) and needs a named
+  argument or a typed null — the same trade the context overloads accepted in v2.0.0.
+  Binary compatibility is unaffected; all interface additions are default members.
+* Emission degrades against older packages: without the catalog surface the generated
+  output is unchanged.
+
 ## v2.1.0 – '2026-08-07'
 
 Stable release. Promotes the entire preview cycle since v2.0.0 to the stable channel — the
