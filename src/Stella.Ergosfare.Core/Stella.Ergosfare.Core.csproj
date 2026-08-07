@@ -16,5 +16,7 @@
         <InternalsVisibleTo Include="Ergosfare.Core.Extensions.MicrosoftDependencyInjection" />
         <!-- The event broadcast invoker rents/returns pooled execution contexts directly. -->
         <InternalsVisibleTo Include="Stella.Ergosfare.Events" />
+        <!-- The query stream invoker's fast lane builds contexts and version-guarded plans directly. -->
+        <InternalsVisibleTo Include="Stella.Ergosfare.Queries" />
     </ItemGroup>
 </Project>

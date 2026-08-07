@@ -83,6 +83,7 @@ internal sealed class MessageDependencies : IMessageDependencies
             && FinalInterceptors.Count == 0;
 
         FastSingleHandler = HasNoInterceptors && Handlers.Count == 1 ? Handlers[0] : null;
+        MemoizedInstances = memoizedProvider is not null;
     }
 
     /// <summary>
@@ -104,6 +105,13 @@ internal sealed class MessageDependencies : IMessageDependencies
     /// stages; <c>null</c> otherwise. Computed once at construction.
     /// </summary>
     internal IHandlerReference<IHandler, IMainHandlerDescriptor>? FastSingleHandler { get; }
+
+    /// <summary>
+    /// Whether references resolve once and cache the instance (memoized mode). Generated
+    /// plans must not construct handlers directly in this mode — the memoized instance is
+    /// the semantic contract.
+    /// </summary>
+    internal bool MemoizedInstances { get; }
 
     /// <summary>
     /// Wraps the shape's planned handlers in resolvable references. Runs once per
