@@ -24,6 +24,11 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 ///     <c>Func&lt;THandler&gt;</c> overloads); older packages take only the parameterless
 ///     form, and emission degrades accordingly.
 /// </param>
+/// <param name="HasDescriptorCatalog">
+///     Whether <c>GeneratedDescriptorCatalog</c> is resolvable — the lookup that makes
+///     runtime <c>Register&lt;THandler&gt;()</c> reflection-free for generator-modeled
+///     types; older packages simply skip the module-initializer emission.
+/// </param>
 internal readonly record struct ModuleBuilderAvailability(
     bool HasMessageRegistry,
     bool HasCommandModuleBuilder,
@@ -36,4 +41,5 @@ internal readonly record struct ModuleBuilderAvailability(
     bool HasDispatchRoots,
     bool DispatchRootsHasVoidPlans,
     bool DispatchRootsHasResultPlans,
-    bool DispatchRootsHasPlanFactories);
+    bool DispatchRootsHasPlanFactories,
+    bool HasDescriptorCatalog);

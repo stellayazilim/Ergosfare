@@ -65,11 +65,13 @@ public class ErgosfareRegistrationGeneratorTests
         Assert.Equal(1, CountOccurrences(source, "builder.Register(typeof(global::TestApp.PingCreated));"));
 
         // The handler registers through a pre-computed descriptor: once in the assembly-wide
-        // factory and once in its module's factory — never through the runtime fallback.
+        // factory, once in its module's factory, and once in the descriptor-catalog module
+        // initializer (which backs manual Register<T>() calls) — never through the runtime
+        // fallback.
         const string handlerDescriptor =
             "global::Stella.Ergosfare.Core.Abstractions.Registry.Descriptors.HandlerDescriptors.Handler(" +
             "typeof(global::TestApp.CreatePing), typeof(global::System.Threading.Tasks.ValueTask), typeof(global::TestApp.CreatePingHandler))";
-        Assert.Equal(2, CountOccurrences(source, handlerDescriptor));
+        Assert.Equal(3, CountOccurrences(source, handlerDescriptor));
         Assert.DoesNotContain("Register(typeof(global::TestApp.CreatePingHandler))", source);
     }
 

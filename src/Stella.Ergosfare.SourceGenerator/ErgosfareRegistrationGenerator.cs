@@ -63,6 +63,7 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     private const string EventBuilderMetadataName = "Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.EventModuleBuilder";
 
     private const string ValueTaskExpression = "global::System.Threading.Tasks.ValueTask";
+    private const string DescriptorCatalogMetadataName = "Stella.Ergosfare.Core.Abstractions.GeneratedDescriptorCatalog";
 
     private const string ScanReferencesBuildProperty = "build_property.ErgosfareSourceGeneratorScanReferences";
     private const string ErgosfareAssemblyNamePrefix = "Stella.Ergosfare";
@@ -107,7 +108,8 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 HasDispatchRoots: dispatchRoots is not null,
                 DispatchRootsHasVoidPlans: dispatchRoots is not null && !dispatchRoots.GetMembers("AddVoidPlan").IsEmpty,
                 DispatchRootsHasResultPlans: dispatchRoots is not null && !dispatchRoots.GetMembers("AddResultPlan").IsEmpty,
-                DispatchRootsHasPlanFactories: dispatchRoots is not null && HasFactoryOverload(dispatchRoots));
+                DispatchRootsHasPlanFactories: dispatchRoots is not null && HasFactoryOverload(dispatchRoots),
+                HasDescriptorCatalog: compilation.GetTypeByMetadataName(DescriptorCatalogMetadataName) is not null);
         });
 
         // Reference scanning is default-on; consumers opt out per project through the
