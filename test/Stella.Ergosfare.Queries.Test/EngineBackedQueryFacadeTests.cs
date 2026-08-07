@@ -37,7 +37,7 @@ public class EngineBackedQueryFacadeTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task DiResolvedFacade_Streams_ResolvingTheScopesMediatorOnDemand()
+    public async Task DiResolvedFacade_Streams_ThroughTheEngineFastLane()
     {
         var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddQueryModule(q => q.Register<StubNonGenericStreamStringResultQueryHandler>()))
