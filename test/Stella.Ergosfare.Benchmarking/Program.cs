@@ -190,6 +190,7 @@ public class MediationBenchmark
     private readonly GroupedPingEvent _groupedPingEvent = new();
 
     private static readonly string[] BenchGroups = ["bench"];
+    private static readonly GroupSet BenchGroupSet = GroupSet.Of("bench");
 
     // Reused across dispatches, mirroring a caller that keeps its settings: the grouped
     // rows measure the grouped lane itself, not per-call settings construction.
@@ -337,11 +338,21 @@ public class MediationBenchmark
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask Command_Void_Grouped() => _commands.SendAsync(_groupedCommand, _groupedCommandSettings);
 
+    /// <summary>
+    /// The canonical-filter overload: no settings object, and the grouped executor
+    /// lookup matches the reused <see cref="GroupSet"/> on a single reference check.
+    /// </summary>
+    [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask Command_Void_Grouped_GroupSet() => _commands.SendAsync(_groupedCommand, BenchGroupSet);
+
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask Event_Publish() => _events.PublishAsync(_pingEvent);
 
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask Event_Publish_Grouped() => _events.PublishAsync(_groupedPingEvent, _groupedEventSettings);
+
+    [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask Event_Publish_Grouped_GroupSet() => _events.PublishAsync(_groupedPingEvent, BenchGroupSet);
 
     [Benchmark, BenchmarkCategory("Root")]
     public Task MediatR_Send_Void() => _mediator.Send(_mediatrVoid);

@@ -41,7 +41,7 @@ public class CommandMediatorTests
         var messageMediator = serviceCollection.GetService<IMessageMediator>();
         var mediator = new CommandMediator(messageMediator!);
 
-        await mediator.SendAsync(new StubNonGenericCommand(), null, CancellationToken.None);
+        await mediator.SendAsync(new StubNonGenericCommand(), commandMediationSettings: null, CancellationToken.None);
     }
 
     /// <summary>
