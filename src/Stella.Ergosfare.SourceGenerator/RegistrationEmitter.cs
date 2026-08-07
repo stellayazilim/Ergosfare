@@ -33,6 +33,7 @@ internal static class RegistrationEmitter
     private const string QueryBuilderFullName = "global::Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.QueryModuleBuilder";
     private const string EventBuilderFullName = "global::Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.EventModuleBuilder";
     private const string DispatchRootsFullName = "global::Stella.Ergosfare.Core.Abstractions.GeneratedDispatchRoots";
+    private const string DescriptorCatalogFullName = "global::Stella.Ergosfare.Core.Abstractions.GeneratedDescriptorCatalog";
 
     /// <summary>
     ///     Emits the <c>ErgosfareGeneratedRegistrations</c> class for the discovered types.
@@ -101,6 +102,11 @@ internal static class RegistrationEmitter
         {
             EmitDispatchRoots(sb, ref wroteMember, types, voidPlans, resultPlans,
                 builders.DispatchRootsHasPlanFactories);
+        }
+
+        if (builders.HasDescriptorCatalog && useDescriptors && HasDescriptors(types))
+        {
+            EmitDescriptorCatalog(sb, ref wroteMember, types);
         }
 
         EmitMatchesHelper(sb, ref wroteMember);
@@ -389,6 +395,52 @@ internal static class RegistrationEmitter
             sb.Append("                ").Append(receiver).AppendLine(".RegisterDescriptors(descriptors);");
             sb.AppendLine("            }");
         }
+    }
+
+    /// <summary>
+    ///     Emits the module initializer that hands every modeled handler type's
+    ///     compile-time descriptor factory to <c>GeneratedDescriptorCatalog</c>: from then
+    ///     on a manual <c>Register&lt;THandler&gt;()</c> — including ones that never call
+    ///     <c>RegisterGenerated()</c> — registers without reflection. Purely a lookup
+    ///     contribution: nothing is registered here, so initialization order and
+    ///     discovery-key gating are unaffected.
+    /// </summary>
+    private static void EmitDescriptorCatalog(
+        StringBuilder sb,
+        ref bool wroteMember,
+        IReadOnlyList<RegistrableTypeModel> types)
+    {
+        StartMember(sb, ref wroteMember);
+        sb.AppendLine("        [global::System.Runtime.CompilerServices.ModuleInitializer]");
+        sb.AppendLine("        internal static void PopulateDescriptorCatalog()");
+        sb.AppendLine("        {");
+
+        foreach (var type in types)
+        {
+            if (type.Descriptors.Length == 0)
+            {
+                continue;
+            }
+
+            sb.Append("            ").Append(DescriptorCatalogFullName)
+              .Append(".Add(typeof(").Append(type.TypeofExpression)
+              .Append("), static () => new global::System.Collections.Generic.List<")
+              .Append(DescriptorFullName).Append("> { ");
+
+            for (var i = 0; i < type.Descriptors.Length; i++)
+            {
+                if (i > 0)
+                {
+                    sb.Append(", ");
+                }
+
+                AppendDescriptorExpression(sb, type, type.Descriptors[i]);
+            }
+
+            sb.AppendLine(" });");
+        }
+
+        sb.AppendLine("        }");
     }
 
     private static void AppendDescriptorExpression(StringBuilder sb, in RegistrableTypeModel type, in DescriptorModel descriptor)

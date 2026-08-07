@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Registry;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Internal.Factories;
@@ -159,10 +160,14 @@ internal sealed class MessageRegistry(
                 return;
             }
 
-            // Use builders to create handler descriptors for the given type
-            // <see cref="MessageDescriptorBuilderFactory" />
-
-            var newDescriptors = handlerDescriptorBuilderFactory.BuildDescriptors(type);
+            // Compile-time-computed descriptors first (the generator's module initializer
+            // populated the catalog for every type it modeled — identical values to what
+            // the builders would derive); the reflection-based builders remain the
+            // fallback for types no generator saw.
+            IReadOnlyList<IHandlerDescriptor> newDescriptors =
+                GeneratedDescriptorCatalog.TryCreateDescriptors(type, out var precomputed)
+                    ? precomputed!
+                    : handlerDescriptorBuilderFactory.BuildDescriptors(type);
 
 
             // If no handlers were created, assume the type is a message type and register it
