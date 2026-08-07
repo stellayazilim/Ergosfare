@@ -101,7 +101,9 @@ internal static class RegistrationEmitter
         if (emitDispatchRoots)
         {
             EmitDispatchRoots(sb, ref wroteMember, types, voidPlans, resultPlans,
-                builders.DispatchRootsHasPlanFactories);
+                builders.DispatchRootsHasPlanFactories,
+                builders.DispatchRootsHasProviderPlanFactories,
+                builders.HasKeyedServiceExtensions);
         }
 
         if (builders.HasDescriptorCatalog && useDescriptors && HasDescriptors(types))
@@ -253,7 +255,9 @@ internal static class RegistrationEmitter
         IReadOnlyList<RegistrableTypeModel> types,
         IReadOnlyList<VoidPlanModel> voidPlans,
         IReadOnlyList<ResultPlanModel> resultPlans,
-        bool emitPlanFactories)
+        bool emitPlanFactories,
+        bool emitProviderPlanFactories,
+        bool hasKeyedServiceExtensions)
     {
         StartMember(sb, ref wroteMember);
         sb.AppendLine("        private static void RootDispatchInstantiations()");
@@ -280,9 +284,10 @@ internal static class RegistrationEmitter
 
         // Compile-time pipeline plans: the runtime re-validates each one against the
         // registry per version, so a plan can only lose its speedup, never change
-        // behavior. Directly-constructible handlers additionally carry a construction
-        // factory, which the runtime uses only after verifying the handler's effective
-        // DI registration is the module's own plain transient one.
+        // behavior. Qualifying handlers additionally carry a construction factory —
+        // parameterless `new` or a provider-taking one for dependency-injected
+        // constructors — which the runtime uses only after verifying the handler's
+        // effective DI registration is the module's own plain transient one.
         foreach (var plan in voidPlans)
         {
             sb.Append("            ").Append(DispatchRootsFullName)
@@ -290,10 +295,9 @@ internal static class RegistrationEmitter
               .Append(", ").Append(plan.HandlerTypeExpression)
               .Append(">(");
 
-            if (emitPlanFactories && plan.HasDirectConstruction)
-            {
-                sb.Append("static () => new ").Append(plan.HandlerTypeExpression).Append("()");
-            }
+            AppendPlanFactory(sb, plan.HandlerTypeExpression, plan.HasDirectConstruction,
+                plan.ProviderConstructionExpression, plan.UsesKeyedServices,
+                emitPlanFactories, emitProviderPlanFactories, hasKeyedServiceExtensions);
 
             sb.AppendLine(");");
         }
@@ -306,15 +310,43 @@ internal static class RegistrationEmitter
               .Append(", ").Append(plan.HandlerTypeExpression)
               .Append(">(");
 
-            if (emitPlanFactories && plan.HasDirectConstruction)
-            {
-                sb.Append("static () => new ").Append(plan.HandlerTypeExpression).Append("()");
-            }
+            AppendPlanFactory(sb, plan.HandlerTypeExpression, plan.HasDirectConstruction,
+                plan.ProviderConstructionExpression, plan.UsesKeyedServices,
+                emitPlanFactories, emitProviderPlanFactories, hasKeyedServiceExtensions);
 
             sb.AppendLine(");");
         }
 
         sb.AppendLine("        }");
+    }
+
+    /// <summary>
+    ///     Appends a plan's construction-factory argument when one qualifies and the
+    ///     referenced surfaces support it: the parameterless <c>new</c> shape first (the
+    ///     cheaper one, and available against older packages), the provider-taking shape
+    ///     for dependency-injected constructors otherwise — keyed resolutions only when
+    ///     the keyed-service extensions are resolvable in the consuming compilation.
+    /// </summary>
+    private static void AppendPlanFactory(
+        StringBuilder sb,
+        string handlerTypeExpression,
+        bool hasDirectConstruction,
+        string? providerConstructionExpression,
+        bool usesKeyedServices,
+        bool emitPlanFactories,
+        bool emitProviderPlanFactories,
+        bool hasKeyedServiceExtensions)
+    {
+        if (emitPlanFactories && hasDirectConstruction)
+        {
+            sb.Append("static () => new ").Append(handlerTypeExpression).Append("()");
+        }
+        else if (emitProviderPlanFactories
+                 && providerConstructionExpression is not null
+                 && (!usesKeyedServices || hasKeyedServiceExtensions))
+        {
+            sb.Append(providerConstructionExpression);
+        }
     }
 
     /// <summary>

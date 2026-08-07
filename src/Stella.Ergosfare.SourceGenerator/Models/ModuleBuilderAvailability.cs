@@ -24,6 +24,18 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 ///     <c>Func&lt;THandler&gt;</c> overloads); older packages take only the parameterless
 ///     form, and emission degrades accordingly.
 /// </param>
+/// <param name="DispatchRootsHasProviderPlanFactories">
+///     Whether the plan surface accepts provider-taking construction factories (the
+///     <c>Func&lt;IServiceProvider, THandler&gt;</c> overloads) and the compilation can
+///     name <c>ServiceProviderServiceExtensions</c> the emitted factory resolves
+///     dependencies through; without either, dependency-injected handlers keep the
+///     factory-less plan form.
+/// </param>
+/// <param name="HasKeyedServiceExtensions">
+///     Whether <c>ServiceProviderKeyedServiceExtensions</c> is resolvable — required by
+///     factories for handlers with <c>[FromKeyedServices]</c> parameters; without it such
+///     handlers keep the factory-less plan form.
+/// </param>
 /// <param name="HasDescriptorCatalog">
 ///     Whether <c>GeneratedDescriptorCatalog</c> is resolvable — the lookup that makes
 ///     runtime <c>Register&lt;THandler&gt;()</c> reflection-free for generator-modeled
@@ -42,4 +54,6 @@ internal readonly record struct ModuleBuilderAvailability(
     bool DispatchRootsHasVoidPlans,
     bool DispatchRootsHasResultPlans,
     bool DispatchRootsHasPlanFactories,
+    bool DispatchRootsHasProviderPlanFactories,
+    bool HasKeyedServiceExtensions,
     bool HasDescriptorCatalog);

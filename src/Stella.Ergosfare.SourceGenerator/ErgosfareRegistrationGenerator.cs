@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Text;
 using System.Threading;
 using Microsoft.CodeAnalysis;
@@ -65,6 +66,10 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     private const string ValueTaskExpression = "global::System.Threading.Tasks.ValueTask";
     private const string DescriptorCatalogMetadataName = "Stella.Ergosfare.Core.Abstractions.GeneratedDescriptorCatalog";
 
+    private const string ServiceProviderExtensionsMetadataName = "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions";
+    private const string KeyedServiceExtensionsMetadataName = "Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions";
+    private const string DependencyInjectionNamespace = "Microsoft.Extensions.DependencyInjection";
+
     private const string ScanReferencesBuildProperty = "build_property.ErgosfareSourceGeneratorScanReferences";
     private const string ErgosfareAssemblyNamePrefix = "Stella.Ergosfare";
 
@@ -109,6 +114,10 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 DispatchRootsHasVoidPlans: dispatchRoots is not null && !dispatchRoots.GetMembers("AddVoidPlan").IsEmpty,
                 DispatchRootsHasResultPlans: dispatchRoots is not null && !dispatchRoots.GetMembers("AddResultPlan").IsEmpty,
                 DispatchRootsHasPlanFactories: dispatchRoots is not null && HasFactoryOverload(dispatchRoots),
+                DispatchRootsHasProviderPlanFactories: dispatchRoots is not null
+                    && HasProviderFactoryOverload(dispatchRoots)
+                    && compilation.GetTypeByMetadataName(ServiceProviderExtensionsMetadataName) is not null,
+                HasKeyedServiceExtensions: compilation.GetTypeByMetadataName(KeyedServiceExtensionsMetadataName) is not null,
                 HasDescriptorCatalog: compilation.GetTypeByMetadataName(DescriptorCatalogMetadataName) is not null);
         });
 
@@ -152,6 +161,28 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     }
 
     /// <summary>
+    ///     Whether the referenced <c>GeneratedDispatchRoots</c> accepts a plan overload
+    ///     with a provider-taking factory parameter
+    ///     (<c>Func&lt;IServiceProvider, THandler&gt;</c>) — the surface the
+    ///     dependency-injected construction emission requires. Recognized by delegate
+    ///     arity: the parameterless factory overload's <c>Func&lt;THandler&gt;</c> has one
+    ///     type argument, the provider-taking one has two.
+    /// </summary>
+    private static bool HasProviderFactoryOverload(INamedTypeSymbol dispatchRoots)
+    {
+        foreach (var member in dispatchRoots.GetMembers("AddVoidPlan"))
+        {
+            if (member is IMethodSymbol { Parameters.Length: 1 } method
+                && method.Parameters[0].Type is INamedTypeSymbol { Arity: 2 })
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     ///     Whether generated code can construct the type with <c>new()</c> and doing so
     ///     is provably interchangeable with resolving its plain transient registration:
     ///     a concrete, non-generic class whose ONLY instance constructor is public and
@@ -162,6 +193,29 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     ///     transient disposables; direct construction would not).
     /// </summary>
     private static bool IsDirectlyConstructible(INamedTypeSymbol symbol)
+    {
+        if (!HasDirectConstructionShape(symbol))
+        {
+            return false;
+        }
+
+        // Exactly one instance constructor, public and parameterless: with any richer
+        // constructor present (records' synthesized copy constructor included), the
+        // container's selection and `new()` can diverge — dropping dependencies the
+        // container would have injected.
+        return symbol.InstanceConstructors.Length == 1
+               && symbol.InstanceConstructors[0] is { Parameters.IsEmpty: true, DeclaredAccessibility: Accessibility.Public };
+    }
+
+    /// <summary>
+    ///     Shared base qualification of both construction factories: a concrete,
+    ///     non-generic class implementing neither <c>IDisposable</c> nor
+    ///     <c>IAsyncDisposable</c> (the container tracks transient disposables in the
+    ///     resolving scope; direct construction would not), with no <c>required</c>
+    ///     members anywhere in the hierarchy (an emitted <c>new</c> fails compilation
+    ///     with CS9035, while the container activation the factory replaces ignores them).
+    /// </summary>
+    private static bool HasDirectConstructionShape(INamedTypeSymbol symbol)
     {
         if (symbol.TypeKind != TypeKind.Class || symbol.IsAbstract || symbol.IsGenericType)
         {
@@ -176,9 +230,6 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             }
         }
 
-        // Required members anywhere in the hierarchy make an emitted `new()` a compile
-        // error (CS9035); the reflection-based container activation the plan replaces
-        // does not enforce them, so such types stay on the container path.
         for (var type = symbol; type is not null; type = type.BaseType)
         {
             foreach (var member in type.GetMembers())
@@ -190,12 +241,222 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             }
         }
 
-        // Exactly one instance constructor, public and parameterless: with any richer
-        // constructor present (records' synthesized copy constructor included), the
-        // container's selection and `new()` can diverge — dropping dependencies the
-        // container would have injected.
-        return symbol.InstanceConstructors.Length == 1
-               && symbol.InstanceConstructors[0] is { Parameters.IsEmpty: true, DeclaredAccessibility: Accessibility.Public };
+        return true;
+    }
+
+    /// <summary>
+    ///     Builds the provider-taking construction factory
+    ///     (<c>static provider =&gt; new THandler(...)</c>) for a handler whose
+    ///     construction is provably identical to container activation, or <c>null</c>
+    ///     when the type does not qualify. The gate mirrors what
+    ///     <c>Microsoft.Extensions.DependencyInjection</c> would do with the type's plain
+    ///     transient registration: the container considers only public constructors, so a
+    ///     type with exactly one public constructor leaves it no choice; every parameter
+    ///     must be a plain service resolution (<c>GetRequiredService</c>) or a
+    ///     <c>[FromKeyedServices]</c> one (<c>GetRequiredKeyedService</c>) from the very
+    ///     provider container activation would resolve from. Anything that makes the
+    ///     container's behavior content-dependent disqualifies: optional/default-valued
+    ///     parameters (the container falls back to the default only when the service is
+    ///     unregistered), multiple public constructors (greedy selection), <c>ref</c>-ish
+    ///     or <c>params</c> parameters, <c>[ServiceKey]</c> injection, non-nameable
+    ///     parameter types, and keys the emission cannot reproduce exactly.
+    /// </summary>
+    private static string? GetProviderConstructionExpression(
+        INamedTypeSymbol symbol,
+        string handlerTypeExpression,
+        IAssemblySymbol? currentAssembly,
+        out bool usesKeyedServices)
+    {
+        usesKeyedServices = false;
+
+        if (!HasDirectConstructionShape(symbol))
+        {
+            return null;
+        }
+
+        IMethodSymbol? publicConstructor = null;
+
+        foreach (var constructor in symbol.InstanceConstructors)
+        {
+            if (constructor.DeclaredAccessibility != Accessibility.Public)
+            {
+                // Invisible to the container's constructor selection; irrelevant here too.
+                continue;
+            }
+
+            if (publicConstructor is not null)
+            {
+                return null;
+            }
+
+            publicConstructor = constructor;
+        }
+
+        // Parameterless construction stays on the cheaper Func<THandler> shape.
+        if (publicConstructor is null || publicConstructor.Parameters.IsEmpty)
+        {
+            return null;
+        }
+
+        var arguments = new List<string>(publicConstructor.Parameters.Length);
+
+        foreach (var parameter in publicConstructor.Parameters)
+        {
+            if (parameter.RefKind != RefKind.None || parameter.IsParams || parameter.IsOptional || parameter.HasExplicitDefaultValue)
+            {
+                return null;
+            }
+
+            string? keyLiteral = null;
+
+            foreach (var attribute in parameter.GetAttributes())
+            {
+                if (attribute.AttributeClass is not { } attributeClass
+                    || !IsDependencyInjectionNamespace(attributeClass.ContainingNamespace))
+                {
+                    continue;
+                }
+
+                switch (attributeClass.Name)
+                {
+                    case "FromKeyedServicesAttribute":
+                        keyLiteral = GetServiceKeyLiteral(attribute, currentAssembly);
+
+                        if (keyLiteral is null)
+                        {
+                            return null;
+                        }
+
+                        break;
+                    case "ServiceKeyAttribute":
+                        return null;
+                }
+            }
+
+            if (parameter.Type is not INamedTypeSymbol parameterType
+                || parameterType.IsRefLikeType
+                || parameterType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T
+                || !IsNameableClosedType(parameterType, currentAssembly))
+            {
+                return null;
+            }
+
+            var typeExpression = parameterType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            arguments.Add(keyLiteral is null
+                ? "global::" + ServiceProviderExtensionsMetadataName + ".GetRequiredService<" + typeExpression + ">(provider)"
+                : "global::" + KeyedServiceExtensionsMetadataName + ".GetRequiredKeyedService<" + typeExpression + ">(provider, " + keyLiteral + ")");
+
+            usesKeyedServices |= keyLiteral is not null;
+        }
+
+        return "static provider => new " + handlerTypeExpression + "(" + string.Join(", ", arguments) + ")";
+    }
+
+    /// <summary>
+    ///     Whether generated code in the current compilation can name the closed type in
+    ///     a generic argument position: spellable names and public accessibility along the
+    ///     whole containing chain (internal accepted only for the current compilation's
+    ///     own types — referenced-assembly IVT grants are deliberately not modeled here),
+    ///     recursively for every generic type argument.
+    /// </summary>
+    private static bool IsNameableClosedType(INamedTypeSymbol type, IAssemblySymbol? currentAssembly)
+    {
+        if (type.IsUnboundGenericType || !HasSpellableName(type))
+        {
+            return false;
+        }
+
+        for (var current = type; current is not null; current = current.ContainingType)
+        {
+            switch (current.DeclaredAccessibility)
+            {
+                case Accessibility.Public:
+                    break;
+                case Accessibility.Internal:
+                case Accessibility.ProtectedOrInternal:
+                    if (currentAssembly is null
+                        || !SymbolEqualityComparer.Default.Equals(current.ContainingAssembly, currentAssembly))
+                    {
+                        return false;
+                    }
+
+                    break;
+                default:
+                    return false;
+            }
+        }
+
+        foreach (var argument in type.TypeArguments)
+        {
+            if (argument is not INamedTypeSymbol named || !IsNameableClosedType(named, currentAssembly))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsDependencyInjectionNamespace(INamespaceSymbol? ns)
+        => ns is
+        {
+            Name: "DependencyInjection",
+            ContainingNamespace:
+            {
+                Name: "Extensions",
+                ContainingNamespace: { Name: "Microsoft", ContainingNamespace.IsGlobalNamespace: true }
+            }
+        };
+
+    /// <summary>
+    ///     The C# literal reproducing a <c>[FromKeyedServices]</c> key exactly — the
+    ///     container matches keys by boxed equality, so the emitted constant must carry
+    ///     the same runtime type and value as the attribute's. Strings, chars, bools,
+    ///     integral primitives, enums and <c>typeof</c> keys are reproducible; anything
+    ///     else (null, floating-point, arrays) returns <c>null</c> and keeps the handler
+    ///     on the container path.
+    /// </summary>
+    private static string? GetServiceKeyLiteral(AttributeData attribute, IAssemblySymbol? currentAssembly)
+    {
+        if (attribute.ConstructorArguments.Length != 1)
+        {
+            return null;
+        }
+
+        var key = attribute.ConstructorArguments[0];
+
+        switch (key.Kind)
+        {
+            case TypedConstantKind.Primitive:
+                return key.Value switch
+                {
+                    string s => SymbolDisplay.FormatLiteral(s, quote: true),
+                    char c => SymbolDisplay.FormatLiteral(c, quote: true),
+                    bool b => b ? "true" : "false",
+                    int i => i.ToString(CultureInfo.InvariantCulture),
+                    long l => l.ToString(CultureInfo.InvariantCulture) + "L",
+                    sbyte v => "(sbyte)" + v.ToString(CultureInfo.InvariantCulture),
+                    byte v => "(byte)" + v.ToString(CultureInfo.InvariantCulture),
+                    short v => "(short)" + v.ToString(CultureInfo.InvariantCulture),
+                    ushort v => "(ushort)" + v.ToString(CultureInfo.InvariantCulture),
+                    uint v => v.ToString(CultureInfo.InvariantCulture) + "U",
+                    ulong v => v.ToString(CultureInfo.InvariantCulture) + "UL",
+                    _ => null,
+                };
+            case TypedConstantKind.Enum:
+                return key.Type is INamedTypeSymbol enumType && IsNameableClosedType(enumType, currentAssembly)
+                    ? "(" + enumType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ")("
+                      + Convert.ToString(key.Value, CultureInfo.InvariantCulture) + ")"
+                    : null;
+            case TypedConstantKind.Type:
+                return key.Value is INamedTypeSymbol { IsUnboundGenericType: false } keyType
+                       && IsNameableClosedType(keyType, currentAssembly)
+                    ? "typeof(" + keyType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ")"
+                    : null;
+            default:
+                return null;
+        }
     }
 
     /// <summary>
@@ -232,10 +493,16 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         var isAccessible = IsAccessibleFromGeneratedCode(symbol);
         var descriptors = isAccessible ? BuildDescriptors(symbol) : ImmutableArray<DescriptorModel>.Empty;
         var isDispatchable = isAccessible && IsDispatchableMessage(symbol, descriptors);
+        var typeofExpression = BuildTypeofExpression(symbol);
+
+        var usesKeyedServices = false;
+        var providerConstruction = isAccessible
+            ? GetProviderConstructionExpression(symbol, typeofExpression, symbol.ContainingAssembly, out usesKeyedServices)
+            : null;
 
         return new RegistrableTypeModel
         {
-            TypeofExpression = BuildTypeofExpression(symbol),
+            TypeofExpression = typeofExpression,
             DisplayName = symbol.ToDisplayString(),
             IsCommand = isCommand,
             IsQuery = isQuery,
@@ -250,6 +517,8 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             IsDispatchableMessage = isDispatchable,
             DispatchResults = isDispatchable ? GetDispatchResults(symbol) : ImmutableArray<DispatchResultModel>.Empty,
             IsDirectlyConstructible = isAccessible && IsDirectlyConstructible(symbol),
+            ProviderConstructionExpression = providerConstruction,
+            ProviderConstructionUsesKeyedServices = usesKeyedServices,
         };
     }
 
@@ -604,10 +873,18 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         var isAccessible = IsVisibleToCompilation(symbol, givesAccess) && HasSpellableName(symbol);
         var descriptors = isAccessible ? BuildDescriptors(symbol) : ImmutableArray<DescriptorModel>.Empty;
         var isDispatchable = isAccessible && IsDispatchableMessage(symbol, descriptors);
+        var typeofExpression = BuildTypeofExpression(symbol);
+
+        // Referenced handlers get no current-assembly grant: their construction factory
+        // qualifies only over fully public parameter types (IVT grants are not modeled).
+        var usesKeyedServices = false;
+        var providerConstruction = isAccessible
+            ? GetProviderConstructionExpression(symbol, typeofExpression, currentAssembly: null, out usesKeyedServices)
+            : null;
 
         return new RegistrableTypeModel
         {
-            TypeofExpression = BuildTypeofExpression(symbol),
+            TypeofExpression = typeofExpression,
             DisplayName = symbol.ToDisplayString(),
             IsCommand = isCommand,
             IsQuery = isQuery,
@@ -622,6 +899,8 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             IsDispatchableMessage = isDispatchable,
             DispatchResults = isDispatchable ? GetDispatchResults(symbol) : ImmutableArray<DispatchResultModel>.Empty,
             IsDirectlyConstructible = isAccessible && IsDirectlyConstructible(symbol),
+            ProviderConstructionExpression = providerConstruction,
+            ProviderConstructionUsesKeyedServices = usesKeyedServices,
         };
     }
 
@@ -744,7 +1023,12 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 continue;
             }
 
-            plans.Add(new VoidPlanModel(type.TypeofExpression, handler.TypeofExpression, handler.IsDirectlyConstructible));
+            plans.Add(new VoidPlanModel(
+                type.TypeofExpression,
+                handler.TypeofExpression,
+                handler.IsDirectlyConstructible,
+                handler.ProviderConstructionExpression,
+                handler.ProviderConstructionUsesKeyedServices));
         }
 
         return plans;
@@ -797,7 +1081,9 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 type.TypeofExpression,
                 dispatchResult.ResultTypeExpression,
                 handler.TypeofExpression,
-                handler.IsDirectlyConstructible));
+                handler.IsDirectlyConstructible,
+                handler.ProviderConstructionExpression,
+                handler.ProviderConstructionUsesKeyedServices));
         }
 
         return plans;

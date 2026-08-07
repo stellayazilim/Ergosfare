@@ -75,6 +75,23 @@ public static class GeneratedDispatchRoots
         where THandler : class, IAsyncHandler<TMessage>
         => VoidPlans.TryAdd(typeof(TMessage), new VoidPlanRoot<TMessage, THandler>(directHandlerFactory));
 
+    /// <summary>
+    /// Variant of <see cref="AddVoidPlan{TMessage, THandler}()"/> carrying a compile-time
+    /// construction path for handlers with constructor dependencies: the generator emits
+    /// <c>static provider =&gt; new THandler(provider.GetRequiredService&lt;TDep&gt;(), ...)</c>
+    /// for handlers whose single public constructor takes only plain (or
+    /// <c>[FromKeyedServices]</c>) service parameters — the one shape where the container's
+    /// own constructor selection and the emitted construction provably coincide. The same
+    /// advisory contract applies: the executor uses the factory only after verifying the
+    /// handler's DI registration is the module's own plain transient one, and the
+    /// dependencies resolve from the dispatching scope's provider exactly as container
+    /// activation would resolve them. Idempotent.
+    /// </summary>
+    public static void AddVoidPlan<TMessage, THandler>(Func<IServiceProvider, THandler> directHandlerFactory)
+        where TMessage : notnull, IMessage
+        where THandler : class, IAsyncHandler<TMessage>
+        => VoidPlans.TryAdd(typeof(TMessage), new VoidPlanRoot<TMessage, THandler>(directHandlerFactory));
+
     /// <summary>The void pipeline plan of the message type, or <c>null</c> when none was generated.</summary>
     public static VoidPlanRoot? FindVoidPlan(Type messageType)
         => VoidPlans.TryGetValue(messageType, out var root) ? root : null;
@@ -98,6 +115,17 @@ public static class GeneratedDispatchRoots
     /// Idempotent.
     /// </summary>
     public static void AddResultPlan<TMessage, TResult, THandler>(Func<THandler> directHandlerFactory)
+        where TMessage : notnull, IMessage
+        where THandler : class, IAsyncHandler<TMessage, TResult>
+        => ResultPlans.TryAdd((typeof(TMessage), typeof(TResult)), new ResultPlanRoot<TMessage, TResult, THandler>(directHandlerFactory));
+
+    /// <summary>
+    /// Variant of <see cref="AddResultPlan{TMessage, TResult, THandler}()"/> carrying the
+    /// compile-time construction path for handlers with constructor dependencies; see
+    /// <see cref="AddVoidPlan{TMessage, THandler}(Func{IServiceProvider, THandler})"/> for
+    /// the contract. Idempotent.
+    /// </summary>
+    public static void AddResultPlan<TMessage, TResult, THandler>(Func<IServiceProvider, THandler> directHandlerFactory)
         where TMessage : notnull, IMessage
         where THandler : class, IAsyncHandler<TMessage, TResult>
         => ResultPlans.TryAdd((typeof(TMessage), typeof(TResult)), new ResultPlanRoot<TMessage, TResult, THandler>(directHandlerFactory));
@@ -170,9 +198,10 @@ public abstract class VoidPlanRoot
     public abstract TReturn Accept<TReturn, TState>(IVoidPlanRootVisitor<TReturn, TState> visitor, TState state);
 
     /// <summary>
-    /// The compile-time handler construction path — a <c>Func&lt;THandler&gt;</c> carried
-    /// erased, cast back inside the executor's closed generic context — or <c>null</c>
-    /// when the generator emitted no factory for the handler.
+    /// The compile-time handler construction path — a <c>Func&lt;THandler&gt;</c> or a
+    /// provider-taking <c>Func&lt;IServiceProvider, THandler&gt;</c>, carried erased and
+    /// cast back inside the executor's closed generic context — or <c>null</c> when the
+    /// generator emitted no factory for the handler.
     /// </summary>
     internal virtual object? DirectHandlerFactory => null;
 }
@@ -182,7 +211,7 @@ public sealed class VoidPlanRoot<TMessage, THandler> : VoidPlanRoot
     where TMessage : notnull, IMessage
     where THandler : class, IAsyncHandler<TMessage>
 {
-    private readonly Func<THandler>? _directHandlerFactory;
+    private readonly object? _directHandlerFactory;
 
     /// <summary>Creates a plan without a compile-time construction path.</summary>
     public VoidPlanRoot()
@@ -190,6 +219,9 @@ public sealed class VoidPlanRoot<TMessage, THandler> : VoidPlanRoot
     }
 
     internal VoidPlanRoot(Func<THandler> directHandlerFactory)
+        => _directHandlerFactory = directHandlerFactory;
+
+    internal VoidPlanRoot(Func<IServiceProvider, THandler> directHandlerFactory)
         => _directHandlerFactory = directHandlerFactory;
 
     internal override object? DirectHandlerFactory => _directHandlerFactory;
@@ -227,7 +259,7 @@ public sealed class ResultPlanRoot<TMessage, TResult, THandler> : ResultPlanRoot
     where TMessage : notnull, IMessage
     where THandler : class, IAsyncHandler<TMessage, TResult>
 {
-    private readonly Func<THandler>? _directHandlerFactory;
+    private readonly object? _directHandlerFactory;
 
     /// <summary>Creates a plan without a compile-time construction path.</summary>
     public ResultPlanRoot()
@@ -235,6 +267,9 @@ public sealed class ResultPlanRoot<TMessage, TResult, THandler> : ResultPlanRoot
     }
 
     internal ResultPlanRoot(Func<THandler> directHandlerFactory)
+        => _directHandlerFactory = directHandlerFactory;
+
+    internal ResultPlanRoot(Func<IServiceProvider, THandler> directHandlerFactory)
         => _directHandlerFactory = directHandlerFactory;
 
     internal override object? DirectHandlerFactory => _directHandlerFactory;
