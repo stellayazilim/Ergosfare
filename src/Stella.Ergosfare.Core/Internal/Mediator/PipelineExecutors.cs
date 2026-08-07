@@ -414,29 +414,64 @@ internal sealed class PipelineExecutorCache(
     private readonly ConcurrentDictionary<Type, GroupedResultExecutorSlot> _groupedResultSlotsByType = new();
 
     /// <summary>Immutable (groups, executor) pair; see <see cref="ResultExecutorSlot"/> for the refresh contract.</summary>
-    private sealed class GroupedVoidExecutorSlot(string[] groups, IPipelineExecutor executor)
+    private sealed class GroupedVoidExecutorSlot(string[] groups, GroupSet? canonical, IPipelineExecutor executor)
     {
         public readonly string[] Groups = groups;
+        public readonly GroupSet? Canonical = canonical;
         public readonly IPipelineExecutor Executor = executor;
     }
 
     /// <summary>Immutable (groups, result type, executor) triple; see <see cref="ResultExecutorSlot"/>.</summary>
-    private sealed class GroupedResultExecutorSlot(string[] groups, Type resultType, object executor)
+    private sealed class GroupedResultExecutorSlot(string[] groups, GroupSet? canonical, Type resultType, object executor)
     {
         public readonly string[] Groups = groups;
+        public readonly GroupSet? Canonical = canonical;
         public readonly Type ResultType = resultType;
         public readonly object Executor = executor;
     }
 
     /// <summary>
+    /// Slot match with the canonical fast path: a <see cref="GroupSet"/> that is the very
+    /// instance the slot was built from matches on one reference check — interning makes
+    /// that the steady state for callers reusing a filter. Everything else (a different
+    /// or un-interned set, a plain sequence) falls to the ordinal element-wise compare.
+    /// Only immutable <see cref="GroupSet"/> instances take the reference shortcut; a
+    /// reused mutable list must keep being compared by content so in-place mutation is
+    /// always observed.
+    /// </summary>
+    internal static bool SlotMatches(IEnumerable<string> groups, string[] cachedNames, GroupSet? canonical)
+        => groups is GroupSet set
+            ? ReferenceEquals(set, canonical) || GroupsMatch(set, cachedNames)
+            : GroupsMatch(groups, cachedNames);
+
+    /// <summary>
     /// Ordinal element-wise comparison of the caller's group sequence against a cached
-    /// snapshot, allocation-free for the array and list shapes settings expose. Order is
-    /// significant, matching the joined composite key exactly.
+    /// snapshot, allocation-free for the <see cref="GroupSet"/>, array and list shapes.
+    /// Order is significant, matching the joined composite key exactly.
     /// </summary>
     internal static bool GroupsMatch(IEnumerable<string> groups, string[] cached)
     {
         switch (groups)
         {
+            case GroupSet set:
+            {
+                var names = set.Names;
+
+                if (names.Length != cached.Length)
+                {
+                    return false;
+                }
+
+                for (var i = 0; i < names.Length; i++)
+                {
+                    if (!string.Equals(names[i], cached[i], StringComparison.Ordinal))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
             case string[] array:
             {
                 if (array.Length != cached.Length)
@@ -552,13 +587,16 @@ internal sealed class PipelineExecutorCache(
         }
 
         if (_groupedVoidSlotsByType.TryGetValue(messageType, out var slot)
-            && GroupsMatch(groups, slot.Groups))
+            && SlotMatches(groups, slot.Groups, slot.Canonical))
         {
             return slot.Executor;
         }
 
-        var materializedGroups = MaterializeGroups(groups);
-        var key = (messageType, GroupsKey(materializedGroups));
+        // A canonical set contributes its immutable name array and precomputed key
+        // directly — the refresh allocates nothing for it.
+        var canonical = groups as GroupSet;
+        var materializedGroups = canonical?.Names ?? MaterializeGroups(groups);
+        var key = (messageType, canonical?.JoinedKey ?? GroupsKey(materializedGroups));
 
         if (!_voidExecutors.TryGetValue(key, out var executor))
         {
@@ -567,7 +605,7 @@ internal sealed class PipelineExecutorCache(
                 (Cache: this, Groups: materializedGroups));
         }
 
-        _groupedVoidSlotsByType[messageType] = new GroupedVoidExecutorSlot(materializedGroups, executor);
+        _groupedVoidSlotsByType[messageType] = new GroupedVoidExecutorSlot(materializedGroups, canonical, executor);
 
         return executor;
     }
@@ -590,15 +628,16 @@ internal sealed class PipelineExecutorCache(
 
         if (_groupedResultSlotsByType.TryGetValue(messageType, out var groupedSlot)
             && ReferenceEquals(groupedSlot.ResultType, typeof(TResult))
-            && GroupsMatch(groups, groupedSlot.Groups))
+            && SlotMatches(groups, groupedSlot.Groups, groupedSlot.Canonical))
         {
             // Slot entries are only ever created as IPipelineExecutor<TResult> for their
             // recorded result type; see the group-less slot above.
             return Unsafe.As<IPipelineExecutor<TResult>>(groupedSlot.Executor);
         }
 
-        var materializedGroups = MaterializeGroups(groups);
-        var key = (messageType, typeof(TResult), GroupsKey(materializedGroups));
+        var canonical = groups as GroupSet;
+        var materializedGroups = canonical?.Names ?? MaterializeGroups(groups);
+        var key = (messageType, typeof(TResult), canonical?.JoinedKey ?? GroupsKey(materializedGroups));
 
         if (!_resultExecutors.TryGetValue(key, out var executor))
         {
@@ -607,7 +646,7 @@ internal sealed class PipelineExecutorCache(
                 (Cache: this, Groups: materializedGroups));
         }
 
-        _groupedResultSlotsByType[messageType] = new GroupedResultExecutorSlot(materializedGroups, typeof(TResult), executor);
+        _groupedResultSlotsByType[messageType] = new GroupedResultExecutorSlot(materializedGroups, canonical, typeof(TResult), executor);
 
         return (IPipelineExecutor<TResult>)executor;
     }

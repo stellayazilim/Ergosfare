@@ -23,19 +23,24 @@ internal interface IEventBroadcastInvoker
 {
     ValueTask Publish(object @event, EventMediationSettings? settings, CancellationToken cancellationToken,
         IMessageMediator mediator, ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
-        IResultAdapterService? resultAdapterService, IExecutionContext? externalContext = null);
+        IResultAdapterService? resultAdapterService, IExecutionContext? externalContext = null,
+        IEnumerable<string>? groupsOverride = null);
 
     /// <summary>
     /// Engine-backed publish: the concrete dispatch machinery is known by construction, so
-    /// the group-less publish takes the fast lane directly against the engine's plan and
-    /// the caller's scope provider. Non-fast shapes (grouped filters, external contexts)
-    /// resolve the scope's <see cref="IMessageMediator"/> on demand and run the original
-    /// overload — semantics unchanged.
+    /// the publish runs directly against the engine's plan and the caller's scope
+    /// provider — grouped filters included, resolved from the grouped plan slot. External
+    /// contexts resolve the scope's <see cref="IMessageMediator"/> on demand and run the
+    /// original overload — semantics unchanged.
+    /// <paramref name="groupsOverride"/> carries a facade-level group filter (a
+    /// <see cref="GroupSet"/>) without a settings object; when present it takes
+    /// precedence over the settings' groups.
     /// </summary>
     ValueTask Publish(object @event, EventMediationSettings? settings, CancellationToken cancellationToken,
         MessageDispatchEngine engine, IServiceProvider serviceProvider,
         ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
-        IResultAdapterService? resultAdapterService, IExecutionContext? externalContext = null);
+        IResultAdapterService? resultAdapterService, IExecutionContext? externalContext = null,
+        IEnumerable<string>? groupsOverride = null);
 }
 
 internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
@@ -53,7 +58,8 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
 
     public ValueTask Publish(object @event, EventMediationSettings? settings, CancellationToken cancellationToken,
         IMessageMediator mediator, ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
-        IResultAdapterService? resultAdapterService, IExecutionContext? externalContext = null)
+        IResultAdapterService? resultAdapterService, IExecutionContext? externalContext = null,
+        IEnumerable<string>? groupsOverride = null)
     {
         // Null settings (the common publish) reuse the cached default strategy — no
         // EventMediationSettings, no Filters/List/Dictionary, no strategy allocation.
@@ -70,7 +76,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
                 MessageMediationStrategy = strategy,
                 MessageResolveStrategy = resolveStrategy,
                 CancellationToken = cancellationToken,
-                Groups = settings is null ? EmptyGroups : settings.Filters.Groups,
+                Groups = groupsOverride ?? (settings is null ? EmptyGroups : settings.Filters.Groups),
                 ExternalContext = externalContext,
             });
         }
@@ -95,8 +101,8 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
             // plan slot; only foreign mediator implementations keep the original path.
             if (mediator is MessageMediator concreteMediator)
             {
-                var groups = settings?.Filters.Groups;
-                var dependencies = groups is null or List<string> { Count: 0 } or string[] { Length: 0 }
+                var groups = groupsOverride ?? settings?.Filters.Groups;
+                var dependencies = groups is null or List<string> { Count: 0 } or string[] { Length: 0 } or GroupSet { Count: 0 }
                     ? GetPlan(concreteMediator.DependenciesFactory, resolveStrategy)
                     : GetGroupedPlan(concreteMediator.DependenciesFactory, resolveStrategy, groups);
 
@@ -125,7 +131,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
                     MessageMediationStrategy = strategy,
                     MessageResolveStrategy = resolveStrategy,
                     CancellationToken = cancellationToken,
-                    Groups = settings is null ? EmptyGroups : settings.Filters.Groups,
+                    Groups = groupsOverride ?? (settings is null ? EmptyGroups : settings.Filters.Groups),
                     ExternalContext = context,
                 });
             }
@@ -169,12 +175,14 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     public ValueTask Publish(object @event, EventMediationSettings? settings, CancellationToken cancellationToken,
         MessageDispatchEngine engine, IServiceProvider serviceProvider,
         ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
-        IResultAdapterService? resultAdapterService, IExecutionContext? externalContext = null)
+        IResultAdapterService? resultAdapterService, IExecutionContext? externalContext = null,
+        IEnumerable<string>? groupsOverride = null)
     {
         if (externalContext is not null)
         {
             return Publish(@event, settings, cancellationToken,
-                ResolveMediator(serviceProvider), resolveStrategy, resultAdapterService, externalContext);
+                ResolveMediator(serviceProvider), resolveStrategy, resultAdapterService, externalContext,
+                groupsOverride);
         }
 
         var context = ErgosfareExecutionContextPool.Rent(settings?.Items, cancellationToken);
@@ -183,8 +191,8 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
 
         try
         {
-            var groups = settings?.Filters.Groups;
-            var dependencies = groups is null or List<string> { Count: 0 } or string[] { Length: 0 }
+            var groups = groupsOverride ?? settings?.Filters.Groups;
+            var dependencies = groups is null or List<string> { Count: 0 } or string[] { Length: 0 } or GroupSet { Count: 0 }
                 ? GetPlan(engine.DependenciesFactory, resolveStrategy)
                 : GetGroupedPlan(engine.DependenciesFactory, resolveStrategy, groups);
 
@@ -300,11 +308,13 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     private sealed class GroupedPlanSlot(
         MessageDependenciesFactory factory,
         string[] groups,
+        GroupSet? canonical,
         IMessageDependencies dependencies,
         int version)
     {
         public readonly MessageDependenciesFactory Factory = factory;
         public readonly string[] Groups = groups;
+        public readonly GroupSet? Canonical = canonical;
         public readonly IMessageDependencies Dependencies = dependencies;
         public readonly int Version = version;
     }
@@ -321,15 +331,17 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
             if (slot is not null
                 && ReferenceEquals(slot.Factory, typedFactory)
                 && slot.Version == typedFactory.CurrentRegistryVersion
-                && PipelineExecutorCache.GroupsMatch(groups, slot.Groups))
+                && PipelineExecutorCache.SlotMatches(groups, slot.Groups, slot.Canonical))
             {
                 return slot.Dependencies;
             }
 
-            string[] materialized = [.. groups];
+            // A canonical set contributes its immutable name array directly.
+            var canonical = groups as GroupSet;
+            var materialized = canonical?.Names ?? [.. groups];
             var dependencies = BuildPlan(typedFactory, resolveStrategy, materialized);
             _cachedGroupedPlan = new GroupedPlanSlot(
-                typedFactory, materialized, dependencies, typedFactory.CurrentRegistryVersion);
+                typedFactory, materialized, canonical, dependencies, typedFactory.CurrentRegistryVersion);
             return dependencies;
         }
 

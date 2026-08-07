@@ -124,6 +124,43 @@ public class QueryMediator : IQueryMediator
     }
 
     /// <summary>
+    /// Executes a query under a canonical group filter — no settings object, and with a
+    /// reused <see cref="GroupSet"/> the grouped executor lookup matches on a single
+    /// reference check. An empty set routes to the group-less fast lane.
+    /// </summary>
+    public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, GroupSet groups,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(groups);
+
+        IEnumerable<string>? effectiveGroups = groups.Count == 0 ? null : groups;
+
+        return _engine is not null
+            ? _engine.DispatchAsync<TResult>(query, _serviceProvider!, null, cancellationToken, effectiveGroups)
+            : _messageMediator!.DispatchAsync<TResult>(query, null, cancellationToken, effectiveGroups);
+    }
+
+    /// <summary>
+    /// Streaming counterpart of
+    /// <see cref="QueryAsync{TResult}(IQuery{TResult}, GroupSet, CancellationToken)"/>:
+    /// the group filter flows into the invoker's plan slot directly, with no settings
+    /// object on the way.
+    /// </summary>
+    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, GroupSet groups,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(groups);
+
+        IEnumerable<string>? effectiveGroups = groups.Count == 0 ? null : groups;
+
+        return _engine is not null
+            ? QueryStreamInvokerCache.Get<TResult>(query.GetType()).Stream(
+                query, null, cancellationToken, _engine, _serviceProvider!, _messageResolveStrategy, effectiveGroups)
+            : QueryStreamInvokerCache.Get<TResult>(query.GetType()).Stream(
+                query, null, cancellationToken, RequireMessageMediator(), _messageResolveStrategy, effectiveGroups);
+    }
+
+    /// <summary>
     /// Executes a query under an externally owned execution context — the nested-dispatch
     /// path: a handler opens a scope on its own context and passes the child here. The
     /// caller owns the context's lifetime; cancellation flows from the context.

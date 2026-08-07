@@ -20,7 +20,8 @@ namespace Stella.Ergosfare.Queries;
 internal interface IQueryStreamInvoker<out TResult>
 {
     IAsyncEnumerable<TResult> Stream(object query, QueryMediationSettings? settings, CancellationToken cancellationToken,
-        IMessageMediator mediator, ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy);
+        IMessageMediator mediator, ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
+        IEnumerable<string>? groupsOverride = null);
 
     /// <summary>
     /// Engine-backed streaming: the concrete dispatch machinery is known by construction,
@@ -28,10 +29,14 @@ internal interface IQueryStreamInvoker<out TResult>
     /// plan — no <c>MediateOptions</c>, no per-call descriptor lookup, no scope-resolved
     /// mediator. Grouped streams resolve the same group-filtered dependencies the Mediate
     /// path would build, from a last-used group-set slot.
+    /// <paramref name="groupsOverride"/> carries a facade-level group filter (a
+    /// <see cref="Core.Abstractions.GroupSet"/>) without a settings object; when present
+    /// it takes precedence over the settings' groups.
     /// </summary>
     IAsyncEnumerable<TResult> Stream(object query, QueryMediationSettings? settings, CancellationToken cancellationToken,
         MessageDispatchEngine engine, IServiceProvider serviceProvider,
-        ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy);
+        ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
+        IEnumerable<string>? groupsOverride = null);
 }
 
 internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<TResult>
@@ -47,7 +52,8 @@ internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<
     private static readonly ResultAdapterService SharedEmptyAdapters = new();
 
     public IAsyncEnumerable<TResult> Stream(object query, QueryMediationSettings? settings, CancellationToken cancellationToken,
-        IMessageMediator mediator, ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy)
+        IMessageMediator mediator, ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
+        IEnumerable<string>? groupsOverride = null)
     {
         var options = new MediateOptions<TQuery, IAsyncEnumerable<TResult>>
         {
@@ -55,7 +61,7 @@ internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<
             MessageResolveStrategy = resolveStrategy,
             CancellationToken = cancellationToken,
             Items = settings?.Items,
-            Groups = settings?.Filters.Groups ?? EmptyGroups,
+            Groups = groupsOverride ?? settings?.Filters.Groups ?? EmptyGroups,
         };
 
         return mediator.Mediate((TQuery)query, options);
@@ -64,10 +70,11 @@ internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<
     /// <inheritdoc />
     public IAsyncEnumerable<TResult> Stream(object query, QueryMediationSettings? settings, CancellationToken cancellationToken,
         MessageDispatchEngine engine, IServiceProvider serviceProvider,
-        ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy)
+        ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
+        IEnumerable<string>? groupsOverride = null)
     {
-        var groups = settings?.Filters.Groups;
-        var dependencies = groups is null or List<string> { Count: 0 } or string[] { Length: 0 }
+        var groups = groupsOverride ?? settings?.Filters.Groups;
+        var dependencies = groups is null or List<string> { Count: 0 } or string[] { Length: 0 } or GroupSet { Count: 0 }
             ? GetPlan(engine.DependenciesFactory, resolveStrategy)
             : GetGroupedPlan(engine.DependenciesFactory, resolveStrategy, groups);
 
@@ -128,11 +135,13 @@ internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<
     private sealed class GroupedPlanSlot(
         MessageDependenciesFactory factory,
         string[] groups,
+        GroupSet? canonical,
         IMessageDependencies dependencies,
         int version)
     {
         public readonly MessageDependenciesFactory Factory = factory;
         public readonly string[] Groups = groups;
+        public readonly GroupSet? Canonical = canonical;
         public readonly IMessageDependencies Dependencies = dependencies;
         public readonly int Version = version;
     }
@@ -149,15 +158,16 @@ internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<
             if (slot is not null
                 && ReferenceEquals(slot.Factory, typedFactory)
                 && slot.Version == typedFactory.CurrentRegistryVersion
-                && Core.Internal.Mediator.PipelineExecutorCache.GroupsMatch(groups, slot.Groups))
+                && Core.Internal.Mediator.PipelineExecutorCache.SlotMatches(groups, slot.Groups, slot.Canonical))
             {
                 return slot.Dependencies;
             }
 
+            var canonical = groups as GroupSet;
             string[] materialized = [.. groups];
             var dependencies = BuildPlan(typedFactory, resolveStrategy, materialized);
             _cachedGroupedPlan = new GroupedPlanSlot(
-                typedFactory, materialized, dependencies, typedFactory.CurrentRegistryVersion);
+                typedFactory, materialized, canonical, dependencies, typedFactory.CurrentRegistryVersion);
             return dependencies;
         }
 

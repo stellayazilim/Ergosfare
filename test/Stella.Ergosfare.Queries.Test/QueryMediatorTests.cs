@@ -52,7 +52,7 @@ public class QueryMediatorTests
         var expected = new []  {"Foo", "Bar", "Baz"};
         var result = new List<string>();
         // act
-        await foreach (var item in mediator.StreamAsync(new StubNonGenericStreamStringResultQuery(), null))
+        await foreach (var item in mediator.StreamAsync(new StubNonGenericStreamStringResultQuery(), queryMediationSettings: null))
         {
             result.Add(item);
         }

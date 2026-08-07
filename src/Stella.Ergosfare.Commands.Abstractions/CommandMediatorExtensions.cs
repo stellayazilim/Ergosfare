@@ -17,7 +17,7 @@ public static class CommandMediatorExtensions
     public static ValueTask SendAsync(this ICommandMediator commandMediator, ICommand command,
         CancellationToken cancellationToken = default)
     {
-        return commandMediator.SendAsync(command,null, cancellationToken);
+        return commandMediator.SendAsync(command, commandMediationSettings: null, cancellationToken);
     }
 
     /// <summary>
@@ -31,7 +31,7 @@ public static class CommandMediatorExtensions
     public static ValueTask<TResult> SendAsync<TResult>(this ICommandMediator commandMediator, ICommand<TResult> command,
         CancellationToken cancellationToken = default)
     {
-        return commandMediator.SendAsync(command, null, cancellationToken);
+        return commandMediator.SendAsync(command, commandMediationSettings: null, cancellationToken);
     }
 
     /// <summary>
