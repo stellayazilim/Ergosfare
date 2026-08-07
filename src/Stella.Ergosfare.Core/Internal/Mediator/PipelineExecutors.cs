@@ -179,7 +179,8 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
     IMessageDependenciesFactory dependenciesFactory,
     IResultAdapterService? resultAdapterService,
     string[] groups,
-    Func<THandler>? directHandlerFactory = null) : IPipelineExecutor
+    Func<THandler>? directHandlerFactory = null,
+    Func<IServiceProvider, THandler>? providerHandlerFactory = null) : IPipelineExecutor
     where TMessage : notnull, IMessage
     where THandler : class, IAsyncHandler<TMessage>
 {
@@ -188,13 +189,16 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
     private readonly ResultAdapterService? _concreteAdapters = resultAdapterService as ResultAdapterService;
     private readonly bool _foreignAdapters = resultAdapterService is not null and not ResultAdapterService;
 
-    // Compile-time construction path for the planned handler; discarded up front for
+    // Compile-time construction paths for the planned handler; discarded up front for
     // disposable handlers — the container tracks transient disposables in the resolving
-    // scope, direct construction would not.
-    private readonly Func<THandler>? _directHandlerFactory =
-        typeof(IDisposable).IsAssignableFrom(typeof(THandler)) || typeof(IAsyncDisposable).IsAssignableFrom(typeof(THandler))
-            ? null
-            : directHandlerFactory;
+    // scope, direct construction would not. The provider-taking shape covers handlers
+    // with constructor dependencies: it resolves them from the dispatching scope's
+    // provider, exactly where container activation would resolve them.
+    private static readonly bool HandlerIsDisposable =
+        typeof(IDisposable).IsAssignableFrom(typeof(THandler)) || typeof(IAsyncDisposable).IsAssignableFrom(typeof(THandler));
+
+    private readonly Func<THandler>? _directHandlerFactory = HandlerIsDisposable ? null : directHandlerFactory;
+    private readonly Func<IServiceProvider, THandler>? _providerHandlerFactory = HandlerIsDisposable ? null : providerHandlerFactory;
 
     private IMessageDependencies? _cachedDependencies;
     private MessageDependencies? _cachedFastDependencies;
@@ -218,7 +222,7 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
             // hand: a version transition observed halfway can only route back through the
             // container, never construct a type the registry no longer plans.
             IHandler handler = _useDirectConstruction && handlerReference.HandlerType == typeof(THandler)
-                ? _directHandlerFactory!()
+                ? _directHandlerFactory is not null ? _directHandlerFactory() : _providerHandlerFactory!(serviceProvider)
                 : handlerReference.Resolve(serviceProvider);
 
             // The compile-time plan's handler type: a devirtualized call, no pattern
@@ -260,7 +264,7 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
             var fastDependencies = dependencies as MessageDependencies;
             _cachedFastDependencies = fastDependencies;
             _cachedDependencies = dependencies;
-            _useDirectConstruction = _directHandlerFactory is not null
+            _useDirectConstruction = (_directHandlerFactory is not null || _providerHandlerFactory is not null)
                 && fastDependencies is { MemoizedInstances: false, FastSingleHandler.HandlerType: var plannedType }
                 && plannedType == typeof(THandler)
                 && typedFactory.IsPlainTransientRegistration(typeof(THandler));
@@ -287,7 +291,8 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
     IMessageDependenciesFactory dependenciesFactory,
     IResultAdapterService? resultAdapterService,
     string[] groups,
-    Func<THandler>? directHandlerFactory = null) : IPipelineExecutor<TResult>
+    Func<THandler>? directHandlerFactory = null,
+    Func<IServiceProvider, THandler>? providerHandlerFactory = null) : IPipelineExecutor<TResult>
     where TMessage : notnull, IMessage
     where THandler : class, IAsyncHandler<TMessage, TResult>
 {
@@ -296,10 +301,11 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
     private readonly ResultAdapterService? _concreteAdapters = resultAdapterService as ResultAdapterService;
     private readonly bool _foreignAdapters = resultAdapterService is not null and not ResultAdapterService;
 
-    private readonly Func<THandler>? _directHandlerFactory =
-        typeof(IDisposable).IsAssignableFrom(typeof(THandler)) || typeof(IAsyncDisposable).IsAssignableFrom(typeof(THandler))
-            ? null
-            : directHandlerFactory;
+    private static readonly bool HandlerIsDisposable =
+        typeof(IDisposable).IsAssignableFrom(typeof(THandler)) || typeof(IAsyncDisposable).IsAssignableFrom(typeof(THandler));
+
+    private readonly Func<THandler>? _directHandlerFactory = HandlerIsDisposable ? null : directHandlerFactory;
+    private readonly Func<IServiceProvider, THandler>? _providerHandlerFactory = HandlerIsDisposable ? null : providerHandlerFactory;
 
     private IMessageDependencies? _cachedDependencies;
     private MessageDependencies? _cachedFastDependencies;
@@ -315,7 +321,7 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
             && (_concreteAdapters is null || _concreteAdapters.IsEmpty))
         {
             IHandler handler = _useDirectConstruction && handlerReference.HandlerType == typeof(THandler)
-                ? _directHandlerFactory!()
+                ? _directHandlerFactory is not null ? _directHandlerFactory() : _providerHandlerFactory!(serviceProvider)
                 : handlerReference.Resolve(serviceProvider);
 
             if (handler is THandler planned)
@@ -352,7 +358,7 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
             var fastDependencies = dependencies as MessageDependencies;
             _cachedFastDependencies = fastDependencies;
             _cachedDependencies = dependencies;
-            _useDirectConstruction = _directHandlerFactory is not null
+            _useDirectConstruction = (_directHandlerFactory is not null || _providerHandlerFactory is not null)
                 && fastDependencies is { MemoizedInstances: false, FastSingleHandler.HandlerType: var plannedType }
                 && plannedType == typeof(THandler)
                 && typedFactory.IsPlainTransientRegistration(typeof(THandler));
@@ -751,8 +757,8 @@ internal sealed class PipelineExecutorCache(
     /// <summary>
     /// Constructor arguments carried into the generic re-entry of a dispatch root.
     /// <paramref name="DirectHandlerFactory"/> is a plan's erased <c>Func&lt;THandler&gt;</c>
-    /// (cast back inside the closed generic), or <c>null</c> for plain roots and plans
-    /// without a construction path.
+    /// or <c>Func&lt;IServiceProvider, THandler&gt;</c> (cast back inside the closed
+    /// generic), or <c>null</c> for plain roots and plans without a construction path.
     /// </summary>
     private readonly record struct ExecutorState(
         IMessageDescriptor Descriptor,
@@ -798,7 +804,8 @@ internal sealed class PipelineExecutorCache(
             where THandler : class, IAsyncHandler<TMessage>
             => new GeneratedVoidPipelineExecutor<TMessage, THandler>(
                 state.Descriptor, state.DependenciesFactory, state.ResultAdapterService, state.Groups,
-                state.DirectHandlerFactory as Func<THandler>);
+                state.DirectHandlerFactory as Func<THandler>,
+                state.DirectHandlerFactory as Func<IServiceProvider, THandler>);
     }
 
     /// <summary>
@@ -815,7 +822,8 @@ internal sealed class PipelineExecutorCache(
             where THandler : class, IAsyncHandler<TMessage, TResult>
             => new GeneratedResultPipelineExecutor<TMessage, TResult, THandler>(
                 state.Descriptor, state.DependenciesFactory, state.ResultAdapterService, state.Groups,
-                state.DirectHandlerFactory as Func<THandler>);
+                state.DirectHandlerFactory as Func<THandler>,
+                state.DirectHandlerFactory as Func<IServiceProvider, THandler>);
     }
 
     private IMessageDescriptor FindDescriptor(Type messageType)

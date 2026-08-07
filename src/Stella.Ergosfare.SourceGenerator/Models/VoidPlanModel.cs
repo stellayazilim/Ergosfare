@@ -15,7 +15,17 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 ///     (<c>static () => new THandler()</c>); see
 ///     <see cref="RegistrableTypeModel.IsDirectlyConstructible"/>.
 /// </param>
+/// <param name="ProviderConstructionExpression">
+///     The provider-taking construction factory for a dependency-injected handler, or
+///     <c>null</c>; see <see cref="RegistrableTypeModel.ProviderConstructionExpression"/>.
+/// </param>
+/// <param name="UsesKeyedServices">
+///     Whether the provider factory needs the keyed-service extensions; see
+///     <see cref="RegistrableTypeModel.ProviderConstructionUsesKeyedServices"/>.
+/// </param>
 internal readonly record struct VoidPlanModel(
     string MessageTypeExpression,
     string HandlerTypeExpression,
-    bool HasDirectConstruction);
+    bool HasDirectConstruction,
+    string? ProviderConstructionExpression,
+    bool UsesKeyedServices);

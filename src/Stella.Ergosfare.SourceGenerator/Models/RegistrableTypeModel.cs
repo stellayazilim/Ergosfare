@@ -102,6 +102,24 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     /// </summary>
     public required bool IsDirectlyConstructible { get; init; }
 
+    /// <summary>
+    ///     The emitted provider-taking construction factory
+    ///     (<c>static provider =&gt; new THandler(provider.GetRequiredService&lt;TDep&gt;(), ...)</c>)
+    ///     for a handler whose single public constructor takes only plain (or
+    ///     <c>[FromKeyedServices]</c>) service parameters, or <c>null</c> when the type
+    ///     does not qualify. Mutually exclusive with
+    ///     <see cref="IsDirectlyConstructible"/> — parameterless construction stays on the
+    ///     cheaper <c>Func&lt;THandler&gt;</c> shape. Meaningful for handler types only.
+    /// </summary>
+    public required string? ProviderConstructionExpression { get; init; }
+
+    /// <summary>
+    ///     Whether <see cref="ProviderConstructionExpression"/> resolves any parameter
+    ///     through the keyed-service extensions; emission then additionally requires
+    ///     those extensions to be resolvable in the consuming compilation.
+    /// </summary>
+    public required bool ProviderConstructionUsesKeyedServices { get; init; }
+
     public bool Equals(RegistrableTypeModel other)
     {
         if (TypeofExpression != other.TypeofExpression
@@ -116,6 +134,8 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
             || ReferencedAssemblyName != other.ReferencedAssemblyName
             || IsDispatchableMessage != other.IsDispatchableMessage
             || IsDirectlyConstructible != other.IsDirectlyConstructible
+            || ProviderConstructionExpression != other.ProviderConstructionExpression
+            || ProviderConstructionUsesKeyedServices != other.ProviderConstructionUsesKeyedServices
             || Descriptors.Length != other.Descriptors.Length
             || DiscoveryKeys.Length != other.DiscoveryKeys.Length
             || DispatchResults.Length != other.DispatchResults.Length)
