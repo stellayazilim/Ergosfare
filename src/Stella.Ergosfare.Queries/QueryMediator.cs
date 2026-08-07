@@ -113,8 +113,14 @@ public class QueryMediator : IQueryMediator
     public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, QueryMediationSettings? queryMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
-        return QueryStreamInvokerCache.Get<TResult>(query.GetType()).Stream(
-            query, queryMediationSettings, cancellationToken, RequireMessageMediator(), _messageResolveStrategy);
+        // Engine-backed facades stream against the invoker-cached pipeline plan — no
+        // per-call mediator resolution, MediateOptions or descriptor lookup; the wrapped
+        // shape keeps the original Mediate path for foreign mediator implementations.
+        return _engine is not null
+            ? QueryStreamInvokerCache.Get<TResult>(query.GetType()).Stream(
+                query, queryMediationSettings, cancellationToken, _engine, _serviceProvider!, _messageResolveStrategy)
+            : QueryStreamInvokerCache.Get<TResult>(query.GetType()).Stream(
+                query, queryMediationSettings, cancellationToken, RequireMessageMediator(), _messageResolveStrategy);
     }
 
     /// <summary>
@@ -138,9 +144,10 @@ public class QueryMediator : IQueryMediator
     }
 
     /// <summary>
-    /// The mediator the streaming path (untouched by the engine: it mediates through
-    /// <c>Mediate(options)</c>) runs against — the wrapped instance, or on the engine
-    /// shape the scope's own registration, resolved on demand.
+    /// The mediator the wrapped-shape streaming path (which mediates through
+    /// <c>Mediate(options)</c>) runs against — the wrapped instance, or the scope's own
+    /// registration resolved on demand. Engine-backed facades never call this: their
+    /// streams run the invoker's engine fast lane.
     /// </summary>
     private IMessageMediator RequireMessageMediator()
         => _messageMediator
