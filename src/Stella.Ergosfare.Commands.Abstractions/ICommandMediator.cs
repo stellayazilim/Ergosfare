@@ -74,4 +74,29 @@ public interface ICommandMediator
     ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command,
                                                    CommandMediationSettings? commandMediationSettings = null,
                                                    CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Sends a void command under a canonical group filter. With a reused
+    ///     <see cref="Core.Abstractions.GroupSet"/> (define filters once, statically) the
+    ///     grouped dispatch caches match on a single reference check and the call
+    ///     allocates no settings object. The default implementation routes through the
+    ///     settings overload, so foreign mediator implementations keep working unchanged.
+    /// </summary>
+    /// <param name="command">The command to send.</param>
+    /// <param name="groups">The canonical group filter; <see cref="Core.Abstractions.GroupSet.Empty"/> dispatches the default pipeline.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    ValueTask SendAsync(ICommand command, Core.Abstractions.GroupSet groups, CancellationToken cancellationToken = default)
+        => SendAsync(command, new CommandMediationSettings { Filters = { Groups = groups } }, cancellationToken);
+
+    /// <summary>
+    ///     Result-producing counterpart of
+    ///     <see cref="SendAsync(ICommand, Core.Abstractions.GroupSet, CancellationToken)"/>.
+    /// </summary>
+    /// <typeparam name="TResult">The expected result type of the command.</typeparam>
+    /// <param name="command">The command to send.</param>
+    /// <param name="groups">The canonical group filter.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, Core.Abstractions.GroupSet groups,
+        CancellationToken cancellationToken = default)
+        => SendAsync(command, new CommandMediationSettings { Filters = { Groups = groups } }, cancellationToken);
 }

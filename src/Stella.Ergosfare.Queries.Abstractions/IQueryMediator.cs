@@ -64,4 +64,31 @@ public interface IQueryMediator: IMessage
     IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query,
                                                              QueryMediationSettings? queryMediationSettings = null,
                                                              CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Executes a query under a canonical group filter. With a reused
+    ///     <see cref="GroupSet"/> (define filters once, statically) the grouped dispatch
+    ///     caches match on a single reference check and the call allocates no settings
+    ///     object. The default implementation routes through the settings overload, so
+    ///     foreign mediator implementations keep working unchanged.
+    /// </summary>
+    /// <typeparam name="TQueryResult">The type of the result returned by the query.</typeparam>
+    /// <param name="query">The query to execute.</param>
+    /// <param name="groups">The canonical group filter; <see cref="GroupSet.Empty"/> dispatches the default pipeline.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    ValueTask<TQueryResult> QueryAsync<TQueryResult>(IQuery<TQueryResult> query, GroupSet groups,
+        CancellationToken cancellationToken = default)
+        => QueryAsync(query, new QueryMediationSettings { Filters = { Groups = groups } }, cancellationToken);
+
+    /// <summary>
+    ///     Streaming counterpart of
+    ///     <see cref="QueryAsync{TQueryResult}(IQuery{TQueryResult}, GroupSet, CancellationToken)"/>.
+    /// </summary>
+    /// <typeparam name="TQueryResult">The type of the results returned by the stream query.</typeparam>
+    /// <param name="query">The stream query to execute.</param>
+    /// <param name="groups">The canonical group filter.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query, GroupSet groups,
+        CancellationToken cancellationToken = default)
+        => StreamAsync(query, new QueryMediationSettings { Filters = { Groups = groups } }, cancellationToken);
 }

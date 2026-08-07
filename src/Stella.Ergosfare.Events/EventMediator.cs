@@ -136,6 +136,56 @@ public class EventMediator : IPublisher
     }
 
     /// <summary>
+    /// Publishes an event under a canonical group filter — no settings object, and with a
+    /// reused <see cref="GroupSet"/> the grouped broadcast plan matches on a single
+    /// reference check. An empty set publishes the default pipeline.
+    /// </summary>
+    public ValueTask PublishAsync(IEvent @event, GroupSet groups, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(groups);
+
+        IEnumerable<string>? effectiveGroups = groups.Count == 0 ? null : groups;
+        var invoker = EventBroadcastInvokerCache.Get(@event.GetType());
+
+        return _engine is not null
+            ? invoker.Publish(
+                @event, null, cancellationToken,
+                _engine, _serviceProvider!, _messageResolveStrategy, _resultAdapterService,
+                groupsOverride: effectiveGroups)
+            : invoker.Publish(
+                @event, null, cancellationToken,
+                _messageMediator!, _messageResolveStrategy, _resultAdapterService,
+                groupsOverride: effectiveGroups);
+    }
+
+    /// <summary>
+    /// Strongly-typed counterpart of
+    /// <see cref="PublishAsync(IEvent, GroupSet, CancellationToken)"/>; the invoker comes
+    /// from the static-generic holder when the runtime type is exactly
+    /// <typeparamref name="TEvent"/>.
+    /// </summary>
+    public ValueTask PublishAsync<TEvent>(TEvent @event, GroupSet groups, CancellationToken cancellationToken = default)
+        where TEvent : notnull
+    {
+        ArgumentNullException.ThrowIfNull(groups);
+
+        IEnumerable<string>? effectiveGroups = groups.Count == 0 ? null : groups;
+        var invoker = @event.GetType() == typeof(TEvent)
+            ? EventBroadcastInvokerCache.Holder<TEvent>.Instance
+            : EventBroadcastInvokerCache.Get(@event.GetType());
+
+        return _engine is not null
+            ? invoker.Publish(
+                @event, null, cancellationToken,
+                _engine, _serviceProvider!, _messageResolveStrategy, _resultAdapterService,
+                groupsOverride: effectiveGroups)
+            : invoker.Publish(
+                @event, null, cancellationToken,
+                _messageMediator!, _messageResolveStrategy, _resultAdapterService,
+                groupsOverride: effectiveGroups);
+    }
+
+    /// <summary>
     /// Publishes an event under an externally owned execution context — the
     /// nested-dispatch path: a handler opens a scope on its own context and passes the
     /// child here. The caller owns the context's lifetime; cancellation flows from the
