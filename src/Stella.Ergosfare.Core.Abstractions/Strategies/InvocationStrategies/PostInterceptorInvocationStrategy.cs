@@ -17,21 +17,30 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 /// The pipeline's result type — <see cref="ValueTask"/> for void pipelines, where the
 /// completed-task box stands in as the (meaningless) result object.
 /// </typeparam>
+/// <remarks>
+/// Static: the pipeline state travels as arguments, so a dispatch allocates no invoker object.
+/// </remarks>
 #pragma warning disable CS8714 // TResult is used as a pattern type argument; interceptor contracts declare notnull results
-internal sealed class PostInterceptorInvocationStrategy<TMessage, TResult>(
-    IMessageDependencies messageDependencies,
-    IResultAdapterService? resultAdapterService,
-    IServiceProvider serviceProvider)
+internal static class PostInterceptorInvocationStrategy<TMessage, TResult>
     where TMessage : notnull
 {
     /// <summary>
     /// Executes all post-interceptors for the specified message and result.
     /// </summary>
+    /// <param name="messageDependencies">The message's pipeline composition, supplying the post-interceptor list.</param>
+    /// <param name="resultAdapterService">Adapters that surface a failure carried inside an interceptor's result, if configured.</param>
+    /// <param name="serviceProvider">The provider of the scope this dispatch runs in; interceptors resolve from it.</param>
     /// <param name="message">The message that was handled.</param>
     /// <param name="result">The result produced by the pipeline so far.</param>
     /// <param name="context">The execution context for the current pipeline invocation.</param>
     /// <returns>The (possibly replaced) result after all post-interceptors have executed.</returns>
-    public async ValueTask<object?> Invoke(TMessage message, object? result, IExecutionContext context)
+    public static async ValueTask<object?> Invoke(
+        IMessageDependencies messageDependencies,
+        IResultAdapterService? resultAdapterService,
+        IServiceProvider serviceProvider,
+        TMessage message,
+        object? result,
+        IExecutionContext context)
     {
         var interceptors = messageDependencies.PostInterceptors;
 

@@ -70,17 +70,16 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
         Exception? exception = null;
         try
         {
-            // Empty stages are skipped before any invoker object exists — an invoker over an
-            // empty stage is a no-op, so the guards change allocations, not behavior.
+            // Empty stages are skipped outright — an invoker pass over an empty stage is a
+            // no-op, so the guards only cut dead work, not behavior.
             if (messageDependencies.PreInterceptors.Count > 0)
             {
-                // events doesn't need result adapter, since events intended to not return a result
-                var preInvoker = new PreInterceptorInvocationStrategy<TMessage>(messageDependencies, serviceProvider);
-
                 // Pre-interceptors may transform the event — including returning a brand new
                 // instance — so the broadcast continues with the returned message, exactly as
-                // the single-handler strategies do.
-                message = (TMessage) await preInvoker.Invoke(message, context);
+                // the single-handler strategies do. Events don't need a result adapter, since
+                // events aren't intended to return a result.
+                message = (TMessage) await PreInterceptorInvocationStrategy<TMessage>.Invoke(
+                    messageDependencies, serviceProvider, message, context);
             }
 
             if (handlers.Count > 0)
@@ -97,8 +96,8 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
             {
                 // A ValueTask may be awaited only once — the completed ValueTask stands in as the
                 // (meaningless for events) result object flowing through the interceptor stages.
-                var postInvoker = new PostInterceptorInvocationStrategy<TMessage, ValueTask>(messageDependencies, null, serviceProvider);
-                await postInvoker.Invoke(message, CompletedResultBox.Instance, context);
+                await PostInterceptorInvocationStrategy<TMessage, ValueTask>.Invoke(
+                    messageDependencies, null, serviceProvider, message, CompletedResultBox.Instance, context);
             }
         }
         catch (Exception e)
@@ -106,15 +105,15 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
             exception = e;
 
             // Zero exception interceptors: rethrow directly — identical to the invoker's own
-            // empty-stage behavior (it rethrows via ExceptionDispatchInfo), minus the
-            // allocations. Final interceptors still run from the finally block.
+            // empty-stage behavior (it rethrows via ExceptionDispatchInfo), minus the capture.
+            // Final interceptors still run from the finally block.
             if (messageDependencies.ExceptionInterceptors.Count == 0)
             {
                 throw;
             }
 
-            var exceptionInvoker = new ExceptionInterceptorInvocationStrategy<TMessage, ValueTask>(messageDependencies, serviceProvider);
-            await exceptionInvoker.Invoke(message, CompletedResultBox.Instance,
+            await ExceptionInterceptorInvocationStrategy<TMessage, ValueTask>.Invoke(
+                messageDependencies, serviceProvider, message, CompletedResultBox.Instance,
                 ExceptionDispatchInfo.Capture(e), context);
 
         }
@@ -123,8 +122,8 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
         {
             if (messageDependencies.FinalInterceptors.Count > 0)
             {
-                var finalInvoker = new FinalInterceptorInvocationStrategy<TMessage, ValueTask>(messageDependencies, serviceProvider);
-                await finalInvoker.Invoke(message, CompletedResultBox.Instance, exception, context);
+                await FinalInterceptorInvocationStrategy<TMessage, ValueTask>.Invoke(
+                    messageDependencies, serviceProvider, message, CompletedResultBox.Instance, exception, context);
             }
         }
     }

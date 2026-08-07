@@ -63,8 +63,8 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         try
         {
             // run pre interceptors
-            var preInvoker = new PreInterceptorInvocationStrategy<TMessage>(messageDependencies, serviceProvider);
-            message =  (TMessage)await preInvoker.Invoke(message, context) ;
+            message = (TMessage) await PreInterceptorInvocationStrategy<TMessage>.Invoke(
+                messageDependencies, serviceProvider, message, context);
 
 
             // Typed dispatch only — no object bridge. `in TMessage` variance admits handlers
@@ -130,9 +130,9 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         {
             if (_unknownException is null)
             {
-                var postInvoker = new PostInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>(messageDependencies, resultAdapterService, serviceProvider);
                 // we can't override result since its chunked
-                await postInvoker.Invoke(message, enumerator, context).ConfigureAwait(false);
+                await PostInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>.Invoke(
+                    messageDependencies, resultAdapterService, serviceProvider, message, enumerator, context).ConfigureAwait(false);
             }
         }
         catch (ExecutionAbortedException)
@@ -145,13 +145,10 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         {
             if (_unknownException is not null)
             {
-                var exceptionInvoker = new ExceptionInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>(messageDependencies, serviceProvider);
                 // we can't override result since its chunked
-                await exceptionInvoker.Invoke(
-                    message,
-                    enumerator,
-                    ExceptionDispatchInfo.Capture(_unknownException),
-                    context).ConfigureAwait(false);
+                await ExceptionInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>.Invoke(
+                    messageDependencies, serviceProvider, message, enumerator,
+                    ExceptionDispatchInfo.Capture(_unknownException), context).ConfigureAwait(false);
             }
         }
         catch (Exception e) when (e is not ExecutionAbortedException)
@@ -160,8 +157,8 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         }
         finally
         {
-            var finalInvoker = new FinalInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>(messageDependencies, serviceProvider);
-            await finalInvoker.Invoke(message, enumerator, _unknownException, context);
+            await FinalInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>.Invoke(
+                messageDependencies, serviceProvider, message, enumerator, _unknownException, context);
         }
     }
     

@@ -21,7 +21,8 @@ public class Program
 {
     public static void Main(string[] args)
     {
-        BenchmarkRunner.Run<MediationBenchmark>();
+        // Args flow through so filtered runs work, e.g. `-- --filter *Intercepted`.
+        BenchmarkRunner.Run<MediationBenchmark>(args: args);
     }
 }
 
@@ -79,6 +80,49 @@ public sealed class FirstGroupedPingEventHandler : IEventHandler<GroupedPingEven
 public sealed class SecondGroupedPingEventHandler : IEventHandler<GroupedPingEvent>
 {
     public ValueTask HandleAsync(GroupedPingEvent @event, IExecutionContext context) => ValueTask.CompletedTask;
+}
+
+// Intercepted variants on their own message types: one pass-through pre- and one
+// pass-through post-interceptor each, so these rows measure the interceptor-bearing
+// strategy path — the staged-plans epic baseline — without disturbing the default
+// rows' interceptor-free fast lanes (interceptors bind to their message type only).
+
+public sealed class InterceptedCommand : Stella.Ergosfare.Commands.Abstractions.ICommand { }
+
+public sealed class InterceptedCommandHandler : ICommandHandler<InterceptedCommand>
+{
+    public ValueTask HandleAsync(InterceptedCommand command, IExecutionContext context) => ValueTask.CompletedTask;
+}
+
+public sealed class InterceptedCommandPreInterceptor : ICommandPreInterceptor<InterceptedCommand>
+{
+    public ValueTask<InterceptedCommand> HandleAsync(InterceptedCommand command, IExecutionContext context)
+        => ValueTask.FromResult(command);
+}
+
+public sealed class InterceptedCommandPostInterceptor : ICommandPostInterceptor<InterceptedCommand>
+{
+    public ValueTask<object> HandleAsync(InterceptedCommand command, object messageResult, IExecutionContext context)
+        => ValueTask.FromResult(messageResult);
+}
+
+public sealed class InterceptedIntQuery : IQuery<int> { }
+
+public sealed class InterceptedIntQueryHandler : IQueryHandler<InterceptedIntQuery, int>
+{
+    public ValueTask<int> HandleAsync(InterceptedIntQuery query, IExecutionContext context) => ValueTask.FromResult(7);
+}
+
+public sealed class InterceptedIntQueryPreInterceptor : IQueryPreInterceptor<InterceptedIntQuery>
+{
+    public ValueTask<InterceptedIntQuery> HandleAsync(InterceptedIntQuery query, IExecutionContext context)
+        => ValueTask.FromResult(query);
+}
+
+public sealed class InterceptedIntQueryPostInterceptor : IQueryPostInterceptor<InterceptedIntQuery, int>
+{
+    public ValueTask<int> HandleAsync(InterceptedIntQuery query, int queryResult, IExecutionContext context)
+        => ValueTask.FromResult(queryResult);
 }
 
 // ---------------------------------------------------------------------------
@@ -188,6 +232,8 @@ public class MediationBenchmark
     private readonly PingEvent _pingEvent = new();
     private readonly GroupedCommand _groupedCommand = new();
     private readonly GroupedPingEvent _groupedPingEvent = new();
+    private readonly InterceptedCommand _interceptedCommand = new();
+    private readonly InterceptedIntQuery _interceptedIntQuery = new();
 
     private static readonly string[] BenchGroups = ["bench"];
     private static readonly GroupSet BenchGroupSet = GroupSet.Of("bench");
@@ -213,8 +259,17 @@ public class MediationBenchmark
                 {
                     commands.Register<VoidCommandHandler>();
                     commands.Register<GroupedCommandHandler>();
+                    commands.Register<InterceptedCommandHandler>();
+                    commands.Register<InterceptedCommandPreInterceptor>();
+                    commands.Register<InterceptedCommandPostInterceptor>();
                 });
-                options.AddQueryModule(queries => queries.Register<IntQueryHandler>());
+                options.AddQueryModule(queries =>
+                {
+                    queries.Register<IntQueryHandler>();
+                    queries.Register<InterceptedIntQueryHandler>();
+                    queries.Register<InterceptedIntQueryPreInterceptor>();
+                    queries.Register<InterceptedIntQueryPostInterceptor>();
+                });
                 options.AddEventModule(events =>
                 {
                     events.Register<FirstPingEventHandler>();
@@ -329,8 +384,19 @@ public class MediationBenchmark
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask Command_Void_Memoized() => _memoizedCommands.SendAsync(_voidCommand);
 
+    /// <summary>
+    /// The interceptor-bearing strategy path (one pass-through pre- and post-interceptor):
+    /// the baseline the staged-plans epic optimizes. Every dispatch that can't take a fast
+    /// lane pays this shape.
+    /// </summary>
+    [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask Command_Void_Intercepted() => _commands.SendAsync(_interceptedCommand);
+
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask<int> Query_Result() => _queries.QueryAsync(_intQuery);
+
+    [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask<int> Query_Result_Intercepted() => _queries.QueryAsync(_interceptedIntQuery);
 
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask<int> Query_Result_Generated() => _generatedQueries.QueryAsync(_intQuery);

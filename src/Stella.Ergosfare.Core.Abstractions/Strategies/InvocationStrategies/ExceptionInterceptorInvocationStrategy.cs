@@ -19,20 +19,25 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 /// The pipeline's result type — <see cref="ValueTask"/> for void pipelines, where the
 /// completed-task box stands in as the (meaningless) result object.
 /// </typeparam>
-internal sealed class ExceptionInterceptorInvocationStrategy<TMessage, TResult>(
-    IMessageDependencies messageDependencies,
-    IServiceProvider serviceProvider)
+/// <remarks>
+/// Static: the pipeline state travels as arguments, so a dispatch allocates no invoker object.
+/// </remarks>
+internal static class ExceptionInterceptorInvocationStrategy<TMessage, TResult>
     where TMessage : notnull
 {
     /// <summary>
     /// Executes all exception interceptors for the specified message, result, and exception.
     /// </summary>
+    /// <param name="messageDependencies">The message's pipeline composition, supplying the exception-interceptor list.</param>
+    /// <param name="serviceProvider">The provider of the scope this dispatch runs in; interceptors resolve from it.</param>
     /// <param name="message">The message whose processing threw.</param>
     /// <param name="result">The result produced by the pipeline so far, if any.</param>
     /// <param name="exceptionDispatchInfo">The captured exception; rethrown when no interceptor is registered.</param>
     /// <param name="executionContext">The execution context for the current pipeline invocation.</param>
     /// <returns>The (possibly replaced) result after all exception interceptors have executed.</returns>
-    public async ValueTask<object?> Invoke(
+    public static async ValueTask<object?> Invoke(
+        IMessageDependencies messageDependencies,
+        IServiceProvider serviceProvider,
         TMessage message,
         object? result,
         ExceptionDispatchInfo exceptionDispatchInfo,
