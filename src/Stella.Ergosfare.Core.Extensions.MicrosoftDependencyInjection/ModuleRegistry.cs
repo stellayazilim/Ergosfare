@@ -89,23 +89,61 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
             RegisterHandlersFromDescriptor(descriptor, allHandlerTypes);
         }
 
-        // Capture the effective DI lifetime of every handler type (a user registration made
-        // before AddErgosfare wins over the TryAddTransient defaults above). Messages whose
-        // whole pipeline is singleton-registered keep the memoized fast path; the rest are
-        // resolved per scope so scoped/transient dependencies are honored.
-        var handlerLifetimes = new Dictionary<Type, ServiceLifetime>();
-        foreach (var serviceDescriptor in services)
-        {
-            if (allHandlerTypes.Contains(serviceDescriptor.ServiceType))
-            {
-                handlerLifetimes[serviceDescriptor.ServiceType] = serviceDescriptor.Lifetime;
-            }
-        }
-
-        services.TryAddSingleton(new HandlerLifetimeRegistry(handlerLifetimes));
+        // The lifetime registry is registered as a FACTORY so the capture runs at first
+        // resolution — after BuildServiceProvider, when the collection is final. A snapshot
+        // taken here (inside AddErgosfare) would miss registrations the user adds
+        // afterwards; for memoization that staleness only cost the fast path, but the
+        // plans' direct-construction gate must never claim a handler whose effective
+        // registration the user has overridden. The captured set of handler types keeps
+        // the scan bounded to pipeline participants.
+        var registeredHandlerTypes = allHandlerTypes;
+        services.TryAddSingleton(_ => CaptureHandlerLifetimes(services, registeredHandlerTypes));
     }
     
     
+    /// <summary>
+    /// Builds the lifetime registry from the finalized service collection: the effective
+    /// DI lifetime of every handler type (last registration wins, mirroring
+    /// <c>GetRequiredService</c>), and the subset whose effective registration is a plain
+    /// transient self-registration — the shape the module's own <c>TryAddTransient</c>
+    /// produces, and the only shape for which a generated plan may construct the handler
+    /// directly. Keyed descriptors throw on the implementation members, so they are
+    /// excluded up front.
+    /// </summary>
+    private static HandlerLifetimeRegistry CaptureHandlerLifetimes(
+        IServiceCollection services, HashSet<Type> handlerTypes)
+    {
+        var handlerLifetimes = new Dictionary<Type, ServiceLifetime>();
+        var plainTransientRegistrations = new HashSet<Type>();
+
+        foreach (var serviceDescriptor in services)
+        {
+            if (!handlerTypes.Contains(serviceDescriptor.ServiceType))
+            {
+                continue;
+            }
+
+            handlerLifetimes[serviceDescriptor.ServiceType] = serviceDescriptor.Lifetime;
+
+            var isPlain = !serviceDescriptor.IsKeyedService
+                          && serviceDescriptor.Lifetime == ServiceLifetime.Transient
+                          && serviceDescriptor.ImplementationType == serviceDescriptor.ServiceType
+                          && serviceDescriptor.ImplementationFactory is null
+                          && serviceDescriptor.ImplementationInstance is null;
+
+            if (isPlain)
+            {
+                plainTransientRegistrations.Add(serviceDescriptor.ServiceType);
+            }
+            else
+            {
+                plainTransientRegistrations.Remove(serviceDescriptor.ServiceType);
+            }
+        }
+
+        return new HandlerLifetimeRegistry(handlerLifetimes, plainTransientRegistrations);
+    }
+
     /// <summary>
     /// Collects and registers all handler types defined in the given message descriptor.
     /// </summary>

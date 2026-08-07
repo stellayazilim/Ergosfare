@@ -29,8 +29,127 @@ public class VoidPlanEmissionTests
 
         Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
+
+        // The handler has an accessible parameterless constructor and is not disposable,
+        // so the plan carries the direct-construction factory.
         Assert.Contains(
-            "GeneratedDispatchRoots.AddVoidPlan<global::TestApp.SoloPing, global::TestApp.SoloPingHandler>();",
+            "GeneratedDispatchRoots.AddVoidPlan<global::TestApp.SoloPing, global::TestApp.SoloPingHandler>(static () => new global::TestApp.SoloPingHandler());",
+            result.GeneratedSource);
+    }
+
+    [Fact]
+    public void ConstructorDependency_SuppressesTheFactoryButKeepsThePlan()
+    {
+        var result = GeneratorTestHost.Run("""
+            using Stella.Ergosfare.Commands.Abstractions;
+            using System.Threading.Tasks;
+
+            namespace TestApp
+            {
+                public sealed record NeedyPing : ICommand;
+
+                public sealed class NeedyPingHandler : ICommandHandler<NeedyPing>
+                {
+                    public NeedyPingHandler(string dependency) { }
+
+                    public ValueTask HandleAsync(NeedyPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                        => default;
+                }
+            }
+            """);
+
+        Assert.Empty(result.CompilationErrors);
+        Assert.Contains(
+            "GeneratedDispatchRoots.AddVoidPlan<global::TestApp.NeedyPing, global::TestApp.NeedyPingHandler>();",
+            result.GeneratedSource);
+    }
+
+    [Fact]
+    public void AdditionalConstructor_SuppressesTheFactoryButKeepsThePlan()
+    {
+        var result = GeneratorTestHost.Run("""
+            using Stella.Ergosfare.Commands.Abstractions;
+            using System.Threading.Tasks;
+
+            namespace TestApp
+            {
+                public sealed record PickyPing : ICommand;
+
+                public sealed class PickyPingHandler : ICommandHandler<PickyPing>
+                {
+                    public PickyPingHandler() { }
+
+                    public PickyPingHandler(string dependency) { }
+
+                    public ValueTask HandleAsync(PickyPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                        => default;
+                }
+            }
+            """);
+
+        Assert.Empty(result.CompilationErrors);
+
+        // The container's greedy constructor selection would pick the richer constructor;
+        // a `new()` factory would silently drop that dependency — plan only, no factory.
+        Assert.Contains(
+            "GeneratedDispatchRoots.AddVoidPlan<global::TestApp.PickyPing, global::TestApp.PickyPingHandler>();",
+            result.GeneratedSource);
+    }
+
+    [Fact]
+    public void RequiredMember_SuppressesTheFactoryButKeepsThePlan()
+    {
+        var result = GeneratorTestHost.Run("""
+            using Stella.Ergosfare.Commands.Abstractions;
+            using System.Threading.Tasks;
+
+            namespace TestApp
+            {
+                public sealed record NamedPing : ICommand;
+
+                public sealed class NamedPingHandler : ICommandHandler<NamedPing>
+                {
+                    public required string Name { get; init; }
+
+                    public ValueTask HandleAsync(NamedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                        => default;
+                }
+            }
+            """);
+
+        Assert.Empty(result.CompilationErrors);
+
+        // An emitted `new()` would fail compilation with CS9035 — plan only, no factory.
+        Assert.Contains(
+            "GeneratedDispatchRoots.AddVoidPlan<global::TestApp.NamedPing, global::TestApp.NamedPingHandler>();",
+            result.GeneratedSource);
+    }
+
+    [Fact]
+    public void DisposableHandler_SuppressesTheFactoryButKeepsThePlan()
+    {
+        var result = GeneratorTestHost.Run("""
+            using Stella.Ergosfare.Commands.Abstractions;
+            using System;
+            using System.Threading.Tasks;
+
+            namespace TestApp
+            {
+                public sealed record LeakyPing : ICommand;
+
+                public sealed class LeakyPingHandler : ICommandHandler<LeakyPing>, IDisposable
+                {
+                    public ValueTask HandleAsync(LeakyPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                        => default;
+
+                    public void Dispose() { }
+                }
+            }
+            """);
+
+        Assert.Empty(result.CompilationErrors);
+        Assert.Contains(
+            "GeneratedDispatchRoots.AddVoidPlan<global::TestApp.LeakyPing, global::TestApp.LeakyPingHandler>();",
             result.GeneratedSource);
     }
 
@@ -149,5 +268,64 @@ public class VoidPlanEmissionTests
         Assert.Empty(result.CompilationErrors);
         Assert.DoesNotContain("AddVoidPlan<", result.GeneratedSource);
         Assert.Contains("AddResult<global::TestApp.TypedPing, string>", result.GeneratedSource);
+
+        // The same solo-async-handler shape on the result side produces the result plan
+        // instead, factory included.
+        Assert.Contains(
+            "GeneratedDispatchRoots.AddResultPlan<global::TestApp.TypedPing, string, global::TestApp.TypedPingHandler>(static () => new global::TestApp.TypedPingHandler());",
+            result.GeneratedSource);
+    }
+
+    [Fact]
+    public void DiscoveredInterceptor_SuppressesTheResultPlan()
+    {
+        var result = GeneratorTestHost.Run("""
+            using Stella.Ergosfare.Commands.Abstractions;
+            using System.Threading.Tasks;
+
+            namespace TestApp
+            {
+                public sealed record GuardedTypedPing : ICommand<string>;
+
+                public sealed class GuardedTypedPingHandler : ICommandHandler<GuardedTypedPing, string>
+                {
+                    public ValueTask<string> HandleAsync(GuardedTypedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                        => ValueTask.FromResult(string.Empty);
+                }
+
+                public sealed class GuardedTypedPingInterceptor : ICommandPreInterceptor<GuardedTypedPing>
+                {
+                    public ValueTask<GuardedTypedPing> HandleAsync(GuardedTypedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                        => ValueTask.FromResult(message);
+                }
+            }
+            """);
+
+        Assert.Empty(result.CompilationErrors);
+        Assert.DoesNotContain("AddResultPlan<", result.GeneratedSource);
+    }
+
+    [Fact]
+    public void StreamContract_DoesNotProduceAResultPlan()
+    {
+        var result = GeneratorTestHost.Run("""
+            using Stella.Ergosfare.Queries.Abstractions;
+            using System.Collections.Generic;
+
+            namespace TestApp
+            {
+                public sealed record NumberStream : IStreamQuery<int>;
+
+                public sealed class NumberStreamHandler : IStreamQueryHandler<NumberStream, int>
+                {
+                    public IAsyncEnumerable<int> StreamAsync(NumberStream message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                        => throw new System.NotImplementedException();
+                }
+            }
+            """);
+
+        Assert.Empty(result.CompilationErrors);
+        Assert.DoesNotContain("AddResultPlan<", result.GeneratedSource);
+        Assert.Contains("AddStream<global::TestApp.NumberStream, int>", result.GeneratedSource);
     }
 }

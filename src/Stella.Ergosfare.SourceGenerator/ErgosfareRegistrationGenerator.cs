@@ -105,7 +105,9 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 QueryBuilderHasRegisterDescriptors: HasRegisterDescriptors(queryBuilder),
                 EventBuilderHasRegisterDescriptors: HasRegisterDescriptors(eventBuilder),
                 HasDispatchRoots: dispatchRoots is not null,
-                DispatchRootsHasVoidPlans: dispatchRoots is not null && !dispatchRoots.GetMembers("AddVoidPlan").IsEmpty);
+                DispatchRootsHasVoidPlans: dispatchRoots is not null && !dispatchRoots.GetMembers("AddVoidPlan").IsEmpty,
+                DispatchRootsHasResultPlans: dispatchRoots is not null && !dispatchRoots.GetMembers("AddResultPlan").IsEmpty,
+                DispatchRootsHasPlanFactories: dispatchRoots is not null && HasFactoryOverload(dispatchRoots));
         });
 
         // Reference scanning is default-on; consumers opt out per project through the
@@ -128,6 +130,71 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
 
     private static bool HasRegisterDescriptors(INamedTypeSymbol? builder)
         => builder is not null && !builder.GetMembers("RegisterDescriptors").IsEmpty;
+
+    /// <summary>
+    ///     Whether the referenced <c>GeneratedDispatchRoots</c> accepts a plan overload
+    ///     with a direct-construction factory parameter — the surface the
+    ///     <c>static () => new THandler()</c> emission requires.
+    /// </summary>
+    private static bool HasFactoryOverload(INamedTypeSymbol dispatchRoots)
+    {
+        foreach (var member in dispatchRoots.GetMembers("AddVoidPlan"))
+        {
+            if (member is IMethodSymbol { Parameters.Length: 1 })
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Whether generated code can construct the type with <c>new()</c> and doing so
+    ///     is provably interchangeable with resolving its plain transient registration:
+    ///     a concrete, non-generic class whose ONLY instance constructor is public and
+    ///     parameterless (the container's greedy constructor selection would pick any
+    ///     richer constructor, and it only considers public ones), with no <c>required</c>
+    ///     members (a generated <c>new()</c> would fail compilation), implementing
+    ///     neither <c>IDisposable</c> nor <c>IAsyncDisposable</c> (the container tracks
+    ///     transient disposables; direct construction would not).
+    /// </summary>
+    private static bool IsDirectlyConstructible(INamedTypeSymbol symbol)
+    {
+        if (symbol.TypeKind != TypeKind.Class || symbol.IsAbstract || symbol.IsGenericType)
+        {
+            return false;
+        }
+
+        foreach (var iface in symbol.AllInterfaces)
+        {
+            if (iface is { Name: "IDisposable" or "IAsyncDisposable", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } })
+            {
+                return false;
+            }
+        }
+
+        // Required members anywhere in the hierarchy make an emitted `new()` a compile
+        // error (CS9035); the reflection-based container activation the plan replaces
+        // does not enforce them, so such types stay on the container path.
+        for (var type = symbol; type is not null; type = type.BaseType)
+        {
+            foreach (var member in type.GetMembers())
+            {
+                if (member is IPropertySymbol { IsRequired: true } or IFieldSymbol { IsRequired: true })
+                {
+                    return false;
+                }
+            }
+        }
+
+        // Exactly one instance constructor, public and parameterless: with any richer
+        // constructor present (records' synthesized copy constructor included), the
+        // container's selection and `new()` can diverge — dropping dependencies the
+        // container would have injected.
+        return symbol.InstanceConstructors.Length == 1
+               && symbol.InstanceConstructors[0] is { Parameters.IsEmpty: true, DeclaredAccessibility: Accessibility.Public };
+    }
 
     /// <summary>
     ///     Projects a candidate type declaration to its registration model, or <c>null</c>
@@ -180,6 +247,7 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             DiscoveryKeys = GetDiscoveryKeys(symbol),
             IsDispatchableMessage = isDispatchable,
             DispatchResults = isDispatchable ? GetDispatchResults(symbol) : ImmutableArray<DispatchResultModel>.Empty,
+            IsDirectlyConstructible = isAccessible && IsDirectlyConstructible(symbol),
         };
     }
 
@@ -551,6 +619,7 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             DiscoveryKeys = GetDiscoveryKeys(symbol),
             IsDispatchableMessage = isDispatchable,
             DispatchResults = isDispatchable ? GetDispatchResults(symbol) : ImmutableArray<DispatchResultModel>.Empty,
+            IsDirectlyConstructible = isAccessible && IsDirectlyConstructible(symbol),
         };
     }
 
@@ -628,7 +697,11 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             ? ComputeVoidPlans(types)
             : (IReadOnlyList<VoidPlanModel>)Array.Empty<VoidPlanModel>();
 
-        var source = RegistrationEmitter.Emit(types, availability, voidPlans, GeneratorVersion);
+        var resultPlans = availability.DispatchRootsHasResultPlans
+            ? ComputeResultPlans(types)
+            : (IReadOnlyList<ResultPlanModel>)Array.Empty<ResultPlanModel>();
+
+        var source = RegistrationEmitter.Emit(types, availability, voidPlans, resultPlans, GeneratorVersion);
         context.AddSource("ErgosfareRegistrations.g.cs", SourceText.From(source, Encoding.UTF8));
     }
 
@@ -646,9 +719,102 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     /// </summary>
     private static List<VoidPlanModel> ComputeVoidPlans(List<RegistrableTypeModel> types)
     {
-        var handlerCounts = new Dictionary<string, int>(StringComparer.Ordinal);
-        var soleHandlers = new Dictionary<string, (RegistrableTypeModel Model, DescriptorModel Descriptor)>(StringComparer.Ordinal);
-        var interceptedMessages = new HashSet<string>(StringComparer.Ordinal);
+        CollectPipelineFacts(types, out var handlerCounts, out var soleHandlers, out var interceptedMessages);
+
+        var plans = new List<VoidPlanModel>();
+
+        foreach (var type in types)
+        {
+            if (!type.IsDispatchableMessage || !type.IsCommand)
+            {
+                continue;
+            }
+
+            if (!TryGetSolePlannableHandler(type, handlerCounts, soleHandlers, interceptedMessages,
+                    out var handler, out var descriptor))
+            {
+                continue;
+            }
+
+            // The sole handler must be the async void contract.
+            if (descriptor.ResultTypeExpression != ValueTaskExpression)
+            {
+                continue;
+            }
+
+            plans.Add(new VoidPlanModel(type.TypeofExpression, handler.TypeofExpression, handler.IsDirectlyConstructible));
+        }
+
+        return plans;
+    }
+
+    /// <summary>
+    ///     Result-producing counterpart of <see cref="ComputeVoidPlans"/>: a dispatchable
+    ///     command/query with exactly one closed, non-stream result contract qualifies
+    ///     when its whole discovered pipeline is a single async handler producing exactly
+    ///     that result. Equally conservative and equally advisory — the runtime
+    ///     re-validates per registry version.
+    /// </summary>
+    private static List<ResultPlanModel> ComputeResultPlans(List<RegistrableTypeModel> types)
+    {
+        CollectPipelineFacts(types, out var handlerCounts, out var soleHandlers, out var interceptedMessages);
+
+        var plans = new List<ResultPlanModel>();
+
+        foreach (var type in types)
+        {
+            if (!type.IsDispatchableMessage || (!type.IsCommand && !type.IsQuery))
+            {
+                continue;
+            }
+
+            // Exactly one closed result contract, and not a streaming one — a message
+            // with several result shapes is dispatched with executor-side result typing
+            // the plan cannot pin down.
+            if (type.DispatchResults.Length != 1 || type.DispatchResults[0].IsStream)
+            {
+                continue;
+            }
+
+            var dispatchResult = type.DispatchResults[0];
+
+            if (!TryGetSolePlannableHandler(type, handlerCounts, soleHandlers, interceptedMessages,
+                    out var handler, out var descriptor))
+            {
+                continue;
+            }
+
+            // The sole handler must be the async contract producing exactly the message's
+            // declared result (sync contracts carry the bare result type and fall out).
+            if (descriptor.ResultTypeExpression != ValueTaskExpression + "<" + dispatchResult.ResultTypeExpression + ">")
+            {
+                continue;
+            }
+
+            plans.Add(new ResultPlanModel(
+                type.TypeofExpression,
+                dispatchResult.ResultTypeExpression,
+                handler.TypeofExpression,
+                handler.IsDirectlyConstructible));
+        }
+
+        return plans;
+    }
+
+    /// <summary>
+    ///     Indexes the discovered descriptors by message type: main-handler counts, the
+    ///     (last-seen) sole handler per message, and the set of messages any interceptor
+    ///     targets directly — the shared facts both plan computations qualify against.
+    /// </summary>
+    private static void CollectPipelineFacts(
+        List<RegistrableTypeModel> types,
+        out Dictionary<string, int> handlerCounts,
+        out Dictionary<string, (RegistrableTypeModel Model, DescriptorModel Descriptor)> soleHandlers,
+        out HashSet<string> interceptedMessages)
+    {
+        handlerCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        soleHandlers = new Dictionary<string, (RegistrableTypeModel, DescriptorModel)>(StringComparer.Ordinal);
+        interceptedMessages = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var type in types)
         {
@@ -666,43 +832,41 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 }
             }
         }
+    }
 
-        var plans = new List<VoidPlanModel>();
+    /// <summary>
+    ///     The shared plan qualification: the message has exactly one discovered main
+    ///     handler, no interceptor targets it directly, and that handler is accessible
+    ///     and discoverable by default (an unkeyed, ungrouped registration — anything
+    ///     else may not be registered, or not in the default-group pipeline the plan
+    ///     serves).
+    /// </summary>
+    private static bool TryGetSolePlannableHandler(
+        RegistrableTypeModel type,
+        Dictionary<string, int> handlerCounts,
+        Dictionary<string, (RegistrableTypeModel Model, DescriptorModel Descriptor)> soleHandlers,
+        HashSet<string> interceptedMessages,
+        out RegistrableTypeModel handler,
+        out DescriptorModel descriptor)
+    {
+        handler = default;
+        descriptor = default;
 
-        foreach (var type in types)
+        if (!handlerCounts.TryGetValue(type.TypeofExpression, out var count) || count != 1)
         {
-            if (!type.IsDispatchableMessage || !type.IsCommand)
-            {
-                continue;
-            }
-
-            if (!handlerCounts.TryGetValue(type.TypeofExpression, out var count) || count != 1)
-            {
-                continue;
-            }
-
-            if (interceptedMessages.Contains(type.TypeofExpression))
-            {
-                continue;
-            }
-
-            var (handler, descriptor) = soleHandlers[type.TypeofExpression];
-
-            // The sole handler must be the async void contract, discoverable by default
-            // (an unkeyed, ungrouped registration — anything else may not be registered,
-            // or not in the default-group pipeline the plan serves).
-            if (descriptor.ResultTypeExpression != ValueTaskExpression
-                || !handler.IsAccessible
-                || !handler.DiscoveryKeys.IsEmpty
-                || handler.GroupsExpression is not null)
-            {
-                continue;
-            }
-
-            plans.Add(new VoidPlanModel(type.TypeofExpression, handler.TypeofExpression));
+            return false;
         }
 
-        return plans;
+        if (interceptedMessages.Contains(type.TypeofExpression))
+        {
+            return false;
+        }
+
+        (handler, descriptor) = soleHandlers[type.TypeofExpression];
+
+        return handler.IsAccessible
+               && handler.DiscoveryKeys.IsEmpty
+               && handler.GroupsExpression is null;
     }
 
     private static void AddModels(

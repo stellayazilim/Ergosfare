@@ -4,7 +4,9 @@ using BenchmarkDotNet.Running;
 using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
+using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Events.Abstractions;
 using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
@@ -53,6 +55,63 @@ public sealed class SecondPingEventHandler : IEventHandler<PingEvent>
     public ValueTask HandleAsync(PingEvent @event, IExecutionContext context) => ValueTask.CompletedTask;
 }
 
+// Grouped variants on their own message types, so the grouped rows measure the grouped
+// lane without changing the default rows' pipelines (a second handler on VoidCommand
+// would suppress its compile-time plan, for instance).
+
+public sealed class GroupedCommand : Stella.Ergosfare.Commands.Abstractions.ICommand { }
+
+[Group("bench")]
+public sealed class GroupedCommandHandler : ICommandHandler<GroupedCommand>
+{
+    public ValueTask HandleAsync(GroupedCommand command, IExecutionContext context) => ValueTask.CompletedTask;
+}
+
+public sealed class GroupedPingEvent : IEvent { }
+
+[Group("bench")]
+public sealed class FirstGroupedPingEventHandler : IEventHandler<GroupedPingEvent>
+{
+    public ValueTask HandleAsync(GroupedPingEvent @event, IExecutionContext context) => ValueTask.CompletedTask;
+}
+
+[Group("bench")]
+public sealed class SecondGroupedPingEventHandler : IEventHandler<GroupedPingEvent>
+{
+    public ValueTask HandleAsync(GroupedPingEvent @event, IExecutionContext context) => ValueTask.CompletedTask;
+}
+
+// ---------------------------------------------------------------------------
+// Mediator (martinothamar/Mediator, source-generated) messages & handlers
+// ---------------------------------------------------------------------------
+
+public sealed class MediatorSgVoidCommand : Mediator.ICommand { }
+
+public sealed class MediatorSgVoidCommandHandler : Mediator.ICommandHandler<MediatorSgVoidCommand>
+{
+    public ValueTask<Mediator.Unit> Handle(MediatorSgVoidCommand command, CancellationToken cancellationToken)
+        => new(Mediator.Unit.Value);
+}
+
+public sealed class MediatorSgIntQuery : Mediator.IQuery<int> { }
+
+public sealed class MediatorSgIntQueryHandler : Mediator.IQueryHandler<MediatorSgIntQuery, int>
+{
+    public ValueTask<int> Handle(MediatorSgIntQuery query, CancellationToken cancellationToken) => new(7);
+}
+
+public sealed class MediatorSgPingNotification : Mediator.INotification { }
+
+public sealed class FirstMediatorSgPingHandler : Mediator.INotificationHandler<MediatorSgPingNotification>
+{
+    public ValueTask Handle(MediatorSgPingNotification notification, CancellationToken cancellationToken) => default;
+}
+
+public sealed class SecondMediatorSgPingHandler : Mediator.INotificationHandler<MediatorSgPingNotification>
+{
+    public ValueTask Handle(MediatorSgPingNotification notification, CancellationToken cancellationToken) => default;
+}
+
 // ---------------------------------------------------------------------------
 // MediatR requests & handlers
 // ---------------------------------------------------------------------------
@@ -93,7 +152,14 @@ public sealed class SecondMediatrPingHandler : INotificationHandler<MediatrPingN
 /// baseline — that is the floor the public facades add their convenience on top of, and
 /// the Ratio column reads as "what does the facade (or MediatR) cost relative to it".
 /// Within each category: a void dispatch, a result-returning dispatch, and a two-handler
-/// event publish, for Ergosfare and MediatR alike.
+/// event publish, for Ergosfare and the competitors alike.
+/// <para>Competitors run their out-of-the-box defaults: MediatR (reflection-based,
+/// transient handlers) as the ubiquitous baseline, and martinothamar/Mediator
+/// (source-generated dispatch, singleton lifetime by default) as the fastest widely-used
+/// alternative — the <c>MediatorSg_*</c> rows. Ergosfare's default rows resolve transient
+/// handlers per dispatch; the <c>Command_Void_Memoized</c> row shows the zero-allocation
+/// shape <c>ForceMemoizedHandlers()</c> (or plain singleton handler registration) yields,
+/// which is the apples-to-apples comparison against Mediator's singleton default.</para>
 /// </summary>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
@@ -102,21 +168,39 @@ public class MediationBenchmark
 {
     private ServiceProvider _ergosfare = null!;
     private ServiceProvider _ergosfareGenerated = null!;
+    private ServiceProvider _ergosfareMemoized = null!;
     private ServiceProvider _mediatr = null!;
+    private ServiceProvider _mediatorSg = null!;
 
     private IMessageMediator _engine = null!;
+    private MessageDispatchEngine _dispatchEngine = null!;
     private ICommandMediator _commands = null!;
     private ICommandMediator _generatedCommands = null!;
+    private ICommandMediator _memoizedCommands = null!;
     private IQueryMediator _queries = null!;
+    private IQueryMediator _generatedQueries = null!;
     private IEventMediator _events = null!;
     private IMediator _mediator = null!;
+    private Mediator.IMediator _martinMediator = null!;
 
     private readonly VoidCommand _voidCommand = new();
     private readonly IntQuery _intQuery = new();
     private readonly PingEvent _pingEvent = new();
+    private readonly GroupedCommand _groupedCommand = new();
+    private readonly GroupedPingEvent _groupedPingEvent = new();
+
+    private static readonly string[] BenchGroups = ["bench"];
+
+    // Reused across dispatches, mirroring a caller that keeps its settings: the grouped
+    // rows measure the grouped lane itself, not per-call settings construction.
+    private readonly CommandMediationSettings _groupedCommandSettings = new() { Filters = { Groups = BenchGroups } };
+    private readonly EventMediationSettings _groupedEventSettings = new() { Filters = { Groups = BenchGroups } };
     private readonly MediatrVoidRequest _mediatrVoid = new();
     private readonly MediatrIntRequest _mediatrInt = new();
     private readonly MediatrPingNotification _mediatrPing = new();
+    private readonly MediatorSgVoidCommand _mediatorSgVoid = new();
+    private readonly MediatorSgIntQuery _mediatorSgInt = new();
+    private readonly MediatorSgPingNotification _mediatorSgPing = new();
 
     [GlobalSetup]
     public void Setup()
@@ -124,17 +208,24 @@ public class MediationBenchmark
         _ergosfare = new ServiceCollection()
             .AddErgosfare(options =>
             {
-                options.AddCommandModule(commands => commands.Register<VoidCommandHandler>());
+                options.AddCommandModule(commands =>
+                {
+                    commands.Register<VoidCommandHandler>();
+                    commands.Register<GroupedCommandHandler>();
+                });
                 options.AddQueryModule(queries => queries.Register<IntQueryHandler>());
                 options.AddEventModule(events =>
                 {
                     events.Register<FirstPingEventHandler>();
                     events.Register<SecondPingEventHandler>();
+                    events.Register<FirstGroupedPingEventHandler>();
+                    events.Register<SecondGroupedPingEventHandler>();
                 });
             })
             .BuildServiceProvider();
 
         _engine = _ergosfare.GetRequiredService<IMessageMediator>();
+        _dispatchEngine = _ergosfare.GetRequiredService<MessageDispatchEngine>();
         _commands = _ergosfare.GetRequiredService<ICommandMediator>();
         _queries = _ergosfare.GetRequiredService<IQueryMediator>();
         _events = _ergosfare.GetRequiredService<IEventMediator>();
@@ -144,6 +235,12 @@ public class MediationBenchmark
             .BuildServiceProvider();
 
         _mediator = _mediatr.GetRequiredService<IMediator>();
+
+        _mediatorSg = new ServiceCollection()
+            .AddMediator()
+            .BuildServiceProvider();
+
+        _martinMediator = _mediatorSg.GetRequiredService<Mediator.IMediator>();
     }
 
     [GlobalCleanup]
@@ -151,6 +248,7 @@ public class MediationBenchmark
     {
         _ergosfare.Dispose();
         _mediatr.Dispose();
+        _mediatorSg.Dispose();
     }
 
     /// <summary>
@@ -159,20 +257,52 @@ public class MediationBenchmark
     /// void pipeline plans process-wide, and the targeted setup keeps that installation
     /// away from the runtime-registration rows' processes so the comparison stays honest.
     /// </summary>
-    [GlobalSetup(Targets = [nameof(Command_Void_Generated)])]
+    [GlobalSetup(Targets = [nameof(Command_Void_Generated), nameof(Query_Result_Generated)])]
     public void SetupGenerated()
     {
         _ergosfareGenerated = new ServiceCollection()
-            .AddErgosfare(options => options.AddCommandModule(commands => commands.RegisterGenerated()))
+            .AddErgosfare(options =>
+            {
+                options.AddCommandModule(commands => commands.RegisterGenerated());
+                options.AddQueryModule(queries => queries.RegisterGenerated());
+            })
             .BuildServiceProvider();
 
         _generatedCommands = _ergosfareGenerated.GetRequiredService<ICommandMediator>();
+        _generatedQueries = _ergosfareGenerated.GetRequiredService<IQueryMediator>();
     }
 
-    [GlobalCleanup(Targets = [nameof(Command_Void_Generated)])]
+    [GlobalCleanup(Targets = [nameof(Command_Void_Generated), nameof(Query_Result_Generated)])]
     public void CleanupGenerated()
     {
         _ergosfareGenerated.Dispose();
+    }
+
+    /// <summary>
+    /// Zero-allocation variant: <c>ForceMemoizedHandlers()</c> resolves each handler graph
+    /// once and reuses it for every dispatch, so the transient handler instance — the last
+    /// 24 B on the default root path — disappears. Plain singleton handler registration
+    /// reaches the same shape without the switch. Isolated to its own process via targets,
+    /// like the generated variant above.
+    /// </summary>
+    [GlobalSetup(Targets = [nameof(Command_Void_Memoized)])]
+    public void SetupMemoized()
+    {
+        _ergosfareMemoized = new ServiceCollection()
+            .AddErgosfare(options =>
+            {
+                options.ForceMemoizedHandlers();
+                options.AddCommandModule(commands => commands.Register<VoidCommandHandler>());
+            })
+            .BuildServiceProvider();
+
+        _memoizedCommands = _ergosfareMemoized.GetRequiredService<ICommandMediator>();
+    }
+
+    [GlobalCleanup(Targets = [nameof(Command_Void_Memoized)])]
+    public void CleanupMemoized()
+    {
+        _ergosfareMemoized.Dispose();
     }
 
     // ------------------------------------------------------------------
@@ -182,6 +312,13 @@ public class MediationBenchmark
     [Benchmark(Baseline = true), BenchmarkCategory("Root")]
     public ValueTask Engine_Void() => _engine.DispatchAsync(_voidCommand);
 
+    /// <summary>
+    /// Typed engine dispatch: the compile-time message type resolves the executor from a
+    /// static-generic holder — no dictionary lookup on the hot path.
+    /// </summary>
+    [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask Engine_Void_Typed() => _dispatchEngine.DispatchVoidAsync(_voidCommand, _ergosfare);
+
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask Command_Void() => _commands.SendAsync(_voidCommand);
 
@@ -189,10 +326,22 @@ public class MediationBenchmark
     public ValueTask Command_Void_Generated() => _generatedCommands.SendAsync(_voidCommand);
 
     [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask Command_Void_Memoized() => _memoizedCommands.SendAsync(_voidCommand);
+
+    [Benchmark, BenchmarkCategory("Root")]
     public ValueTask<int> Query_Result() => _queries.QueryAsync(_intQuery);
 
     [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask<int> Query_Result_Generated() => _generatedQueries.QueryAsync(_intQuery);
+
+    [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask Command_Void_Grouped() => _commands.SendAsync(_groupedCommand, _groupedCommandSettings);
+
+    [Benchmark, BenchmarkCategory("Root")]
     public ValueTask Event_Publish() => _events.PublishAsync(_pingEvent);
+
+    [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask Event_Publish_Grouped() => _events.PublishAsync(_groupedPingEvent, _groupedEventSettings);
 
     [Benchmark, BenchmarkCategory("Root")]
     public Task MediatR_Send_Void() => _mediator.Send(_mediatrVoid);
@@ -202,6 +351,15 @@ public class MediationBenchmark
 
     [Benchmark, BenchmarkCategory("Root")]
     public Task MediatR_Publish() => _mediator.Publish(_mediatrPing);
+
+    [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask<Mediator.Unit> MediatorSg_Send_Void() => _martinMediator.Send(_mediatorSgVoid);
+
+    [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask<int> MediatorSg_Send_Result() => _martinMediator.Send(_mediatorSgInt);
+
+    [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask MediatorSg_Publish() => _martinMediator.Publish(_mediatorSgPing);
 
     // ------------------------------------------------------------------
     // Scoped — a fresh DI scope and mediator resolution per dispatch
@@ -254,5 +412,26 @@ public class MediationBenchmark
     {
         using var scope = _mediatr.CreateScope();
         await scope.ServiceProvider.GetRequiredService<IMediator>().Publish(_mediatrPing);
+    }
+
+    [Benchmark, BenchmarkCategory("Scoped")]
+    public async Task MediatorSg_Send_Void_Scoped()
+    {
+        using var scope = _mediatorSg.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<Mediator.IMediator>().Send(_mediatorSgVoid);
+    }
+
+    [Benchmark, BenchmarkCategory("Scoped")]
+    public async Task<int> MediatorSg_Send_Result_Scoped()
+    {
+        using var scope = _mediatorSg.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<Mediator.IMediator>().Send(_mediatorSgInt);
+    }
+
+    [Benchmark, BenchmarkCategory("Scoped")]
+    public async Task MediatorSg_Publish_Scoped()
+    {
+        using var scope = _mediatorSg.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<Mediator.IMediator>().Publish(_mediatorSgPing);
     }
 }

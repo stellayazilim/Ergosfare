@@ -97,6 +97,74 @@ public sealed class MessageDispatchEngine
     }
 
     /// <summary>
+    /// Typed void dispatch: when the compile-time <typeparamref name="TMessage"/> is the
+    /// message's runtime type (the overwhelmingly common concrete-typed call), the
+    /// executor comes from a static-generic holder instead of the type-keyed dictionary —
+    /// the last lookup on the group-less hot path. A base-typed generic call falls back to
+    /// resolving by the runtime type, so dispatch semantics are identical to
+    /// <see cref="DispatchAsync(object, IServiceProvider, IDictionary{object, object?}?, CancellationToken, IEnumerable{string}?)"/>;
+    /// group-filtered dispatches stay on that overload.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately NOT a <c>DispatchAsync</c> overload: a same-name generic would join
+    /// the candidate set of every explicit <c>DispatchAsync&lt;T&gt;(msg, ...)</c> call, and
+    /// whenever the message expression is convertible to the type argument (an echo-typed
+    /// result dispatch — legal since <c>ICommand&lt;TResult&gt; : ICommand : IMessage</c>) the
+    /// identity conversion would out-rank the result overload's <c>object</c> parameter,
+    /// silently rerouting a result dispatch through the void pipeline or breaking the
+    /// caller with a return-type mismatch. The distinct name keeps the typed fast path
+    /// out of that candidate set entirely.
+    /// </remarks>
+    /// <typeparam name="TMessage">The compile-time message type.</typeparam>
+    /// <param name="message">The message to dispatch.</param>
+    /// <param name="serviceProvider">The scope provider handlers resolve against.</param>
+    /// <param name="items">Optional contextual items exposed to the pipeline.</param>
+    /// <param name="cancellationToken">Cancellation token for the dispatch.</param>
+    public ValueTask DispatchVoidAsync<TMessage>(TMessage message, IServiceProvider serviceProvider,
+        IDictionary<object, object?>? items = null, CancellationToken cancellationToken = default)
+        where TMessage : notnull, IMessage
+    {
+        ArgumentNullException.ThrowIfNull(message);
+
+        var executor = message.GetType() == typeof(TMessage)
+            ? _executorCache.GetVoidExecutor<TMessage>()
+            : _executorCache.GetVoidExecutor(message.GetType());
+        var context = ErgosfareExecutionContextPool.Rent(items, cancellationToken);
+        ValueTask task;
+
+        try
+        {
+            task = executor.Execute(message, context, serviceProvider);
+        }
+        catch
+        {
+            ErgosfareExecutionContextPool.Return(context);
+            throw;
+        }
+
+        if (task.IsCompletedSuccessfully)
+        {
+            ErgosfareExecutionContextPool.Return(context);
+            return default;
+        }
+
+        return AwaitAndReturn(task, context);
+
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
+        static async ValueTask AwaitAndReturn(ValueTask task, ErgosfareExecutionContext context)
+        {
+            try
+            {
+                await task;
+            }
+            finally
+            {
+                ErgosfareExecutionContextPool.Return(context);
+            }
+        }
+    }
+
+    /// <summary>
     /// Result-producing counterpart of
     /// <see cref="DispatchAsync(object, IServiceProvider, IDictionary{object, object?}?, CancellationToken, IEnumerable{string}?)"/>.
     /// </summary>

@@ -76,7 +76,7 @@ public class EngineBackedEventFacadeTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task Publish_WithGroups_TakesTheMediateFallback_AndFiltersHandlers()
+    public async Task Publish_WithGroups_FiltersHandlers()
     {
         var provider = Build();
         await using var _ = provider;
@@ -88,7 +88,8 @@ public class EngineBackedEventFacadeTests
 
         await mediator.PublishAsync(new GroupedEvent(), settings);
 
-        // The grouped publish leaves the fast lane; only the requested group's handler runs.
+        // The grouped publish runs the group-filtered plan; only the requested group's
+        // handler runs.
         Assert.Equal(true, settings.Items["auditRan"]);
         Assert.False(settings.Items.ContainsKey("defaultRan"));
     }

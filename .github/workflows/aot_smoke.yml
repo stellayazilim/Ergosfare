@@ -1,0 +1,36 @@
+name: AotSmoke
+permissions:
+  contents: read
+on:
+  push:
+    branches:
+      - "*"
+  pull_request:
+    branches:
+      - main
+      - preview
+
+jobs:
+  aot-smoke:
+    # End-to-end NativeAOT gate: publishes the sample app with PublishAot=true (trim/AOT
+    # analyzer warnings are errors there) and runs the produced binary — every dispatch
+    # shape must work without the JIT's MakeGenericType fallback actually jitting.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        # Both SDKs: the referenced library projects multi-target net9.0 and net10.0, so
+        # restore needs to evaluate both even though the smoke app publishes net9.0.
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            9.0.x
+            10.0.x
+
+      - name: Publish NativeAOT Smoke App
+        run: dotnet publish examples/AotSmoke/AotSmoke.csproj -c Release -r linux-x64
+
+      - name: Run NativeAOT Smoke App
+        run: ./examples/AotSmoke/bin/Release/net9.0/linux-x64/publish/Ergosfare.AotSmoke

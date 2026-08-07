@@ -87,15 +87,18 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
 
         try
         {
-            // Fast lane: for the group-less publish against the concrete mediator, run the
-            // broadcast strategy directly against the invoker-cached pipeline plan (the
-            // executors' registry-version-guarded pattern) — no MediateOptions, no
-            // per-publish descriptor lookup, no Mediate wrapper. Grouped publishes and
-            // foreign mediator implementations keep the original Mediate path.
-            if ((settings is null || settings.Filters.Groups is List<string> { Count: 0 } or string[] { Length: 0 })
-                && mediator is MessageMediator concreteMediator)
+            // Fast lane: against the concrete mediator, run the broadcast strategy
+            // directly against the invoker-cached pipeline plan (the executors'
+            // registry-version-guarded pattern) — no MediateOptions, no per-publish
+            // descriptor lookup, no Mediate wrapper. Grouped publishes resolve the same
+            // group-filtered dependencies the Mediate path would build, from the grouped
+            // plan slot; only foreign mediator implementations keep the original path.
+            if (mediator is MessageMediator concreteMediator)
             {
-                var dependencies = GetPlan(concreteMediator.DependenciesFactory, resolveStrategy);
+                var groups = settings?.Filters.Groups;
+                var dependencies = groups is null or List<string> { Count: 0 } or string[] { Length: 0 }
+                    ? GetPlan(concreteMediator.DependenciesFactory, resolveStrategy)
+                    : GetGroupedPlan(concreteMediator.DependenciesFactory, resolveStrategy, groups);
 
                 // Straight-through broadcast: with no interceptor stages and no handler
                 // filtering requested, loop the handler arrays directly — synchronously
@@ -168,8 +171,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
         ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
         IResultAdapterService? resultAdapterService, IExecutionContext? externalContext = null)
     {
-        if (externalContext is not null
-            || !(settings is null || settings.Filters.Groups is List<string> { Count: 0 } or string[] { Length: 0 }))
+        if (externalContext is not null)
         {
             return Publish(@event, settings, cancellationToken,
                 ResolveMediator(serviceProvider), resolveStrategy, resultAdapterService, externalContext);
@@ -181,7 +183,10 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
 
         try
         {
-            var dependencies = GetPlan(engine.DependenciesFactory, resolveStrategy);
+            var groups = settings?.Filters.Groups;
+            var dependencies = groups is null or List<string> { Count: 0 } or string[] { Length: 0 }
+                ? GetPlan(engine.DependenciesFactory, resolveStrategy)
+                : GetGroupedPlan(engine.DependenciesFactory, resolveStrategy, groups);
 
             if (dependencies is MessageDependencies { HasNoInterceptors: true } plan
                 && (settings is null
@@ -269,14 +274,66 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
                 return cached;
             }
 
-            var dependencies = BuildPlan(typedFactory, resolveStrategy);
+            var dependencies = BuildPlan(typedFactory, resolveStrategy, EmptyGroups);
             _cachedDependencies = dependencies;
             _cachedFactory = typedFactory;
             _cachedVersion = typedFactory.CurrentRegistryVersion;
             return dependencies;
         }
 
-        return BuildPlan(dependenciesFactory, resolveStrategy);
+        return BuildPlan(dependenciesFactory, resolveStrategy, EmptyGroups);
+    }
+
+    /// <summary>
+    /// Grouped counterpart of <see cref="GetPlan"/>: a single last-used
+    /// (factory, group set) slot serves the overwhelmingly common shape — one stable
+    /// group set per event type — with an ordinal element-wise compare instead of a
+    /// per-publish key materialization. The dependencies come from the same factory call
+    /// the Mediate path would make, so the group-filtered pipeline is identical; a slot
+    /// miss (alternating group sets, another container, a registry change) only rebuilds
+    /// through the factory's own process-wide dependency cache. The slot snapshots the
+    /// caller's group sequence, so later caller-side mutation of a reused settings
+    /// instance is seen as a different group set, never as a stale hit.
+    /// </summary>
+    private GroupedPlanSlot? _cachedGroupedPlan;
+
+    private sealed class GroupedPlanSlot(
+        MessageDependenciesFactory factory,
+        string[] groups,
+        IMessageDependencies dependencies,
+        int version)
+    {
+        public readonly MessageDependenciesFactory Factory = factory;
+        public readonly string[] Groups = groups;
+        public readonly IMessageDependencies Dependencies = dependencies;
+        public readonly int Version = version;
+    }
+
+    private IMessageDependencies GetGroupedPlan(
+        Core.Abstractions.Factories.IMessageDependenciesFactory dependenciesFactory,
+        ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
+        IEnumerable<string> groups)
+    {
+        if (dependenciesFactory is MessageDependenciesFactory typedFactory)
+        {
+            var slot = _cachedGroupedPlan;
+
+            if (slot is not null
+                && ReferenceEquals(slot.Factory, typedFactory)
+                && slot.Version == typedFactory.CurrentRegistryVersion
+                && PipelineExecutorCache.GroupsMatch(groups, slot.Groups))
+            {
+                return slot.Dependencies;
+            }
+
+            string[] materialized = [.. groups];
+            var dependencies = BuildPlan(typedFactory, resolveStrategy, materialized);
+            _cachedGroupedPlan = new GroupedPlanSlot(
+                typedFactory, materialized, dependencies, typedFactory.CurrentRegistryVersion);
+            return dependencies;
+        }
+
+        return BuildPlan(dependenciesFactory, resolveStrategy, [.. groups]);
     }
 
     /// <summary>
@@ -383,7 +440,8 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
 
     private static IMessageDependencies BuildPlan(
         Core.Abstractions.Factories.IMessageDependenciesFactory factory,
-        ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy)
+        ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
+        string[] groups)
     {
         // Mirrors MessageMediator.Mediate's descriptor handling for the options the old
         // path used: RegisterPlainMessagesOnSpot was never set for events, so an
@@ -391,7 +449,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
         var descriptor = resolveStrategy.Find(typeof(TEvent))
                          ?? throw new NoHandlerFoundException(typeof(TEvent));
 
-        return factory.Create(typeof(TEvent), descriptor, EmptyGroups);
+        return factory.Create(typeof(TEvent), descriptor, groups);
     }
 }
 

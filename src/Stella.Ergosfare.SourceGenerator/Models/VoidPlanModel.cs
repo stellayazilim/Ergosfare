@@ -10,6 +10,12 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 /// </summary>
 /// <param name="MessageTypeExpression">Fully qualified expression of the closed message type.</param>
 /// <param name="HandlerTypeExpression">Fully qualified expression of the sole handler type.</param>
+/// <param name="HasDirectConstruction">
+///     Whether the handler qualifies for the plan's direct-construction factory
+///     (<c>static () => new THandler()</c>); see
+///     <see cref="RegistrableTypeModel.IsDirectlyConstructible"/>.
+/// </param>
 internal readonly record struct VoidPlanModel(
     string MessageTypeExpression,
-    string HandlerTypeExpression);
+    string HandlerTypeExpression,
+    bool HasDirectConstruction);
