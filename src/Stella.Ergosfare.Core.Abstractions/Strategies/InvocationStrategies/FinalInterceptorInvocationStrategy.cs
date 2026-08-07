@@ -17,19 +17,28 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 /// The pipeline's result type — <see cref="ValueTask"/> for void pipelines, where the
 /// completed-task box stands in as the (meaningless) result object.
 /// </typeparam>
-internal sealed class FinalInterceptorInvocationStrategy<TMessage, TResult>(
-    IMessageDependencies messageDependencies,
-    IServiceProvider serviceProvider)
+/// <remarks>
+/// Static: the pipeline state travels as arguments, so a dispatch allocates no invoker object.
+/// </remarks>
+internal static class FinalInterceptorInvocationStrategy<TMessage, TResult>
     where TMessage : notnull
 {
     /// <summary>
     /// Executes all final interceptors for the specified message, result, and exception.
     /// </summary>
+    /// <param name="messageDependencies">The message's pipeline composition, supplying the final-interceptor list.</param>
+    /// <param name="serviceProvider">The provider of the scope this dispatch runs in; interceptors resolve from it.</param>
     /// <param name="message">The message that was processed.</param>
     /// <param name="result">The final result, if any.</param>
     /// <param name="exception">The exception that terminated the pipeline, if any.</param>
     /// <param name="executionContext">The execution context for the current pipeline invocation.</param>
-    public async ValueTask Invoke(TMessage message, object? result, Exception? exception, IExecutionContext executionContext)
+    public static async ValueTask Invoke(
+        IMessageDependencies messageDependencies,
+        IServiceProvider serviceProvider,
+        TMessage message,
+        object? result,
+        Exception? exception,
+        IExecutionContext executionContext)
     {
         var interceptors = messageDependencies.FinalInterceptors;
 
