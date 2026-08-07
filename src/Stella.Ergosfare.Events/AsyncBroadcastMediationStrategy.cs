@@ -70,20 +70,49 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
         Exception? exception = null;
         try
         {
-            // events doesn't need result adapter, since events intended to not return a result
-            var preInvoker = new PreInterceptorInvocationStrategy<TMessage>(messageDependencies, serviceProvider);
-            await preInvoker.Invoke(message, context);
-            await PublishSequentially(message, handlers, context, serviceProvider);
-            await PublishSequentially(message, indirectHandlers, context, serviceProvider);
+            // Empty stages are skipped before any invoker object exists — an invoker over an
+            // empty stage is a no-op, so the guards change allocations, not behavior.
+            if (messageDependencies.PreInterceptors.Count > 0)
+            {
+                // events doesn't need result adapter, since events intended to not return a result
+                var preInvoker = new PreInterceptorInvocationStrategy<TMessage>(messageDependencies, serviceProvider);
 
-            // A ValueTask may be awaited only once — the completed ValueTask stands in as the
-            // (meaningless for events) result object flowing through the interceptor stages.
-            var postInvoker = new PostInterceptorInvocationStrategy<TMessage, ValueTask>(messageDependencies, null, serviceProvider);
-            await postInvoker.Invoke(message, CompletedResultBox.Instance, context);
+                // Pre-interceptors may transform the event — including returning a brand new
+                // instance — so the broadcast continues with the returned message, exactly as
+                // the single-handler strategies do.
+                message = (TMessage) await preInvoker.Invoke(message, context);
+            }
+
+            if (handlers.Count > 0)
+            {
+                await PublishSequentially(message, handlers, context, serviceProvider);
+            }
+
+            if (indirectHandlers.Count > 0)
+            {
+                await PublishSequentially(message, indirectHandlers, context, serviceProvider);
+            }
+
+            if (messageDependencies.PostInterceptors.Count > 0)
+            {
+                // A ValueTask may be awaited only once — the completed ValueTask stands in as the
+                // (meaningless for events) result object flowing through the interceptor stages.
+                var postInvoker = new PostInterceptorInvocationStrategy<TMessage, ValueTask>(messageDependencies, null, serviceProvider);
+                await postInvoker.Invoke(message, CompletedResultBox.Instance, context);
+            }
         }
         catch (Exception e)
         {
             exception = e;
+
+            // Zero exception interceptors: rethrow directly — identical to the invoker's own
+            // empty-stage behavior (it rethrows via ExceptionDispatchInfo), minus the
+            // allocations. Final interceptors still run from the finally block.
+            if (messageDependencies.ExceptionInterceptors.Count == 0)
+            {
+                throw;
+            }
+
             var exceptionInvoker = new ExceptionInterceptorInvocationStrategy<TMessage, ValueTask>(messageDependencies, serviceProvider);
             await exceptionInvoker.Invoke(message, CompletedResultBox.Instance,
                 ExceptionDispatchInfo.Capture(e), context);
@@ -92,8 +121,11 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
 
         finally
         {
-            var finalInvoker = new FinalInterceptorInvocationStrategy<TMessage, ValueTask>(messageDependencies, serviceProvider);
-            await finalInvoker.Invoke(message, CompletedResultBox.Instance, exception, context);
+            if (messageDependencies.FinalInterceptors.Count > 0)
+            {
+                var finalInvoker = new FinalInterceptorInvocationStrategy<TMessage, ValueTask>(messageDependencies, serviceProvider);
+                await finalInvoker.Invoke(message, CompletedResultBox.Instance, exception, context);
+            }
         }
     }
 
@@ -106,6 +138,14 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
         IReadOnlyList<IHandlerReference<IHandler, IMainHandlerDescriptor>> handlers)
     {
         var predicate = settings.Filters.HandlerPredicate;
+
+        // The canonical accept-all predicate can be recognized by reference — no filtering
+        // requested, so skip the per-handler predicate loop entirely.
+        if (ReferenceEquals(predicate, EventMediationSettings.EventMediationFilters.AcceptAllHandlers))
+        {
+            return handlers;
+        }
+
         List<IHandlerReference<IHandler, IMainHandlerDescriptor>>? filtered = null;
 
         for (var i = 0; i < handlers.Count; i++)

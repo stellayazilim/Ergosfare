@@ -10,8 +10,30 @@ namespace Stella.Ergosfare.Core.Internal.Registry;
 /// memoized fast path). Types with no known registration are treated as non-singleton,
 /// which routes them to the always-correct per-scope resolution path.
 /// </summary>
-internal sealed class HandlerLifetimeRegistry(IReadOnlyDictionary<Type, ServiceLifetime> lifetimes)
+/// <param name="lifetimes">Effective DI lifetime per handler type, captured at module initialization.</param>
+/// <param name="plainTransientRegistrations">
+/// Handler types whose effective registration is a plain transient self-registration
+/// (implementation type equals the service type, no factory, no instance, unkeyed) — the
+/// exact shape the module's own <c>TryAddTransient</c> produces. For these, container
+/// resolution and direct construction are semantically identical, which is what licenses
+/// a generated plan's <c>new()</c> fast path. Types not in the set — user factories,
+/// lifetime overrides, runtime-only registrations — always resolve through the container.
+/// </param>
+internal sealed class HandlerLifetimeRegistry(
+    IReadOnlyDictionary<Type, ServiceLifetime> lifetimes,
+    IReadOnlyCollection<Type>? plainTransientRegistrations = null)
 {
+    private readonly HashSet<Type> _plainTransients =
+        plainTransientRegistrations as HashSet<Type> ?? [.. plainTransientRegistrations ?? []];
+
+    /// <summary>
+    /// Whether the handler type's effective registration is the module's own plain
+    /// transient shape; see the constructor documentation. Captured at initialization —
+    /// the same capture window the lifetime dictionary (and with it the memoized fast
+    /// path) already relies on.
+    /// </summary>
+    public bool IsPlainTransientRegistration(Type handlerType) => _plainTransients.Contains(handlerType);
+
     private readonly ConcurrentDictionary<Type, bool> _allSingletonByMessageType = new();
     private int _version = -1;
 

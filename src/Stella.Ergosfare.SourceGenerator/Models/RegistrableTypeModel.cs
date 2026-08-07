@@ -93,6 +93,15 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     /// </summary>
     public required ImmutableArray<DispatchResultModel> DispatchResults { get; init; }
 
+    /// <summary>
+    ///     Whether generated code can construct the type with <c>new()</c> and doing so is
+    ///     interchangeable with a plain transient container resolution: a concrete,
+    ///     non-generic class with an accessible parameterless constructor that is neither
+    ///     <c>IDisposable</c> nor <c>IAsyncDisposable</c>. Feeds the pipeline plans'
+    ///     direct-construction factories; meaningful for handler types only.
+    /// </summary>
+    public required bool IsDirectlyConstructible { get; init; }
+
     public bool Equals(RegistrableTypeModel other)
     {
         if (TypeofExpression != other.TypeofExpression
@@ -106,6 +115,7 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
             || GroupsExpression != other.GroupsExpression
             || ReferencedAssemblyName != other.ReferencedAssemblyName
             || IsDispatchableMessage != other.IsDispatchableMessage
+            || IsDirectlyConstructible != other.IsDirectlyConstructible
             || Descriptors.Length != other.Descriptors.Length
             || DiscoveryKeys.Length != other.DiscoveryKeys.Length
             || DispatchResults.Length != other.DispatchResults.Length)

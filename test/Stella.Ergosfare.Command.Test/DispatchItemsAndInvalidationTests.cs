@@ -1,0 +1,154 @@
+using Stella.Ergosfare.Commands.Abstractions;
+using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
+using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Registry;
+using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Stella.Ergosfare.Command.Test;
+
+/// <summary>
+/// Covers the dispatch fast path's interaction with caller-supplied settings items —
+/// the pooled context adopts the caller's dictionary for the dispatch and detaches it
+/// untouched on return — and the executor-level plan cache's registry-version
+/// invalidation for runtime registrations.
+/// </summary>
+public class DispatchItemsAndInvalidationTests
+{
+    public sealed class ItemsCommand : ICommand { }
+
+    public sealed class ItemsCommandHandler : ICommandHandler<ItemsCommand>
+    {
+        public ValueTask HandleAsync(ItemsCommand command, IExecutionContext context)
+        {
+            context.Set("writtenByHandler", "yes");
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task Send_ShouldNotWipeCallerSettingsItems_AndShouldExposeHandlerWrites()
+    {
+        var provider = new ServiceCollection()
+            .AddErgosfare(x => x.AddCommandModule(c => c.Register<ItemsCommandHandler>()))
+            .BuildServiceProvider();
+        await using var _ = provider;
+
+        var mediator = provider.GetRequiredService<ICommandMediator>();
+        var settings = new CommandMediationSettings();
+        settings.Items["keep"] = "me";
+
+        await mediator.SendAsync(new ItemsCommand(), settings);
+
+        Assert.Equal("me", settings.Items["keep"]);
+        Assert.Equal("yes", settings.Items["writtenByHandler"]);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task Send_ShouldNotLeakOneDispatchesItems_IntoTheNext()
+    {
+        var provider = new ServiceCollection()
+            .AddErgosfare(x => x.AddCommandModule(c => c.Register<ItemsCommandHandler>()))
+            .BuildServiceProvider();
+        await using var _ = provider;
+
+        var mediator = provider.GetRequiredService<ICommandMediator>();
+
+        var first = new CommandMediationSettings();
+        first.Items["secret"] = "data";
+        await mediator.SendAsync(new ItemsCommand(), first);
+
+        var second = new CommandMediationSettings();
+        await mediator.SendAsync(new ItemsCommand(), second);
+
+        // The second dispatch's pooled context must not surface the first caller's items,
+        // and writing during the second dispatch must not reach the first caller.
+        Assert.False(second.Items.ContainsKey("secret"));
+        Assert.Equal("data", first.Items["secret"]);
+    }
+
+    public sealed class LateInterceptedCommand : ICommand { }
+
+    public sealed class LateInterceptedCommandHandler : ICommandHandler<LateInterceptedCommand>
+    {
+        public ValueTask HandleAsync(LateInterceptedCommand command, IExecutionContext context)
+            => ValueTask.CompletedTask;
+    }
+
+    /// <summary>
+    /// Excluded from discovery: the fact below registers this type at runtime to observe
+    /// the version bump — another test's assembly scan (the registry is process-wide)
+    /// must not slip it into the pipeline before the warm dispatches run.
+    /// </summary>
+    [ExcludeFromDiscovery]
+    public sealed class LateRegisteredInterceptor : ICommandPreInterceptor<LateInterceptedCommand>
+    {
+        public ValueTask<LateInterceptedCommand> HandleAsync(LateInterceptedCommand command, IExecutionContext context)
+        {
+            context.Set("lateInterceptorRan", true);
+            return ValueTask.FromResult(command);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task Send_ShouldPickUpRuntimeRegistrations_AfterWarmingTheExecutorCache()
+    {
+        var provider = new ServiceCollection()
+            .AddTransient<LateRegisteredInterceptor>()
+            .AddErgosfare(x => x.AddCommandModule(c => c.Register<LateInterceptedCommandHandler>()))
+            .BuildServiceProvider();
+        await using var _ = provider;
+
+        var mediator = provider.GetRequiredService<ICommandMediator>();
+        var registry = provider.GetRequiredService<IMessageRegistry>();
+
+        // Warm the executor's cached plan on the zero-interceptor fast path.
+        var warm = new CommandMediationSettings();
+        await mediator.SendAsync(new LateInterceptedCommand(), warm);
+        await mediator.SendAsync(new LateInterceptedCommand(), warm);
+        Assert.False(warm.Items.ContainsKey("lateInterceptorRan"));
+
+        // A runtime registration bumps the registry version; the cached plan must rebuild
+        // and the dispatch must leave the fast path for the full pipeline.
+        registry.Register(typeof(LateRegisteredInterceptor));
+
+        var probe = new CommandMediationSettings();
+        await mediator.SendAsync(new LateInterceptedCommand(), probe);
+
+        Assert.Equal(true, probe.Items["lateInterceptorRan"]);
+    }
+
+    public sealed class ResultCommand : ICommand<int> { }
+
+    public sealed class ResultCommandHandler : ICommandHandler<ResultCommand, int>
+    {
+        public ValueTask<int> HandleAsync(ResultCommand command, IExecutionContext context)
+            => ValueTask.FromResult(42);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task Send_ResultCommand_ShouldFlowThroughTheResultFastPath()
+    {
+        var provider = new ServiceCollection()
+            .AddErgosfare(x => x.AddCommandModule(c => c.Register<ResultCommandHandler>()))
+            .BuildServiceProvider();
+        await using var _ = provider;
+
+        var mediator = provider.GetRequiredService<ICommandMediator>();
+
+        // Repeated sends exercise the cached result-executor lookup.
+        for (var i = 0; i < 3; i++)
+        {
+            Assert.Equal(42, await mediator.SendAsync(new ResultCommand()));
+        }
+    }
+}

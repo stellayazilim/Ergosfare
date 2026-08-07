@@ -33,6 +33,13 @@ public sealed class ResultAdapterService: IResultAdapterService
 
     
     public IEnumerable<IResultAdapter> GetAdapters() => _resultAdapters;
+
+    /// <summary>
+    /// Whether no adapters are registered — lets dispatch fast paths skip the lookup
+    /// entirely. Reads the live list count, so a late AddAdapter is observed.
+    /// </summary>
+    internal bool IsEmpty => _resultAdapters.Count == 0;
+
     /// <summary>
     /// Iterates over the registered adapters to find the first one that can handle
     /// the given <paramref name="result"/> and extract an exception.

@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Core;
+using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Queries.Abstractions;
@@ -11,10 +11,64 @@ namespace Stella.Ergosfare.Queries;
 /// Handles both standard queries and streaming queries using the internal message mediation pipeline,
 /// supporting pre/post/final interceptors and result adapters.
 /// </summary>
-public class QueryMediator(
-    ActualTypeOrFirstAssignableTypeMessageResolveStrategy messageResolveStrategy,
-    IMessageMediator messageMediator): IQueryMediator
+public class QueryMediator : IQueryMediator
 {
+    /// <summary>
+    /// Resolve strategy handed to the streaming invoker; identical on both construction
+    /// shapes.
+    /// </summary>
+    private readonly ActualTypeOrFirstAssignableTypeMessageResolveStrategy _messageResolveStrategy;
+
+    /// <summary>
+    /// The mediator backing the original construction shape; null when the facade is
+    /// engine-backed.
+    /// </summary>
+    private readonly IMessageMediator? _messageMediator;
+
+    /// <summary>
+    /// The singleton dispatch engine; null when the facade wraps an
+    /// <see cref="IMessageMediator"/>.
+    /// </summary>
+    private readonly MessageDispatchEngine? _engine;
+
+    /// <summary>
+    /// The scope provider handlers resolve against on the engine path; the streaming path
+    /// also resolves its <see cref="IMessageMediator"/> from it on demand.
+    /// </summary>
+    private readonly IServiceProvider? _serviceProvider;
+
+    /// <summary>
+    /// Wraps an existing <see cref="IMessageMediator"/> — the original construction shape,
+    /// kept for direct construction and foreign mediator implementations.
+    /// </summary>
+    public QueryMediator(
+        ActualTypeOrFirstAssignableTypeMessageResolveStrategy messageResolveStrategy,
+        IMessageMediator messageMediator)
+    {
+        _messageResolveStrategy = messageResolveStrategy;
+        _messageMediator = messageMediator;
+    }
+
+    /// <summary>
+    /// Engine-backed construction: queries go straight to the process-wide engine with
+    /// <paramref name="serviceProvider"/> as the handler-resolution scope, making the
+    /// facade the only object built per resolution.
+    /// </summary>
+    /// <param name="engine">The singleton dispatch engine.</param>
+    /// <param name="serviceProvider">The provider of the scope this facade serves.</param>
+    /// <param name="messageResolveStrategy">Resolve strategy used by the streaming path.</param>
+    public QueryMediator(
+        MessageDispatchEngine engine,
+        IServiceProvider serviceProvider,
+        ActualTypeOrFirstAssignableTypeMessageResolveStrategy messageResolveStrategy)
+    {
+        ArgumentNullException.ThrowIfNull(engine);
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+
+        _engine = engine;
+        _serviceProvider = serviceProvider;
+        _messageResolveStrategy = messageResolveStrategy;
+    }
 
     /// <summary>
     /// Executes a query and returns a single result of type <typeparamref name="TResult"/>.
@@ -30,14 +84,21 @@ public class QueryMediator(
     public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, QueryMediationSettings? queryMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
-        return messageMediator.DispatchAsync<TResult>(
-            query,
-            queryMediationSettings?.Items,
-            cancellationToken,
-            queryMediationSettings?.Filters.Groups);
+        return _engine is not null
+            ? _engine.DispatchAsync<TResult>(
+                query,
+                _serviceProvider!,
+                queryMediationSettings?.Items,
+                cancellationToken,
+                queryMediationSettings?.Filters.Groups)
+            : _messageMediator!.DispatchAsync<TResult>(
+                query,
+                queryMediationSettings?.Items,
+                cancellationToken,
+                queryMediationSettings?.Filters.Groups);
     }
 
-    
+
     /// <summary>
     /// Executes a streaming query and returns an asynchronous enumerable of results.
     /// The query is processed through the streaming pipeline, supporting interceptors and result adapters.
@@ -52,8 +113,14 @@ public class QueryMediator(
     public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, QueryMediationSettings? queryMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
-        return QueryStreamInvokerCache.Get<TResult>(query.GetType()).Stream(
-            query, queryMediationSettings, cancellationToken, messageMediator, messageResolveStrategy);
+        // Engine-backed facades stream against the invoker-cached pipeline plan — no
+        // per-call mediator resolution, MediateOptions or descriptor lookup; the wrapped
+        // shape keeps the original Mediate path for foreign mediator implementations.
+        return _engine is not null
+            ? QueryStreamInvokerCache.Get<TResult>(query.GetType()).Stream(
+                query, queryMediationSettings, cancellationToken, _engine, _serviceProvider!, _messageResolveStrategy)
+            : QueryStreamInvokerCache.Get<TResult>(query.GetType()).Stream(
+                query, queryMediationSettings, cancellationToken, RequireMessageMediator(), _messageResolveStrategy);
     }
 
     /// <summary>
@@ -64,9 +131,27 @@ public class QueryMediator(
     public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, IExecutionContext context,
         QueryMediationSettings? queryMediationSettings = null)
     {
-        return messageMediator.DispatchAsync<TResult>(
-            query,
-            context,
-            queryMediationSettings?.Filters.Groups);
+        return _engine is not null
+            ? _engine.DispatchAsync<TResult>(
+                query,
+                context,
+                _serviceProvider!,
+                queryMediationSettings?.Filters.Groups)
+            : _messageMediator!.DispatchAsync<TResult>(
+                query,
+                context,
+                queryMediationSettings?.Filters.Groups);
     }
+
+    /// <summary>
+    /// The mediator the wrapped-shape streaming path (which mediates through
+    /// <c>Mediate(options)</c>) runs against — the wrapped instance, or the scope's own
+    /// registration resolved on demand. Engine-backed facades never call this: their
+    /// streams run the invoker's engine fast lane.
+    /// </summary>
+    private IMessageMediator RequireMessageMediator()
+        => _messageMediator
+           ?? (IMessageMediator?)_serviceProvider!.GetService(typeof(IMessageMediator))
+           ?? throw new InvalidOperationException(
+               "Streaming dispatch resolves IMessageMediator from the scope; register Ergosfare through AddErgosfare.");
 }

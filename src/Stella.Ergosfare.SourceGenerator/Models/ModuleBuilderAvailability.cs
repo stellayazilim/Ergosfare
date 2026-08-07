@@ -17,6 +17,13 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 /// <param name="QueryBuilderHasRegisterDescriptors">Whether the query builder exposes <c>RegisterDescriptors</c>.</param>
 /// <param name="EventBuilderHasRegisterDescriptors">Whether the event builder exposes <c>RegisterDescriptors</c>.</param>
 /// <param name="HasDispatchRoots">Whether the <c>GeneratedDispatchRoots</c> store is resolvable.</param>
+/// <param name="DispatchRootsHasVoidPlans">Whether the store exposes <c>AddVoidPlan</c> (compile-time pipeline plans).</param>
+/// <param name="DispatchRootsHasResultPlans">Whether the store exposes <c>AddResultPlan</c> (result pipeline plans).</param>
+/// <param name="DispatchRootsHasPlanFactories">
+///     Whether the plan surface accepts direct-construction factories (the
+///     <c>Func&lt;THandler&gt;</c> overloads); older packages take only the parameterless
+///     form, and emission degrades accordingly.
+/// </param>
 internal readonly record struct ModuleBuilderAvailability(
     bool HasMessageRegistry,
     bool HasCommandModuleBuilder,
@@ -26,4 +33,7 @@ internal readonly record struct ModuleBuilderAvailability(
     bool CommandBuilderHasRegisterDescriptors,
     bool QueryBuilderHasRegisterDescriptors,
     bool EventBuilderHasRegisterDescriptors,
-    bool HasDispatchRoots);
+    bool HasDispatchRoots,
+    bool DispatchRootsHasVoidPlans,
+    bool DispatchRootsHasResultPlans,
+    bool DispatchRootsHasPlanFactories);

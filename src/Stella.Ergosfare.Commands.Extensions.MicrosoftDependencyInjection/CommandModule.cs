@@ -28,7 +28,12 @@ internal class CommandModule : IModule
     {
         _builder(new CommandModuleBuilder(configuration.MessageRegistry));
 
-        // Scoped so per-dispatch handler resolution binds to the calling scope's provider.
-        configuration.Services.TryAddScoped<ICommandMediator, CommandMediator>();
+        // Transient: the mediator is a stateless facade whose only per-instance state is the
+        // provider that resolved it — a transient still receives the calling scope's provider,
+        // so per-dispatch handler resolution binds to the right scope. Scoped registration
+        // would pay the scope lock + resolved-services dictionary insert on every fresh
+        // scope (the scope-per-dispatch hot path) with nothing to amortize it. The
+        // engine-backed shape makes the facade the only object built per resolution.
+        configuration.Services.TryAddTransient<ICommandMediator, EngineBackedCommandMediator>();
     }
 }
