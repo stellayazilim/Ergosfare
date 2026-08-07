@@ -1,0 +1,10 @@
+<Project>
+    <!-- Deliberately does not import the repo root props: the smoke app pins a single
+         TFM for its NativeAOT publish, and the repo-wide net10.0;net9.0 multi-targeting
+         would fight that (and misresolve the ILCompiler pack). -->
+    <PropertyGroup>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <LangVersion>latest</LangVersion>
+    </PropertyGroup>
+</Project>

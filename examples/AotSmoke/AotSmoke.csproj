@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <!-- Single-TFM override of the repo-wide multi-targeting: the smoke publishes one
+             concrete AOT binary. -->
+        <TargetFramework>net9.0</TargetFramework>
+        <PublishAot>true</PublishAot>
+        <InvariantGlobalization>true</InvariantGlobalization>
+        <!-- Trim/AOT analyzer findings in this app or the library fail the smoke instead
+             of scrolling by as warnings. -->
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <!-- The Stella.Ergosfare.* prefix is reserved: reference scanning skips library
+             assemblies, so the app must live outside it to be scanned itself. -->
+        <AssemblyName>Ergosfare.AotSmoke</AssemblyName>
+        <RootNamespace>Ergosfare.AotSmoke</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Stella.Ergosfare\Stella.Ergosfare.csproj" />
+        <ProjectReference Include="..\..\src\Stella.Ergosfare.SourceGenerator\Stella.Ergosfare.SourceGenerator.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+</Project>
