@@ -22,7 +22,7 @@ public interface IMessageMediator
     /// <summary>
     /// Dispatches <paramref name="message"/> through the cached result-producing pipeline
     /// executor closed over its runtime type and the requested group set; see
-    /// <see cref="DispatchAsync"/>.
+    /// <see cref="DispatchAsync(object, IDictionary{object, object}, CancellationToken, IEnumerable{string})"/>.
     /// </summary>
     /// <typeparam name="TResult">The result type produced by the pipeline.</typeparam>
     /// <param name="message">The message instance to dispatch.</param>

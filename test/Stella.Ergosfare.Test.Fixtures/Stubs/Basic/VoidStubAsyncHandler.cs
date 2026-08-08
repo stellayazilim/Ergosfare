@@ -58,7 +58,7 @@ public class StubVoidAsyncExceptionInterceptor: IAsyncExceptionInterceptor<StubM
     /// <inheritdoc />
     public ValueTask<object> HandleAsync(StubMessage message, object? messageResult, Exception exception, IExecutionContext context)
     {
-        return ValueTask.FromResult<object>(messageResult!);
+        return ValueTask.FromResult(messageResult!);
     }
 }
 

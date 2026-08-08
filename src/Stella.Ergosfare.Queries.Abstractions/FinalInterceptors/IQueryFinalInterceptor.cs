@@ -8,17 +8,17 @@ namespace Stella.Ergosfare.Queries.Abstractions;
 /// </summary>
 /// <remarks>
 /// <para>
-/// This interface is a non-generic version of <see cref="IQueryFinalInterceptor{TQuery}"/>,
-/// applying to all queries implementing <see cref="IQuery"/>.
+/// This interface applies to all queries implementing <see cref="IQuery"/>.
 /// </para>
 /// <para>
-/// It inherits from <see cref="IAsyncFinalInterceptor{TQuery, TResult}"/>, enabling
-/// asynchronous final processing of queries after they are dispatched to their handlers.
-/// </para>
-/// <para>
-/// Query handlers and messages that implement <see cref="IQuery"/> will recognize
-/// this interceptor automatically in the query mediation pipeline.
+/// It inherits from the result-agnostic <see cref="IAsyncFinalInterceptor{TMessage}"/>,
+/// enabling asynchronous final processing of queries after they are dispatched to their
+/// handlers. The result-agnostic base is deliberate: a result-typed base (the previous
+/// <c>IAsyncFinalInterceptor&lt;IQuery, object&gt;</c>) is invisible to the pipeline's
+/// pattern match whenever the query result is a value type, so the final stage failed
+/// with <see cref="System.NotSupportedException"/> for such queries the moment it ran.
+/// For a strongly-typed result use <see cref="IQueryFinalInterceptor{TQuery, TResult}"/>.
 /// </para>
 /// </remarks>
 // ReSharper disable once UnusedType.Global
-public interface IQueryFinalInterceptor: IQuery, IAsyncFinalInterceptor<IQuery, object>;
+public interface IQueryFinalInterceptor: IQuery, IAsyncFinalInterceptor<IQuery>;

@@ -1,7 +1,8 @@
-using Stella.Ergosfare.Commands.Abstractions;
+﻿using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Abstractions.Registry;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,7 +11,7 @@ namespace Stella.Ergosfare.Command.Test;
 
 /// <summary>
 /// Runtime behavior of generated void pipeline plans, installed here through the public
-/// <see cref="GeneratedDispatchRoots.AddVoidPlan{TMessage, THandler}"/> surface exactly as
+/// <see cref="GeneratedDispatchRoots.AddVoidPlan{TMessage, THandler}()"/> surface exactly as
 /// generated code would: the plan-closed executor dispatches the handler, runtime
 /// registrations still invalidate the cached pipeline, and a plan whose handler type does
 /// not match the actual registration falls back to the runtime dispatch shape without any

@@ -123,7 +123,7 @@ public class EngineBackedFacadeTests
         {
             var settings = new CommandMediationSettings();
 
-            var result = await mediator.SendAsync<string>(
+            var result = await mediator.SendAsync(
                 new EchoCommand { Payload = "hi" }, settings);
 
             Assert.Equal("hi!", result);

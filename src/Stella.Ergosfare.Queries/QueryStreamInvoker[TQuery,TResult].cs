@@ -1,6 +1,4 @@
-using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
-using Stella.Ergosfare.Core;
+﻿using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
@@ -10,38 +8,11 @@ using Stella.Ergosfare.Queries.Abstractions;
 
 namespace Stella.Ergosfare.Queries;
 
-/// <summary>
-/// Streams a query through a pipeline closed over the query's concrete type, so the stream
-/// handler is always invoked through its typed member — interface-erased streaming
-/// (<c>StreamAsync(IStreamQuery&lt;T&gt;)</c>) resolves the invoker from the query's runtime
-/// type. Invokers are closed once per (query type, result type) and cached; the per-call
-/// cancellation token flows into a fresh strategy instance, as before.
-/// </summary>
-internal interface IQueryStreamInvoker<out TResult>
-{
-    IAsyncEnumerable<TResult> Stream(object query, QueryMediationSettings? settings, CancellationToken cancellationToken,
-        IMessageMediator mediator, ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
-        IEnumerable<string>? groupsOverride = null);
-
-    /// <summary>
-    /// Engine-backed streaming: the concrete dispatch machinery is known by construction,
-    /// so the stream runs against the invoker-cached, registry-version-guarded pipeline
-    /// plan — no <c>MediateOptions</c>, no per-call descriptor lookup, no scope-resolved
-    /// mediator. Grouped streams resolve the same group-filtered dependencies the Mediate
-    /// path would build, from a last-used group-set slot.
-    /// <paramref name="groupsOverride"/> carries a facade-level group filter (a
-    /// <see cref="Core.Abstractions.GroupSet"/>) without a settings object; when present
-    /// it takes precedence over the settings' groups.
-    /// </summary>
-    IAsyncEnumerable<TResult> Stream(object query, QueryMediationSettings? settings, CancellationToken cancellationToken,
-        MessageDispatchEngine engine, IServiceProvider serviceProvider,
-        ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
-        IEnumerable<string>? groupsOverride = null);
-}
-
 internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<TResult>
     where TQuery : notnull
 {
+    // One copy per closed query type is deliberate — the invoker itself is per-query-type.
+    // ReSharper disable once StaticMemberInGenericType
     private static readonly string[] EmptyGroups = [];
 
     /// <summary>
@@ -49,6 +20,7 @@ internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<
     /// carries none); a single shared empty instance preserves that behavior without the
     /// per-call allocation. Never exposed, so it cannot be mutated.
     /// </summary>
+    // ReSharper disable once StaticMemberInGenericType
     private static readonly ResultAdapterService SharedEmptyAdapters = new();
 
     public IAsyncEnumerable<TResult> Stream(object query, QueryMediationSettings? settings, CancellationToken cancellationToken,
@@ -104,11 +76,14 @@ internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
+            // Read before the build: a registration completing mid-build must land as a
+            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
+            var registryVersion = typedFactory.CurrentRegistryVersion;
             var cached = _cachedDependencies;
 
             if (cached is not null
                 && ReferenceEquals(_cachedFactory, typedFactory)
-                && _cachedVersion == typedFactory.CurrentRegistryVersion)
+                && _cachedVersion == registryVersion)
             {
                 return cached;
             }
@@ -116,7 +91,7 @@ internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<
             var dependencies = BuildPlan(typedFactory, resolveStrategy, EmptyGroups);
             _cachedDependencies = dependencies;
             _cachedFactory = typedFactory;
-            _cachedVersion = typedFactory.CurrentRegistryVersion;
+            _cachedVersion = registryVersion;
             return dependencies;
         }
 
@@ -153,21 +128,27 @@ internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
+            // Read before the build: a registration completing mid-build must land as a
+            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
+            var registryVersion = typedFactory.CurrentRegistryVersion;
             var slot = _cachedGroupedPlan;
 
+            // Deliberate: groups is matched allocation-free first and only materialized on a slot miss.
+            // ReSharper disable once PossibleMultipleEnumeration
             if (slot is not null
                 && ReferenceEquals(slot.Factory, typedFactory)
-                && slot.Version == typedFactory.CurrentRegistryVersion
+                && slot.Version == registryVersion
                 && Core.Internal.Mediator.PipelineExecutorCache.SlotMatches(groups, slot.Groups, slot.Canonical))
             {
                 return slot.Dependencies;
             }
 
             var canonical = groups as GroupSet;
+            // ReSharper disable once PossibleMultipleEnumeration
             string[] materialized = [.. groups];
             var dependencies = BuildPlan(typedFactory, resolveStrategy, materialized);
             _cachedGroupedPlan = new GroupedPlanSlot(
-                typedFactory, materialized, canonical, dependencies, typedFactory.CurrentRegistryVersion);
+                typedFactory, materialized, canonical, dependencies, registryVersion);
             return dependencies;
         }
 
@@ -186,48 +167,5 @@ internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<
                          ?? throw new NoHandlerFoundException(typeof(TQuery));
 
         return factory.Create(typeof(TQuery), descriptor, groups);
-    }
-}
-
-/// <summary>
-/// Process-wide cache of <see cref="IQueryStreamInvoker{TResult}"/> instances, one per
-/// (query runtime type, result type) — one <see cref="Type.MakeGenericType"/> per pair.
-/// </summary>
-internal static class QueryStreamInvokerCache
-{
-    private static readonly ConcurrentDictionary<(Type QueryType, Type ResultType), object> Invokers = new();
-
-    [UnconditionalSuppressMessage("Trimming", "IL2055",
-        Justification = "The invoker generic is closed over a live query's runtime type; the query roots its type.")]
-    [UnconditionalSuppressMessage("AOT", "IL3050",
-        Justification = "Generated dispatch roots cover source-generated query types; this reflective path is the " +
-                        "JIT fallback for runtime-only registrations.")]
-    public static IQueryStreamInvoker<TResult> Get<TResult>(Type queryType)
-    {
-        var key = (queryType, typeof(TResult));
-
-        if (!Invokers.TryGetValue(key, out var invoker))
-        {
-            // Generated dispatch roots close the invoker generic at compile time; the
-            // reflective path below only serves query types without a root.
-            invoker = GeneratedDispatchRoots.FindStream(queryType, typeof(TResult)) is { } root
-                ? Invokers.GetOrAdd(key, root.Accept(InvokerVisitor.Instance, state: false))
-                : Invokers.GetOrAdd(key,
-                    static k => Activator.CreateInstance(typeof(QueryStreamInvoker<,>).MakeGenericType(k.QueryType, k.ResultType))!);
-        }
-
-        return (IQueryStreamInvoker<TResult>)invoker;
-    }
-
-    /// <summary>
-    /// Re-enters a generic context with a root's (query, result) pair and constructs the
-    /// closed stream invoker there — no <see cref="Type.MakeGenericType"/>, no reflection.
-    /// </summary>
-    private sealed class InvokerVisitor : IMessageResultRootVisitor<object, bool>
-    {
-        public static readonly InvokerVisitor Instance = new();
-
-        public object Visit<TMessage, TResult>(bool state) where TMessage : IMessage
-            => new QueryStreamInvoker<TMessage, TResult>();
     }
 }

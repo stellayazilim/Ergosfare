@@ -129,7 +129,7 @@ public class ResultAdapterFixtures : IFixture<ResultAdapterFixtures>
                 return false;
 
             // Explicitly check if it's an error state
-            exception = new AdaptedException(errorOr.Description ?? "Unknown error", result);
+            exception = new AdaptedException(errorOr.Description , result);
             return true;
         }
     }

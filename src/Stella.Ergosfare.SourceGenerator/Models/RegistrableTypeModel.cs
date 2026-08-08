@@ -1,4 +1,4 @@
-using System;
+
 using System.Collections.Immutable;
 
 namespace Stella.Ergosfare.SourceGenerator.Models;
@@ -102,6 +102,87 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     /// </summary>
     public required bool IsDirectlyConstructible { get; init; }
 
+    /// <summary>
+    ///     The emitted provider-taking construction factory
+    ///     (<c>static provider =&gt; new THandler(provider.GetRequiredService&lt;TDep&gt;(), ...)</c>)
+    ///     for a handler whose single public constructor takes only plain (or
+    ///     <c>[FromKeyedServices]</c>) service parameters, or <c>null</c> when the type
+    ///     does not qualify. Mutually exclusive with
+    ///     <see cref="IsDirectlyConstructible"/> — parameterless construction stays on the
+    ///     cheaper <c>Func&lt;THandler&gt;</c> shape. Meaningful for handler types only.
+    /// </summary>
+    public required string? ProviderConstructionExpression { get; init; }
+
+    /// <summary>
+    ///     Whether <see cref="ProviderConstructionExpression"/> resolves any parameter
+    ///     through the keyed-service extensions; emission then additionally requires
+    ///     those extensions to be resolvable in the consuming compilation.
+    /// </summary>
+    public required bool ProviderConstructionUsesKeyedServices { get; init; }
+
+    /// <summary>Whether the type carries <c>[ExcludeFromPipeline]</c>; such messages stay off staged plans.</summary>
+    public required bool HasPipelineExclusion { get; init; }
+
+    /// <summary>Whether the type is a value type — variance never applies to it at runtime.</summary>
+    public required bool IsValueType { get; init; }
+
+    /// <summary>
+    ///     Whether the type is nested in another type. The runtime orders pipeline
+    ///     segments by <c>Type.FullName</c>, whose nested separator (<c>+</c>) sorts
+    ///     differently from the display name's dot — nested participants therefore
+    ///     disqualify staged plans instead of risking a divergent order.
+    /// </summary>
+    public required bool IsNestedType { get; init; }
+
+    /// <summary>
+    ///     For dispatchable messages: the normalized type expressions of every base type
+    ///     and implemented interface — the compile-time domain of the runtime's
+    ///     <c>IsAssignableTo</c> checks that admit indirect (covariant) interceptors.
+    ///     Empty for non-dispatchable types.
+    /// </summary>
+    public required ImmutableArray<string> AssignableKeys { get; init; }
+
+    /// <summary>
+    ///     The raw interceptor contracts the type implements (undeduped), feeding the
+    ///     staged-plan arm selection; see <see cref="ContractShapeModel"/>. Empty for
+    ///     plain messages.
+    /// </summary>
+    public required ImmutableArray<ContractShapeModel> ContractShapes { get; init; }
+
+    /// <summary>
+    ///     The bare <c>new T(...)</c> construction expression for a pipeline participant
+    ///     whose construction is provably identical to container activation, resolving
+    ///     constructor dependencies from the <c>serviceProvider</c> identifier — the
+    ///     staged plans' direct-construction (<c>ExecuteDirect</c>) emission input.
+    ///     <c>null</c> when the participant does not qualify.
+    /// </summary>
+    public required string? StagedConstructionExpression { get; init; }
+
+    /// <summary>
+    ///     Whether <see cref="StagedConstructionExpression"/> resolves any dependency
+    ///     through the keyed-service extensions.
+    /// </summary>
+    public required bool StagedConstructionUsesKeyedServices { get; init; }
+
+    /// <summary>
+    ///     Whether a pipeline participant declares more than one public constructor —
+    ///     the ERGOSG003 info: the container's constructor selection stays in play, so
+    ///     generated plans skip the direct-construction fast path.
+    /// </summary>
+    public required bool HasMultiplePublicConstructors { get; init; }
+
+    /// <summary>
+    ///     Whether any constructor parameter carries <c>[FromServices]</c> — the
+    ///     ERGOSG004 info: the attribute has no effect on constructors.
+    /// </summary>
+    public required bool HasFromServicesConstructorParameter { get; init; }
+
+    /// <summary>
+    ///     Declaration location for the informational diagnostics above; captured only
+    ///     when one of them applies (source-declared types only).
+    /// </summary>
+    public required LocationInfo? InfoLocation { get; init; }
+
     public bool Equals(RegistrableTypeModel other)
     {
         if (TypeofExpression != other.TypeofExpression
@@ -116,11 +197,39 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
             || ReferencedAssemblyName != other.ReferencedAssemblyName
             || IsDispatchableMessage != other.IsDispatchableMessage
             || IsDirectlyConstructible != other.IsDirectlyConstructible
+            || ProviderConstructionExpression != other.ProviderConstructionExpression
+            || ProviderConstructionUsesKeyedServices != other.ProviderConstructionUsesKeyedServices
+            || HasPipelineExclusion != other.HasPipelineExclusion
+            || IsValueType != other.IsValueType
+            || IsNestedType != other.IsNestedType
+            || StagedConstructionExpression != other.StagedConstructionExpression
+            || StagedConstructionUsesKeyedServices != other.StagedConstructionUsesKeyedServices
+            || HasMultiplePublicConstructors != other.HasMultiplePublicConstructors
+            || HasFromServicesConstructorParameter != other.HasFromServicesConstructorParameter
+            || !Nullable.Equals(InfoLocation, other.InfoLocation)
             || Descriptors.Length != other.Descriptors.Length
             || DiscoveryKeys.Length != other.DiscoveryKeys.Length
-            || DispatchResults.Length != other.DispatchResults.Length)
+            || DispatchResults.Length != other.DispatchResults.Length
+            || AssignableKeys.Length != other.AssignableKeys.Length
+            || ContractShapes.Length != other.ContractShapes.Length)
         {
             return false;
+        }
+
+        for (var i = 0; i < AssignableKeys.Length; i++)
+        {
+            if (!string.Equals(AssignableKeys[i], other.AssignableKeys[i], StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        for (var i = 0; i < ContractShapes.Length; i++)
+        {
+            if (!ContractShapes[i].Equals(other.ContractShapes[i]))
+            {
+                return false;
+            }
         }
 
         for (var i = 0; i < Descriptors.Length; i++)

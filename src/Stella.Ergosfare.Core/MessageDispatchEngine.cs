@@ -122,7 +122,7 @@ public sealed class MessageDispatchEngine
     /// <param name="cancellationToken">Cancellation token for the dispatch.</param>
     public ValueTask DispatchVoidAsync<TMessage>(TMessage message, IServiceProvider serviceProvider,
         IDictionary<object, object?>? items = null, CancellationToken cancellationToken = default)
-        where TMessage : notnull, IMessage
+        where TMessage : IMessage
     {
         ArgumentNullException.ThrowIfNull(message);
 

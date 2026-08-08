@@ -1,4 +1,3 @@
-using System;
 
 namespace Stella.Ergosfare.Core.Abstractions;
 
@@ -32,14 +31,4 @@ public readonly struct ExecutionContextScope : IDisposable
     /// be used afterwards.
     /// </summary>
     public void Dispose() => (Context as IPoolReturnable)?.ReturnToPool();
-}
-
-/// <summary>
-/// Implemented by pooled execution contexts; <see cref="ExecutionContextScope.Dispose"/>
-/// and the dispatch paths return contexts through it.
-/// </summary>
-internal interface IPoolReturnable
-{
-    /// <summary>Resets the instance and returns it to its pool.</summary>
-    void ReturnToPool();
 }

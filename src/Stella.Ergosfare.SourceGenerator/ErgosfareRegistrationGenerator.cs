@@ -1,8 +1,7 @@
-using System;
-using System.Collections.Generic;
+
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Text;
-using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -56,7 +55,7 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     private const string AttributeNamespace = "Stella.Ergosfare.Core.Abstractions.Attributes";
 
     private const string MessageRegistryMetadataName = "Stella.Ergosfare.Core.Abstractions.Registry.IMessageRegistry";
-    private const string DispatchRootsMetadataName = "Stella.Ergosfare.Core.Abstractions.GeneratedDispatchRoots";
+    private const string DispatchRootsMetadataName = "Stella.Ergosfare.Core.Abstractions.DispatchRoots.GeneratedDispatchRoots";
     private const string DescriptorFactoryMetadataName = "Stella.Ergosfare.Core.Abstractions.Registry.Descriptors.HandlerDescriptors";
     private const string CommandBuilderMetadataName = "Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.CommandModuleBuilder";
     private const string QueryBuilderMetadataName = "Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.QueryModuleBuilder";
@@ -64,6 +63,10 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
 
     private const string ValueTaskExpression = "global::System.Threading.Tasks.ValueTask";
     private const string DescriptorCatalogMetadataName = "Stella.Ergosfare.Core.Abstractions.GeneratedDescriptorCatalog";
+
+    private const string StagedVoidPlanMetadataName = "Stella.Ergosfare.Core.Abstractions.StagedPlans.StagedVoidPlan";
+    private const string ServiceProviderExtensionsMetadataName = "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions";
+    private const string KeyedServiceExtensionsMetadataName = "Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions";
 
     private const string ScanReferencesBuildProperty = "build_property.ErgosfareSourceGeneratorScanReferences";
     private const string ErgosfareAssemblyNamePrefix = "Stella.Ergosfare";
@@ -109,6 +112,16 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 DispatchRootsHasVoidPlans: dispatchRoots is not null && !dispatchRoots.GetMembers("AddVoidPlan").IsEmpty,
                 DispatchRootsHasResultPlans: dispatchRoots is not null && !dispatchRoots.GetMembers("AddResultPlan").IsEmpty,
                 DispatchRootsHasPlanFactories: dispatchRoots is not null && HasFactoryOverload(dispatchRoots),
+                DispatchRootsHasProviderPlanFactories: dispatchRoots is not null
+                    && HasProviderFactoryOverload(dispatchRoots)
+                    && compilation.GetTypeByMetadataName(ServiceProviderExtensionsMetadataName) is not null,
+                HasKeyedServiceExtensions: compilation.GetTypeByMetadataName(KeyedServiceExtensionsMetadataName) is not null,
+                DispatchRootsHasStagedPlans: dispatchRoots is not null
+                    && !dispatchRoots.GetMembers("AddStagedPlan").IsEmpty
+                    && compilation.GetTypeByMetadataName(ServiceProviderExtensionsMetadataName) is not null,
+                StagedPlansSupportDirectConstruction:
+                    compilation.GetTypeByMetadataName(StagedVoidPlanMetadataName) is { } stagedVoidPlan
+                    && !stagedVoidPlan.GetMembers("SupportsDirectConstruction").IsEmpty,
                 HasDescriptorCatalog: compilation.GetTypeByMetadataName(DescriptorCatalogMetadataName) is not null);
         });
 
@@ -152,6 +165,28 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     }
 
     /// <summary>
+    ///     Whether the referenced <c>GeneratedDispatchRoots</c> accepts a plan overload
+    ///     with a provider-taking factory parameter
+    ///     (<c>Func&lt;IServiceProvider, THandler&gt;</c>) — the surface the
+    ///     dependency-injected construction emission requires. Recognized by delegate
+    ///     arity: the parameterless factory overload's <c>Func&lt;THandler&gt;</c> has one
+    ///     type argument, the provider-taking one has two.
+    /// </summary>
+    private static bool HasProviderFactoryOverload(INamedTypeSymbol dispatchRoots)
+    {
+        foreach (var member in dispatchRoots.GetMembers("AddVoidPlan"))
+        {
+            if (member is IMethodSymbol { Parameters.Length: 1 } method
+                && method.Parameters[0].Type is INamedTypeSymbol { Arity: 2 })
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     ///     Whether generated code can construct the type with <c>new()</c> and doing so
     ///     is provably interchangeable with resolving its plain transient registration:
     ///     a concrete, non-generic class whose ONLY instance constructor is public and
@@ -162,6 +197,29 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     ///     transient disposables; direct construction would not).
     /// </summary>
     private static bool IsDirectlyConstructible(INamedTypeSymbol symbol)
+    {
+        if (!HasDirectConstructionShape(symbol))
+        {
+            return false;
+        }
+
+        // Exactly one instance constructor, public and parameterless: with any richer
+        // constructor present (records' synthesized copy constructor included), the
+        // container's selection and `new()` can diverge — dropping dependencies the
+        // container would have injected.
+        return symbol.InstanceConstructors.Length == 1
+               && symbol.InstanceConstructors[0] is { Parameters.IsEmpty: true, DeclaredAccessibility: Accessibility.Public };
+    }
+
+    /// <summary>
+    ///     Shared base qualification of both construction factories: a concrete,
+    ///     non-generic class implementing neither <c>IDisposable</c> nor
+    ///     <c>IAsyncDisposable</c> (the container tracks transient disposables in the
+    ///     resolving scope; direct construction would not), with no <c>required</c>
+    ///     members anywhere in the hierarchy (an emitted <c>new</c> fails compilation
+    ///     with CS9035, while the container activation the factory replaces ignores them).
+    /// </summary>
+    private static bool HasDirectConstructionShape(INamedTypeSymbol symbol)
     {
         if (symbol.TypeKind != TypeKind.Class || symbol.IsAbstract || symbol.IsGenericType)
         {
@@ -176,9 +234,6 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             }
         }
 
-        // Required members anywhere in the hierarchy make an emitted `new()` a compile
-        // error (CS9035); the reflection-based container activation the plan replaces
-        // does not enforce them, so such types stay on the container path.
         for (var type = symbol; type is not null; type = type.BaseType)
         {
             foreach (var member in type.GetMembers())
@@ -190,12 +245,250 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             }
         }
 
-        // Exactly one instance constructor, public and parameterless: with any richer
-        // constructor present (records' synthesized copy constructor included), the
-        // container's selection and `new()` can diverge — dropping dependencies the
-        // container would have injected.
-        return symbol.InstanceConstructors.Length == 1
-               && symbol.InstanceConstructors[0] is { Parameters.IsEmpty: true, DeclaredAccessibility: Accessibility.Public };
+        return true;
+    }
+
+    /// <summary>
+    ///     Builds the provider-taking construction factory
+    ///     (<c>static provider =&gt; new THandler(...)</c>) for a handler whose
+    ///     construction is provably identical to container activation, or <c>null</c>
+    ///     when the type does not qualify. The gate mirrors what
+    ///     <c>Microsoft.Extensions.DependencyInjection</c> would do with the type's plain
+    ///     transient registration: the container considers only public constructors, so a
+    ///     type with exactly one public constructor leaves it no choice; every parameter
+    ///     must be a plain service resolution (<c>GetRequiredService</c>) or a
+    ///     <c>[FromKeyedServices]</c> one (<c>GetRequiredKeyedService</c>) from the very
+    ///     provider container activation would resolve from. Anything that makes the
+    ///     container's behavior content-dependent disqualifies: optional/default-valued
+    ///     parameters (the container falls back to the default only when the service is
+    ///     unregistered), multiple public constructors (greedy selection), <c>ref</c>-ish
+    ///     or <c>params</c> parameters, <c>[ServiceKey]</c> injection, non-nameable
+    ///     parameter types, and keys the emission cannot reproduce exactly.
+    /// </summary>
+    private static string? GetProviderConstructionExpression(
+        INamedTypeSymbol symbol,
+        string handlerTypeExpression,
+        IAssemblySymbol? currentAssembly,
+        out bool usesKeyedServices)
+    {
+        var construction = TryBuildConstructionExpression(
+            symbol, handlerTypeExpression, currentAssembly, "provider", allowParameterless: false, out usesKeyedServices);
+
+        return construction is null ? null : "static provider => " + construction;
+    }
+
+    /// <summary>
+    ///     Builds the bare <c>new T(...)</c> expression for a participant whose
+    ///     construction is provably identical to container activation (see
+    ///     <see cref="GetProviderConstructionExpression"/> for the gate), resolving
+    ///     constructor dependencies from the given provider identifier. The staged plans'
+    ///     direct-construction emission consumes it with <c>serviceProvider</c>; the
+    ///     provider factories wrap it in a lambda. Parameterless constructions are only
+    ///     produced when asked for — the plan factories keep those on the cheaper
+    ///     <c>Func&lt;THandler&gt;</c> shape.
+    /// </summary>
+    private static string? TryBuildConstructionExpression(
+        INamedTypeSymbol symbol,
+        string typeExpression,
+        IAssemblySymbol? currentAssembly,
+        string providerIdentifier,
+        bool allowParameterless,
+        out bool usesKeyedServices)
+    {
+        usesKeyedServices = false;
+
+        if (!HasDirectConstructionShape(symbol))
+        {
+            return null;
+        }
+
+        IMethodSymbol? publicConstructor = null;
+
+        foreach (var constructor in symbol.InstanceConstructors)
+        {
+            if (constructor.DeclaredAccessibility != Accessibility.Public)
+            {
+                // Invisible to the container's constructor selection; irrelevant here too.
+                continue;
+            }
+
+            if (publicConstructor is not null)
+            {
+                return null;
+            }
+
+            publicConstructor = constructor;
+        }
+
+        if (publicConstructor is null)
+        {
+            return null;
+        }
+
+        if (publicConstructor.Parameters.IsEmpty)
+        {
+            return allowParameterless ? "new " + typeExpression + "()" : null;
+        }
+
+        var arguments = new List<string>(publicConstructor.Parameters.Length);
+
+        foreach (var parameter in publicConstructor.Parameters)
+        {
+            if (parameter.RefKind != RefKind.None || parameter.IsParams || parameter.IsOptional || parameter.HasExplicitDefaultValue)
+            {
+                return null;
+            }
+
+            string? keyLiteral = null;
+
+            foreach (var attribute in parameter.GetAttributes())
+            {
+                if (attribute.AttributeClass is not { } attributeClass
+                    || !IsDependencyInjectionNamespace(attributeClass.ContainingNamespace))
+                {
+                    continue;
+                }
+
+                switch (attributeClass.Name)
+                {
+                    case "FromKeyedServicesAttribute":
+                        keyLiteral = GetServiceKeyLiteral(attribute, currentAssembly);
+
+                        if (keyLiteral is null)
+                        {
+                            return null;
+                        }
+
+                        break;
+                    case "ServiceKeyAttribute":
+                        return null;
+                }
+            }
+
+            if (parameter.Type is not INamedTypeSymbol parameterType
+                || parameterType.IsRefLikeType
+                || parameterType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T
+                || !IsNameableClosedType(parameterType, currentAssembly))
+            {
+                return null;
+            }
+
+            var parameterTypeExpression = parameterType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            arguments.Add(keyLiteral is null
+                ? "global::" + ServiceProviderExtensionsMetadataName + ".GetRequiredService<" + parameterTypeExpression + ">(" + providerIdentifier + ")"
+                : "global::" + KeyedServiceExtensionsMetadataName + ".GetRequiredKeyedService<" + parameterTypeExpression + ">(" + providerIdentifier + ", " + keyLiteral + ")");
+
+            usesKeyedServices |= keyLiteral is not null;
+        }
+
+        return "new " + typeExpression + "(" + string.Join(", ", arguments) + ")";
+    }
+
+    /// <summary>
+    ///     Whether generated code in the current compilation can name the closed type in
+    ///     a generic argument position: spellable names and public accessibility along the
+    ///     whole containing chain (internal accepted only for the current compilation's
+    ///     own types — referenced-assembly IVT grants are deliberately not modeled here),
+    ///     recursively for every generic type argument.
+    /// </summary>
+    private static bool IsNameableClosedType(INamedTypeSymbol type, IAssemblySymbol? currentAssembly)
+    {
+        if (type.IsUnboundGenericType || !HasSpellableName(type))
+        {
+            return false;
+        }
+
+        for (var current = type; current is not null; current = current.ContainingType)
+        {
+            switch (current.DeclaredAccessibility)
+            {
+                case Accessibility.Public:
+                    break;
+                case Accessibility.Internal:
+                case Accessibility.ProtectedOrInternal:
+                    if (currentAssembly is null
+                        || !SymbolEqualityComparer.Default.Equals(current.ContainingAssembly, currentAssembly))
+                    {
+                        return false;
+                    }
+
+                    break;
+                default:
+                    return false;
+            }
+        }
+
+        foreach (var argument in type.TypeArguments)
+        {
+            if (argument is not INamedTypeSymbol named || !IsNameableClosedType(named, currentAssembly))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsDependencyInjectionNamespace(INamespaceSymbol? ns)
+        => ns is
+        {
+            Name: "DependencyInjection",
+            ContainingNamespace:
+            {
+                Name: "Extensions",
+                ContainingNamespace: { Name: "Microsoft", ContainingNamespace.IsGlobalNamespace: true }
+            }
+        };
+
+    /// <summary>
+    ///     The C# literal reproducing a <c>[FromKeyedServices]</c> key exactly — the
+    ///     container matches keys by boxed equality, so the emitted constant must carry
+    ///     the same runtime type and value as the attribute's. Strings, chars, bools,
+    ///     integral primitives, enums and <c>typeof</c> keys are reproducible; anything
+    ///     else (null, floating-point, arrays) returns <c>null</c> and keeps the handler
+    ///     on the container path.
+    /// </summary>
+    private static string? GetServiceKeyLiteral(AttributeData attribute, IAssemblySymbol? currentAssembly)
+    {
+        if (attribute.ConstructorArguments.Length != 1)
+        {
+            return null;
+        }
+
+        var key = attribute.ConstructorArguments[0];
+
+        switch (key.Kind)
+        {
+            case TypedConstantKind.Primitive:
+                return key.Value switch
+                {
+                    string s => SymbolDisplay.FormatLiteral(s, quote: true),
+                    char c => SymbolDisplay.FormatLiteral(c, quote: true),
+                    bool b => b ? "true" : "false",
+                    int i => i.ToString(CultureInfo.InvariantCulture),
+                    long l => l.ToString(CultureInfo.InvariantCulture) + "L",
+                    sbyte v => "(sbyte)" + v.ToString(CultureInfo.InvariantCulture),
+                    byte v => "(byte)" + v.ToString(CultureInfo.InvariantCulture),
+                    short v => "(short)" + v.ToString(CultureInfo.InvariantCulture),
+                    ushort v => "(ushort)" + v.ToString(CultureInfo.InvariantCulture),
+                    uint v => v.ToString(CultureInfo.InvariantCulture) + "U",
+                    ulong v => v.ToString(CultureInfo.InvariantCulture) + "UL",
+                    _ => null,
+                };
+            case TypedConstantKind.Enum:
+                return key.Type is INamedTypeSymbol enumType && IsNameableClosedType(enumType, currentAssembly)
+                    ? "(" + enumType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ")("
+                      + Convert.ToString(key.Value, CultureInfo.InvariantCulture) + ")"
+                    : null;
+            case TypedConstantKind.Type:
+                return key.Value is INamedTypeSymbol { IsUnboundGenericType: false } keyType
+                       && IsNameableClosedType(keyType, currentAssembly)
+                    ? "typeof(" + keyType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ")"
+                    : null;
+            default:
+                return null;
+        }
     }
 
     /// <summary>
@@ -232,10 +525,27 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         var isAccessible = IsAccessibleFromGeneratedCode(symbol);
         var descriptors = isAccessible ? BuildDescriptors(symbol) : ImmutableArray<DescriptorModel>.Empty;
         var isDispatchable = isAccessible && IsDispatchableMessage(symbol, descriptors);
+        var typeofExpression = BuildTypeofExpression(symbol);
+
+        var usesKeyedServices = false;
+        var providerConstruction = isAccessible
+            ? GetProviderConstructionExpression(symbol, typeofExpression, symbol.ContainingAssembly, out usesKeyedServices)
+            : null;
+
+        // Informational diagnostics apply to pipeline participants declared in source —
+        // the only place the user can act on them.
+        var hasMultipleCtors = !descriptors.IsEmpty && HasMultiplePublicInstanceConstructors(symbol);
+        var hasFromServices = !descriptors.IsEmpty && HasFromServicesOnConstructor(symbol);
+
+        var stagedKeyedServices = false;
+        var stagedConstruction = isAccessible && !descriptors.IsEmpty
+            ? TryBuildConstructionExpression(symbol, typeofExpression, symbol.ContainingAssembly,
+                "serviceProvider", allowParameterless: true, out stagedKeyedServices)
+            : null;
 
         return new RegistrableTypeModel
         {
-            TypeofExpression = BuildTypeofExpression(symbol),
+            TypeofExpression = typeofExpression,
             DisplayName = symbol.ToDisplayString(),
             IsCommand = isCommand,
             IsQuery = isQuery,
@@ -250,7 +560,53 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             IsDispatchableMessage = isDispatchable,
             DispatchResults = isDispatchable ? GetDispatchResults(symbol) : ImmutableArray<DispatchResultModel>.Empty,
             IsDirectlyConstructible = isAccessible && IsDirectlyConstructible(symbol),
+            ProviderConstructionExpression = providerConstruction,
+            ProviderConstructionUsesKeyedServices = usesKeyedServices,
+            HasPipelineExclusion = HasPipelineExclusionAttribute(symbol),
+            IsValueType = symbol.IsValueType,
+            IsNestedType = symbol.ContainingType is not null,
+            AssignableKeys = isDispatchable ? GetAssignableKeys(symbol) : ImmutableArray<string>.Empty,
+            ContractShapes = isAccessible ? BuildContractShapes(symbol) : ImmutableArray<ContractShapeModel>.Empty,
+            StagedConstructionExpression = stagedConstruction,
+            StagedConstructionUsesKeyedServices = stagedKeyedServices,
+            HasMultiplePublicConstructors = hasMultipleCtors,
+            HasFromServicesConstructorParameter = hasFromServices,
+            InfoLocation = hasMultipleCtors || hasFromServices ? LocationInfo.From(symbol) : null,
         };
+    }
+
+    private static bool HasMultiplePublicInstanceConstructors(INamedTypeSymbol symbol)
+    {
+        var count = 0;
+
+        foreach (var constructor in symbol.InstanceConstructors)
+        {
+            if (constructor.DeclaredAccessibility == Accessibility.Public && ++count > 1)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasFromServicesOnConstructor(INamedTypeSymbol symbol)
+    {
+        foreach (var constructor in symbol.InstanceConstructors)
+        {
+            foreach (var parameter in constructor.Parameters)
+            {
+                foreach (var attribute in parameter.GetAttributes())
+                {
+                    if (attribute.AttributeClass is { Name: "FromServicesAttribute" })
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -312,7 +668,8 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                     continue;
             }
 
-            var model = new DispatchResultModel(VerbatimTypeExpression(iface.TypeArguments[0]), isStream);
+            var model = new DispatchResultModel(
+                VerbatimTypeExpression(iface.TypeArguments[0]), isStream, iface.TypeArguments[0].IsValueType);
 
             results ??= ImmutableArray.CreateBuilder<DispatchResultModel>();
 
@@ -333,6 +690,120 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     private static bool IsExcludedFromDiscovery(INamedTypeSymbol symbol)
         => HasExcludeFromDiscovery(symbol.GetAttributes())
            || HasExcludeFromDiscovery(symbol.ContainingAssembly.GetAttributes());
+
+    /// <summary>
+    ///     Whether the type declares <c>[ExcludeFromPipeline]</c>. The attribute shapes the
+    ///     indirect interceptor stages at runtime; staged plans conservatively skip such
+    ///     messages instead of modeling the exclusion.
+    /// </summary>
+    private static bool HasPipelineExclusionAttribute(INamedTypeSymbol symbol)
+    {
+        foreach (var attribute in symbol.GetAttributes())
+        {
+            if (attribute.AttributeClass is { Name: "ExcludeFromPipelineAttribute" } attributeClass
+                && IsInNamespace(attributeClass, AttributeNamespace))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     The normalized type expressions of every base type and implemented interface —
+    ///     the compile-time domain of the runtime's <c>IsAssignableTo</c> checks that admit
+    ///     indirect (covariantly registered) interceptors into a message's pipeline.
+    /// </summary>
+    private static ImmutableArray<string> GetAssignableKeys(INamedTypeSymbol symbol)
+    {
+        var keys = ImmutableArray.CreateBuilder<string>();
+
+        for (var baseType = symbol.BaseType; baseType is not null; baseType = baseType.BaseType)
+        {
+            keys.Add(NormalizedTypeExpression(baseType));
+        }
+
+        foreach (var iface in symbol.AllInterfaces)
+        {
+            keys.Add(NormalizedTypeExpression(iface));
+        }
+
+        return keys.ToImmutable();
+    }
+
+    /// <summary>
+    ///     Collects the raw interceptor contracts the type implements — the undeduped
+    ///     counterpart of <see cref="BuildDescriptors"/>'s interceptor walk, keeping the
+    ///     async/sync and result-typed facts the staged-plan arm selection needs.
+    /// </summary>
+    private static ImmutableArray<ContractShapeModel> BuildContractShapes(INamedTypeSymbol symbol)
+    {
+        for (var current = symbol; current is not null; current = current.ContainingType)
+        {
+            if (current.Arity > 0)
+            {
+                return ImmutableArray<ContractShapeModel>.Empty;
+            }
+        }
+
+        ImmutableArray<ContractShapeModel>.Builder? shapes = null;
+
+        foreach (var iface in symbol.AllInterfaces)
+        {
+            if (iface.Arity is not (1 or 2) || !IsInNamespace(iface, HandlerContractNamespace))
+            {
+                continue;
+            }
+
+            var arguments = iface.TypeArguments;
+
+            ContractShapeModel? shape = iface.Name switch
+            {
+                "IPreInterceptor" when iface.Arity == 1 => new ContractShapeModel(
+                    DescriptorKind.PreInterceptor, IsAsync: false, IsResultTyped: false,
+                    NormalizedTypeExpression(arguments[0]), null),
+                "IAsyncPreInterceptor" when iface.Arity == 1 => new ContractShapeModel(
+                    DescriptorKind.PreInterceptor, IsAsync: true, IsResultTyped: false,
+                    NormalizedTypeExpression(arguments[0]), null),
+                "IPostInterceptor" when iface.Arity == 2 => new ContractShapeModel(
+                    DescriptorKind.PostInterceptor, IsAsync: false, IsResultTyped: true,
+                    NormalizedTypeExpression(arguments[0]), VerbatimTypeExpression(arguments[1])),
+                "IAsyncPostInterceptor" when iface.Arity == 2 => new ContractShapeModel(
+                    DescriptorKind.PostInterceptor, IsAsync: true, IsResultTyped: true,
+                    NormalizedTypeExpression(arguments[0]), VerbatimTypeExpression(arguments[1])),
+                "IAsyncPostInterceptor" when iface.Arity == 1 => new ContractShapeModel(
+                    DescriptorKind.PostInterceptor, IsAsync: true, IsResultTyped: false,
+                    NormalizedTypeExpression(arguments[0]), null),
+                "IExceptionInterceptor" when iface.Arity == 2 => new ContractShapeModel(
+                    DescriptorKind.ExceptionInterceptor, IsAsync: false, IsResultTyped: true,
+                    NormalizedTypeExpression(arguments[0]), VerbatimTypeExpression(arguments[1])),
+                "IAsyncExceptionInterceptor" when iface.Arity == 2 => new ContractShapeModel(
+                    DescriptorKind.ExceptionInterceptor, IsAsync: true, IsResultTyped: true,
+                    NormalizedTypeExpression(arguments[0]), VerbatimTypeExpression(arguments[1])),
+                "IAsyncExceptionInterceptor" when iface.Arity == 1 => new ContractShapeModel(
+                    DescriptorKind.ExceptionInterceptor, IsAsync: true, IsResultTyped: false,
+                    NormalizedTypeExpression(arguments[0]), null),
+                "IFinalInterceptor" when iface.Arity == 2 => new ContractShapeModel(
+                    DescriptorKind.FinalInterceptor, IsAsync: false, IsResultTyped: true,
+                    NormalizedTypeExpression(arguments[0]), VerbatimTypeExpression(arguments[1])),
+                "IAsyncFinalInterceptor" when iface.Arity == 2 => new ContractShapeModel(
+                    DescriptorKind.FinalInterceptor, IsAsync: true, IsResultTyped: true,
+                    NormalizedTypeExpression(arguments[0]), VerbatimTypeExpression(arguments[1])),
+                "IAsyncFinalInterceptor" when iface.Arity == 1 => new ContractShapeModel(
+                    DescriptorKind.FinalInterceptor, IsAsync: true, IsResultTyped: false,
+                    NormalizedTypeExpression(arguments[0]), null),
+                _ => null,
+            };
+
+            if (shape is { } value)
+            {
+                (shapes ??= ImmutableArray.CreateBuilder<ContractShapeModel>()).Add(value);
+            }
+        }
+
+        return shapes?.ToImmutable() ?? ImmutableArray<ContractShapeModel>.Empty;
+    }
 
     private static bool HasExcludeFromDiscovery(ImmutableArray<AttributeData> attributes)
     {
@@ -604,10 +1075,24 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         var isAccessible = IsVisibleToCompilation(symbol, givesAccess) && HasSpellableName(symbol);
         var descriptors = isAccessible ? BuildDescriptors(symbol) : ImmutableArray<DescriptorModel>.Empty;
         var isDispatchable = isAccessible && IsDispatchableMessage(symbol, descriptors);
+        var typeofExpression = BuildTypeofExpression(symbol);
+
+        // Referenced handlers get no current-assembly grant: their construction factory
+        // qualifies only over fully public parameter types (IVT grants are not modeled).
+        var usesKeyedServices = false;
+        var providerConstruction = isAccessible
+            ? GetProviderConstructionExpression(symbol, typeofExpression, currentAssembly: null, out usesKeyedServices)
+            : null;
+
+        var referencedStagedKeyedServices = false;
+        var referencedStagedConstruction = isAccessible && !descriptors.IsEmpty
+            ? TryBuildConstructionExpression(symbol, typeofExpression, currentAssembly: null,
+                "serviceProvider", allowParameterless: true, out referencedStagedKeyedServices)
+            : null;
 
         return new RegistrableTypeModel
         {
-            TypeofExpression = BuildTypeofExpression(symbol),
+            TypeofExpression = typeofExpression,
             DisplayName = symbol.ToDisplayString(),
             IsCommand = isCommand,
             IsQuery = isQuery,
@@ -622,6 +1107,18 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             IsDispatchableMessage = isDispatchable,
             DispatchResults = isDispatchable ? GetDispatchResults(symbol) : ImmutableArray<DispatchResultModel>.Empty,
             IsDirectlyConstructible = isAccessible && IsDirectlyConstructible(symbol),
+            ProviderConstructionExpression = providerConstruction,
+            ProviderConstructionUsesKeyedServices = usesKeyedServices,
+            HasPipelineExclusion = HasPipelineExclusionAttribute(symbol),
+            IsValueType = symbol.IsValueType,
+            IsNestedType = symbol.ContainingType is not null,
+            AssignableKeys = isDispatchable ? GetAssignableKeys(symbol) : ImmutableArray<string>.Empty,
+            ContractShapes = isAccessible ? BuildContractShapes(symbol) : ImmutableArray<ContractShapeModel>.Empty,
+            StagedConstructionExpression = referencedStagedConstruction,
+            StagedConstructionUsesKeyedServices = referencedStagedKeyedServices,
+            HasMultiplePublicConstructors = false,
+            HasFromServicesConstructorParameter = false,
+            InfoLocation = null,
         };
     }
 
@@ -703,8 +1200,383 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             ? ComputeResultPlans(types)
             : (IReadOnlyList<ResultPlanModel>)Array.Empty<ResultPlanModel>();
 
-        var source = RegistrationEmitter.Emit(types, availability, voidPlans, resultPlans, GeneratorVersion);
+        var stagedPlans = availability.DispatchRootsHasStagedPlans
+            ? ComputeStagedPlans(types, availability.HasKeyedServiceExtensions)
+            : (IReadOnlyList<StagedPlanModel>)Array.Empty<StagedPlanModel>();
+
+        var source = RegistrationEmitter.Emit(types, availability, voidPlans, resultPlans, stagedPlans, GeneratorVersion);
         context.AddSource("ErgosfareRegistrations.g.cs", SourceText.From(source, Encoding.UTF8));
+    }
+
+    /// <summary>
+    ///     Computes the staged pipeline plans: a dispatchable command (void) or
+    ///     command/query (single closed result) qualifies when its sole discovered handler
+    ///     is the matching async contract AND at least one discovered interceptor
+    ///     participates in its pipeline AND every part of that pipeline could be modeled
+    ///     exactly — the composition (membership and order) replicates the runtime
+    ///     shape-builder, and every call's pattern-match arm is decidable at compile time.
+    ///     Anything unmodelable disqualifies the message rather than risking divergence;
+    ///     the runtime gate then simply never sees a staged plan for it. The plan stays
+    ///     advisory regardless: the hosting executor re-validates the composition per
+    ///     registry version.
+    /// </summary>
+    private static List<StagedPlanModel> ComputeStagedPlans(List<RegistrableTypeModel> types, bool hasKeyedServiceExtensions)
+    {
+        CollectPipelineFacts(types, out var handlerCounts, out var soleHandlers, out _);
+
+        var plans = new List<StagedPlanModel>();
+
+        foreach (var type in types)
+        {
+            if (!type.IsDispatchableMessage || type.HasPipelineExclusion)
+            {
+                continue;
+            }
+
+            string? resultTypeExpression = null;
+            var resultIsValueType = false;
+
+            if (type.IsCommand && type.DispatchResults.Length == 0)
+            {
+                // Void pipeline.
+            }
+            else if ((type.IsCommand || type.IsQuery)
+                     && type.DispatchResults.Length == 1
+                     && !type.DispatchResults[0].IsStream)
+            {
+                resultTypeExpression = type.DispatchResults[0].ResultTypeExpression;
+                resultIsValueType = type.DispatchResults[0].ResultIsValueType;
+            }
+            else
+            {
+                continue;
+            }
+
+            // The sole handler gate mirrors the single-handler plans, minus the
+            // interceptor suppression (interceptors are the whole point here).
+            if (!handlerCounts.TryGetValue(type.TypeofExpression, out var count) || count != 1)
+            {
+                continue;
+            }
+
+            var (handler, handlerDescriptor) = soleHandlers[type.TypeofExpression];
+
+            if (!handler.IsAccessible || !handler.DiscoveryKeys.IsEmpty || handler.GroupsExpression is not null)
+            {
+                continue;
+            }
+
+            var expectedHandlerResult = resultTypeExpression is null
+                ? ValueTaskExpression
+                : ValueTaskExpression + "<" + resultTypeExpression + ">";
+
+            if (handlerDescriptor.ResultTypeExpression != expectedHandlerResult
+                || handlerDescriptor.MessageTypeExpression != type.TypeofExpression)
+            {
+                continue;
+            }
+
+            if (!TryAssembleStagedStages(type, types, resultTypeExpression, resultIsValueType, hasKeyedServiceExtensions,
+                    out var pre, out var post, out var exceptionCalls, out var finalCalls))
+            {
+                continue;
+            }
+
+            if (pre.Length + post.Length + exceptionCalls.Length + finalCalls.Length == 0)
+            {
+                // No interceptors: the single-handler plans already cover this shape.
+                continue;
+            }
+
+            plans.Add(new StagedPlanModel(
+                type.TypeofExpression,
+                resultTypeExpression,
+                resultIsValueType,
+                handler.TypeofExpression,
+                GatedConstructionExpression(handler, hasKeyedServiceExtensions),
+                pre, post, exceptionCalls, finalCalls));
+        }
+
+        return plans;
+    }
+
+    /// <summary>
+    ///     Assembles the four staged interceptor stages for a message in the runtime
+    ///     shape-builder's exact execution order, or fails when any participant cannot be
+    ///     modeled: grouped/keyed/inaccessible/nested participants, a participant matching
+    ///     through more than one deduped contract registration, a participant with no
+    ///     variance-resolvable arm (the runtime would throw for it), or a reference-typed
+    ///     pipeline result with an inexactly-typed contract (runtime result variance the
+    ///     string model cannot verify).
+    /// </summary>
+    /// <summary>
+    ///     The participant's staged construction expression, or <c>null</c> when keyed
+    ///     resolutions are needed but the keyed-service extensions are not resolvable in
+    ///     the consuming compilation.
+    /// </summary>
+    private static string? GatedConstructionExpression(RegistrableTypeModel participant, bool hasKeyedServiceExtensions)
+        => participant.StagedConstructionUsesKeyedServices && !hasKeyedServiceExtensions
+            ? null
+            : participant.StagedConstructionExpression;
+
+    private static bool TryAssembleStagedStages(
+        RegistrableTypeModel message,
+        List<RegistrableTypeModel> types,
+        string? resultTypeExpression,
+        bool resultIsValueType,
+        bool hasKeyedServiceExtensions,
+        out ImmutableArray<StagedCallModel> preCalls,
+        out ImmutableArray<StagedCallModel> postCalls,
+        out ImmutableArray<StagedCallModel> exceptionCalls,
+        out ImmutableArray<StagedCallModel> finalCalls)
+    {
+        preCalls = postCalls = exceptionCalls = finalCalls = ImmutableArray<StagedCallModel>.Empty;
+
+        // The pipeline result the arms match against: the declared result for result
+        // pipelines, the ValueTask carrier for void ones (a struct either way unless the
+        // declared result is a reference type).
+        var pipelineResultExpression = resultTypeExpression ?? ValueTaskExpression;
+        var pipelineResultIsValueType = resultTypeExpression is null || resultIsValueType;
+
+        var stages = new List<(RegistrableTypeModel Type, StagedCallArm Arm, bool Direct)>?[4];
+
+        foreach (var candidate in types)
+        {
+            if (candidate.ContractShapes.IsEmpty)
+            {
+                continue;
+            }
+
+            for (var kindIndex = 0; kindIndex < 4; kindIndex++)
+            {
+                var kind = (DescriptorKind)(kindIndex + 1);
+
+                // Deduped registrations of this candidate that reach the message —
+                // mirrors the descriptor builders' first-wins (message, result) dedupe,
+                // where result-agnostic async contracts carry `object`.
+                string? matchedMessageKey = null;
+                var matchedDirect = false;
+                var registrationCount = 0;
+                HashSet<string>? seenRegistrations = null;
+
+                foreach (var shape in candidate.ContractShapes)
+                {
+                    if (shape.Kind != kind)
+                    {
+                        continue;
+                    }
+
+                    var direct = shape.MessageTypeExpression == message.TypeofExpression;
+
+                    if (!direct && !message.AssignableKeys.Contains(shape.MessageTypeExpression))
+                    {
+                        continue;
+                    }
+
+                    var dedupeKey = shape.MessageTypeExpression + "\x1f"
+                        + (kind == DescriptorKind.PreInterceptor
+                            ? string.Empty
+                            : shape.IsResultTyped ? shape.ResultTypeExpression : "object");
+
+                    if ((seenRegistrations ??= new HashSet<string>(StringComparer.Ordinal)).Add(dedupeKey))
+                    {
+                        registrationCount++;
+                        matchedMessageKey = shape.MessageTypeExpression;
+                        matchedDirect = direct;
+                    }
+                }
+
+                if (registrationCount == 0)
+                {
+                    continue;
+                }
+
+                // More than one registration would put the type into the stage more than
+                // once; the order among them is not worth modeling — disqualify.
+                if (registrationCount > 1)
+                {
+                    return false;
+                }
+
+                // Participation established. The participant itself must be modelable.
+                if (!candidate.IsAccessible
+                    || !candidate.DiscoveryKeys.IsEmpty
+                    || candidate.GroupsExpression is not null
+                    || candidate.IsNestedType)
+                {
+                    return false;
+                }
+
+                if (!TrySelectArm(candidate, kind, message, pipelineResultExpression, pipelineResultIsValueType,
+                        out var arm))
+                {
+                    return false;
+                }
+
+                (stages[kindIndex] ??= []).Add((candidate, arm, matchedDirect));
+                _ = matchedMessageKey;
+            }
+        }
+
+        preCalls = OrderStage(stages[0], hasKeyedServiceExtensions);
+        postCalls = OrderStage(stages[1], hasKeyedServiceExtensions);
+        exceptionCalls = OrderStage(stages[2], hasKeyedServiceExtensions);
+        finalCalls = OrderStage(stages[3], hasKeyedServiceExtensions);
+        return true;
+    }
+
+    /// <summary>
+    ///     Selects the pattern-match arm the runtime invoker would take for the
+    ///     interceptor, or fails when none resolves (the runtime would throw
+    ///     <c>NotSupportedException</c> — the strategy fallback preserves that) or when a
+    ///     reference-typed pipeline result meets an inexactly-typed contract (possible
+    ///     runtime result variance the string model cannot decide).
+    /// </summary>
+    private static bool TrySelectArm(
+        RegistrableTypeModel candidate,
+        DescriptorKind kind,
+        RegistrableTypeModel message,
+        string pipelineResultExpression,
+        bool pipelineResultIsValueType,
+        out StagedCallArm arm)
+    {
+        arm = default;
+
+        var hasAsyncTyped = false;
+        var hasAsyncAgnostic = false;
+        var hasSync = false;
+
+        foreach (var shape in candidate.ContractShapes)
+        {
+            if (shape.Kind != kind)
+            {
+                continue;
+            }
+
+            // Message-side variance: exact match always works; a base/interface
+            // registration matches only for reference-typed messages.
+            var messageMatches = shape.MessageTypeExpression == message.TypeofExpression
+                || (!message.IsValueType && message.AssignableKeys.Contains(shape.MessageTypeExpression));
+
+            if (!messageMatches)
+            {
+                continue;
+            }
+
+            if (shape.IsResultTyped)
+            {
+                // Exact result match always works. An `object`-typed contract (the
+                // flavored marker interfaces' shape) matches any reference-typed result
+                // through the runtime's `in TResult` variance; value-typed results have
+                // no variance, so the contract is simply invisible to the pattern match.
+                if (shape.ResultTypeExpression == pipelineResultExpression
+                    || (!pipelineResultIsValueType && shape.ResultTypeExpression == "object"))
+                {
+                    if (shape.IsAsync)
+                    {
+                        hasAsyncTyped = true;
+                    }
+                    else
+                    {
+                        hasSync = true;
+                    }
+                }
+                else if (!pipelineResultIsValueType)
+                {
+                    // Any other base-of relationship the variance could admit is
+                    // undecidable in the string model — disqualify.
+                    return false;
+                }
+            }
+            else if (shape.IsAsync)
+            {
+                hasAsyncAgnostic = true;
+            }
+            else
+            {
+                // Sync pre carries no result typing.
+                hasSync = true;
+            }
+        }
+
+        if (kind == DescriptorKind.PreInterceptor)
+        {
+            if (hasAsyncAgnostic)
+            {
+                arm = StagedCallArm.AsyncAgnostic;
+                return true;
+            }
+
+            if (hasSync)
+            {
+                arm = StagedCallArm.Sync;
+                return true;
+            }
+
+            return false;
+        }
+
+        if (hasAsyncTyped)
+        {
+            arm = StagedCallArm.AsyncTyped;
+            return true;
+        }
+
+        if (hasAsyncAgnostic)
+        {
+            arm = StagedCallArm.AsyncAgnostic;
+            return true;
+        }
+
+        if (hasSync)
+        {
+            arm = StagedCallArm.Sync;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Orders one staged stage exactly like the runtime shape builder: the direct
+    ///     segment first, then the indirect one, each sorted by weight descending with the
+    ///     type name as the ordinal tie-break (participants are non-nested and
+    ///     non-generic, so the display name equals the runtime <c>Type.FullName</c>).
+    /// </summary>
+    private static ImmutableArray<StagedCallModel> OrderStage(
+        List<(RegistrableTypeModel Type, StagedCallArm Arm, bool Direct)>? entries,
+        bool hasKeyedServiceExtensions)
+    {
+        if (entries is null)
+        {
+            return ImmutableArray<StagedCallModel>.Empty;
+        }
+
+        entries.Sort(static (x, y) =>
+        {
+            var bySegment = y.Direct.CompareTo(x.Direct);
+
+            if (bySegment != 0)
+            {
+                return bySegment;
+            }
+
+            var byWeight = y.Type.Weight.CompareTo(x.Type.Weight);
+
+            return byWeight != 0
+                ? byWeight
+                : string.CompareOrdinal(x.Type.DisplayName, y.Type.DisplayName);
+        });
+
+        var calls = ImmutableArray.CreateBuilder<StagedCallModel>(entries.Count);
+
+        foreach (var (type, arm, _) in entries)
+        {
+            calls.Add(new StagedCallModel(
+                type.TypeofExpression, arm, GatedConstructionExpression(type, hasKeyedServiceExtensions)));
+        }
+
+        return calls.MoveToImmutable();
     }
 
     /// <summary>
@@ -744,7 +1616,12 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 continue;
             }
 
-            plans.Add(new VoidPlanModel(type.TypeofExpression, handler.TypeofExpression, handler.IsDirectlyConstructible));
+            plans.Add(new VoidPlanModel(
+                type.TypeofExpression,
+                handler.TypeofExpression,
+                handler.IsDirectlyConstructible,
+                handler.ProviderConstructionExpression,
+                handler.ProviderConstructionUsesKeyedServices));
         }
 
         return plans;
@@ -797,7 +1674,9 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 type.TypeofExpression,
                 dispatchResult.ResultTypeExpression,
                 handler.TypeofExpression,
-                handler.IsDirectlyConstructible));
+                handler.IsDirectlyConstructible,
+                handler.ProviderConstructionExpression,
+                handler.ProviderConstructionUsesKeyedServices));
         }
 
         return plans;
@@ -897,6 +1776,22 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                         model.Location?.ToLocation(),
                         model.DisplayName));
                 continue;
+            }
+
+            if (model.HasMultiplePublicConstructors)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    GeneratorDiagnostics.MultiplePublicConstructors,
+                    model.InfoLocation?.ToLocation(),
+                    model.DisplayName));
+            }
+
+            if (model.HasFromServicesConstructorParameter)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    GeneratorDiagnostics.FromServicesOnConstructor,
+                    model.InfoLocation?.ToLocation(),
+                    model.DisplayName));
             }
 
             types.Add(model);

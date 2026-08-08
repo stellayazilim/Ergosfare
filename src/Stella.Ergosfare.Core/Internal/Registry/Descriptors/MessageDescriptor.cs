@@ -106,7 +106,7 @@ internal class MessageDescriptor(Type messageType) : IMessageDescriptor
     /// <summary>
     /// Adds a single handler descriptor to this message descriptor.
     /// Direct or indirect placement depends on whether the descriptor's
-    /// <see cref="IHandlerDescriptor.MessageType"/> exactly matches or is assignable to the message type.
+    /// <see cref="IHasMessageType.MessageType"/> exactly matches or is assignable to the message type.
     /// </summary>
     /// <param name="descriptor">The descriptor to add.</param>
     public void AddDescriptor(IHandlerDescriptor descriptor)

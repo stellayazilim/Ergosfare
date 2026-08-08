@@ -130,7 +130,7 @@ public class MessageDependencyFixture : IFixture<MessageDependencyFixture>
     /// <summary>
     /// Creates <see cref="IMessageDependencies"/> for a generic message type.
     /// </summary>
-    /// <typeparam name="TMessage">The message type to resolve dependencies for.</typeparam>
+    /// <param name="messageType">The message type to resolve dependencies for.</param>
     /// <returns>An instance of <see cref="IMessageDependencies"/>.</returns>
     public IMessageDependencies CreateDependencies(Type messageType)
     {

@@ -46,6 +46,8 @@ public class MessageRegistryThreadSafetyTests
         var tasks = Enumerable.Range(0, ThreadCount)
             .Select(_ => Task.Run(() =>
             {
+                // All tasks are awaited before 'barrier' leaves the using scope; the shared capture is the point of the test.
+                // ReSharper disable once AccessToDisposedClosure
                 barrier.SignalAndWait();
                 foreach (var type in types)
                 {
@@ -74,6 +76,8 @@ public class MessageRegistryThreadSafetyTests
         var tasks = Enumerable.Range(0, ThreadCount)
             .Select(_ => Task.Run(() =>
             {
+                // All tasks are awaited before 'barrier' leaves the using scope; the shared capture is the point of the test.
+                // ReSharper disable once AccessToDisposedClosure
                 barrier.SignalAndWait();
                 registry.Register(typeof(ThreadMessageHandler));
             }))
@@ -123,6 +127,8 @@ public class MessageRegistryThreadSafetyTests
         var readers = Enumerable.Range(0, ThreadCount - 1)
             .Select(readerIndex => Task.Run(() =>
             {
+                // 'stop' is deliberately written by the outer scope while readers poll it; that interleaving is what the test exercises.
+                // ReSharper disable once AccessToModifiedClosure
                 while (Volatile.Read(ref stop) == 0)
                 {
                     var count = 0;

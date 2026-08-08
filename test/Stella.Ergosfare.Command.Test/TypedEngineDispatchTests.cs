@@ -145,7 +145,7 @@ public class TypedEngineDispatchTests
         // exception an unhandled message produces. The contract under test is exception
         // parity: the typed overload fails exactly like the erased one.
         var erased = await Record.ExceptionAsync(async () =>
-            await engine.DispatchAsync((object)new UnregisteredCommand(), provider));
+            await engine.DispatchAsync(new UnregisteredCommand(), provider));
         var typed = await Record.ExceptionAsync(async () =>
             await engine.DispatchVoidAsync(new UnregisteredCommand(), provider));
 

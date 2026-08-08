@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿
 using System.Text;
 using Microsoft.CodeAnalysis.CSharp;
 using Stella.Ergosfare.SourceGenerator.Models;
@@ -32,7 +32,7 @@ internal static class RegistrationEmitter
     private const string CommandBuilderFullName = "global::Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.CommandModuleBuilder";
     private const string QueryBuilderFullName = "global::Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.QueryModuleBuilder";
     private const string EventBuilderFullName = "global::Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.EventModuleBuilder";
-    private const string DispatchRootsFullName = "global::Stella.Ergosfare.Core.Abstractions.GeneratedDispatchRoots";
+    private const string DispatchRootsFullName = "global::Stella.Ergosfare.Core.Abstractions.DispatchRoots.GeneratedDispatchRoots";
     private const string DescriptorCatalogFullName = "global::Stella.Ergosfare.Core.Abstractions.GeneratedDescriptorCatalog";
 
     /// <summary>
@@ -43,6 +43,7 @@ internal static class RegistrationEmitter
         ModuleBuilderAvailability builders,
         IReadOnlyList<VoidPlanModel> voidPlans,
         IReadOnlyList<ResultPlanModel> resultPlans,
+        IReadOnlyList<StagedPlanModel> stagedPlans,
         string generatorVersion)
     {
         var useDescriptors = builders.HasDescriptorFactory;
@@ -100,8 +101,12 @@ internal static class RegistrationEmitter
 
         if (emitDispatchRoots)
         {
-            EmitDispatchRoots(sb, ref wroteMember, types, voidPlans, resultPlans,
-                builders.DispatchRootsHasPlanFactories);
+            EmitDispatchRoots(sb, ref wroteMember, types, voidPlans, resultPlans, stagedPlans,
+                builders.DispatchRootsHasPlanFactories,
+                builders.DispatchRootsHasProviderPlanFactories,
+                builders.HasKeyedServiceExtensions);
+
+            EmitStagedPlanClasses(sb, ref wroteMember, stagedPlans, builders.StagedPlansSupportDirectConstruction);
         }
 
         if (builders.HasDescriptorCatalog && useDescriptors && HasDescriptors(types))
@@ -119,7 +124,7 @@ internal static class RegistrationEmitter
 
     private static List<RegistrableTypeModel> Filter(
         IReadOnlyList<RegistrableTypeModel> types,
-        System.Func<RegistrableTypeModel, bool> predicate)
+        Func<RegistrableTypeModel, bool> predicate)
     {
         var filtered = new List<RegistrableTypeModel>(types.Count);
 
@@ -253,7 +258,10 @@ internal static class RegistrationEmitter
         IReadOnlyList<RegistrableTypeModel> types,
         IReadOnlyList<VoidPlanModel> voidPlans,
         IReadOnlyList<ResultPlanModel> resultPlans,
-        bool emitPlanFactories)
+        IReadOnlyList<StagedPlanModel> stagedPlans,
+        bool emitPlanFactories,
+        bool emitProviderPlanFactories,
+        bool hasKeyedServiceExtensions)
     {
         StartMember(sb, ref wroteMember);
         sb.AppendLine("        private static void RootDispatchInstantiations()");
@@ -280,9 +288,10 @@ internal static class RegistrationEmitter
 
         // Compile-time pipeline plans: the runtime re-validates each one against the
         // registry per version, so a plan can only lose its speedup, never change
-        // behavior. Directly-constructible handlers additionally carry a construction
-        // factory, which the runtime uses only after verifying the handler's effective
-        // DI registration is the module's own plain transient one.
+        // behavior. Qualifying handlers additionally carry a construction factory —
+        // parameterless `new` or a provider-taking one for dependency-injected
+        // constructors — which the runtime uses only after verifying the handler's
+        // effective DI registration is the module's own plain transient one.
         foreach (var plan in voidPlans)
         {
             sb.Append("            ").Append(DispatchRootsFullName)
@@ -290,10 +299,9 @@ internal static class RegistrationEmitter
               .Append(", ").Append(plan.HandlerTypeExpression)
               .Append(">(");
 
-            if (emitPlanFactories && plan.HasDirectConstruction)
-            {
-                sb.Append("static () => new ").Append(plan.HandlerTypeExpression).Append("()");
-            }
+            AppendPlanFactory(sb, plan.HandlerTypeExpression, plan.HasDirectConstruction,
+                plan.ProviderConstructionExpression, plan.UsesKeyedServices,
+                emitPlanFactories, emitProviderPlanFactories, hasKeyedServiceExtensions);
 
             sb.AppendLine(");");
         }
@@ -306,15 +314,501 @@ internal static class RegistrationEmitter
               .Append(", ").Append(plan.HandlerTypeExpression)
               .Append(">(");
 
-            if (emitPlanFactories && plan.HasDirectConstruction)
-            {
-                sb.Append("static () => new ").Append(plan.HandlerTypeExpression).Append("()");
-            }
+            AppendPlanFactory(sb, plan.HandlerTypeExpression, plan.HasDirectConstruction,
+                plan.ProviderConstructionExpression, plan.UsesKeyedServices,
+                emitPlanFactories, emitProviderPlanFactories, hasKeyedServiceExtensions);
 
             sb.AppendLine(");");
         }
 
+        // Staged plans: bespoke straight-line pipelines for interceptor-bearing messages,
+        // emitted as sealed plan classes below. Advisory like every plan — the hosting
+        // executor re-validates the baked composition per registry version.
+        for (var i = 0; i < stagedPlans.Count; i++)
+        {
+            var plan = stagedPlans[i];
+
+            sb.Append("            ").Append(DispatchRootsFullName)
+              .Append(".AddStagedPlan<").Append(plan.MessageTypeExpression);
+
+            if (plan.ResultTypeExpression is not null)
+            {
+                sb.Append(", ").Append(plan.ResultTypeExpression);
+            }
+
+            sb.Append(">(new StagedPlan").Append(i).AppendLine("());");
+        }
+
         sb.AppendLine("        }");
+    }
+
+    private const string HandlersNamespace = "global::Stella.Ergosfare.Core.Abstractions.Handlers.";
+    private const string StagedCompositionFullName = "global::Stella.Ergosfare.Core.Abstractions.StagedPlans.StagedPlanComposition";
+    private const string ExecutionContextFullName = "global::Stella.Ergosfare.Core.Abstractions.IExecutionContext";
+    private const string AbortedExceptionFullName = "global::Stella.Ergosfare.Core.Abstractions.Exceptions.ExecutionAbortedException";
+    private const string ValueTaskFullName = "global::System.Threading.Tasks.ValueTask";
+    private const string GetRequiredServiceFullName = "global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService";
+
+    /// <summary>
+    ///     Emits one sealed plan class per staged plan: the baked composition plus a
+    ///     bespoke <c>Execute</c> reproducing the runtime strategy's semantics exactly for
+    ///     the baked pipeline — pre stages in order (each may rewrite the message), the
+    ///     handler, post stages with result rewrite, exception stages (skipped for
+    ///     <c>ExecutionAbortedException</c>, swallowing the exception once they ran, like
+    ///     the strategy), and final stages that always run. Casts mirror the strategy and
+    ///     invoker code shapes, including the erased-generic unbox semantics for
+    ///     value-typed results. Participants resolve from the dispatching provider — what
+    ///     the runtime references do outside memoized mode, which the hosting executor's
+    ///     gate excludes.
+    /// </summary>
+    private static void EmitStagedPlanClasses(
+        StringBuilder sb,
+        ref bool wroteMember,
+        IReadOnlyList<StagedPlanModel> stagedPlans,
+        bool supportsDirectConstruction)
+    {
+        for (var i = 0; i < stagedPlans.Count; i++)
+        {
+            var plan = stagedPlans[i];
+            var isVoid = plan.ResultTypeExpression is null;
+            var emitDirect = supportsDirectConstruction && plan.SupportsDirectConstruction;
+
+            StartMember(sb, ref wroteMember);
+            sb.Append("        private sealed class StagedPlan").Append(i).Append(" : global::Stella.Ergosfare.Core.Abstractions.StagedPlans.");
+
+            if (isVoid)
+            {
+                sb.Append("StagedVoidPlan<").Append(plan.MessageTypeExpression).AppendLine(">");
+            }
+            else
+            {
+                sb.Append("StagedResultPlan<").Append(plan.MessageTypeExpression)
+                  .Append(", ").Append(plan.ResultTypeExpression).AppendLine(">");
+            }
+
+            sb.AppendLine("        {");
+
+            if (isVoid)
+            {
+                sb.Append("            private static readonly object CompletedVoidResult = default(")
+                  .Append(ValueTaskFullName).AppendLine(");");
+                sb.AppendLine();
+            }
+
+            sb.Append("            private static readonly ").Append(StagedCompositionFullName)
+              .Append(" BakedComposition = new ").Append(StagedCompositionFullName).AppendLine("(");
+            sb.Append("                typeof(").Append(plan.HandlerTypeExpression).AppendLine("),");
+            AppendCompositionStage(sb, plan.PreCalls);
+            sb.AppendLine(",");
+            AppendCompositionStage(sb, plan.PostCalls);
+            sb.AppendLine(",");
+            AppendCompositionStage(sb, plan.ExceptionCalls);
+            sb.AppendLine(",");
+            AppendCompositionStage(sb, plan.FinalCalls);
+            sb.AppendLine(");");
+            sb.AppendLine();
+            sb.Append("            public override ").Append(StagedCompositionFullName).AppendLine(" Composition");
+            sb.AppendLine("            {");
+            sb.AppendLine("                get { return BakedComposition; }");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+
+            sb.Append("            public override async ").Append(ValueTaskFullName);
+
+            if (!isVoid)
+            {
+                sb.Append('<').Append(plan.ResultTypeExpression).Append('>');
+            }
+
+            sb.AppendLine(" Execute(");
+            sb.Append("                ").Append(plan.MessageTypeExpression).AppendLine(" message,");
+            sb.Append("                ").Append(ExecutionContextFullName).AppendLine(" context,");
+            sb.AppendLine("                global::System.IServiceProvider serviceProvider)");
+            sb.AppendLine("            {");
+
+            if (isVoid)
+            {
+                EmitVoidExecuteBody(sb, plan, direct: false);
+            }
+            else
+            {
+                EmitResultExecuteBody(sb, plan, direct: false);
+            }
+
+            sb.AppendLine("            }");
+
+            // The direct-construction variant: the same pipeline with every participant
+            // constructed via `new` — used by the hosting executor only after it verified
+            // every participant's plain transient registration.
+            if (emitDirect)
+            {
+                sb.AppendLine();
+                sb.AppendLine("            public override bool SupportsDirectConstruction");
+                sb.AppendLine("            {");
+                sb.AppendLine("                get { return true; }");
+                sb.AppendLine("            }");
+                sb.AppendLine();
+                sb.Append("            public override async ").Append(ValueTaskFullName);
+
+                if (!isVoid)
+                {
+                    sb.Append('<').Append(plan.ResultTypeExpression).Append('>');
+                }
+
+                sb.AppendLine(" ExecuteDirect(");
+                sb.Append("                ").Append(plan.MessageTypeExpression).AppendLine(" message,");
+                sb.Append("                ").Append(ExecutionContextFullName).AppendLine(" context,");
+                sb.AppendLine("                global::System.IServiceProvider serviceProvider)");
+                sb.AppendLine("            {");
+
+                if (isVoid)
+                {
+                    EmitVoidExecuteBody(sb, plan, direct: true);
+                }
+                else
+                {
+                    EmitResultExecuteBody(sb, plan, direct: true);
+                }
+
+                sb.AppendLine("            }");
+            }
+
+            sb.AppendLine("        }");
+        }
+    }
+
+    private static void AppendCompositionStage(StringBuilder sb, System.Collections.Immutable.ImmutableArray<StagedCallModel> calls)
+    {
+        if (calls.IsEmpty)
+        {
+            sb.Append("                global::System.Array.Empty<global::System.Type>()");
+            return;
+        }
+
+        sb.Append("                new global::System.Type[] { ");
+
+        for (var i = 0; i < calls.Length; i++)
+        {
+            if (i > 0)
+            {
+                sb.Append(", ");
+            }
+
+            sb.Append("typeof(").Append(calls[i].TypeExpression).Append(')');
+        }
+
+        sb.Append(" }");
+    }
+
+    private static void AppendResolve(StringBuilder sb, string typeExpression)
+        => sb.Append(GetRequiredServiceFullName).Append('<').Append(typeExpression).Append(">(serviceProvider)");
+
+    /// <summary>
+    ///     A participant expression: the container resolution, or — in the
+    ///     direct-construction variant — the participant's <c>new</c> expression.
+    /// </summary>
+    private static void AppendParticipant(StringBuilder sb, string typeExpression, string? constructionExpression)
+    {
+        if (constructionExpression is null)
+        {
+            AppendResolve(sb, typeExpression);
+        }
+        else
+        {
+            sb.Append(constructionExpression);
+        }
+    }
+
+    /// <summary>The strategy/invoker-parity cast of the chained object result back to the pipeline result type.</summary>
+    private static string ResultCast(string resultExpression, bool resultIsValueType, string operand)
+        => resultIsValueType
+            ? "(" + resultExpression + ")" + operand + "!"
+            : "(" + resultExpression + "?)" + operand;
+
+    private static void EmitPreCalls(StringBuilder sb, StagedPlanModel plan, bool direct, string indent)
+    {
+        foreach (var call in plan.PreCalls)
+        {
+            sb.Append(indent).Append("message = (").Append(plan.MessageTypeExpression).Append(") ");
+
+            if (call.Arm == StagedCallArm.Sync)
+            {
+                sb.Append("((").Append(HandlersNamespace).Append("IPreInterceptor<").Append(plan.MessageTypeExpression).Append(">)");
+                AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
+                sb.AppendLine(").Handle(message, context);");
+            }
+            else
+            {
+                sb.Append("await ((").Append(HandlersNamespace).Append("IAsyncPreInterceptor<").Append(plan.MessageTypeExpression).Append(">)");
+                AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
+                sb.AppendLine(").HandleAsync(message, context);");
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Emits one interceptor-chain call for a result-carrying stage, rewriting the
+    ///     given object-typed chain variable exactly as the runtime invoker loop does.
+    /// </summary>
+    private static void EmitChainCall(
+        StringBuilder sb,
+        StagedPlanModel plan,
+        StagedCallModel call,
+        bool direct,
+        string stageInterface,
+        string chainVariable,
+        string? exceptionArgument,
+        string indent)
+    {
+        var pipelineResult = plan.ResultTypeExpression ?? ValueTaskFullName;
+        var pipelineResultIsValueType = plan.ResultTypeExpression is null || plan.ResultIsValueType;
+        var extraArgument = exceptionArgument is null ? string.Empty : ", " + exceptionArgument;
+
+        sb.Append(indent).Append(chainVariable).Append(" = ");
+
+        switch (call.Arm)
+        {
+            case StagedCallArm.AsyncTyped:
+                sb.Append("await ((").Append(HandlersNamespace).Append("IAsync").Append(stageInterface)
+                  .Append('<').Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
+                AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
+                sb.Append(").HandleAsync(message, ")
+                  .Append(ResultCast(pipelineResult, pipelineResultIsValueType, chainVariable))
+                  .Append(extraArgument).AppendLine(", context);");
+                break;
+            case StagedCallArm.AsyncAgnostic:
+                sb.Append("await ((").Append(HandlersNamespace).Append("IAsync").Append(stageInterface)
+                  .Append('<').Append(plan.MessageTypeExpression).Append(">)");
+                AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
+                sb.Append(").HandleAsync(message, ").Append(chainVariable)
+                  .Append(exceptionArgument is null ? "!" : string.Empty)
+                  .Append(extraArgument).AppendLine(", context);");
+                break;
+            default:
+                sb.Append("((").Append(HandlersNamespace).Append('I').Append(stageInterface)
+                  .Append('<').Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
+                AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
+                sb.Append(").Handle(message, ")
+                  .Append(ResultCast(pipelineResult, pipelineResultIsValueType, chainVariable))
+                  .Append(extraArgument).AppendLine(", context);");
+                break;
+        }
+    }
+
+    private static void EmitFinalCalls(StringBuilder sb, StagedPlanModel plan, bool direct, string resultExpressionText, string indent)
+    {
+        var pipelineResult = plan.ResultTypeExpression ?? ValueTaskFullName;
+        var pipelineResultIsValueType = plan.ResultTypeExpression is null || plan.ResultIsValueType;
+
+        foreach (var call in plan.FinalCalls)
+        {
+            switch (call.Arm)
+            {
+                case StagedCallArm.AsyncTyped:
+                    sb.Append(indent).Append("await ((").Append(HandlersNamespace).Append("IAsyncFinalInterceptor<")
+                      .Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
+                    AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
+                    sb.Append(").HandleAsync(message, ")
+                      .Append(ResultCast(pipelineResult, pipelineResultIsValueType, resultExpressionText))
+                      .AppendLine(", exception, context);");
+                    break;
+                case StagedCallArm.AsyncAgnostic:
+                    sb.Append(indent).Append("await ((").Append(HandlersNamespace).Append("IAsyncFinalInterceptor<")
+                      .Append(plan.MessageTypeExpression).Append(">)");
+                    AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
+                    sb.Append(").HandleAsync(message, ").Append(resultExpressionText).AppendLine(", exception, context);");
+                    break;
+                default:
+                    sb.Append(indent).Append("((").Append(HandlersNamespace).Append("IFinalInterceptor<")
+                      .Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
+                    AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
+                    sb.Append(").Handle(message, ")
+                      .Append(ResultCast(pipelineResult, pipelineResultIsValueType, resultExpressionText))
+                      .AppendLine(", exception, context);");
+                    break;
+            }
+        }
+    }
+
+    private static void EmitVoidExecuteBody(StringBuilder sb, StagedPlanModel plan, bool direct)
+    {
+        var needsResult = !plan.PostCalls.IsEmpty || !plan.ExceptionCalls.IsEmpty || !plan.FinalCalls.IsEmpty;
+        var needsGuards = needsResult;
+
+        if (!needsGuards)
+        {
+            // Pre-only pipeline: with zero exception and final stages the strategy's
+            // try/catch/finally is a no-op shell — exceptions propagate unchanged.
+            EmitPreCalls(sb, plan, direct, "                ");
+            sb.Append("                await ");
+            AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
+            sb.AppendLine(".HandleAsync(message, context);");
+            return;
+        }
+
+        sb.AppendLine("                object? result = null;");
+        sb.AppendLine("                global::System.Exception? exception = null;");
+        sb.AppendLine("                try");
+        sb.AppendLine("                {");
+        EmitPreCalls(sb, plan, direct, "                    ");
+        sb.Append("                    await ");
+        AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
+        sb.AppendLine(".HandleAsync(message, context);");
+        sb.AppendLine("                    result = CompletedVoidResult;");
+
+        if (!plan.PostCalls.IsEmpty)
+        {
+            foreach (var call in plan.PostCalls)
+            {
+                EmitChainCall(sb, plan, call, direct, "PostInterceptor", "result", null, "                    ");
+            }
+
+            // The strategy's post epilogue: a null post result restores the completed
+            // task; anything non-ValueTask fails the closed nullable cast, exactly like
+            // the strategy's own cast would.
+            sb.Append("                    var invokedPostResult = (").Append(ValueTaskFullName).AppendLine("?) result;");
+            sb.AppendLine("                    result = invokedPostResult == null ? CompletedVoidResult : result;");
+        }
+
+        sb.AppendLine("                }");
+        sb.Append("                catch (global::System.Exception e) when (e is not ").Append(AbortedExceptionFullName).AppendLine(")");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    exception = e;");
+
+        if (plan.ExceptionCalls.IsEmpty)
+        {
+            sb.AppendLine("                    throw;");
+        }
+        else
+        {
+            sb.AppendLine("                    var resultBeforeExceptions = result;");
+
+            foreach (var call in plan.ExceptionCalls)
+            {
+                EmitChainCall(sb, plan, call, direct, "ExceptionInterceptor", "result", "e", "                    ");
+            }
+
+            sb.Append("                    var invokedExceptionResult = (").Append(ValueTaskFullName).AppendLine("?) result;");
+            sb.AppendLine("                    result = invokedExceptionResult == null ? resultBeforeExceptions : result;");
+        }
+
+        sb.AppendLine("                }");
+        sb.AppendLine("                finally");
+        sb.AppendLine("                {");
+        EmitFinalCalls(sb, plan, direct, "result", "                    ");
+        sb.AppendLine("                }");
+    }
+
+    private static void EmitResultExecuteBody(StringBuilder sb, StagedPlanModel plan, bool direct)
+    {
+        var resultExpression = plan.ResultTypeExpression!;
+        var needsGuards = !plan.PostCalls.IsEmpty || !plan.ExceptionCalls.IsEmpty || !plan.FinalCalls.IsEmpty;
+
+        if (!needsGuards)
+        {
+            EmitPreCalls(sb, plan, direct, "                ");
+            sb.Append("                return await ");
+            AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
+            sb.AppendLine(".HandleAsync(message, context);");
+            return;
+        }
+
+        sb.Append("                ").Append(resultExpression).AppendLine(" result = default!;");
+        sb.AppendLine("                global::System.Exception? exception = null;");
+        sb.AppendLine("                try");
+        sb.AppendLine("                {");
+        EmitPreCalls(sb, plan, direct, "                    ");
+        sb.Append("                    result = await ");
+        AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
+        sb.AppendLine(".HandleAsync(message, context);");
+
+        if (!plan.PostCalls.IsEmpty)
+        {
+            sb.AppendLine("                    object? postChain = result;");
+
+            foreach (var call in plan.PostCalls)
+            {
+                EmitChainCall(sb, plan, call, direct, "PostInterceptor", "postChain", null, "                    ");
+            }
+
+            if (plan.ResultIsValueType)
+            {
+                // The strategy's erased (TResult?) cast is a plain unbox for value-typed
+                // results — a null post result throws there, so no null branch exists.
+                sb.Append("                    result = (").Append(resultExpression).AppendLine(") postChain!;");
+            }
+            else
+            {
+                sb.Append("                    var postResult = (").Append(resultExpression).AppendLine("?) postChain;");
+                sb.AppendLine("                    result = postResult == null ? result : postResult;");
+            }
+        }
+
+        sb.AppendLine("                }");
+        sb.Append("                catch (global::System.Exception e) when (e is not ").Append(AbortedExceptionFullName).AppendLine(")");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    exception = e;");
+
+        if (plan.ExceptionCalls.IsEmpty)
+        {
+            sb.AppendLine("                    throw;");
+        }
+        else
+        {
+            sb.AppendLine("                    object? exceptionChain = result;");
+
+            foreach (var call in plan.ExceptionCalls)
+            {
+                EmitChainCall(sb, plan, call, direct, "ExceptionInterceptor", "exceptionChain", "e", "                    ");
+            }
+
+            if (plan.ResultIsValueType)
+            {
+                sb.Append("                    result = (").Append(resultExpression).AppendLine(") exceptionChain!;");
+            }
+            else
+            {
+                sb.Append("                    var exceptionResult = (").Append(resultExpression).AppendLine("?) exceptionChain;");
+                sb.AppendLine("                    result = exceptionResult == null ? result : exceptionResult;");
+            }
+        }
+
+        sb.AppendLine("                }");
+        sb.AppendLine("                finally");
+        sb.AppendLine("                {");
+        EmitFinalCalls(sb, plan, direct, "result", "                    ");
+        sb.AppendLine("                }");
+        sb.AppendLine();
+        sb.AppendLine("                return result;");
+    }
+
+    /// <summary>
+    ///     Appends a plan's construction-factory argument when one qualifies and the
+    ///     referenced surfaces support it: the parameterless <c>new</c> shape first (the
+    ///     cheaper one, and available against older packages), the provider-taking shape
+    ///     for dependency-injected constructors otherwise — keyed resolutions only when
+    ///     the keyed-service extensions are resolvable in the consuming compilation.
+    /// </summary>
+    private static void AppendPlanFactory(
+        StringBuilder sb,
+        string handlerTypeExpression,
+        bool hasDirectConstruction,
+        string? providerConstructionExpression,
+        bool usesKeyedServices,
+        bool emitPlanFactories,
+        bool emitProviderPlanFactories,
+        bool hasKeyedServiceExtensions)
+    {
+        if (emitPlanFactories && hasDirectConstruction)
+        {
+            sb.Append("static () => new ").Append(handlerTypeExpression).Append("()");
+        }
+        else if (emitProviderPlanFactories
+                 && providerConstructionExpression is not null
+                 && (!usesKeyedServices || hasKeyedServiceExtensions))
+        {
+            sb.Append(providerConstructionExpression);
+        }
     }
 
     /// <summary>
@@ -522,7 +1016,7 @@ internal static class RegistrationEmitter
 
     private static List<Cluster> BuildClusters(IReadOnlyList<RegistrableTypeModel> types)
     {
-        var bySignature = new Dictionary<string, Cluster>(System.StringComparer.Ordinal);
+        var bySignature = new Dictionary<string, Cluster>(StringComparer.Ordinal);
         var clusters = new List<Cluster>();
 
         foreach (var type in types)

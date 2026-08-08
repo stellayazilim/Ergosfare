@@ -1,6 +1,4 @@
-using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
@@ -12,40 +10,11 @@ using Stella.Ergosfare.Events.Abstractions;
 
 namespace Stella.Ergosfare.Events;
 
-/// <summary>
-/// Publishes an event through a pipeline closed over the event's concrete type, so broadcast
-/// handlers are always invoked through their typed members — interface-erased publishes
-/// (<c>PublishAsync((IEvent)e)</c>) resolve the invoker from the event's runtime type.
-/// Invokers are closed once per event type and cached; the per-call
-/// <see cref="EventMediationSettings"/> flows into a fresh strategy instance, as before.
-/// </summary>
-internal interface IEventBroadcastInvoker
-{
-    ValueTask Publish(object @event, EventMediationSettings? settings, CancellationToken cancellationToken,
-        IMessageMediator mediator, ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
-        IResultAdapterService? resultAdapterService, IExecutionContext? externalContext = null,
-        IEnumerable<string>? groupsOverride = null);
-
-    /// <summary>
-    /// Engine-backed publish: the concrete dispatch machinery is known by construction, so
-    /// the publish runs directly against the engine's plan and the caller's scope
-    /// provider — grouped filters included, resolved from the grouped plan slot. External
-    /// contexts resolve the scope's <see cref="IMessageMediator"/> on demand and run the
-    /// original overload — semantics unchanged.
-    /// <paramref name="groupsOverride"/> carries a facade-level group filter (a
-    /// <see cref="GroupSet"/>) without a settings object; when present it takes
-    /// precedence over the settings' groups.
-    /// </summary>
-    ValueTask Publish(object @event, EventMediationSettings? settings, CancellationToken cancellationToken,
-        MessageDispatchEngine engine, IServiceProvider serviceProvider,
-        ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
-        IResultAdapterService? resultAdapterService, IExecutionContext? externalContext = null,
-        IEnumerable<string>? groupsOverride = null);
-}
-
 internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     where TEvent : notnull
 {
+    // One copy per closed event type is deliberate — the invoker itself is per-event-type.
+    // ReSharper disable once StaticMemberInGenericType
     private static readonly string[] EmptyGroups = [];
 
     /// <summary>
@@ -53,6 +22,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     /// settings instance is private and never mutated, and the strategy keeps all
     /// per-publish state in locals — one instance serves concurrent publishes.
     /// </summary>
+    // ReSharper disable once StaticMemberInGenericType
     private static readonly EventMediationSettings DefaultSettings = new();
     private static readonly AsyncBroadcastMediationStrategy<TEvent> DefaultStrategy = new(DefaultSettings);
 
@@ -267,6 +237,9 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
+            // Read before the build: a registration completing mid-build must land as a
+            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
+            var registryVersion = typedFactory.CurrentRegistryVersion;
             var cached = _cachedDependencies;
 
             // The invoker is process-wide (one per event type) while factories are
@@ -277,7 +250,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
             // factory's own per-container cache keeps that cheap.
             if (cached is not null
                 && ReferenceEquals(_cachedFactory, typedFactory)
-                && _cachedVersion == typedFactory.CurrentRegistryVersion)
+                && _cachedVersion == registryVersion)
             {
                 return cached;
             }
@@ -285,7 +258,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
             var dependencies = BuildPlan(typedFactory, resolveStrategy, EmptyGroups);
             _cachedDependencies = dependencies;
             _cachedFactory = typedFactory;
-            _cachedVersion = typedFactory.CurrentRegistryVersion;
+            _cachedVersion = registryVersion;
             return dependencies;
         }
 
@@ -326,11 +299,16 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
+            // Read before the build: a registration completing mid-build must land as a
+            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
+            var registryVersion = typedFactory.CurrentRegistryVersion;
             var slot = _cachedGroupedPlan;
 
+            // Deliberate: groups is matched allocation-free first and only materialized on a slot miss.
+            // ReSharper disable once PossibleMultipleEnumeration
             if (slot is not null
                 && ReferenceEquals(slot.Factory, typedFactory)
-                && slot.Version == typedFactory.CurrentRegistryVersion
+                && slot.Version == registryVersion
                 && PipelineExecutorCache.SlotMatches(groups, slot.Groups, slot.Canonical))
             {
                 return slot.Dependencies;
@@ -338,10 +316,11 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
 
             // A canonical set contributes its immutable name array directly.
             var canonical = groups as GroupSet;
+            // ReSharper disable once PossibleMultipleEnumeration
             var materialized = canonical?.Names ?? [.. groups];
             var dependencies = BuildPlan(typedFactory, resolveStrategy, materialized);
             _cachedGroupedPlan = new GroupedPlanSlot(
-                typedFactory, materialized, canonical, dependencies, typedFactory.CurrentRegistryVersion);
+                typedFactory, materialized, canonical, dependencies, registryVersion);
             return dependencies;
         }
 
@@ -427,7 +406,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     /// broadcast strategy applies.
     /// </summary>
     private static ValueTask Invoke(
-        Core.Abstractions.IHandlerReference<Core.Abstractions.Handlers.IHandler, Core.Abstractions.Registry.Descriptors.IMainHandlerDescriptor> reference,
+        IHandlerReference<Core.Abstractions.Handlers.IHandler, Core.Abstractions.Registry.Descriptors.IMainHandlerDescriptor> reference,
         TEvent @event,
         IExecutionContext context,
         IServiceProvider serviceProvider)
@@ -462,63 +441,5 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
                          ?? throw new NoHandlerFoundException(typeof(TEvent));
 
         return factory.Create(typeof(TEvent), descriptor, groups);
-    }
-}
-
-/// <summary>
-/// Process-wide cache of <see cref="IEventBroadcastInvoker"/> instances, one per event
-/// runtime type — one <see cref="Type.MakeGenericType"/> per event type.
-/// </summary>
-internal static class EventBroadcastInvokerCache
-{
-    private static readonly ConcurrentDictionary<Type, IEventBroadcastInvoker> Invokers = new();
-
-    /// <summary>
-    /// Static-generic view of the cache for callers that know the event's concrete type at
-    /// compile time: the invoker resolves once per closed type into a static readonly
-    /// field, so the typed publish overload skips the per-call dictionary lookup. Shares
-    /// the dictionary's instance, keeping the plan cache one-per-event-type (and
-    /// factory-keyed, so container isolation is unchanged). Callers must guard with
-    /// <c>@event.GetType() == typeof(TEvent)</c> — a base-typed generic call must keep
-    /// resolving by the runtime type.
-    /// </summary>
-    internal static class Holder<TEvent> where TEvent : notnull
-    {
-        public static readonly IEventBroadcastInvoker Instance = Get(typeof(TEvent));
-    }
-
-    [UnconditionalSuppressMessage("Trimming", "IL2055",
-        Justification = "The invoker generic is closed over a live event's runtime type; the event roots its type.")]
-    [UnconditionalSuppressMessage("AOT", "IL3050",
-        Justification = "Generated dispatch roots cover source-generated event types; this reflective path is the " +
-                        "JIT fallback for runtime-only registrations.")]
-    public static IEventBroadcastInvoker Get(Type eventType)
-    {
-        if (Invokers.TryGetValue(eventType, out var invoker))
-        {
-            return invoker;
-        }
-
-        // Generated dispatch roots close the invoker generic at compile time; the
-        // reflective path below only serves event types without a root.
-        if (GeneratedDispatchRoots.FindMessage(eventType) is { } root)
-        {
-            return Invokers.GetOrAdd(eventType, root.Accept(InvokerVisitor.Instance, state: false));
-        }
-
-        return Invokers.GetOrAdd(eventType,
-            static t => (IEventBroadcastInvoker)Activator.CreateInstance(typeof(EventBroadcastInvoker<>).MakeGenericType(t))!);
-    }
-
-    /// <summary>
-    /// Re-enters a generic context with a root's event type and constructs the closed
-    /// broadcast invoker there — no <see cref="Type.MakeGenericType"/>, no reflection.
-    /// </summary>
-    private sealed class InvokerVisitor : IMessageRootVisitor<IEventBroadcastInvoker, bool>
-    {
-        public static readonly InvokerVisitor Instance = new();
-
-        public IEventBroadcastInvoker Visit<TMessage>(bool state) where TMessage : IMessage
-            => new EventBroadcastInvoker<TMessage>();
     }
 }

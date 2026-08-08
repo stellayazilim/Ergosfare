@@ -10,7 +10,7 @@ public class EventMediationSettingsTests
 {
     
     /// <summary>
-    /// Tests that the <see cref="EventMediationSettings.Filters.HandlerPredicate"/> 
+    /// Tests that the <see cref="EventMediationSettings.EventMediationFilters.HandlerPredicate"/>
     /// and other properties can be correctly set and retrieved.
     /// </summary>
     [Fact]

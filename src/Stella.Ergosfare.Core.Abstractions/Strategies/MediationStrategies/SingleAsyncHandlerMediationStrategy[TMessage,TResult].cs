@@ -95,8 +95,8 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
         {
             if (preInterceptorCount > 0)
             {
-                var preInvoker = new PreInterceptorInvocationStrategy<TMessage>(messageDependencies, serviceProvider);
-                message = (TMessage) await preInvoker.Invoke(message, context);
+                message = (TMessage) await PreInterceptorInvocationStrategy<TMessage>.Invoke(
+                    messageDependencies, serviceProvider, message, context);
             }
 
             var handler = messageDependencies.Handlers[0].Resolve(serviceProvider);
@@ -109,9 +109,8 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
 
             if (postInterceptorCount > 0)
             {
-                var postInvoker = new PostInterceptorInvocationStrategy<TMessage, TResult>(messageDependencies, resultAdapterService, serviceProvider);
-
-                var postResult = (TResult?)await postInvoker.Invoke(message, result, context);
+                var postResult = (TResult?) await PostInterceptorInvocationStrategy<TMessage, TResult>.Invoke(
+                    messageDependencies, resultAdapterService, serviceProvider, message, result, context);
                 result = postResult is null ? result : postResult;
             }
         }
@@ -128,12 +127,8 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
                 throw;
             }
 
-            var exceptionInvoker = new ExceptionInterceptorInvocationStrategy<TMessage, TResult>(messageDependencies, serviceProvider);
-            var exceptionResult  = (TResult?)await exceptionInvoker.Invoke(
-                message,
-                result,
-                ExceptionDispatchInfo.Capture(exception),
-                context);
+            var exceptionResult = (TResult?) await ExceptionInterceptorInvocationStrategy<TMessage, TResult>.Invoke(
+                messageDependencies, serviceProvider, message, result, ExceptionDispatchInfo.Capture(exception), context);
 
             result = exceptionResult is null ? result : exceptionResult;
 
@@ -142,8 +137,8 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
         {
             if (finalInterceptorCount > 0)
             {
-                var finalInvoker = new FinalInterceptorInvocationStrategy<TMessage, TResult>(messageDependencies, serviceProvider);
-                await finalInvoker.Invoke(message, result, exception, context);
+                await FinalInterceptorInvocationStrategy<TMessage, TResult>.Invoke(
+                    messageDependencies, serviceProvider, message, result, exception, context);
             }
         }
 
