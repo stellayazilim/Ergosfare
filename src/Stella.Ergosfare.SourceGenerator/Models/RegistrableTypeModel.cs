@@ -120,6 +120,35 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     /// </summary>
     public required bool ProviderConstructionUsesKeyedServices { get; init; }
 
+    /// <summary>Whether the type carries <c>[ExcludeFromPipeline]</c>; such messages stay off staged plans.</summary>
+    public required bool HasPipelineExclusion { get; init; }
+
+    /// <summary>Whether the type is a value type — variance never applies to it at runtime.</summary>
+    public required bool IsValueType { get; init; }
+
+    /// <summary>
+    ///     Whether the type is nested in another type. The runtime orders pipeline
+    ///     segments by <c>Type.FullName</c>, whose nested separator (<c>+</c>) sorts
+    ///     differently from the display name's dot — nested participants therefore
+    ///     disqualify staged plans instead of risking a divergent order.
+    /// </summary>
+    public required bool IsNestedType { get; init; }
+
+    /// <summary>
+    ///     For dispatchable messages: the normalized type expressions of every base type
+    ///     and implemented interface — the compile-time domain of the runtime's
+    ///     <c>IsAssignableTo</c> checks that admit indirect (covariant) interceptors.
+    ///     Empty for non-dispatchable types.
+    /// </summary>
+    public required ImmutableArray<string> AssignableKeys { get; init; }
+
+    /// <summary>
+    ///     The raw interceptor contracts the type implements (undeduped), feeding the
+    ///     staged-plan arm selection; see <see cref="ContractShapeModel"/>. Empty for
+    ///     plain messages.
+    /// </summary>
+    public required ImmutableArray<ContractShapeModel> ContractShapes { get; init; }
+
     public bool Equals(RegistrableTypeModel other)
     {
         if (TypeofExpression != other.TypeofExpression
@@ -136,11 +165,32 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
             || IsDirectlyConstructible != other.IsDirectlyConstructible
             || ProviderConstructionExpression != other.ProviderConstructionExpression
             || ProviderConstructionUsesKeyedServices != other.ProviderConstructionUsesKeyedServices
+            || HasPipelineExclusion != other.HasPipelineExclusion
+            || IsValueType != other.IsValueType
+            || IsNestedType != other.IsNestedType
             || Descriptors.Length != other.Descriptors.Length
             || DiscoveryKeys.Length != other.DiscoveryKeys.Length
-            || DispatchResults.Length != other.DispatchResults.Length)
+            || DispatchResults.Length != other.DispatchResults.Length
+            || AssignableKeys.Length != other.AssignableKeys.Length
+            || ContractShapes.Length != other.ContractShapes.Length)
         {
             return false;
+        }
+
+        for (var i = 0; i < AssignableKeys.Length; i++)
+        {
+            if (!string.Equals(AssignableKeys[i], other.AssignableKeys[i], StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        for (var i = 0; i < ContractShapes.Length; i++)
+        {
+            if (!ContractShapes[i].Equals(other.ContractShapes[i]))
+            {
+                return false;
+            }
         }
 
         for (var i = 0; i < Descriptors.Length; i++)
