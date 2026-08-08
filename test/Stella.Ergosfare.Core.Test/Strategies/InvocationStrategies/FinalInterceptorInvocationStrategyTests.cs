@@ -1,11 +1,9 @@
-using System.Reflection;
+
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 using Stella.Ergosfare.Test.Fixtures;
 using Stella.Ergosfare.Test.Fixtures.Stubs.Basic;
-using Microsoft.Extensions.DependencyInjection;
-using Xunit.Abstractions;
 
 namespace Stella.Ergosfare.Core.Test.Strategies.InvocationStrategies;
 
@@ -19,19 +17,13 @@ public class FinalInterceptorInvocationStrategyTests:
 {
     private MessageDependencyFixture _messageDependencyFixture;
     private readonly DescriptorFixture _descriptorFixture;
-    private ExecutionContextFixture _executionContextFixture;
-    private readonly ITestOutputHelper _testOutputHelper;
     // ReSharper disable once ConvertToPrimaryConstructor
     public FinalInterceptorInvocationStrategyTests(
-        ITestOutputHelper  testOutputHelper,
         MessageDependencyFixture messageDependencyFixture,
-        DescriptorFixture descriptorFixture,
-        ExecutionContextFixture executionContextFixture)
+        DescriptorFixture descriptorFixture)
     {
-        _testOutputHelper = testOutputHelper;
         _messageDependencyFixture = messageDependencyFixture;
         _descriptorFixture = descriptorFixture;
-        _executionContextFixture = executionContextFixture;
     }
 
     
@@ -68,7 +60,7 @@ public class FinalInterceptorInvocationStrategyTests:
         Assert.NotNull(descriptor);
         
         // Create dependencies from descriptor
-        var messageDependencies = _messageDependencyFixture.CreateDependenciesFromDescriptor<StubMessage>(descriptor!);
+        var messageDependencies = _messageDependencyFixture.CreateDependenciesFromDescriptor<StubMessage>(descriptor);
         
         // Direct and indirect final interceptors are merged into one list, direct first.
         Assert.NotEmpty(messageDependencies.FinalInterceptors);

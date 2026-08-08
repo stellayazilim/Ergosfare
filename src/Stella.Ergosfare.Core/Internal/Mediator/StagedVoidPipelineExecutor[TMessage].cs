@@ -1,4 +1,4 @@
-using Stella.Ergosfare.Core.Abstractions;
+﻿using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Abstractions.StagedPlans;
@@ -24,7 +24,7 @@ internal sealed class StagedVoidPipelineExecutor<TMessage>(
     IResultAdapterService? resultAdapterService,
     string[] groups,
     StagedVoidPlan<TMessage> plan) : IPipelineExecutor
-    where TMessage : notnull, IMessage
+    where TMessage : IMessage
 {
     private readonly SingleAsyncHandlerMediationStrategy<TMessage> _strategy = new(resultAdapterService);
 
@@ -34,6 +34,7 @@ internal sealed class StagedVoidPipelineExecutor<TMessage>(
     private IMessageDependencies? _cachedDependencies;
     private int _cachedVersion = int.MinValue;
     private bool _useStagedPlan;
+    private bool _useDirectConstruction;
 
     public ValueTask Execute(object message, IExecutionContext context, IServiceProvider serviceProvider)
     {
@@ -41,7 +42,9 @@ internal sealed class StagedVoidPipelineExecutor<TMessage>(
 
         if (_useStagedPlan)
         {
-            return plan.Execute((TMessage)message, context, serviceProvider);
+            return _useDirectConstruction
+                ? plan.ExecuteDirect((TMessage)message, context, serviceProvider)
+                : plan.Execute((TMessage)message, context, serviceProvider);
         }
 
         return _strategy.Mediate((TMessage)message, dependencies, context, serviceProvider);
@@ -51,9 +54,12 @@ internal sealed class StagedVoidPipelineExecutor<TMessage>(
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
+            // Read before the build: a registration completing mid-build must land as a
+            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
+            var registryVersion = typedFactory.CurrentRegistryVersion;
             var cached = _cachedDependencies;
 
-            if (cached is not null && _cachedVersion == typedFactory.CurrentRegistryVersion)
+            if (cached is not null && _cachedVersion == registryVersion)
             {
                 return cached;
             }
@@ -64,11 +70,15 @@ internal sealed class StagedVoidPipelineExecutor<TMessage>(
                 && (_concreteAdapters is null || _concreteAdapters.IsEmpty)
                 && dependencies is MessageDependencies { MemoizedInstances: false } fastDependencies
                 && StagedPlanGate.Matches(fastDependencies, plan.Composition);
-            _cachedVersion = typedFactory.CurrentRegistryVersion;
+            _useDirectConstruction = _useStagedPlan
+                && plan.SupportsDirectConstruction
+                && StagedPlanGate.AllPlainTransient(typedFactory, plan.Composition);
+            _cachedVersion = registryVersion;
             return dependencies;
         }
 
         _useStagedPlan = false;
+        _useDirectConstruction = false;
         return dependenciesFactory.Create(typeof(TMessage), descriptor, groups);
     }
 }

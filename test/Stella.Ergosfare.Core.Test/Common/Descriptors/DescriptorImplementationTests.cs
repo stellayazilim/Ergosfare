@@ -29,7 +29,7 @@ public class DescriptorImplementationTests
     
     /// <summary>
     /// Ensures that all descriptors correctly expose 
-    /// their <see cref="IHandlerDescriptor.MessageType"/>,
+    /// their <see cref="IHasMessageType.MessageType"/>,
     /// <see cref="IHandlerDescriptor.HandlerType"/>,
     /// and (if applicable) <see cref="IHasResultType.ResultType"/>.
     /// </summary>

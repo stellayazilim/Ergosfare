@@ -40,6 +40,11 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 ///     Whether the store exposes <c>AddStagedPlan</c> (staged pipeline plans for
 ///     interceptor-bearing messages); older packages simply skip the staged emission.
 /// </param>
+/// <param name="StagedPlansSupportDirectConstruction">
+///     Whether the staged plan bases expose the direct-construction surface
+///     (<c>SupportsDirectConstruction</c>/<c>ExecuteDirect</c>); against older packages
+///     the emission skips the direct variant and plans resolve through the provider.
+/// </param>
 /// <param name="HasDescriptorCatalog">
 ///     Whether <c>GeneratedDescriptorCatalog</c> is resolvable — the lookup that makes
 ///     runtime <c>Register&lt;THandler&gt;()</c> reflection-free for generator-modeled
@@ -61,4 +66,5 @@ internal readonly record struct ModuleBuilderAvailability(
     bool DispatchRootsHasProviderPlanFactories,
     bool HasKeyedServiceExtensions,
     bool DispatchRootsHasStagedPlans,
+    bool StagedPlansSupportDirectConstruction,
     bool HasDescriptorCatalog);

@@ -69,23 +69,29 @@ internal sealed class MessageDependenciesFactory(IServiceProvider serviceProvide
             _servicesResolved = true;
         }
 
+        // The registry version is read ONCE, before any shape or dependency build, and
+        // stamps every cache entry this call produces: a build racing a registration
+        // then lands with the old version and the next reader rebuilds instead of
+        // serving a stale pipeline. MessageRegistry.Version also changes when handlers
+        // are added to existing messages; Count is the fallback for foreign registry
+        // implementations, and 0 the constant when no registry is resolvable at all.
+        var registryVersion = 0;
+
         if (_registry is not null)
         {
-            // MessageRegistry.Version also changes when handlers are added to existing
-            // messages; Count is the fallback for foreign registry implementations.
-            var registryVersion = _registry is MessageRegistry registry ? registry.Version : _registry.Count;
+            registryVersion = _registry is MessageRegistry registry ? registry.Version : _registry.Count;
             cache.InvalidateIfRegistryChanged(registryVersion);
             _handlerLifetimes?.InvalidateIfRegistryChanged(registryVersion);
         }
 
         var groupsArray = groups as string[] ?? groups.ToArray();
 
-        if (cache.TryGetDependencies(messageType, groupsArray, out var cached))
+        if (cache.TryGetDependencies(messageType, groupsArray, registryVersion, out var cached))
         {
             return cached!;
         }
 
-        var shape = cache.GetOrAddShape(messageType, groupsArray, descriptor);
+        var shape = cache.GetOrAddShape(messageType, groupsArray, descriptor, registryVersion);
 
         // Pipelines that are fully singleton-registered (or forced via MemoizeAllHandlers)
         // cache handler instances inside their references, pinned to the root provider.
@@ -95,7 +101,7 @@ internal sealed class MessageDependenciesFactory(IServiceProvider serviceProvide
         var dependencies = new MessageDependencies(
             shape, memoizeInstances ? _memoizedGraphProvider ?? serviceProvider : null);
 
-        cache.AddDependencies(messageType, groupsArray, dependencies);
+        cache.AddDependencies(messageType, groupsArray, dependencies, registryVersion);
 
         return dependencies;
     }

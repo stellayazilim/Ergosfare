@@ -1,7 +1,6 @@
 ﻿using System.Reflection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -360,7 +359,7 @@ public class StagedPlanExecutionParityTests
     [Trait("Category", "Coverage")]
     public async Task PostInterceptor_RewritesTheResult()
     {
-        var (assembly, provider) = Host.Value;
+        var (assembly, _) = Host.Value;
 
         var queryType = assembly.GetType("TestApp.GenRewriteQuery", throwOnError: true)!;
         Assert.NotNull(GeneratedDispatchRoots.FindStagedResultPlan(queryType, typeof(int)));

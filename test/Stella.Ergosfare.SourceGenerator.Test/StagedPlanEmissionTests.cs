@@ -170,6 +170,117 @@ public class StagedPlanEmissionTests
     }
 
     [Fact]
+    public void ConstructibleParticipants_EmitTheDirectConstructionVariant()
+    {
+        var result = GeneratorTestHost.Run("""
+            using Stella.Ergosfare.Commands.Abstractions;
+            using System.Threading.Tasks;
+
+            namespace TestApp
+            {
+                public interface IGreeter { }
+
+                public sealed record DirectPing : ICommand;
+
+                public sealed class DirectPingHandler : ICommandHandler<DirectPing>
+                {
+                    public DirectPingHandler(IGreeter greeter) { }
+
+                    public ValueTask HandleAsync(DirectPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                        => default;
+                }
+
+                public sealed class DirectPingInterceptor : ICommandPreInterceptor<DirectPing>
+                {
+                    public ValueTask<DirectPing> HandleAsync(DirectPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                        => ValueTask.FromResult(message);
+                }
+            }
+            """);
+
+        Assert.Empty(result.CompilationErrors);
+        Assert.Contains("public override bool SupportsDirectConstruction", result.GeneratedSource);
+        Assert.Contains("ExecuteDirect(", result.GeneratedSource);
+
+        // The direct variant constructs participants with `new` — the parameterless
+        // interceptor directly, the dependency-injected handler with its dependencies
+        // still resolved from the dispatching provider.
+        Assert.Contains("new global::TestApp.DirectPingInterceptor()", result.GeneratedSource);
+        Assert.Contains(
+            "new global::TestApp.DirectPingHandler(global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::TestApp.IGreeter>(serviceProvider))",
+            result.GeneratedSource);
+    }
+
+    [Fact]
+    public void MultiConstructorParticipant_SkipsTheDirectVariantAndReportsTheInfo()
+    {
+        var result = GeneratorTestHost.Run("""
+            using Stella.Ergosfare.Commands.Abstractions;
+            using System.Threading.Tasks;
+
+            namespace TestApp
+            {
+                public sealed record PickyDirectPing : ICommand;
+
+                public sealed class PickyDirectPingHandler : ICommandHandler<PickyDirectPing>
+                {
+                    public PickyDirectPingHandler() { }
+
+                    public PickyDirectPingHandler(string dependency) { }
+
+                    public ValueTask HandleAsync(PickyDirectPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                        => default;
+                }
+
+                public sealed class PickyDirectPingInterceptor : ICommandPreInterceptor<PickyDirectPing>
+                {
+                    public ValueTask<PickyDirectPing> HandleAsync(PickyDirectPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                        => ValueTask.FromResult(message);
+                }
+            }
+            """);
+
+        Assert.Empty(result.CompilationErrors);
+
+        // The staged plan itself still emits — only the direct variant is withheld,
+        // and the ERGOSG003 info points at the reason.
+        Assert.Contains("AddStagedPlan<global::TestApp.PickyDirectPing>", result.GeneratedSource);
+        Assert.DoesNotContain("ExecuteDirect(", result.GeneratedSource);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "ERGOSG003");
+    }
+
+    [Fact]
+    public void FromServicesOnConstructor_ReportsTheInfo()
+    {
+        var result = GeneratorTestHost.Run("""
+            using System;
+            using Stella.Ergosfare.Commands.Abstractions;
+            using System.Threading.Tasks;
+
+            namespace TestApp
+            {
+                [AttributeUsage(AttributeTargets.Parameter)]
+                public sealed class FromServicesAttribute : Attribute;
+
+                public interface IGreeter { }
+
+                public sealed record AnnotatedPing : ICommand;
+
+                public sealed class AnnotatedPingHandler : ICommandHandler<AnnotatedPing>
+                {
+                    public AnnotatedPingHandler([FromServices] IGreeter greeter) { }
+
+                    public ValueTask HandleAsync(AnnotatedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                        => default;
+                }
+            }
+            """);
+
+        Assert.Empty(result.CompilationErrors);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "ERGOSG004");
+    }
+
+    [Fact]
     public void ExcludeFromPipelineMessage_SuppressesTheStagedPlan()
     {
         var result = GeneratorTestHost.Run("""

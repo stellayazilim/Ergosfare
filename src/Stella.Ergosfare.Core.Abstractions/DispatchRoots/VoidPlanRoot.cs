@@ -1,7 +1,7 @@
 namespace Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 /// <summary>
 /// A compile-time pipeline plan closed over a void message and its sole async handler;
-/// see <see cref="GeneratedDispatchRoots.AddVoidPlan{TMessage, THandler}"/> and
+/// see <see cref="GeneratedDispatchRoots.AddVoidPlan{TMessage, THandler}()"/> and
 /// <see cref="MessageRoot"/> for the visitor re-entry pattern.
 /// </summary>
 public abstract class VoidPlanRoot

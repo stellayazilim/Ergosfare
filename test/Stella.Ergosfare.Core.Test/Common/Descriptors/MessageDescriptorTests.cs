@@ -17,7 +17,7 @@ public class MessageDescriptorTests(
     
     /// <summary>
     /// Ensures that <see cref="DescriptorFixture.CreateMessageDescriptor{TMessage}"/>
-    /// produces a descriptor with the correct <see cref="IMessageDescriptor.MessageType"/>.
+    /// produces a descriptor with the correct <see cref="IHasMessageType.MessageType"/>.
     /// </summary>
     [Fact]
     [Trait("Category", "Unit")]

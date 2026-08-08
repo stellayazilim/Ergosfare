@@ -71,7 +71,7 @@ public class ModuleConfigurationTests
             .AddErgosfare(options =>
             {
                 options.ConfigureResultAdapters(adapter => adapter.Register<TestAdapter>())
-                    .AddCoreModule( b => {});
+                    .AddCoreModule( _ => {});
             })
             .BuildServiceProvider();
 
@@ -94,7 +94,7 @@ public class ModuleConfigurationTests
         var serviceProvier = new ServiceCollection()
             .AddErgosfare(options => options
                     .ConfigureResultAdapters(adapter => adapter.RegisterFromAssembly(Assembly.GetExecutingAssembly()))
-                    .AddCoreModule( b => {}))
+                    .AddCoreModule( _ => {}))
             .BuildServiceProvider();
 
         var resultAdapterService = serviceProvier.GetService<IResultAdapterService>();

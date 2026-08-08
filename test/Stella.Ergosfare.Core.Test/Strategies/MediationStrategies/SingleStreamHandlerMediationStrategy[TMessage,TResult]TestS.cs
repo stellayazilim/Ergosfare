@@ -2,7 +2,6 @@ using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Test.Fixtures;
 using Stella.Ergosfare.Test.Fixtures.Stubs.Stream;
-using Xunit.Abstractions;
 
 namespace Stella.Ergosfare.Core.Test.Strategies;
 
@@ -18,7 +17,6 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests :
 
     // ReSharper disable once ConvertToPrimaryConstructor
     public SingleStreamHandlerMediationStrategyTMessageTResultTests(
-        ITestOutputHelper testOutputHelper,
         MessageDependencyFixture messageDependencyFixture,
         ExecutionContextFixture executionContextFixture)
     {

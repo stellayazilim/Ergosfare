@@ -45,7 +45,7 @@ public class EventModuleTests
         var mediator = serviceCollection.GetRequiredService<IEventMediator>();
 
         await mediator.PublishAsync((IEvent) new StubNonGenericEvent());
-        await mediator.PublishAsync<StubNonGenericEvent>(new StubNonGenericEvent());
+        await mediator.PublishAsync(new StubNonGenericEvent());
         
     }
 

@@ -15,7 +15,7 @@ using Stella.Ergosfare.Queries.Abstractions;
 using Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
 using MediatR;
 
-namespace Stella.Ergosfare.Benchmarks;
+namespace Stella.Ergosfare.Benchmarking;
 
 public class Program
 {
@@ -30,7 +30,7 @@ public class Program
 // Ergosfare messages & handlers
 // ---------------------------------------------------------------------------
 
-public sealed class VoidCommand : Stella.Ergosfare.Commands.Abstractions.ICommand { }
+public sealed class VoidCommand : ICommand { }
 
 public sealed class VoidCommandHandler : ICommandHandler<VoidCommand>
 {
@@ -60,7 +60,7 @@ public sealed class SecondPingEventHandler : IEventHandler<PingEvent>
 // lane without changing the default rows' pipelines (a second handler on VoidCommand
 // would suppress its compile-time plan, for instance).
 
-public sealed class GroupedCommand : Stella.Ergosfare.Commands.Abstractions.ICommand { }
+public sealed class GroupedCommand : ICommand { }
 
 [Group("bench")]
 public sealed class GroupedCommandHandler : ICommandHandler<GroupedCommand>
@@ -87,7 +87,7 @@ public sealed class SecondGroupedPingEventHandler : IEventHandler<GroupedPingEve
 // strategy path — the staged-plans epic baseline — without disturbing the default
 // rows' interceptor-free fast lanes (interceptors bind to their message type only).
 
-public sealed class InterceptedCommand : Stella.Ergosfare.Commands.Abstractions.ICommand { }
+public sealed class InterceptedCommand : ICommand { }
 
 public sealed class InterceptedCommandHandler : ICommandHandler<InterceptedCommand>
 {

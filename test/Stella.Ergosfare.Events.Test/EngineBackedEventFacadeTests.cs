@@ -83,8 +83,13 @@ public class EngineBackedEventFacadeTests
 
         var mediator = provider.GetRequiredService<IEventMediator>();
 
-        var settings = new EventMediationSettings();
-        settings.Filters.Groups = ["audit"];
+        var settings = new EventMediationSettings
+        {
+            Filters =
+            {
+                Groups = ["audit"]
+            }
+        };
 
         await mediator.PublishAsync(new GroupedEvent(), settings);
 
@@ -110,7 +115,7 @@ public class EngineBackedEventFacadeTests
         var mediatorBacked = new EventMediator(
             strategy, adapters, provider.GetRequiredService<IMessageMediator>());
 
-        foreach (var mediator in new EventMediator[] { engineBacked, mediatorBacked })
+        foreach (var mediator in new [] { engineBacked, mediatorBacked })
         {
             var settings = new EventMediationSettings();
 

@@ -9,7 +9,7 @@ namespace Stella.Ergosfare.Test.Fixtures;
 /// Provides methods for configuring services, accessing a service provider,
 /// and creating fresh instances for per-test isolation.
 /// </summary>
-/// <typeparam name="TFixture">The concrete type of the fixture implementing this interface.</typeparam
+/// <typeparam name="TFixture">The concrete type of the fixture implementing this interface.</typeparam>
 public interface IFixture<out TFixture> : IDisposable
     where TFixture : IFixture<TFixture>
 {

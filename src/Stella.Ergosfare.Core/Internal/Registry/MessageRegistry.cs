@@ -146,6 +146,7 @@ internal sealed class MessageRegistry(
 
         // Lock-free fast path: already-processed types (every dispatch-time re-registration
         // attempt after the first) never touch the gate.
+        // ReSharper disable once InconsistentlySynchronizedField
         if (_processedTypes.ContainsKey(type))
         {
             return;
@@ -227,6 +228,7 @@ internal sealed class MessageRegistry(
     private void Publish()
     {
         Interlocked.Increment(ref _version);
+        // ReSharper disable once InconsistentlySynchronizedField
         _snapshot = _messages.ToArray();
     }
 
@@ -336,6 +338,8 @@ internal sealed class MessageRegistry(
         // Create a new MessageDescriptor and stage it in the newMessages list
         var descriptor = new MessageDescriptor(messageType);
         _messageIndex[messageType] = descriptor;
+        // Only reachable from registration paths that already hold _gate.
+        // ReSharper disable once InconsistentlySynchronizedField
         _newMessages.Add(descriptor);
     }
 }

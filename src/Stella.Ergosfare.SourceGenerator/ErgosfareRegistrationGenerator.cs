@@ -1,9 +1,7 @@
-using System;
-using System.Collections.Generic;
+
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
-using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -66,9 +64,9 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     private const string ValueTaskExpression = "global::System.Threading.Tasks.ValueTask";
     private const string DescriptorCatalogMetadataName = "Stella.Ergosfare.Core.Abstractions.GeneratedDescriptorCatalog";
 
+    private const string StagedVoidPlanMetadataName = "Stella.Ergosfare.Core.Abstractions.StagedPlans.StagedVoidPlan";
     private const string ServiceProviderExtensionsMetadataName = "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions";
     private const string KeyedServiceExtensionsMetadataName = "Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions";
-    private const string DependencyInjectionNamespace = "Microsoft.Extensions.DependencyInjection";
 
     private const string ScanReferencesBuildProperty = "build_property.ErgosfareSourceGeneratorScanReferences";
     private const string ErgosfareAssemblyNamePrefix = "Stella.Ergosfare";
@@ -121,6 +119,9 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 DispatchRootsHasStagedPlans: dispatchRoots is not null
                     && !dispatchRoots.GetMembers("AddStagedPlan").IsEmpty
                     && compilation.GetTypeByMetadataName(ServiceProviderExtensionsMetadataName) is not null,
+                StagedPlansSupportDirectConstruction:
+                    compilation.GetTypeByMetadataName(StagedVoidPlanMetadataName) is { } stagedVoidPlan
+                    && !stagedVoidPlan.GetMembers("SupportsDirectConstruction").IsEmpty,
                 HasDescriptorCatalog: compilation.GetTypeByMetadataName(DescriptorCatalogMetadataName) is not null);
         });
 
@@ -270,6 +271,30 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         IAssemblySymbol? currentAssembly,
         out bool usesKeyedServices)
     {
+        var construction = TryBuildConstructionExpression(
+            symbol, handlerTypeExpression, currentAssembly, "provider", allowParameterless: false, out usesKeyedServices);
+
+        return construction is null ? null : "static provider => " + construction;
+    }
+
+    /// <summary>
+    ///     Builds the bare <c>new T(...)</c> expression for a participant whose
+    ///     construction is provably identical to container activation (see
+    ///     <see cref="GetProviderConstructionExpression"/> for the gate), resolving
+    ///     constructor dependencies from the given provider identifier. The staged plans'
+    ///     direct-construction emission consumes it with <c>serviceProvider</c>; the
+    ///     provider factories wrap it in a lambda. Parameterless constructions are only
+    ///     produced when asked for — the plan factories keep those on the cheaper
+    ///     <c>Func&lt;THandler&gt;</c> shape.
+    /// </summary>
+    private static string? TryBuildConstructionExpression(
+        INamedTypeSymbol symbol,
+        string typeExpression,
+        IAssemblySymbol? currentAssembly,
+        string providerIdentifier,
+        bool allowParameterless,
+        out bool usesKeyedServices)
+    {
         usesKeyedServices = false;
 
         if (!HasDirectConstructionShape(symbol))
@@ -295,10 +320,14 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             publicConstructor = constructor;
         }
 
-        // Parameterless construction stays on the cheaper Func<THandler> shape.
-        if (publicConstructor is null || publicConstructor.Parameters.IsEmpty)
+        if (publicConstructor is null)
         {
             return null;
+        }
+
+        if (publicConstructor.Parameters.IsEmpty)
+        {
+            return allowParameterless ? "new " + typeExpression + "()" : null;
         }
 
         var arguments = new List<string>(publicConstructor.Parameters.Length);
@@ -344,16 +373,16 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 return null;
             }
 
-            var typeExpression = parameterType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var parameterTypeExpression = parameterType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
             arguments.Add(keyLiteral is null
-                ? "global::" + ServiceProviderExtensionsMetadataName + ".GetRequiredService<" + typeExpression + ">(provider)"
-                : "global::" + KeyedServiceExtensionsMetadataName + ".GetRequiredKeyedService<" + typeExpression + ">(provider, " + keyLiteral + ")");
+                ? "global::" + ServiceProviderExtensionsMetadataName + ".GetRequiredService<" + parameterTypeExpression + ">(" + providerIdentifier + ")"
+                : "global::" + KeyedServiceExtensionsMetadataName + ".GetRequiredKeyedService<" + parameterTypeExpression + ">(" + providerIdentifier + ", " + keyLiteral + ")");
 
             usesKeyedServices |= keyLiteral is not null;
         }
 
-        return "static provider => new " + handlerTypeExpression + "(" + string.Join(", ", arguments) + ")";
+        return "new " + typeExpression + "(" + string.Join(", ", arguments) + ")";
     }
 
     /// <summary>
@@ -503,6 +532,17 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             ? GetProviderConstructionExpression(symbol, typeofExpression, symbol.ContainingAssembly, out usesKeyedServices)
             : null;
 
+        // Informational diagnostics apply to pipeline participants declared in source —
+        // the only place the user can act on them.
+        var hasMultipleCtors = !descriptors.IsEmpty && HasMultiplePublicInstanceConstructors(symbol);
+        var hasFromServices = !descriptors.IsEmpty && HasFromServicesOnConstructor(symbol);
+
+        var stagedKeyedServices = false;
+        var stagedConstruction = isAccessible && !descriptors.IsEmpty
+            ? TryBuildConstructionExpression(symbol, typeofExpression, symbol.ContainingAssembly,
+                "serviceProvider", allowParameterless: true, out stagedKeyedServices)
+            : null;
+
         return new RegistrableTypeModel
         {
             TypeofExpression = typeofExpression,
@@ -527,7 +567,46 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             IsNestedType = symbol.ContainingType is not null,
             AssignableKeys = isDispatchable ? GetAssignableKeys(symbol) : ImmutableArray<string>.Empty,
             ContractShapes = isAccessible ? BuildContractShapes(symbol) : ImmutableArray<ContractShapeModel>.Empty,
+            StagedConstructionExpression = stagedConstruction,
+            StagedConstructionUsesKeyedServices = stagedKeyedServices,
+            HasMultiplePublicConstructors = hasMultipleCtors,
+            HasFromServicesConstructorParameter = hasFromServices,
+            InfoLocation = hasMultipleCtors || hasFromServices ? LocationInfo.From(symbol) : null,
         };
+    }
+
+    private static bool HasMultiplePublicInstanceConstructors(INamedTypeSymbol symbol)
+    {
+        var count = 0;
+
+        foreach (var constructor in symbol.InstanceConstructors)
+        {
+            if (constructor.DeclaredAccessibility == Accessibility.Public && ++count > 1)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasFromServicesOnConstructor(INamedTypeSymbol symbol)
+    {
+        foreach (var constructor in symbol.InstanceConstructors)
+        {
+            foreach (var parameter in constructor.Parameters)
+            {
+                foreach (var attribute in parameter.GetAttributes())
+                {
+                    if (attribute.AttributeClass is { Name: "FromServicesAttribute" })
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -1005,6 +1084,12 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             ? GetProviderConstructionExpression(symbol, typeofExpression, currentAssembly: null, out usesKeyedServices)
             : null;
 
+        var referencedStagedKeyedServices = false;
+        var referencedStagedConstruction = isAccessible && !descriptors.IsEmpty
+            ? TryBuildConstructionExpression(symbol, typeofExpression, currentAssembly: null,
+                "serviceProvider", allowParameterless: true, out referencedStagedKeyedServices)
+            : null;
+
         return new RegistrableTypeModel
         {
             TypeofExpression = typeofExpression,
@@ -1029,6 +1114,11 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             IsNestedType = symbol.ContainingType is not null,
             AssignableKeys = isDispatchable ? GetAssignableKeys(symbol) : ImmutableArray<string>.Empty,
             ContractShapes = isAccessible ? BuildContractShapes(symbol) : ImmutableArray<ContractShapeModel>.Empty,
+            StagedConstructionExpression = referencedStagedConstruction,
+            StagedConstructionUsesKeyedServices = referencedStagedKeyedServices,
+            HasMultiplePublicConstructors = false,
+            HasFromServicesConstructorParameter = false,
+            InfoLocation = null,
         };
     }
 
@@ -1111,7 +1201,7 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             : (IReadOnlyList<ResultPlanModel>)Array.Empty<ResultPlanModel>();
 
         var stagedPlans = availability.DispatchRootsHasStagedPlans
-            ? ComputeStagedPlans(types)
+            ? ComputeStagedPlans(types, availability.HasKeyedServiceExtensions)
             : (IReadOnlyList<StagedPlanModel>)Array.Empty<StagedPlanModel>();
 
         var source = RegistrationEmitter.Emit(types, availability, voidPlans, resultPlans, stagedPlans, GeneratorVersion);
@@ -1130,7 +1220,7 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     ///     advisory regardless: the hosting executor re-validates the composition per
     ///     registry version.
     /// </summary>
-    private static List<StagedPlanModel> ComputeStagedPlans(List<RegistrableTypeModel> types)
+    private static List<StagedPlanModel> ComputeStagedPlans(List<RegistrableTypeModel> types, bool hasKeyedServiceExtensions)
     {
         CollectPipelineFacts(types, out var handlerCounts, out var soleHandlers, out _);
 
@@ -1186,7 +1276,7 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 continue;
             }
 
-            if (!TryAssembleStagedStages(type, types, resultTypeExpression, resultIsValueType,
+            if (!TryAssembleStagedStages(type, types, resultTypeExpression, resultIsValueType, hasKeyedServiceExtensions,
                     out var pre, out var post, out var exceptionCalls, out var finalCalls))
             {
                 continue;
@@ -1203,6 +1293,7 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 resultTypeExpression,
                 resultIsValueType,
                 handler.TypeofExpression,
+                GatedConstructionExpression(handler, hasKeyedServiceExtensions),
                 pre, post, exceptionCalls, finalCalls));
         }
 
@@ -1218,11 +1309,22 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     ///     pipeline result with an inexactly-typed contract (runtime result variance the
     ///     string model cannot verify).
     /// </summary>
+    /// <summary>
+    ///     The participant's staged construction expression, or <c>null</c> when keyed
+    ///     resolutions are needed but the keyed-service extensions are not resolvable in
+    ///     the consuming compilation.
+    /// </summary>
+    private static string? GatedConstructionExpression(RegistrableTypeModel participant, bool hasKeyedServiceExtensions)
+        => participant.StagedConstructionUsesKeyedServices && !hasKeyedServiceExtensions
+            ? null
+            : participant.StagedConstructionExpression;
+
     private static bool TryAssembleStagedStages(
         RegistrableTypeModel message,
         List<RegistrableTypeModel> types,
         string? resultTypeExpression,
         bool resultIsValueType,
+        bool hasKeyedServiceExtensions,
         out ImmutableArray<StagedCallModel> preCalls,
         out ImmutableArray<StagedCallModel> postCalls,
         out ImmutableArray<StagedCallModel> exceptionCalls,
@@ -1316,10 +1418,10 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             }
         }
 
-        preCalls = OrderStage(stages[0]);
-        postCalls = OrderStage(stages[1]);
-        exceptionCalls = OrderStage(stages[2]);
-        finalCalls = OrderStage(stages[3]);
+        preCalls = OrderStage(stages[0], hasKeyedServiceExtensions);
+        postCalls = OrderStage(stages[1], hasKeyedServiceExtensions);
+        exceptionCalls = OrderStage(stages[2], hasKeyedServiceExtensions);
+        finalCalls = OrderStage(stages[3], hasKeyedServiceExtensions);
         return true;
     }
 
@@ -1442,7 +1544,8 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     ///     non-generic, so the display name equals the runtime <c>Type.FullName</c>).
     /// </summary>
     private static ImmutableArray<StagedCallModel> OrderStage(
-        List<(RegistrableTypeModel Type, StagedCallArm Arm, bool Direct)>? entries)
+        List<(RegistrableTypeModel Type, StagedCallArm Arm, bool Direct)>? entries,
+        bool hasKeyedServiceExtensions)
     {
         if (entries is null)
         {
@@ -1469,7 +1572,8 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
 
         foreach (var (type, arm, _) in entries)
         {
-            calls.Add(new StagedCallModel(type.TypeofExpression, arm));
+            calls.Add(new StagedCallModel(
+                type.TypeofExpression, arm, GatedConstructionExpression(type, hasKeyedServiceExtensions)));
         }
 
         return calls.MoveToImmutable();
@@ -1672,6 +1776,22 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                         model.Location?.ToLocation(),
                         model.DisplayName));
                 continue;
+            }
+
+            if (model.HasMultiplePublicConstructors)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    GeneratorDiagnostics.MultiplePublicConstructors,
+                    model.InfoLocation?.ToLocation(),
+                    model.DisplayName));
+            }
+
+            if (model.HasFromServicesConstructorParameter)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    GeneratorDiagnostics.FromServicesOnConstructor,
+                    model.InfoLocation?.ToLocation(),
+                    model.DisplayName));
             }
 
             types.Add(model);

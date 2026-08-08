@@ -1,4 +1,4 @@
-using Stella.Ergosfare.Core.Abstractions;
+﻿using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
@@ -23,7 +23,7 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
     string[] groups,
     Func<THandler>? directHandlerFactory = null,
     Func<IServiceProvider, THandler>? providerHandlerFactory = null) : IPipelineExecutor<TResult>
-    where TMessage : notnull, IMessage
+    where TMessage : IMessage
     where THandler : class, IAsyncHandler<TMessage, TResult>
 {
     private readonly SingleAsyncHandlerMediationStrategy<TMessage, TResult> _strategy = new(resultAdapterService);
@@ -77,9 +77,12 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
+            // Read before the build: a registration completing mid-build must land as a
+            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
+            var registryVersion = typedFactory.CurrentRegistryVersion;
             var cached = _cachedDependencies;
 
-            if (cached is not null && _cachedVersion == typedFactory.CurrentRegistryVersion)
+            if (cached is not null && _cachedVersion == registryVersion)
             {
                 return cached;
             }
@@ -92,7 +95,7 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
                 && fastDependencies is { MemoizedInstances: false, FastSingleHandler.HandlerType: var plannedType }
                 && plannedType == typeof(THandler)
                 && typedFactory.IsPlainTransientRegistration(typeof(THandler));
-            _cachedVersion = typedFactory.CurrentRegistryVersion;
+            _cachedVersion = registryVersion;
             return dependencies;
         }
 

@@ -46,7 +46,8 @@ public class ResultAdapterBuilderTests
     /// <summary>
     /// A class that does not implement <see cref="IResultAdapter"/>.
     /// Used to verify that <see cref="ResultAdapterBuilder.Register(Type)"/>
-    /// ignores non-a
+    /// ignores non-adapter types.
+    /// </summary>
     private class NotAnAdapter { }
 
     /// <summary>
@@ -67,7 +68,7 @@ public class ResultAdapterBuilderTests
             throw new NotImplementedException();
         }
 
-        public Exception? LookupException(object? result)
+        public Exception LookupException(object? result)
         {
             throw new NotImplementedException();
         }

@@ -27,7 +27,7 @@ public interface IQueryPostInterceptor<in TQuery, TResult> : IQuery, IAsyncPostI
     /// <inheritdoc />
     async ValueTask<object> IAsyncPostInterceptor<TQuery, TResult>.HandleAsync(
         TQuery query, TResult messageResult, IExecutionContext context)
-        => (await HandleAsync(query, messageResult, context))!;
+        => await HandleAsync(query, messageResult, context);
 
     /// <summary>
     /// Handles the post-processing of a query asynchronously.

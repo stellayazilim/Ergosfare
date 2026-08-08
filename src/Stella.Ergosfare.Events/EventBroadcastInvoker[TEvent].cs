@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
@@ -13,6 +13,8 @@ namespace Stella.Ergosfare.Events;
 internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     where TEvent : notnull
 {
+    // One copy per closed event type is deliberate — the invoker itself is per-event-type.
+    // ReSharper disable once StaticMemberInGenericType
     private static readonly string[] EmptyGroups = [];
 
     /// <summary>
@@ -20,6 +22,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     /// settings instance is private and never mutated, and the strategy keeps all
     /// per-publish state in locals — one instance serves concurrent publishes.
     /// </summary>
+    // ReSharper disable once StaticMemberInGenericType
     private static readonly EventMediationSettings DefaultSettings = new();
     private static readonly AsyncBroadcastMediationStrategy<TEvent> DefaultStrategy = new(DefaultSettings);
 
@@ -234,6 +237,9 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
+            // Read before the build: a registration completing mid-build must land as a
+            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
+            var registryVersion = typedFactory.CurrentRegistryVersion;
             var cached = _cachedDependencies;
 
             // The invoker is process-wide (one per event type) while factories are
@@ -244,7 +250,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
             // factory's own per-container cache keeps that cheap.
             if (cached is not null
                 && ReferenceEquals(_cachedFactory, typedFactory)
-                && _cachedVersion == typedFactory.CurrentRegistryVersion)
+                && _cachedVersion == registryVersion)
             {
                 return cached;
             }
@@ -252,7 +258,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
             var dependencies = BuildPlan(typedFactory, resolveStrategy, EmptyGroups);
             _cachedDependencies = dependencies;
             _cachedFactory = typedFactory;
-            _cachedVersion = typedFactory.CurrentRegistryVersion;
+            _cachedVersion = registryVersion;
             return dependencies;
         }
 
@@ -293,11 +299,16 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
+            // Read before the build: a registration completing mid-build must land as a
+            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
+            var registryVersion = typedFactory.CurrentRegistryVersion;
             var slot = _cachedGroupedPlan;
 
+            // Deliberate: groups is matched allocation-free first and only materialized on a slot miss.
+            // ReSharper disable once PossibleMultipleEnumeration
             if (slot is not null
                 && ReferenceEquals(slot.Factory, typedFactory)
-                && slot.Version == typedFactory.CurrentRegistryVersion
+                && slot.Version == registryVersion
                 && PipelineExecutorCache.SlotMatches(groups, slot.Groups, slot.Canonical))
             {
                 return slot.Dependencies;
@@ -305,10 +316,11 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
 
             // A canonical set contributes its immutable name array directly.
             var canonical = groups as GroupSet;
+            // ReSharper disable once PossibleMultipleEnumeration
             var materialized = canonical?.Names ?? [.. groups];
             var dependencies = BuildPlan(typedFactory, resolveStrategy, materialized);
             _cachedGroupedPlan = new GroupedPlanSlot(
-                typedFactory, materialized, canonical, dependencies, typedFactory.CurrentRegistryVersion);
+                typedFactory, materialized, canonical, dependencies, registryVersion);
             return dependencies;
         }
 
@@ -394,7 +406,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     /// broadcast strategy applies.
     /// </summary>
     private static ValueTask Invoke(
-        Core.Abstractions.IHandlerReference<Core.Abstractions.Handlers.IHandler, Core.Abstractions.Registry.Descriptors.IMainHandlerDescriptor> reference,
+        IHandlerReference<Core.Abstractions.Handlers.IHandler, Core.Abstractions.Registry.Descriptors.IMainHandlerDescriptor> reference,
         TEvent @event,
         IExecutionContext context,
         IServiceProvider serviceProvider)

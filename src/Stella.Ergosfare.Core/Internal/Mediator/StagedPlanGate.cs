@@ -1,6 +1,7 @@
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Abstractions.StagedPlans;
+using Stella.Ergosfare.Core.Internal.Factories;
 
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
@@ -34,6 +35,33 @@ internal static class StagedPlanGate
         for (var i = 0; i < baked.Length; i++)
         {
             if (stage[i].HandlerType != baked[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The direct-construction gate on top of a composition match: every participant's
+    /// effective DI registration must be the module's own plain transient one — the
+    /// single shape where a plan constructing participants with <c>new</c> is observably
+    /// identical to container resolution. Any override (user factory, lifetime change)
+    /// routes the plan back to its provider-resolving variant.
+    /// </summary>
+    internal static bool AllPlainTransient(MessageDependenciesFactory factory, StagedPlanComposition composition)
+        => factory.IsPlainTransientRegistration(composition.HandlerType)
+           && StagePlainTransient(factory, composition.PreInterceptorTypeArray)
+           && StagePlainTransient(factory, composition.PostInterceptorTypeArray)
+           && StagePlainTransient(factory, composition.ExceptionInterceptorTypeArray)
+           && StagePlainTransient(factory, composition.FinalInterceptorTypeArray);
+
+    private static bool StagePlainTransient(MessageDependenciesFactory factory, Type[] participants)
+    {
+        foreach (var participant in participants)
+        {
+            if (!factory.IsPlainTransientRegistration(participant))
             {
                 return false;
             }

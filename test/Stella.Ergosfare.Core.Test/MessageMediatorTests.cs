@@ -8,8 +8,6 @@ using Stella.Ergosfare.Core.Internal.Mediator;
 using Stella.Ergosfare.Core.Internal.Registry;
 using Stella.Ergosfare.Test.Fixtures.Stubs.Basic;
 using Moq;
-using Stella.Ergosfare.Core.Abstractions.Caching;
-using Stella.Ergosfare.Core.Internal.Caching;
 
 namespace Stella.Ergosfare.Core.Test;
 
@@ -91,7 +89,7 @@ public class MessageMediatorTests
             RegisterPlainMessagesOnSpot = false,
             CancellationToken = CancellationToken.None,
             Items = new Dictionary<object, object?>(),
-            MessageResolveStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry)!,
+            MessageResolveStrategy = new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(registry),
             MessageMediationStrategy = 
                 new SingleAsyncHandlerMediationStrategy<StubMessage>(new ResultAdapterService()),
             Groups = []

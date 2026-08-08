@@ -337,6 +337,158 @@ public class StagedPlanExecutionTests
     }
 
     [ExcludeFromDiscovery]
+    public sealed class DirectStagedCommand : ICommand
+    {
+        public List<string> Order { get; } = [];
+    }
+
+    [ExcludeFromDiscovery]
+    public sealed class DirectStagedCommandHandler : ICommandHandler<DirectStagedCommand>
+    {
+        public ValueTask HandleAsync(DirectStagedCommand command, IExecutionContext context)
+        {
+            command.Order.Add("handler");
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    [ExcludeFromDiscovery]
+    public sealed class DirectStagedCommandPreInterceptor : ICommandPreInterceptor<DirectStagedCommand>
+    {
+        public ValueTask<DirectStagedCommand> HandleAsync(DirectStagedCommand command, IExecutionContext context)
+        {
+            command.Order.Add("pre");
+            return ValueTask.FromResult(command);
+        }
+    }
+
+    private sealed class DirectStagedCommandPlan : StagedVoidPlan<DirectStagedCommand>
+    {
+        public override StagedPlanComposition Composition { get; } = new(
+            typeof(DirectStagedCommandHandler),
+            [typeof(DirectStagedCommandPreInterceptor)],
+            [],
+            [],
+            []);
+
+        public override bool SupportsDirectConstruction => true;
+
+        public override async ValueTask Execute(DirectStagedCommand message, IExecutionContext context, IServiceProvider serviceProvider)
+        {
+            message.Order.Add("staged");
+            message = await serviceProvider.GetRequiredService<DirectStagedCommandPreInterceptor>().HandleAsync(message, context);
+            await serviceProvider.GetRequiredService<DirectStagedCommandHandler>().HandleAsync(message, context);
+        }
+
+        public override async ValueTask ExecuteDirect(DirectStagedCommand message, IExecutionContext context, IServiceProvider serviceProvider)
+        {
+            message.Order.Add("staged-direct");
+            message = await new DirectStagedCommandPreInterceptor().HandleAsync(message, context);
+            await new DirectStagedCommandHandler().HandleAsync(message, context);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task PlainTransientParticipants_ExecuteThroughTheDirectVariant()
+    {
+        GeneratedDispatchRoots.AddStagedPlan(new DirectStagedCommandPlan());
+
+        var provider = new ServiceCollection()
+            .AddErgosfare(x => x.AddCommandModule(c =>
+            {
+                c.Register<DirectStagedCommandHandler>();
+                c.Register<DirectStagedCommandPreInterceptor>();
+            }))
+            .BuildServiceProvider();
+        await using var _ = provider;
+
+        var command = new DirectStagedCommand();
+        await provider.GetRequiredService<ICommandMediator>().SendAsync(command);
+
+        Assert.Equal(["staged-direct", "pre", "handler"], command.Order);
+    }
+
+    [ExcludeFromDiscovery]
+    public sealed class OverriddenDirectCommand : ICommand
+    {
+        public List<string> Order { get; } = [];
+    }
+
+    [ExcludeFromDiscovery]
+    public sealed class OverriddenDirectCommandHandler : ICommandHandler<OverriddenDirectCommand>
+    {
+        public ValueTask HandleAsync(OverriddenDirectCommand command, IExecutionContext context)
+        {
+            command.Order.Add("handler");
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    [ExcludeFromDiscovery]
+    public sealed class OverriddenDirectCommandPreInterceptor : ICommandPreInterceptor<OverriddenDirectCommand>
+    {
+        public ValueTask<OverriddenDirectCommand> HandleAsync(OverriddenDirectCommand command, IExecutionContext context)
+        {
+            command.Order.Add("pre");
+            return ValueTask.FromResult(command);
+        }
+    }
+
+    private sealed class OverriddenDirectCommandPlan : StagedVoidPlan<OverriddenDirectCommand>
+    {
+        public override StagedPlanComposition Composition { get; } = new(
+            typeof(OverriddenDirectCommandHandler),
+            [typeof(OverriddenDirectCommandPreInterceptor)],
+            [],
+            [],
+            []);
+
+        public override bool SupportsDirectConstruction => true;
+
+        public override async ValueTask Execute(OverriddenDirectCommand message, IExecutionContext context, IServiceProvider serviceProvider)
+        {
+            message.Order.Add("staged");
+            message = await serviceProvider.GetRequiredService<OverriddenDirectCommandPreInterceptor>().HandleAsync(message, context);
+            await serviceProvider.GetRequiredService<OverriddenDirectCommandHandler>().HandleAsync(message, context);
+        }
+
+        public override ValueTask ExecuteDirect(OverriddenDirectCommand message, IExecutionContext context, IServiceProvider serviceProvider)
+        {
+            message.Order.Add("staged-direct");
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task LifetimeOverride_KeepsTheProviderResolvingVariant()
+    {
+        GeneratedDispatchRoots.AddStagedPlan(new OverriddenDirectCommandPlan());
+
+        // The user's singleton registration (before AddErgosfare, so the module's
+        // TryAddTransient defers to it) breaks the per-participant plain-transient
+        // proof — the composition still matches, so the plan runs, but through its
+        // provider-resolving variant, which honors the override.
+        var provider = new ServiceCollection()
+            .AddSingleton<OverriddenDirectCommandHandler>()
+            .AddErgosfare(x => x.AddCommandModule(c =>
+            {
+                c.Register<OverriddenDirectCommandHandler>();
+                c.Register<OverriddenDirectCommandPreInterceptor>();
+            }))
+            .BuildServiceProvider();
+        await using var _ = provider;
+
+        var command = new OverriddenDirectCommand();
+        await provider.GetRequiredService<ICommandMediator>().SendAsync(command);
+
+        Assert.Equal(["staged", "pre", "handler"], command.Order);
+    }
+
+    [ExcludeFromDiscovery]
     public sealed class StagedResultCommand : ICommand<int>
     {
         public List<string> Order { get; } = [];

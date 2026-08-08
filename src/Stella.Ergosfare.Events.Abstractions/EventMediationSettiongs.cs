@@ -10,7 +10,7 @@ public sealed class EventMediationSettings
     /// Gets or sets a value indicating whether an exception should be thrown
     /// if no handlers are found for a published event.
     /// </summary>
-    public bool ThrowIfNoHandlerFound { get; init; } = false;
+    public bool ThrowIfNoHandlerFound { get; init; }
 
 
     /// <summary>

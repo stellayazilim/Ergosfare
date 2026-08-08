@@ -6,6 +6,6 @@ public interface IVoidPlanRootVisitor<out TReturn, in TState>
 {
     /// <summary>Called with the plan's message and handler types as the generic arguments.</summary>
     TReturn Visit<TMessage, THandler>(TState state)
-        where TMessage : notnull, IMessage
+        where TMessage : IMessage
         where THandler : class, IAsyncHandler<TMessage>;
 }
