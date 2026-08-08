@@ -20,6 +20,16 @@ public abstract class StagedVoidPlan
     /// <summary>The pipeline composition the plan was baked against.</summary>
     public abstract StagedPlanComposition Composition { get; }
 
+    /// <summary>
+    /// Whether the plan carries a direct-construction variant of its pipeline
+    /// (<c>ExecuteDirect</c>): every participant constructed with <c>new</c> instead of a
+    /// container resolution. The hosting executor uses that variant only after verifying
+    /// at runtime that every participant's effective DI registration is the module's own
+    /// plain transient one — the single shape where container resolution and direct
+    /// construction are observably identical.
+    /// </summary>
+    public virtual bool SupportsDirectConstruction => false;
+
     /// <summary>Invokes the visitor with this plan's message type as the generic argument.</summary>
     public abstract TReturn Accept<TReturn, TState>(IStagedVoidPlanVisitor<TReturn, TState> visitor, TState state);
 }

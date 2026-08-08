@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
@@ -234,6 +234,9 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
+            // Read before the build: a registration completing mid-build must land as a
+            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
+            var registryVersion = typedFactory.CurrentRegistryVersion;
             var cached = _cachedDependencies;
 
             // The invoker is process-wide (one per event type) while factories are
@@ -244,7 +247,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
             // factory's own per-container cache keeps that cheap.
             if (cached is not null
                 && ReferenceEquals(_cachedFactory, typedFactory)
-                && _cachedVersion == typedFactory.CurrentRegistryVersion)
+                && _cachedVersion == registryVersion)
             {
                 return cached;
             }
@@ -252,7 +255,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
             var dependencies = BuildPlan(typedFactory, resolveStrategy, EmptyGroups);
             _cachedDependencies = dependencies;
             _cachedFactory = typedFactory;
-            _cachedVersion = typedFactory.CurrentRegistryVersion;
+            _cachedVersion = registryVersion;
             return dependencies;
         }
 
@@ -293,11 +296,14 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
+            // Read before the build: a registration completing mid-build must land as a
+            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
+            var registryVersion = typedFactory.CurrentRegistryVersion;
             var slot = _cachedGroupedPlan;
 
             if (slot is not null
                 && ReferenceEquals(slot.Factory, typedFactory)
-                && slot.Version == typedFactory.CurrentRegistryVersion
+                && slot.Version == registryVersion
                 && PipelineExecutorCache.SlotMatches(groups, slot.Groups, slot.Canonical))
             {
                 return slot.Dependencies;
@@ -308,7 +314,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
             var materialized = canonical?.Names ?? [.. groups];
             var dependencies = BuildPlan(typedFactory, resolveStrategy, materialized);
             _cachedGroupedPlan = new GroupedPlanSlot(
-                typedFactory, materialized, canonical, dependencies, typedFactory.CurrentRegistryVersion);
+                typedFactory, materialized, canonical, dependencies, registryVersion);
             return dependencies;
         }
 

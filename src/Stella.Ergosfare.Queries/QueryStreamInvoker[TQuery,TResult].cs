@@ -1,4 +1,4 @@
-using Stella.Ergosfare.Core;
+﻿using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
@@ -73,11 +73,14 @@ internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
+            // Read before the build: a registration completing mid-build must land as a
+            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
+            var registryVersion = typedFactory.CurrentRegistryVersion;
             var cached = _cachedDependencies;
 
             if (cached is not null
                 && ReferenceEquals(_cachedFactory, typedFactory)
-                && _cachedVersion == typedFactory.CurrentRegistryVersion)
+                && _cachedVersion == registryVersion)
             {
                 return cached;
             }
@@ -85,7 +88,7 @@ internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<
             var dependencies = BuildPlan(typedFactory, resolveStrategy, EmptyGroups);
             _cachedDependencies = dependencies;
             _cachedFactory = typedFactory;
-            _cachedVersion = typedFactory.CurrentRegistryVersion;
+            _cachedVersion = registryVersion;
             return dependencies;
         }
 
@@ -122,11 +125,14 @@ internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
+            // Read before the build: a registration completing mid-build must land as a
+            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
+            var registryVersion = typedFactory.CurrentRegistryVersion;
             var slot = _cachedGroupedPlan;
 
             if (slot is not null
                 && ReferenceEquals(slot.Factory, typedFactory)
-                && slot.Version == typedFactory.CurrentRegistryVersion
+                && slot.Version == registryVersion
                 && Core.Internal.Mediator.PipelineExecutorCache.SlotMatches(groups, slot.Groups, slot.Canonical))
             {
                 return slot.Dependencies;
@@ -136,7 +142,7 @@ internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<
             string[] materialized = [.. groups];
             var dependencies = BuildPlan(typedFactory, resolveStrategy, materialized);
             _cachedGroupedPlan = new GroupedPlanSlot(
-                typedFactory, materialized, canonical, dependencies, typedFactory.CurrentRegistryVersion);
+                typedFactory, materialized, canonical, dependencies, registryVersion);
             return dependencies;
         }
 

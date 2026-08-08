@@ -41,4 +41,38 @@ internal static class GeneratorDiagnostics
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    /// <summary>
+    ///     A handler with several public constructors keeps the container's greedy,
+    ///     content-dependent constructor selection in play, so the generated plans cannot
+    ///     prove direct construction identical to container activation and leave the
+    ///     handler on the container path. Informational: everything still works, only the
+    ///     construction fast path is lost.
+    /// </summary>
+    public static readonly DiagnosticDescriptor MultiplePublicConstructors = new(
+        id: "ERGOSG003",
+        title: "Multiple public constructors keep the handler on the container path",
+        messageFormat:
+            "Handler '{0}' has more than one public constructor, so generated plans cannot prove which one the " +
+            "container would pick and skip its direct-construction fast path. Collapse to a single public " +
+            "constructor to enable it.",
+        category: "Performance",
+        defaultSeverity: DiagnosticSeverity.Info,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    ///     <c>[FromServices]</c> is an ASP.NET Core action-parameter attribute; on a
+    ///     constructor parameter it does nothing — constructor injection resolves services
+    ///     regardless. Informational so the stray attribute does not suggest behavior that
+    ///     is not there.
+    /// </summary>
+    public static readonly DiagnosticDescriptor FromServicesOnConstructor = new(
+        id: "ERGOSG004",
+        title: "[FromServices] has no effect on constructor parameters",
+        messageFormat:
+            "Type '{0}' carries [FromServices] on a constructor parameter, where it has no effect — constructor " +
+            "injection resolves services regardless. Remove the attribute; for keyed services use [FromKeyedServices].",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Info,
+        isEnabledByDefault: true);
 }

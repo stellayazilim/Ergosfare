@@ -149,6 +149,40 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     /// </summary>
     public required ImmutableArray<ContractShapeModel> ContractShapes { get; init; }
 
+    /// <summary>
+    ///     The bare <c>new T(...)</c> construction expression for a pipeline participant
+    ///     whose construction is provably identical to container activation, resolving
+    ///     constructor dependencies from the <c>serviceProvider</c> identifier — the
+    ///     staged plans' direct-construction (<c>ExecuteDirect</c>) emission input.
+    ///     <c>null</c> when the participant does not qualify.
+    /// </summary>
+    public required string? StagedConstructionExpression { get; init; }
+
+    /// <summary>
+    ///     Whether <see cref="StagedConstructionExpression"/> resolves any dependency
+    ///     through the keyed-service extensions.
+    /// </summary>
+    public required bool StagedConstructionUsesKeyedServices { get; init; }
+
+    /// <summary>
+    ///     Whether a pipeline participant declares more than one public constructor —
+    ///     the ERGOSG003 info: the container's constructor selection stays in play, so
+    ///     generated plans skip the direct-construction fast path.
+    /// </summary>
+    public required bool HasMultiplePublicConstructors { get; init; }
+
+    /// <summary>
+    ///     Whether any constructor parameter carries <c>[FromServices]</c> — the
+    ///     ERGOSG004 info: the attribute has no effect on constructors.
+    /// </summary>
+    public required bool HasFromServicesConstructorParameter { get; init; }
+
+    /// <summary>
+    ///     Declaration location for the informational diagnostics above; captured only
+    ///     when one of them applies (source-declared types only).
+    /// </summary>
+    public required LocationInfo? InfoLocation { get; init; }
+
     public bool Equals(RegistrableTypeModel other)
     {
         if (TypeofExpression != other.TypeofExpression
@@ -168,6 +202,11 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
             || HasPipelineExclusion != other.HasPipelineExclusion
             || IsValueType != other.IsValueType
             || IsNestedType != other.IsNestedType
+            || StagedConstructionExpression != other.StagedConstructionExpression
+            || StagedConstructionUsesKeyedServices != other.StagedConstructionUsesKeyedServices
+            || HasMultiplePublicConstructors != other.HasMultiplePublicConstructors
+            || HasFromServicesConstructorParameter != other.HasFromServicesConstructorParameter
+            || !Nullable.Equals(InfoLocation, other.InfoLocation)
             || Descriptors.Length != other.Descriptors.Length
             || DiscoveryKeys.Length != other.DiscoveryKeys.Length
             || DispatchResults.Length != other.DispatchResults.Length

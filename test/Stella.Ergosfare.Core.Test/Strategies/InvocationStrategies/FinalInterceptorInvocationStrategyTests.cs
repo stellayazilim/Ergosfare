@@ -1,10 +1,9 @@
-using System.Reflection;
+
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 using Stella.Ergosfare.Test.Fixtures;
 using Stella.Ergosfare.Test.Fixtures.Stubs.Basic;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit.Abstractions;
 
 namespace Stella.Ergosfare.Core.Test.Strategies.InvocationStrategies;

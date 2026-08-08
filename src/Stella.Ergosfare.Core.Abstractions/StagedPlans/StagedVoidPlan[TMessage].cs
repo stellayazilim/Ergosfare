@@ -14,6 +14,17 @@ public abstract class StagedVoidPlan<TMessage> : StagedVoidPlan
     /// </summary>
     public abstract ValueTask Execute(TMessage message, IExecutionContext context, IServiceProvider serviceProvider);
 
+    /// <summary>
+    /// The direct-construction variant of <see cref="Execute"/>: participants are
+    /// constructed with <c>new</c> (dependencies still resolve from
+    /// <paramref name="serviceProvider"/>). Only invoked while
+    /// <see cref="StagedVoidPlan.SupportsDirectConstruction"/> is <c>true</c> AND the
+    /// hosting executor verified every participant's plain transient registration; the
+    /// default forwards to <see cref="Execute"/>.
+    /// </summary>
+    public virtual ValueTask ExecuteDirect(TMessage message, IExecutionContext context, IServiceProvider serviceProvider)
+        => Execute(message, context, serviceProvider);
+
     /// <inheritdoc />
     public sealed override TReturn Accept<TReturn, TState>(IStagedVoidPlanVisitor<TReturn, TState> visitor, TState state)
         => visitor.Visit<TMessage>(state);

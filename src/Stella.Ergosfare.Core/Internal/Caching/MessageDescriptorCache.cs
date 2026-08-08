@@ -14,22 +14,31 @@ internal sealed class MessageDescriptorCache(IDescriptorCacheStrategy strategy)
     private readonly IDescriptorCacheStrategy _strategy = strategy ?? throw new ArgumentNullException(nameof(strategy));
 
     /// <summary>
+    /// A cached value stamped with the registry version its build STARTED at. The stamp
+    /// closes the invalidate/add race: a build that began before a registration completes
+    /// may finish (and store) after the invalidation clear, but it carries the old
+    /// version, so readers at the new version miss it and rebuild instead of serving a
+    /// stale pipeline until the next (possibly never-coming) version bump.
+    /// </summary>
+    private readonly record struct VersionedEntry<T>(int Version, T Value);
+
+    /// <summary>
     /// Hot-path cache for resolved dependencies keyed by message type (no groups —
     /// the common case). Avoids building string keys on every dispatch.
     /// </summary>
-    private readonly ConcurrentDictionary<Type, IMessageDependencies> _dependenciesByType = new();
+    private readonly ConcurrentDictionary<Type, VersionedEntry<IMessageDependencies>> _dependenciesByType = new();
 
     /// <summary>
     /// Hot-path cache for resolved dependencies keyed by message type and group set.
     /// </summary>
-    private readonly ConcurrentDictionary<GroupedDependenciesKey, IMessageDependencies> _dependenciesByTypeAndGroups = new();
+    private readonly ConcurrentDictionary<GroupedDependenciesKey, VersionedEntry<IMessageDependencies>> _dependenciesByTypeAndGroups = new();
 
     /// <summary>
     /// Process-wide cache of provider-independent pipeline shapes (ordered, group-filtered
     /// descriptor arrays). Scoped dispatches materialize cheap lazy wrappers over these.
     /// </summary>
-    private readonly ConcurrentDictionary<Type, MessagePipelineShape> _shapesByType = new();
-    private readonly ConcurrentDictionary<GroupedDependenciesKey, MessagePipelineShape> _shapesByTypeAndGroups = new();
+    private readonly ConcurrentDictionary<Type, VersionedEntry<MessagePipelineShape>> _shapesByType = new();
+    private readonly ConcurrentDictionary<GroupedDependenciesKey, VersionedEntry<MessagePipelineShape>> _shapesByTypeAndGroups = new();
 
     private int _registryVersion = -1;
 
@@ -83,46 +92,67 @@ internal sealed class MessageDescriptorCache(IDescriptorCacheStrategy strategy)
 
     /// <summary>
     /// Returns the cached provider-independent pipeline shape for the message type and
-    /// group set, building it from the descriptor on first use.
+    /// group set, building it from the descriptor on first use. A cached shape counts
+    /// only when it was built at the given registry version — a stale entry (a build that
+    /// raced a registration) is rebuilt and overwritten in place.
     /// </summary>
-    public MessagePipelineShape GetOrAddShape(Type messageType, string[] groups, IMessageDescriptor descriptor)
+    public MessagePipelineShape GetOrAddShape(Type messageType, string[] groups, IMessageDescriptor descriptor, int registryVersion)
     {
         if (groups.Length == 0)
         {
-            if (_shapesByType.TryGetValue(messageType, out var shape))
+            if (_shapesByType.TryGetValue(messageType, out var entry) && entry.Version == registryVersion)
             {
-                return shape;
+                return entry.Value;
             }
 
-            return _shapesByType.GetOrAdd(messageType, MessagePipelineShape.Create(messageType, descriptor, groups));
+            var shape = MessagePipelineShape.Create(messageType, descriptor, groups);
+            _shapesByType[messageType] = new VersionedEntry<MessagePipelineShape>(registryVersion, shape);
+            return shape;
         }
 
         var key = new GroupedDependenciesKey(messageType, groups);
 
-        if (_shapesByTypeAndGroups.TryGetValue(key, out var groupedShape))
+        if (_shapesByTypeAndGroups.TryGetValue(key, out var groupedEntry) && groupedEntry.Version == registryVersion)
         {
-            return groupedShape;
+            return groupedEntry.Value;
         }
 
-        return _shapesByTypeAndGroups.GetOrAdd(key, MessagePipelineShape.Create(messageType, descriptor, groups));
+        var groupedShape = MessagePipelineShape.Create(messageType, descriptor, groups);
+        _shapesByTypeAndGroups[key] = new VersionedEntry<MessagePipelineShape>(registryVersion, groupedShape);
+        return groupedShape;
     }
 
-    public bool TryGetDependencies(Type messageType, string[] groups, out IMessageDependencies? dependencies)
+    /// <summary>
+    /// A cached entry counts only when it was built at the given registry version; see
+    /// <see cref="VersionedEntry{T}"/> for why a bare presence check is not enough.
+    /// </summary>
+    public bool TryGetDependencies(Type messageType, string[] groups, int registryVersion, out IMessageDependencies? dependencies)
     {
-        return groups.Length == 0
-            ? _dependenciesByType.TryGetValue(messageType, out dependencies)
-            : _dependenciesByTypeAndGroups.TryGetValue(new GroupedDependenciesKey(messageType, groups), out dependencies);
+        var found = groups.Length == 0
+            ? _dependenciesByType.TryGetValue(messageType, out var entry)
+            : _dependenciesByTypeAndGroups.TryGetValue(new GroupedDependenciesKey(messageType, groups), out entry);
+
+        if (found && entry.Version == registryVersion)
+        {
+            dependencies = entry.Value;
+            return true;
+        }
+
+        dependencies = null;
+        return false;
     }
 
-    public void AddDependencies(Type messageType, string[] groups, IMessageDependencies dependencies)
+    public void AddDependencies(Type messageType, string[] groups, IMessageDependencies dependencies, int registryVersion)
     {
+        var entry = new VersionedEntry<IMessageDependencies>(registryVersion, dependencies);
+
         if (groups.Length == 0)
         {
-            _dependenciesByType[messageType] = dependencies;
+            _dependenciesByType[messageType] = entry;
         }
         else
         {
-            _dependenciesByTypeAndGroups[new GroupedDependenciesKey(messageType, groups)] = dependencies;
+            _dependenciesByTypeAndGroups[new GroupedDependenciesKey(messageType, groups)] = entry;
         }
     }
 

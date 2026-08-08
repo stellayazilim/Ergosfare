@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text;
 using Microsoft.CodeAnalysis.CSharp;
 using Stella.Ergosfare.SourceGenerator.Models;
@@ -106,7 +106,7 @@ internal static class RegistrationEmitter
                 builders.DispatchRootsHasProviderPlanFactories,
                 builders.HasKeyedServiceExtensions);
 
-            EmitStagedPlanClasses(sb, ref wroteMember, stagedPlans);
+            EmitStagedPlanClasses(sb, ref wroteMember, stagedPlans, builders.StagedPlansSupportDirectConstruction);
         }
 
         if (builders.HasDescriptorCatalog && useDescriptors && HasDescriptors(types))
@@ -364,12 +364,14 @@ internal static class RegistrationEmitter
     private static void EmitStagedPlanClasses(
         StringBuilder sb,
         ref bool wroteMember,
-        IReadOnlyList<StagedPlanModel> stagedPlans)
+        IReadOnlyList<StagedPlanModel> stagedPlans,
+        bool supportsDirectConstruction)
     {
         for (var i = 0; i < stagedPlans.Count; i++)
         {
             var plan = stagedPlans[i];
             var isVoid = plan.ResultTypeExpression is null;
+            var emitDirect = supportsDirectConstruction && plan.SupportsDirectConstruction;
 
             StartMember(sb, ref wroteMember);
             sb.Append("        private sealed class StagedPlan").Append(i).Append(" : global::Stella.Ergosfare.Core.Abstractions.StagedPlans.");
@@ -426,14 +428,51 @@ internal static class RegistrationEmitter
 
             if (isVoid)
             {
-                EmitVoidExecuteBody(sb, plan);
+                EmitVoidExecuteBody(sb, plan, direct: false);
             }
             else
             {
-                EmitResultExecuteBody(sb, plan);
+                EmitResultExecuteBody(sb, plan, direct: false);
             }
 
             sb.AppendLine("            }");
+
+            // The direct-construction variant: the same pipeline with every participant
+            // constructed via `new` — used by the hosting executor only after it verified
+            // every participant's plain transient registration.
+            if (emitDirect)
+            {
+                sb.AppendLine();
+                sb.AppendLine("            public override bool SupportsDirectConstruction");
+                sb.AppendLine("            {");
+                sb.AppendLine("                get { return true; }");
+                sb.AppendLine("            }");
+                sb.AppendLine();
+                sb.Append("            public override async ").Append(ValueTaskFullName);
+
+                if (!isVoid)
+                {
+                    sb.Append('<').Append(plan.ResultTypeExpression).Append('>');
+                }
+
+                sb.AppendLine(" ExecuteDirect(");
+                sb.Append("                ").Append(plan.MessageTypeExpression).AppendLine(" message,");
+                sb.Append("                ").Append(ExecutionContextFullName).AppendLine(" context,");
+                sb.AppendLine("                global::System.IServiceProvider serviceProvider)");
+                sb.AppendLine("            {");
+
+                if (isVoid)
+                {
+                    EmitVoidExecuteBody(sb, plan, direct: true);
+                }
+                else
+                {
+                    EmitResultExecuteBody(sb, plan, direct: true);
+                }
+
+                sb.AppendLine("            }");
+            }
+
             sb.AppendLine("        }");
         }
     }
@@ -464,13 +503,29 @@ internal static class RegistrationEmitter
     private static void AppendResolve(StringBuilder sb, string typeExpression)
         => sb.Append(GetRequiredServiceFullName).Append('<').Append(typeExpression).Append(">(serviceProvider)");
 
+    /// <summary>
+    ///     A participant expression: the container resolution, or — in the
+    ///     direct-construction variant — the participant's <c>new</c> expression.
+    /// </summary>
+    private static void AppendParticipant(StringBuilder sb, string typeExpression, string? constructionExpression)
+    {
+        if (constructionExpression is null)
+        {
+            AppendResolve(sb, typeExpression);
+        }
+        else
+        {
+            sb.Append(constructionExpression);
+        }
+    }
+
     /// <summary>The strategy/invoker-parity cast of the chained object result back to the pipeline result type.</summary>
     private static string ResultCast(string resultExpression, bool resultIsValueType, string operand)
         => resultIsValueType
             ? "(" + resultExpression + ")" + operand + "!"
             : "(" + resultExpression + "?)" + operand;
 
-    private static void EmitPreCalls(StringBuilder sb, StagedPlanModel plan, string indent)
+    private static void EmitPreCalls(StringBuilder sb, StagedPlanModel plan, bool direct, string indent)
     {
         foreach (var call in plan.PreCalls)
         {
@@ -479,13 +534,13 @@ internal static class RegistrationEmitter
             if (call.Arm == StagedCallArm.Sync)
             {
                 sb.Append("((").Append(HandlersNamespace).Append("IPreInterceptor<").Append(plan.MessageTypeExpression).Append(">)");
-                AppendResolve(sb, call.TypeExpression);
+                AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                 sb.AppendLine(").Handle(message, context);");
             }
             else
             {
                 sb.Append("await ((").Append(HandlersNamespace).Append("IAsyncPreInterceptor<").Append(plan.MessageTypeExpression).Append(">)");
-                AppendResolve(sb, call.TypeExpression);
+                AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                 sb.AppendLine(").HandleAsync(message, context);");
             }
         }
@@ -499,6 +554,7 @@ internal static class RegistrationEmitter
         StringBuilder sb,
         StagedPlanModel plan,
         StagedCallModel call,
+        bool direct,
         string stageInterface,
         string chainVariable,
         string? exceptionArgument,
@@ -515,7 +571,7 @@ internal static class RegistrationEmitter
             case StagedCallArm.AsyncTyped:
                 sb.Append("await ((").Append(HandlersNamespace).Append("IAsync").Append(stageInterface)
                   .Append('<').Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
-                AppendResolve(sb, call.TypeExpression);
+                AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                 sb.Append(").HandleAsync(message, ")
                   .Append(ResultCast(pipelineResult, pipelineResultIsValueType, chainVariable))
                   .Append(extraArgument).AppendLine(", context);");
@@ -523,7 +579,7 @@ internal static class RegistrationEmitter
             case StagedCallArm.AsyncAgnostic:
                 sb.Append("await ((").Append(HandlersNamespace).Append("IAsync").Append(stageInterface)
                   .Append('<').Append(plan.MessageTypeExpression).Append(">)");
-                AppendResolve(sb, call.TypeExpression);
+                AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                 sb.Append(").HandleAsync(message, ").Append(chainVariable)
                   .Append(exceptionArgument is null ? "!" : string.Empty)
                   .Append(extraArgument).AppendLine(", context);");
@@ -531,7 +587,7 @@ internal static class RegistrationEmitter
             default:
                 sb.Append("((").Append(HandlersNamespace).Append('I').Append(stageInterface)
                   .Append('<').Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
-                AppendResolve(sb, call.TypeExpression);
+                AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                 sb.Append(").Handle(message, ")
                   .Append(ResultCast(pipelineResult, pipelineResultIsValueType, chainVariable))
                   .Append(extraArgument).AppendLine(", context);");
@@ -539,7 +595,7 @@ internal static class RegistrationEmitter
         }
     }
 
-    private static void EmitFinalCalls(StringBuilder sb, StagedPlanModel plan, string resultExpressionText, string indent)
+    private static void EmitFinalCalls(StringBuilder sb, StagedPlanModel plan, bool direct, string resultExpressionText, string indent)
     {
         var pipelineResult = plan.ResultTypeExpression ?? ValueTaskFullName;
         var pipelineResultIsValueType = plan.ResultTypeExpression is null || plan.ResultIsValueType;
@@ -551,7 +607,7 @@ internal static class RegistrationEmitter
                 case StagedCallArm.AsyncTyped:
                     sb.Append(indent).Append("await ((").Append(HandlersNamespace).Append("IAsyncFinalInterceptor<")
                       .Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
-                    AppendResolve(sb, call.TypeExpression);
+                    AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                     sb.Append(").HandleAsync(message, ")
                       .Append(ResultCast(pipelineResult, pipelineResultIsValueType, resultExpressionText))
                       .AppendLine(", exception, context);");
@@ -559,13 +615,13 @@ internal static class RegistrationEmitter
                 case StagedCallArm.AsyncAgnostic:
                     sb.Append(indent).Append("await ((").Append(HandlersNamespace).Append("IAsyncFinalInterceptor<")
                       .Append(plan.MessageTypeExpression).Append(">)");
-                    AppendResolve(sb, call.TypeExpression);
+                    AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                     sb.Append(").HandleAsync(message, ").Append(resultExpressionText).AppendLine(", exception, context);");
                     break;
                 default:
                     sb.Append(indent).Append("((").Append(HandlersNamespace).Append("IFinalInterceptor<")
                       .Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
-                    AppendResolve(sb, call.TypeExpression);
+                    AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                     sb.Append(").Handle(message, ")
                       .Append(ResultCast(pipelineResult, pipelineResultIsValueType, resultExpressionText))
                       .AppendLine(", exception, context);");
@@ -574,7 +630,7 @@ internal static class RegistrationEmitter
         }
     }
 
-    private static void EmitVoidExecuteBody(StringBuilder sb, StagedPlanModel plan)
+    private static void EmitVoidExecuteBody(StringBuilder sb, StagedPlanModel plan, bool direct)
     {
         var needsResult = !plan.PostCalls.IsEmpty || !plan.ExceptionCalls.IsEmpty || !plan.FinalCalls.IsEmpty;
         var needsGuards = needsResult;
@@ -583,9 +639,9 @@ internal static class RegistrationEmitter
         {
             // Pre-only pipeline: with zero exception and final stages the strategy's
             // try/catch/finally is a no-op shell — exceptions propagate unchanged.
-            EmitPreCalls(sb, plan, "                ");
+            EmitPreCalls(sb, plan, direct, "                ");
             sb.Append("                await ");
-            AppendResolve(sb, plan.HandlerTypeExpression);
+            AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
             sb.AppendLine(".HandleAsync(message, context);");
             return;
         }
@@ -594,9 +650,9 @@ internal static class RegistrationEmitter
         sb.AppendLine("                global::System.Exception? exception = null;");
         sb.AppendLine("                try");
         sb.AppendLine("                {");
-        EmitPreCalls(sb, plan, "                    ");
+        EmitPreCalls(sb, plan, direct, "                    ");
         sb.Append("                    await ");
-        AppendResolve(sb, plan.HandlerTypeExpression);
+        AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
         sb.AppendLine(".HandleAsync(message, context);");
         sb.AppendLine("                    result = CompletedVoidResult;");
 
@@ -604,7 +660,7 @@ internal static class RegistrationEmitter
         {
             foreach (var call in plan.PostCalls)
             {
-                EmitChainCall(sb, plan, call, "PostInterceptor", "result", null, "                    ");
+                EmitChainCall(sb, plan, call, direct, "PostInterceptor", "result", null, "                    ");
             }
 
             // The strategy's post epilogue: a null post result restores the completed
@@ -629,7 +685,7 @@ internal static class RegistrationEmitter
 
             foreach (var call in plan.ExceptionCalls)
             {
-                EmitChainCall(sb, plan, call, "ExceptionInterceptor", "result", "e", "                    ");
+                EmitChainCall(sb, plan, call, direct, "ExceptionInterceptor", "result", "e", "                    ");
             }
 
             sb.Append("                    var invokedExceptionResult = (").Append(ValueTaskFullName).AppendLine("?) result;");
@@ -639,20 +695,20 @@ internal static class RegistrationEmitter
         sb.AppendLine("                }");
         sb.AppendLine("                finally");
         sb.AppendLine("                {");
-        EmitFinalCalls(sb, plan, "result", "                    ");
+        EmitFinalCalls(sb, plan, direct, "result", "                    ");
         sb.AppendLine("                }");
     }
 
-    private static void EmitResultExecuteBody(StringBuilder sb, StagedPlanModel plan)
+    private static void EmitResultExecuteBody(StringBuilder sb, StagedPlanModel plan, bool direct)
     {
         var resultExpression = plan.ResultTypeExpression!;
         var needsGuards = !plan.PostCalls.IsEmpty || !plan.ExceptionCalls.IsEmpty || !plan.FinalCalls.IsEmpty;
 
         if (!needsGuards)
         {
-            EmitPreCalls(sb, plan, "                ");
+            EmitPreCalls(sb, plan, direct, "                ");
             sb.Append("                return await ");
-            AppendResolve(sb, plan.HandlerTypeExpression);
+            AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
             sb.AppendLine(".HandleAsync(message, context);");
             return;
         }
@@ -661,9 +717,9 @@ internal static class RegistrationEmitter
         sb.AppendLine("                global::System.Exception? exception = null;");
         sb.AppendLine("                try");
         sb.AppendLine("                {");
-        EmitPreCalls(sb, plan, "                    ");
+        EmitPreCalls(sb, plan, direct, "                    ");
         sb.Append("                    result = await ");
-        AppendResolve(sb, plan.HandlerTypeExpression);
+        AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
         sb.AppendLine(".HandleAsync(message, context);");
 
         if (!plan.PostCalls.IsEmpty)
@@ -672,7 +728,7 @@ internal static class RegistrationEmitter
 
             foreach (var call in plan.PostCalls)
             {
-                EmitChainCall(sb, plan, call, "PostInterceptor", "postChain", null, "                    ");
+                EmitChainCall(sb, plan, call, direct, "PostInterceptor", "postChain", null, "                    ");
             }
 
             if (plan.ResultIsValueType)
@@ -703,7 +759,7 @@ internal static class RegistrationEmitter
 
             foreach (var call in plan.ExceptionCalls)
             {
-                EmitChainCall(sb, plan, call, "ExceptionInterceptor", "exceptionChain", "e", "                    ");
+                EmitChainCall(sb, plan, call, direct, "ExceptionInterceptor", "exceptionChain", "e", "                    ");
             }
 
             if (plan.ResultIsValueType)
@@ -720,7 +776,7 @@ internal static class RegistrationEmitter
         sb.AppendLine("                }");
         sb.AppendLine("                finally");
         sb.AppendLine("                {");
-        EmitFinalCalls(sb, plan, "result", "                    ");
+        EmitFinalCalls(sb, plan, direct, "result", "                    ");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                return result;");

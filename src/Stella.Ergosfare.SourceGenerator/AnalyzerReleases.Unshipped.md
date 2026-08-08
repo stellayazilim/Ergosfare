@@ -7,3 +7,5 @@ Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
 ERGOSG001 | Usage | Warning | Registrable type is not accessible from generated registration code
 ERGOSG002 | Usage | Warning | Registrable type in a referenced assembly is not visible to generated registration code
+ERGOSG003 | Performance | Info | Multiple public constructors keep the handler on the container path
+ERGOSG004 | Usage | Info | [FromServices] has no effect on constructor parameters

@@ -10,6 +10,9 @@ public abstract class StagedResultPlan
     /// <summary>The pipeline composition the plan was baked against.</summary>
     public abstract StagedPlanComposition Composition { get; }
 
+    /// <inheritdoc cref="StagedVoidPlan.SupportsDirectConstruction"/>
+    public virtual bool SupportsDirectConstruction => false;
+
     /// <summary>Invokes the visitor with this plan's message and result types as the generic arguments.</summary>
     public abstract TReturn Accept<TReturn, TState>(IStagedResultPlanVisitor<TReturn, TState> visitor, TState state);
 }
