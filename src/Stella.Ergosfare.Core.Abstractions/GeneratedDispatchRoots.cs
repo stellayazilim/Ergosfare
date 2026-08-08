@@ -21,6 +21,8 @@ public static class GeneratedDispatchRoots
     private static readonly ConcurrentDictionary<(Type MessageType, Type ResultType), MessageResultRoot> Streams = new();
     private static readonly ConcurrentDictionary<Type, VoidPlanRoot> VoidPlans = new();
     private static readonly ConcurrentDictionary<(Type MessageType, Type ResultType), ResultPlanRoot> ResultPlans = new();
+    private static readonly ConcurrentDictionary<Type, StagedVoidPlan> StagedVoidPlans = new();
+    private static readonly ConcurrentDictionary<(Type MessageType, Type ResultType), StagedResultPlan> StagedResultPlans = new();
 
     /// <summary>Roots the void dispatch generics of a message type. Idempotent.</summary>
     public static void AddMessage<TMessage>() where TMessage : IMessage
@@ -133,6 +135,33 @@ public static class GeneratedDispatchRoots
     /// <summary>The result pipeline plan of the (message, result) pair, or <c>null</c> when none was generated.</summary>
     public static ResultPlanRoot? FindResultPlan(Type messageType, Type resultType)
         => ResultPlans.TryGetValue((messageType, resultType), out var root) ? root : null;
+
+    /// <summary>
+    /// Roots a staged pipeline plan for a void message whose pipeline carries interceptor
+    /// stages: bespoke straight-line code for the whole pipeline, replacing the runtime
+    /// strategy's generic machinery. Advisory exactly like the single-handler plans — the
+    /// hosting executor re-validates the plan's <see cref="StagedPlanComposition"/> against
+    /// the registry per version and falls back to the runtime strategy on any mismatch.
+    /// Idempotent.
+    /// </summary>
+    public static void AddStagedPlan<TMessage>(StagedVoidPlan<TMessage> plan)
+        where TMessage : notnull, IMessage
+        => StagedVoidPlans.TryAdd(typeof(TMessage), plan);
+
+    /// <summary>
+    /// Result-producing counterpart of <see cref="AddStagedPlan{TMessage}"/>. Idempotent.
+    /// </summary>
+    public static void AddStagedPlan<TMessage, TResult>(StagedResultPlan<TMessage, TResult> plan)
+        where TMessage : notnull, IMessage
+        => StagedResultPlans.TryAdd((typeof(TMessage), typeof(TResult)), plan);
+
+    /// <summary>The staged void plan of the message type, or <c>null</c> when none was generated.</summary>
+    public static StagedVoidPlan? FindStagedVoidPlan(Type messageType)
+        => StagedVoidPlans.TryGetValue(messageType, out var plan) ? plan : null;
+
+    /// <summary>The staged result plan of the (message, result) pair, or <c>null</c> when none was generated.</summary>
+    public static StagedResultPlan? FindStagedResultPlan(Type messageType, Type resultType)
+        => StagedResultPlans.TryGetValue((messageType, resultType), out var plan) ? plan : null;
 }
 
 /// <summary>
