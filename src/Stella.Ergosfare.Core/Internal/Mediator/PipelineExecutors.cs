@@ -373,6 +373,170 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
 #pragma warning restore CS8714
 
 /// <summary>
+/// The staged plans' advisory gate: whether the live pipeline is exactly the composition a
+/// plan was baked against — one main handler of the planned type and the four interceptor
+/// stages matching the planned type lists in order. Anything else (a runtime-registered
+/// interceptor, a different or additional handler, reordered stages) fails the match and
+/// keeps the dispatch on the runtime strategy.
+/// </summary>
+internal static class StagedPlanGate
+{
+    internal static bool Matches(MessageDependencies dependencies, StagedPlanComposition composition)
+        => dependencies.Handlers.Count == 1
+           && dependencies.Handlers[0].HandlerType == composition.HandlerType
+           && StageMatches(dependencies.PreInterceptors, composition.PreInterceptorTypeArray)
+           && StageMatches(dependencies.PostInterceptors, composition.PostInterceptorTypeArray)
+           && StageMatches(dependencies.ExceptionInterceptors, composition.ExceptionInterceptorTypeArray)
+           && StageMatches(dependencies.FinalInterceptors, composition.FinalInterceptorTypeArray);
+
+    private static bool StageMatches<THandler, TDescriptor>(
+        IReadOnlyList<IHandlerReference<THandler, TDescriptor>> stage,
+        Type[] baked)
+        where TDescriptor : IHandlerDescriptor
+    {
+        if (stage.Count != baked.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < baked.Length; i++)
+        {
+            if (stage[i].HandlerType != baked[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+}
+
+/// <summary>
+/// Void pipeline hosting a staged plan: bespoke straight-line code for the message's whole
+/// interceptor-bearing pipeline. The plan is advisory — the registry-version-guarded
+/// dependency cache re-validates the plan's composition against the live pipeline
+/// (<see cref="StagedPlanGate"/>) plus the memoization and adapter gates, and any mismatch
+/// falls back to the runtime strategy, preserving semantics exactly. The plan resolves its
+/// participants from the dispatching scope's provider — outside memoized mode that is
+/// literally what the runtime handler references do, so container semantics are preserved.
+/// Like every version-guarded executor, a dispatch racing a registration may run the
+/// previous shape once; it never runs a shape the registry has not published.
+/// </summary>
+internal sealed class StagedVoidPipelineExecutor<TMessage>(
+    IMessageDescriptor descriptor,
+    IMessageDependenciesFactory dependenciesFactory,
+    IResultAdapterService? resultAdapterService,
+    string[] groups,
+    StagedVoidPlan<TMessage> plan) : IPipelineExecutor
+    where TMessage : notnull, IMessage
+{
+    private readonly SingleAsyncHandlerMediationStrategy<TMessage> _strategy = new(resultAdapterService);
+
+    private readonly ResultAdapterService? _concreteAdapters = resultAdapterService as ResultAdapterService;
+    private readonly bool _foreignAdapters = resultAdapterService is not null and not ResultAdapterService;
+
+    private IMessageDependencies? _cachedDependencies;
+    private int _cachedVersion = int.MinValue;
+    private bool _useStagedPlan;
+
+    public ValueTask Execute(object message, IExecutionContext context, IServiceProvider serviceProvider)
+    {
+        var dependencies = GetDependencies();
+
+        if (_useStagedPlan)
+        {
+            return plan.Execute((TMessage)message, context, serviceProvider);
+        }
+
+        return _strategy.Mediate((TMessage)message, dependencies, context, serviceProvider);
+    }
+
+    private IMessageDependencies GetDependencies()
+    {
+        if (dependenciesFactory is MessageDependenciesFactory typedFactory)
+        {
+            var cached = _cachedDependencies;
+
+            if (cached is not null && _cachedVersion == typedFactory.CurrentRegistryVersion)
+            {
+                return cached;
+            }
+
+            var dependencies = typedFactory.Create(typeof(TMessage), descriptor, groups);
+            _cachedDependencies = dependencies;
+            _useStagedPlan = !_foreignAdapters
+                && (_concreteAdapters is null || _concreteAdapters.IsEmpty)
+                && dependencies is MessageDependencies { MemoizedInstances: false } fastDependencies
+                && StagedPlanGate.Matches(fastDependencies, plan.Composition);
+            _cachedVersion = typedFactory.CurrentRegistryVersion;
+            return dependencies;
+        }
+
+        _useStagedPlan = false;
+        return dependenciesFactory.Create(typeof(TMessage), descriptor, groups);
+    }
+}
+
+/// <summary>
+/// Result-producing counterpart of <see cref="StagedVoidPipelineExecutor{TMessage}"/>;
+/// the same advisory contract and gates apply.
+/// </summary>
+internal sealed class StagedResultPipelineExecutor<TMessage, TResult>(
+    IMessageDescriptor descriptor,
+    IMessageDependenciesFactory dependenciesFactory,
+    IResultAdapterService? resultAdapterService,
+    string[] groups,
+    StagedResultPlan<TMessage, TResult> plan) : IPipelineExecutor<TResult>
+    where TMessage : notnull, IMessage
+{
+    private readonly SingleAsyncHandlerMediationStrategy<TMessage, TResult> _strategy = new(resultAdapterService);
+
+    private readonly ResultAdapterService? _concreteAdapters = resultAdapterService as ResultAdapterService;
+    private readonly bool _foreignAdapters = resultAdapterService is not null and not ResultAdapterService;
+
+    private IMessageDependencies? _cachedDependencies;
+    private int _cachedVersion = int.MinValue;
+    private bool _useStagedPlan;
+
+    public ValueTask<TResult> Execute(object message, IExecutionContext context, IServiceProvider serviceProvider)
+    {
+        var dependencies = GetDependencies();
+
+        if (_useStagedPlan)
+        {
+            return plan.Execute((TMessage)message, context, serviceProvider);
+        }
+
+        return _strategy.Mediate((TMessage)message, dependencies, context, serviceProvider);
+    }
+
+    private IMessageDependencies GetDependencies()
+    {
+        if (dependenciesFactory is MessageDependenciesFactory typedFactory)
+        {
+            var cached = _cachedDependencies;
+
+            if (cached is not null && _cachedVersion == typedFactory.CurrentRegistryVersion)
+            {
+                return cached;
+            }
+
+            var dependencies = typedFactory.Create(typeof(TMessage), descriptor, groups);
+            _cachedDependencies = dependencies;
+            _useStagedPlan = !_foreignAdapters
+                && (_concreteAdapters is null || _concreteAdapters.IsEmpty)
+                && dependencies is MessageDependencies { MemoizedInstances: false } fastDependencies
+                && StagedPlanGate.Matches(fastDependencies, plan.Composition);
+            _cachedVersion = typedFactory.CurrentRegistryVersion;
+            return dependencies;
+        }
+
+        _useStagedPlan = false;
+        return dependenciesFactory.Create(typeof(TMessage), descriptor, groups);
+    }
+}
+
+/// <summary>
 /// Process-wide cache of pipeline executors, one per (message runtime type, result type,
 /// group set). Executor construction closes the generic executor over the message's runtime
 /// type — one <see cref="Type.MakeGenericType"/> per message type, consistent with the
@@ -695,6 +859,18 @@ internal sealed class PipelineExecutorCache(
     {
         var descriptor = FindDescriptor(messageType);
 
+        // Staged plan: bespoke code for the whole interceptor-bearing pipeline. Checked
+        // before the single-handler plan — generation emits at most one plan kind per
+        // message, and the staged one is the more specific claim. Group-less pipelines
+        // only, like every plan below.
+        if (groups.Length == 0 && GeneratedDispatchRoots.FindStagedVoidPlan(messageType) is { } stagedPlan)
+        {
+            return stagedPlan.Accept(
+                StagedVoidExecutorVisitor.Instance,
+                new ExecutorState(descriptor, dependenciesFactory, resultAdapterService, groups,
+                    StagedPlan: stagedPlan));
+        }
+
         // Generated void plan: closed over (message, handler) at compile time, so the
         // fast path calls the handler devirtualized. Group-less pipelines only — a
         // grouped pipeline may exclude the planned handler, and the plain executor
@@ -731,6 +907,15 @@ internal sealed class PipelineExecutorCache(
     {
         var descriptor = FindDescriptor(messageType);
 
+        // Staged plan first, mirroring the void side.
+        if (groups.Length == 0 && GeneratedDispatchRoots.FindStagedResultPlan(messageType, resultType) is { } stagedPlan)
+        {
+            return stagedPlan.Accept(
+                StagedResultExecutorVisitor.Instance,
+                new ExecutorState(descriptor, dependenciesFactory, resultAdapterService, groups,
+                    StagedPlan: stagedPlan));
+        }
+
         // Generated result plan: closed over (message, result, handler) at compile time,
         // so the fast path calls the handler devirtualized. Group-less pipelines only,
         // mirroring the void plan above.
@@ -759,13 +944,16 @@ internal sealed class PipelineExecutorCache(
     /// <paramref name="DirectHandlerFactory"/> is a plan's erased <c>Func&lt;THandler&gt;</c>
     /// or <c>Func&lt;IServiceProvider, THandler&gt;</c> (cast back inside the closed
     /// generic), or <c>null</c> for plain roots and plans without a construction path.
+    /// <paramref name="StagedPlan"/> is a staged plan carried erased (cast back to its
+    /// typed base inside the closed generic), or <c>null</c> for every other root.
     /// </summary>
     private readonly record struct ExecutorState(
         IMessageDescriptor Descriptor,
         IMessageDependenciesFactory DependenciesFactory,
         IResultAdapterService? ResultAdapterService,
         string[] Groups,
-        object? DirectHandlerFactory = null);
+        object? DirectHandlerFactory = null,
+        object? StagedPlan = null);
 
     /// <summary>
     /// Re-enters a generic context with a root's message type and constructs the closed
@@ -824,6 +1012,33 @@ internal sealed class PipelineExecutorCache(
                 state.Descriptor, state.DependenciesFactory, state.ResultAdapterService, state.Groups,
                 state.DirectHandlerFactory as Func<THandler>,
                 state.DirectHandlerFactory as Func<IServiceProvider, THandler>);
+    }
+
+    /// <summary>
+    /// Re-enters a generic context with a staged plan's message type and constructs the
+    /// plan-hosting executor there — no reflection.
+    /// </summary>
+    private sealed class StagedVoidExecutorVisitor : IStagedVoidPlanVisitor<IPipelineExecutor, ExecutorState>
+    {
+        public static readonly StagedVoidExecutorVisitor Instance = new();
+
+        public IPipelineExecutor Visit<TMessage>(ExecutorState state)
+            where TMessage : notnull, IMessage
+            => new StagedVoidPipelineExecutor<TMessage>(
+                state.Descriptor, state.DependenciesFactory, state.ResultAdapterService, state.Groups,
+                (StagedVoidPlan<TMessage>)state.StagedPlan!);
+    }
+
+    /// <summary>Result-executor counterpart of <see cref="StagedVoidExecutorVisitor"/>.</summary>
+    private sealed class StagedResultExecutorVisitor : IStagedResultPlanVisitor<object, ExecutorState>
+    {
+        public static readonly StagedResultExecutorVisitor Instance = new();
+
+        public object Visit<TMessage, TResult>(ExecutorState state)
+            where TMessage : notnull, IMessage
+            => new StagedResultPipelineExecutor<TMessage, TResult>(
+                state.Descriptor, state.DependenciesFactory, state.ResultAdapterService, state.Groups,
+                (StagedResultPlan<TMessage, TResult>)state.StagedPlan!);
     }
 
     private IMessageDescriptor FindDescriptor(Type messageType)
