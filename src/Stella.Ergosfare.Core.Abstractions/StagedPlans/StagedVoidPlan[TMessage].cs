@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 
-namespace Stella.Ergosfare.Core.Abstractions;
+namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 
 /// <summary>The typed closure of <see cref="StagedVoidPlan"/>; subclassed by generated (or hand-written) plans.</summary>
 public abstract class StagedVoidPlan<TMessage> : StagedVoidPlan

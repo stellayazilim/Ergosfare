@@ -1,4 +1,4 @@
-namespace Stella.Ergosfare.Core.Abstractions;
+namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 
 /// <summary>Generic re-entry point for consumers of <see cref="StagedVoidPlan"/>.</summary>
 public interface IStagedVoidPlanVisitor<out TReturn, in TState>

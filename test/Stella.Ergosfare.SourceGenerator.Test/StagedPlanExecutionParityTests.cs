@@ -1,7 +1,8 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Queries.Abstractions;

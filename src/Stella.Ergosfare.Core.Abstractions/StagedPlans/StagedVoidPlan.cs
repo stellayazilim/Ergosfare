@@ -1,5 +1,4 @@
-namespace Stella.Ergosfare.Core.Abstractions;
-
+namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 /// <summary>
 /// A compile-time staged pipeline plan for a void message: bespoke code that runs the
 /// message's entire interceptor-bearing pipeline — pre stages, handler, post stages, with

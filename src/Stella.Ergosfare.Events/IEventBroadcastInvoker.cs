@@ -21,7 +21,7 @@ internal interface IEventBroadcastInvoker
 
     /// <summary>
     /// Engine-backed publish: the concrete dispatch machinery is known by construction, so
-    /// the publish runs directly against the engine's plan and the caller's scope
+    /// the publishing runs directly against the engine's plan and the caller's scope
     /// provider — grouped filters included, resolved from the grouped plan slot. External
     /// contexts resolve the scope's <see cref="IMessageMediator"/> on demand and run the
     /// original overload — semantics unchanged.

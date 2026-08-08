@@ -1,5 +1,4 @@
-namespace Stella.Ergosfare.Core.Abstractions;
-
+namespace Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 /// <summary>
 /// A compile-time pipeline plan closed over a result-producing message, its result type
 /// and its sole async handler; the result-producing counterpart of

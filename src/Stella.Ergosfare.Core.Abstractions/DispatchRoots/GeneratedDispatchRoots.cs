@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Concurrent;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
+using Stella.Ergosfare.Core.Abstractions.StagedPlans;
 
-namespace Stella.Ergosfare.Core.Abstractions;
+namespace Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 
 /// <summary>
 /// Process-wide store of generically instantiated dispatch roots, populated by

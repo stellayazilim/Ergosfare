@@ -1,6 +1,7 @@
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
+using Stella.Ergosfare.Core.Abstractions.StagedPlans;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Internal.Factories;
 

@@ -1,4 +1,4 @@
-namespace Stella.Ergosfare.Core.Abstractions;
+namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 
 /// <summary>
 /// The result-producing counterpart of <see cref="StagedVoidPlan"/>: a compile-time

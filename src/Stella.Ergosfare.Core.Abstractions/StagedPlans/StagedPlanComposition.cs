@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Stella.Ergosfare.Core.Abstractions;
+namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 
 /// <summary>
 /// The pipeline composition a staged plan was baked against: the sole main handler plus

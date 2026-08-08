@@ -1,8 +1,7 @@
 using System;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 
-namespace Stella.Ergosfare.Core.Abstractions;
-
+namespace Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 /// <summary>The concrete closure of <see cref="ResultPlanRoot"/>; instantiated by generated code.</summary>
 public sealed class ResultPlanRoot<TMessage, TResult, THandler> : ResultPlanRoot
     where TMessage : notnull, IMessage

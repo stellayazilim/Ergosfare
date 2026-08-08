@@ -1,5 +1,4 @@
-namespace Stella.Ergosfare.Core.Abstractions;
-
+namespace Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 /// <summary>
 /// A dispatch root closed over a concrete (message, result) pair; see
 /// <see cref="MessageRoot"/>.

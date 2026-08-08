@@ -1,5 +1,4 @@
-namespace Stella.Ergosfare.Core.Abstractions;
-
+namespace Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 /// <summary>The concrete closure of <see cref="MessageResultRoot"/>; instantiated by generated code.</summary>
 public sealed class MessageResultRoot<TMessage, TResult> : MessageResultRoot where TMessage : IMessage
 {

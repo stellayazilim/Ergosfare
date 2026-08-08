@@ -1,5 +1,6 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Abstractions.Registry;
 
 namespace Stella.Ergosfare.SourceGenerator.Test;

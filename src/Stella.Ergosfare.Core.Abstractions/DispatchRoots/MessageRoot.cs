@@ -1,5 +1,4 @@
-namespace Stella.Ergosfare.Core.Abstractions;
-
+namespace Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 /// <summary>
 /// A dispatch root closed over a concrete message type. A consumer implements
 /// <see cref="IMessageRootVisitor{TReturn, TState}"/> to re-enter a generic context with

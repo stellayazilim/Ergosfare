@@ -1,4 +1,5 @@
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 
 namespace Stella.Ergosfare.Core.Test;
 

@@ -1,8 +1,6 @@
-using System;
-using System.Threading.Tasks;
 
-namespace Stella.Ergosfare.Core.Abstractions;
 
+namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 /// <summary>The typed closure of <see cref="StagedResultPlan"/>; subclassed by generated (or hand-written) plans.</summary>
 public abstract class StagedResultPlan<TMessage, TResult> : StagedResultPlan
     where TMessage : notnull, IMessage
