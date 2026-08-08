@@ -1,19 +1,6 @@
 namespace Stella.Ergosfare.SourceGenerator.Models;
 
 /// <summary>
-/// The handler-descriptor kinds the registry distinguishes; mirrors the runtime
-/// descriptor-builder set.
-/// </summary>
-internal enum DescriptorKind : byte
-{
-    MainHandler,
-    PreInterceptor,
-    PostInterceptor,
-    ExceptionInterceptor,
-    FinalInterceptor,
-}
-
-/// <summary>
 /// Value-equatable projection of one pre-computed handler descriptor: everything the
 /// runtime descriptor builders would have derived reflectively, resolved at compile time.
 /// </summary>
