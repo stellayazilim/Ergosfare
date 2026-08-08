@@ -81,8 +81,39 @@ public class StagedPlanExecutionParityTests
                 }
             }
 
-            // --- exception swallow (reference-typed result: the flavored exception
-            // interceptor's object-typed contract matches through result variance) ---
+            // --- void exception swallow: the flavored exception interceptor's
+            // result-agnostic contract works on void pipelines too -------------------
+
+            public sealed class GenVoidSwallowCommand : ICommand { }
+
+            public sealed class GenVoidSwallowCommandHandler : ICommandHandler<GenVoidSwallowCommand>
+            {
+                public ValueTask HandleAsync(GenVoidSwallowCommand command, IExecutionContext context)
+                {
+                    Sink.Entries.Add("handler");
+                    throw new InvalidOperationException("void-boom");
+                }
+            }
+
+            public sealed class GenVoidSwallowCommandExceptionInterceptor : ICommandExceptionInterceptor<GenVoidSwallowCommand>
+            {
+                public ValueTask<object> HandleAsync(GenVoidSwallowCommand command, object? messageResult, Exception exception, IExecutionContext context)
+                {
+                    Sink.Entries.Add("exception:" + exception.Message);
+                    return ValueTask.FromResult<object>(messageResult!);
+                }
+            }
+
+            public sealed class GenVoidSwallowCommandFinal : ICommandFinalInterceptor<GenVoidSwallowCommand>
+            {
+                public ValueTask HandleAsync(GenVoidSwallowCommand command, object? messageResult, Exception? exception, IExecutionContext context)
+                {
+                    Sink.Entries.Add("final:" + (exception == null ? "clean" : exception.Message));
+                    return default;
+                }
+            }
+
+            // --- exception swallow on a reference-typed result pipeline --------------
 
             public sealed class GenSwallowCommand : ICommand<string> { }
 
@@ -241,6 +272,24 @@ public class StagedPlanExecutionParityTests
         // The handler and post stage see the pre-interceptor's rewritten instance,
         // exactly like the strategy path; the final stage observes a clean outcome last.
         Assert.Equal(["pre:original", "handler:rewritten", "post:rewritten", "final:clean"], Entries);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task VoidHandlerException_RunsTheExceptionStageAndSwallows()
+    {
+        var (assembly, provider) = Host.Value;
+
+        // The re-based (result-agnostic) flavored exception contract makes this pipeline
+        // both runnable at all on the strategy path and modelable for a staged plan.
+        Assert.NotNull(GeneratedDispatchRoots.FindStagedVoidPlan(assembly.GetType("TestApp.GenVoidSwallowCommand")!));
+
+        Entries.Clear();
+
+        await provider.GetRequiredService<ICommandMediator>().SendAsync(CreateCommand("TestApp.GenVoidSwallowCommand"));
+
+        Assert.Equal(["handler", "exception:void-boom", "final:void-boom"], Entries);
     }
 
     [Fact]
