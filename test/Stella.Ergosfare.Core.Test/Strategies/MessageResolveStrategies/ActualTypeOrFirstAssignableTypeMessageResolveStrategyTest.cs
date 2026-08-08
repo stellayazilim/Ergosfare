@@ -10,7 +10,7 @@ public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
 {
     /// <summary>
     /// Ensures that the <see cref="MessageRegistry"/> can correctly resolve
-    /// a <see cref="MessageDescriptor"/> for a registered message type,
+    /// a <see cref="Stella.Ergosfare.Core.Internal.Registry.Descriptors.MessageDescriptor"/> for a registered message type,
     /// including its associated handlers.
     /// </summary>
     [Fact]
@@ -37,10 +37,10 @@ public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
         Assert.Single(descriptor.Handlers);
 
         // Descriptor should match the requested message type
-        Assert.Equal(typeof(StubMessage), descriptor?.MessageType);
+        Assert.Equal(typeof(StubMessage), descriptor.MessageType);
 
         // Verify that the expected handler is registered for StubMessage
-        Assert.Contains(descriptor!.Handlers, h => h.HandlerType == typeof(StubVoidHandler));
+        Assert.Contains(descriptor.Handlers, h => h.HandlerType == typeof(StubVoidHandler));
     }
     
     
@@ -72,7 +72,7 @@ public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
 
         // assert
         Assert.NotNull(descriptor);
-        Assert.Equal(typeof(StubMessage), descriptor?.MessageType);
+        Assert.Equal(typeof(StubMessage), descriptor.MessageType);
     }
     
     
@@ -86,8 +86,6 @@ public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
         var registry = new MessageRegistry(
             new HandlerDescriptorBuilderFactory());
         
-        // dummy generic string arg
-        var mockGenericHandler = new VoidStubGenericHandler<string>();
         
         registry.Register(typeof(VoidStubGenericHandler<string>)); // handles BaseMessage
         
@@ -98,7 +96,7 @@ public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
         
         //assert
         Assert.NotNull(descriptor);
-        Assert.Equal(typeof(StubGenericMessage<>), descriptor?.MessageType);
+        Assert.Equal(typeof(StubGenericMessage<>), descriptor.MessageType);
     }
 
     /// <summary>
@@ -117,7 +115,7 @@ public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
 
         // Assert
         Assert.NotNull(descriptor);
-        Assert.Equal(typeof(StubMessage), descriptor?.MessageType);
+        Assert.Equal(typeof(StubMessage), descriptor.MessageType);
     }
 
     /// <summary>
@@ -137,7 +135,7 @@ public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
 
         // Assert
         Assert.NotNull(descriptor);
-        Assert.Equal(typeof(StubMessage), descriptor?.MessageType);
+        Assert.Equal(typeof(StubMessage), descriptor.MessageType);
     }
 
     /// <summary>
@@ -156,6 +154,6 @@ public class ActualTypeOrFirstAssignableTypeMessageResolveStrategyTest
 
         // Assert
         Assert.NotNull(descriptor);
-        Assert.Equal(typeof(StubGenericMessage<>), descriptor?.MessageType);
+        Assert.Equal(typeof(StubGenericMessage<>), descriptor.MessageType);
     }
 }

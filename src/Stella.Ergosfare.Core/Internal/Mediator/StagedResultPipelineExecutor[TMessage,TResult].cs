@@ -17,7 +17,7 @@ internal sealed class StagedResultPipelineExecutor<TMessage, TResult>(
     IResultAdapterService? resultAdapterService,
     string[] groups,
     StagedResultPlan<TMessage, TResult> plan) : IPipelineExecutor<TResult>
-    where TMessage : notnull, IMessage
+    where TMessage : IMessage
 {
     private readonly SingleAsyncHandlerMediationStrategy<TMessage, TResult> _strategy = new(resultAdapterService);
 

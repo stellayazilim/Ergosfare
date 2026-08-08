@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+﻿
 using System.Text;
 using Microsoft.CodeAnalysis.CSharp;
 using Stella.Ergosfare.SourceGenerator.Models;
@@ -124,7 +124,7 @@ internal static class RegistrationEmitter
 
     private static List<RegistrableTypeModel> Filter(
         IReadOnlyList<RegistrableTypeModel> types,
-        System.Func<RegistrableTypeModel, bool> predicate)
+        Func<RegistrableTypeModel, bool> predicate)
     {
         var filtered = new List<RegistrableTypeModel>(types.Count);
 
@@ -1016,7 +1016,7 @@ internal static class RegistrationEmitter
 
     private static List<Cluster> BuildClusters(IReadOnlyList<RegistrableTypeModel> types)
     {
-        var bySignature = new Dictionary<string, Cluster>(System.StringComparer.Ordinal);
+        var bySignature = new Dictionary<string, Cluster>(StringComparer.Ordinal);
         var clusters = new List<Cluster>();
 
         foreach (var type in types)

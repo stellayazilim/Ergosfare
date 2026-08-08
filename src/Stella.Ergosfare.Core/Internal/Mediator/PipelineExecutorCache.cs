@@ -214,8 +214,11 @@ internal sealed class PipelineExecutorCache(
     /// at most one graph per message type, which in a single-container process is the
     /// live one anyway — a WeakReference would tax every hot-path read instead.
     /// </summary>
+    // The type parameter is the cache key: one static slot per closed message type.
+    // ReSharper disable once UnusedTypeParameter
     private static class VoidExecutorHolder<TMessage> where TMessage : IMessage
     {
+        // ReSharper disable once StaticMemberInGenericType
         public static VoidExecutorSlot? Slot;
     }
 
@@ -232,6 +235,8 @@ internal sealed class PipelineExecutorCache(
                 static (t, cache) => cache.CreateVoidExecutor(t, EmptyGroups), this);
         }
 
+        // Deliberate: groups is matched allocation-free first and only materialized on a slot miss.
+        // ReSharper disable once PossibleMultipleEnumeration
         if (_groupedVoidSlotsByType.TryGetValue(messageType, out var slot)
             && SlotMatches(groups, slot.Groups, slot.Canonical))
         {
@@ -241,6 +246,7 @@ internal sealed class PipelineExecutorCache(
         // A canonical set contributes its immutable name array and precomputed key
         // directly — the refresh allocates nothing for it.
         var canonical = groups as GroupSet;
+        // ReSharper disable once PossibleMultipleEnumeration
         var materializedGroups = canonical?.Names ?? MaterializeGroups(groups);
         var key = (messageType, canonical?.JoinedKey ?? GroupsKey(materializedGroups));
 
@@ -272,6 +278,8 @@ internal sealed class PipelineExecutorCache(
             return GetExecutorSlow<TResult>(messageType);
         }
 
+        // Deliberate: groups is matched allocation-free first and only materialized on a slot miss.
+        // ReSharper disable once PossibleMultipleEnumeration
         if (_groupedResultSlotsByType.TryGetValue(messageType, out var groupedSlot)
             && ReferenceEquals(groupedSlot.ResultType, typeof(TResult))
             && SlotMatches(groups, groupedSlot.Groups, groupedSlot.Canonical))
@@ -282,6 +290,7 @@ internal sealed class PipelineExecutorCache(
         }
 
         var canonical = groups as GroupSet;
+        // ReSharper disable once PossibleMultipleEnumeration
         var materializedGroups = canonical?.Names ?? MaterializeGroups(groups);
         var key = (messageType, typeof(TResult), canonical?.JoinedKey ?? GroupsKey(materializedGroups));
 
@@ -464,7 +473,7 @@ internal sealed class PipelineExecutorCache(
         public static readonly GeneratedVoidExecutorVisitor Instance = new();
 
         public IPipelineExecutor Visit<TMessage, THandler>(ExecutorState state)
-            where TMessage : notnull, IMessage
+            where TMessage : IMessage
             where THandler : class, IAsyncHandler<TMessage>
             => new GeneratedVoidPipelineExecutor<TMessage, THandler>(
                 state.Descriptor, state.DependenciesFactory, state.ResultAdapterService, state.Groups,
@@ -482,7 +491,7 @@ internal sealed class PipelineExecutorCache(
         public static readonly GeneratedResultExecutorVisitor Instance = new();
 
         public object Visit<TMessage, TResult, THandler>(ExecutorState state)
-            where TMessage : notnull, IMessage
+            where TMessage : IMessage
             where THandler : class, IAsyncHandler<TMessage, TResult>
             => new GeneratedResultPipelineExecutor<TMessage, TResult, THandler>(
                 state.Descriptor, state.DependenciesFactory, state.ResultAdapterService, state.Groups,
@@ -499,7 +508,7 @@ internal sealed class PipelineExecutorCache(
         public static readonly StagedVoidExecutorVisitor Instance = new();
 
         public IPipelineExecutor Visit<TMessage>(ExecutorState state)
-            where TMessage : notnull, IMessage
+            where TMessage : IMessage
             => new StagedVoidPipelineExecutor<TMessage>(
                 state.Descriptor, state.DependenciesFactory, state.ResultAdapterService, state.Groups,
                 (StagedVoidPlan<TMessage>)state.StagedPlan!);
@@ -511,7 +520,7 @@ internal sealed class PipelineExecutorCache(
         public static readonly StagedResultExecutorVisitor Instance = new();
 
         public object Visit<TMessage, TResult>(ExecutorState state)
-            where TMessage : notnull, IMessage
+            where TMessage : IMessage
             => new StagedResultPipelineExecutor<TMessage, TResult>(
                 state.Descriptor, state.DependenciesFactory, state.ResultAdapterService, state.Groups,
                 (StagedResultPlan<TMessage, TResult>)state.StagedPlan!);

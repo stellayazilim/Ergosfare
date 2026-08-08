@@ -11,6 +11,8 @@ namespace Stella.Ergosfare.Queries;
 internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<TResult>
     where TQuery : notnull
 {
+    // One copy per closed query type is deliberate — the invoker itself is per-query-type.
+    // ReSharper disable once StaticMemberInGenericType
     private static readonly string[] EmptyGroups = [];
 
     /// <summary>
@@ -18,6 +20,7 @@ internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<
     /// carries none); a single shared empty instance preserves that behavior without the
     /// per-call allocation. Never exposed, so it cannot be mutated.
     /// </summary>
+    // ReSharper disable once StaticMemberInGenericType
     private static readonly ResultAdapterService SharedEmptyAdapters = new();
 
     public IAsyncEnumerable<TResult> Stream(object query, QueryMediationSettings? settings, CancellationToken cancellationToken,
@@ -130,6 +133,8 @@ internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<
             var registryVersion = typedFactory.CurrentRegistryVersion;
             var slot = _cachedGroupedPlan;
 
+            // Deliberate: groups is matched allocation-free first and only materialized on a slot miss.
+            // ReSharper disable once PossibleMultipleEnumeration
             if (slot is not null
                 && ReferenceEquals(slot.Factory, typedFactory)
                 && slot.Version == registryVersion
@@ -139,6 +144,7 @@ internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<
             }
 
             var canonical = groups as GroupSet;
+            // ReSharper disable once PossibleMultipleEnumeration
             string[] materialized = [.. groups];
             var dependencies = BuildPlan(typedFactory, resolveStrategy, materialized);
             _cachedGroupedPlan = new GroupedPlanSlot(

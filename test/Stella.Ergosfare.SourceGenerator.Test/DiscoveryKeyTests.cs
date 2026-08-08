@@ -47,6 +47,7 @@ public class DiscoveryKeyTests
     /// </summary>
     private sealed class DiscoveryHarness
     {
+        // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
         private readonly Assembly _assembly;
         private readonly Type _registrations;
         private readonly Type _recordingRegistry;

@@ -6,6 +6,6 @@ public interface IResultPlanRootVisitor<out TReturn, in TState>
 {
     /// <summary>Called with the plan's message, result and handler types as the generic arguments.</summary>
     TReturn Visit<TMessage, TResult, THandler>(TState state)
-        where TMessage : notnull, IMessage
+        where TMessage : IMessage
         where THandler : class, IAsyncHandler<TMessage, TResult>;
 }

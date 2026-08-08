@@ -4,5 +4,5 @@ namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 public interface IStagedResultPlanVisitor<out TReturn, in TState>
 {
     /// <summary>Called with the plan's message and result types as the generic arguments.</summary>
-    TReturn Visit<TMessage, TResult>(TState state) where TMessage : notnull, IMessage;
+    TReturn Visit<TMessage, TResult>(TState state) where TMessage : IMessage;
 }

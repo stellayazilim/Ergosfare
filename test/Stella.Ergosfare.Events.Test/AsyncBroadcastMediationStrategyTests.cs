@@ -22,7 +22,7 @@ public class AsyncBroadcastMediationStrategyTests
 (ITestOutputHelper  testOutputHelper)
 {
     /// <summary>
-    /// Tests that <see cref="EventMediator.PublishAsync"/> throws an exception
+    /// Tests that <see cref="EventMediator.PublishAsync(IEvent, EventMediationSettings?, CancellationToken)"/> throws an exception
     /// when <c>ThrowIfNoHandlerFound</c> is set to true and no handler is found.
     /// </summary>
     [Fact]
@@ -61,7 +61,7 @@ public class AsyncBroadcastMediationStrategyTests
     }
     
     /// <summary>
-    /// Tests that <see cref="EventMediator.PublishAsync"/> does not throw an exception
+    /// Tests that <see cref="EventMediator.PublishAsync(IEvent, EventMediationSettings?, CancellationToken)"/> does not throw an exception
     /// when <c>ThrowIfNoHandlerFound</c> is false and no handler is found.
     /// </summary>
     [Fact]
@@ -101,7 +101,7 @@ public class AsyncBroadcastMediationStrategyTests
     }
 
     /// <summary>
-    /// Tests that <see cref="EventMediator.PublishAsync"/> correctly runs registered handlers.
+    /// Tests that <see cref="EventMediator.PublishAsync(IEvent, EventMediationSettings?, CancellationToken)"/> correctly runs registered handlers.
     /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
@@ -115,12 +115,11 @@ public class AsyncBroadcastMediationStrategyTests
             })
             .BuildServiceProvider();
         var mediator = services.GetRequiredService<IPublisher>();
-        var handler = services.GetRequiredService<StubNonGenericEventHandler1>();
         await mediator.PublishAsync(new StubNonGenericEvent());
     }
 
     /// <summary>
-    /// Tests that exceptions are correctly intercepted when a handler throws during <see cref="EventMediator.PublishAsync"/>.
+    /// Tests that exceptions are correctly intercepted when a handler throws during <see cref="EventMediator.PublishAsync(IEvent, EventMediationSettings?, CancellationToken)"/>.
     /// </summary>
     [Fact]
     [Trait("Category", "Unit")]

@@ -1,11 +1,9 @@
-using System;
-using System.Threading.Tasks;
 
 namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 
 /// <summary>The typed closure of <see cref="StagedVoidPlan"/>; subclassed by generated (or hand-written) plans.</summary>
 public abstract class StagedVoidPlan<TMessage> : StagedVoidPlan
-    where TMessage : notnull, IMessage
+    where TMessage : IMessage
 {
     /// <summary>
     /// Runs the baked pipeline for the message. Only invoked while the live pipeline

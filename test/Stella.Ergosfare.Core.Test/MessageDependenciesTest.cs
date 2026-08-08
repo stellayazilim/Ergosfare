@@ -8,7 +8,6 @@ using Stella.Ergosfare.Test.Fixtures.Stubs.Basic;
 using Stella.Ergosfare.Test.Fixtures.Stubs.Generic;
 using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
-using Xunit.Abstractions;
 // ReSharper disable ConvertToPrimaryConstructor
 
 namespace Stella.Ergosfare.Core.Test;
@@ -25,7 +24,6 @@ namespace Stella.Ergosfare.Core.Test;
 public class MessageDependenciesTest: 
     IClassFixture<MessageDependencyFixture>, IClassFixture<DescriptorFixture>
 {
-    private readonly ITestOutputHelper _testOutputHelper;
     private MessageDependencyFixture _messageDependencyFixture;
     private readonly DescriptorFixture _descriptorFixture;
     
@@ -35,14 +33,11 @@ public class MessageDependenciesTest:
     /// </summary>
     /// <param name="descriptorFixture">The descriptor fixture.</param>
     /// <param name="messageDependencyFixture">The message dependency fixture.</param>
-    /// <param name="testOutputHelper">The xUnit test output helper.</param>
     public MessageDependenciesTest(
         DescriptorFixture descriptorFixture,
-        MessageDependencyFixture messageDependencyFixture,
-        ITestOutputHelper testOutputHelper)
+        MessageDependencyFixture messageDependencyFixture)
     {
         _descriptorFixture = descriptorFixture;
-        _testOutputHelper = testOutputHelper;
         _messageDependencyFixture = messageDependencyFixture;
     }
     
@@ -83,11 +78,6 @@ public class MessageDependenciesTest:
         _messageDependencyFixture.Dispose();
     }
     
-    
-    /// <summary>
-    /// A test handler used for generic handler resolution tests.
-    /// </summary>
-    private class TestHandler: VoidStubGenericHandler<string> {}
     
     /// <summary>
     /// Tests that generic message dependencies resolve handler and interceptor types correctly.
@@ -302,9 +292,6 @@ public class MessageDependenciesTest:
              .AddTransient(typeof(VoidStubGenericHandler<>))
              .BuildServiceProvider();
          var messageType = typeof(StubGenericMessage<string>);
-         var handlerType = typeof(VoidStubGenericHandler<string>);
-         // register fake handler in service provider
-         var handlerInstance = new VoidStubGenericHandler<string>();
          var handlerDescriptor =
              new HandlerDescriptorBuilderFactory()
                  .BuildDescriptors(typeof(VoidStubGenericHandler<string>))

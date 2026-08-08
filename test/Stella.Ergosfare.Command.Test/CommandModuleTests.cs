@@ -52,7 +52,7 @@ public class CommandModuleTests
             )).BuildServiceProvider();
         var mediator = serviceCollection.GetRequiredService<ICommandMediator>();
         await mediator.SendAsync(new TestCommand());
-        var stringResult = mediator.SendAsync<string>(new TestCommandStringResult());
+        var stringResult = mediator.SendAsync(new TestCommandStringResult());
 
         Assert.Equal(string.Empty, await stringResult);
         

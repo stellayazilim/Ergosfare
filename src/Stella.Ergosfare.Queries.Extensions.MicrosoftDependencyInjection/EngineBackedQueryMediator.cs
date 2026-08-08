@@ -1,6 +1,5 @@
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
-using Stella.Ergosfare.Queries;
 
 namespace Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
 

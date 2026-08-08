@@ -24,7 +24,7 @@ internal sealed class StagedVoidPipelineExecutor<TMessage>(
     IResultAdapterService? resultAdapterService,
     string[] groups,
     StagedVoidPlan<TMessage> plan) : IPipelineExecutor
-    where TMessage : notnull, IMessage
+    where TMessage : IMessage
 {
     private readonly SingleAsyncHandlerMediationStrategy<TMessage> _strategy = new(resultAdapterService);
 

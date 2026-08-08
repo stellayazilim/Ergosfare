@@ -34,7 +34,7 @@ public class FlavoredExceptionInterceptorTests
         public ValueTask<object> HandleAsync(VoidFailingCommand command, object? messageResult, Exception exception, IExecutionContext context)
         {
             context.Set("observed", exception.Message);
-            return ValueTask.FromResult<object>(messageResult!);
+            return ValueTask.FromResult(messageResult!);
         }
     }
 

@@ -25,7 +25,7 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
     string[] groups,
     Func<THandler>? directHandlerFactory = null,
     Func<IServiceProvider, THandler>? providerHandlerFactory = null) : IPipelineExecutor
-    where TMessage : notnull, IMessage
+    where TMessage : IMessage
     where THandler : class, IAsyncHandler<TMessage>
 {
     private readonly SingleAsyncHandlerMediationStrategy<TMessage> _strategy = new(resultAdapterService);

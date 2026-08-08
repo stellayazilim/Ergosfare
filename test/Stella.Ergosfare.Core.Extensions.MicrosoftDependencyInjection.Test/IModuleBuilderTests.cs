@@ -1,6 +1,5 @@
 using System.Reflection;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
 namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test;
 

@@ -1,9 +1,7 @@
-using System;
-using System.Collections.Generic;
+
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
-using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -69,7 +67,6 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     private const string StagedVoidPlanMetadataName = "Stella.Ergosfare.Core.Abstractions.StagedPlans.StagedVoidPlan";
     private const string ServiceProviderExtensionsMetadataName = "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions";
     private const string KeyedServiceExtensionsMetadataName = "Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions";
-    private const string DependencyInjectionNamespace = "Microsoft.Extensions.DependencyInjection";
 
     private const string ScanReferencesBuildProperty = "build_property.ErgosfareSourceGeneratorScanReferences";
     private const string ErgosfareAssemblyNamePrefix = "Stella.Ergosfare";

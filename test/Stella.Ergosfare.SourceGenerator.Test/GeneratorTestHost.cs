@@ -74,6 +74,7 @@ internal static class GeneratorTestHost
         if (libraries is { Count: > 0 })
         {
             references = references.AddRange(libraries.Select(library =>
+                // ReSharper disable once AccessToModifiedClosure
                 CompileLibrary(library.AssemblyName, library.Source, references)));
         }
 

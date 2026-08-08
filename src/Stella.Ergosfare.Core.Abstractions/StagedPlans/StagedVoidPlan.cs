@@ -3,7 +3,7 @@ namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 /// A compile-time staged pipeline plan for a void message: bespoke code that runs the
 /// message's entire interceptor-bearing pipeline — pre stages, handler, post stages, with
 /// exception and final semantics — as straight-line typed calls instead of the runtime
-/// strategy's generic machinery. See <see cref="MessageRoot"/> for the visitor re-entry
+/// strategy's generic machinery. See <see cref="DispatchRoots.MessageRoot"/> for the visitor re-entry
 /// pattern.
 /// </summary>
 /// <remarks>

@@ -10,7 +10,7 @@ public static class QueryModuleRegistryExtensions
     
     /// <summary>
     /// Adds the query module to the specified module registry, allowing registration
-    /// of query types and enabling the <see cref="IQueryMediator"/> for dispatching queries.
+    /// of query types and enabling the <see cref="Abstractions.IQueryMediator"/> for dispatching queries.
     /// </summary>
     /// <param name="registry">The module registry to which the query module will be added.</param>
     /// <param name="builder">

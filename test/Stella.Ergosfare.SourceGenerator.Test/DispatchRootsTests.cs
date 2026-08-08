@@ -1,5 +1,4 @@
 ﻿using System.Reflection;
-using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Abstractions.Registry;
 
@@ -104,7 +103,7 @@ public class DispatchRootsTests
     {
         public int Count => 0;
 
-        public IEnumerator<Stella.Ergosfare.Core.Abstractions.Registry.Descriptors.IMessageDescriptor> GetEnumerator()
+        public IEnumerator<Core.Abstractions.Registry.Descriptors.IMessageDescriptor> GetEnumerator()
         {
             yield break;
         }
@@ -115,7 +114,7 @@ public class DispatchRootsTests
         {
         }
 
-        public void RegisterDescriptors(IEnumerable<Stella.Ergosfare.Core.Abstractions.Registry.Descriptors.IHandlerDescriptor> descriptors)
+        public void RegisterDescriptors(IEnumerable<Core.Abstractions.Registry.Descriptors.IHandlerDescriptor> descriptors)
         {
         }
     }

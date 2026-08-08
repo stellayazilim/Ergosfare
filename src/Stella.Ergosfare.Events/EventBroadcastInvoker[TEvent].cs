@@ -13,6 +13,8 @@ namespace Stella.Ergosfare.Events;
 internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     where TEvent : notnull
 {
+    // One copy per closed event type is deliberate — the invoker itself is per-event-type.
+    // ReSharper disable once StaticMemberInGenericType
     private static readonly string[] EmptyGroups = [];
 
     /// <summary>
@@ -20,6 +22,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     /// settings instance is private and never mutated, and the strategy keeps all
     /// per-publish state in locals — one instance serves concurrent publishes.
     /// </summary>
+    // ReSharper disable once StaticMemberInGenericType
     private static readonly EventMediationSettings DefaultSettings = new();
     private static readonly AsyncBroadcastMediationStrategy<TEvent> DefaultStrategy = new(DefaultSettings);
 
@@ -301,6 +304,8 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
             var registryVersion = typedFactory.CurrentRegistryVersion;
             var slot = _cachedGroupedPlan;
 
+            // Deliberate: groups is matched allocation-free first and only materialized on a slot miss.
+            // ReSharper disable once PossibleMultipleEnumeration
             if (slot is not null
                 && ReferenceEquals(slot.Factory, typedFactory)
                 && slot.Version == registryVersion
@@ -311,6 +316,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
 
             // A canonical set contributes its immutable name array directly.
             var canonical = groups as GroupSet;
+            // ReSharper disable once PossibleMultipleEnumeration
             var materialized = canonical?.Names ?? [.. groups];
             var dependencies = BuildPlan(typedFactory, resolveStrategy, materialized);
             _cachedGroupedPlan = new GroupedPlanSlot(
@@ -400,7 +406,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     /// broadcast strategy applies.
     /// </summary>
     private static ValueTask Invoke(
-        Core.Abstractions.IHandlerReference<Core.Abstractions.Handlers.IHandler, Core.Abstractions.Registry.Descriptors.IMainHandlerDescriptor> reference,
+        IHandlerReference<Core.Abstractions.Handlers.IHandler, Core.Abstractions.Registry.Descriptors.IMainHandlerDescriptor> reference,
         TEvent @event,
         IExecutionContext context,
         IServiceProvider serviceProvider)

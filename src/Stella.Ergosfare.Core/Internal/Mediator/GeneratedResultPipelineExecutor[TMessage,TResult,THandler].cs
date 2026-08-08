@@ -23,7 +23,7 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
     string[] groups,
     Func<THandler>? directHandlerFactory = null,
     Func<IServiceProvider, THandler>? providerHandlerFactory = null) : IPipelineExecutor<TResult>
-    where TMessage : notnull, IMessage
+    where TMessage : IMessage
     where THandler : class, IAsyncHandler<TMessage, TResult>
 {
     private readonly SingleAsyncHandlerMediationStrategy<TMessage, TResult> _strategy = new(resultAdapterService);

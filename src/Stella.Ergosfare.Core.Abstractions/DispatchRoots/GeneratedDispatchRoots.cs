@@ -1,4 +1,4 @@
-using System;
+
 using System.Collections.Concurrent;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.StagedPlans;
@@ -59,7 +59,7 @@ public static class GeneratedDispatchRoots
     /// different handler resolved, adapters configured). Idempotent.
     /// </summary>
     public static void AddVoidPlan<TMessage, THandler>()
-        where TMessage : notnull, IMessage
+        where TMessage : IMessage
         where THandler : class, IAsyncHandler<TMessage>
         => VoidPlans.TryAdd(typeof(TMessage), new VoidPlanRoot<TMessage, THandler>());
 
@@ -74,7 +74,7 @@ public static class GeneratedDispatchRoots
     /// semantically identical. Idempotent.
     /// </summary>
     public static void AddVoidPlan<TMessage, THandler>(Func<THandler> directHandlerFactory)
-        where TMessage : notnull, IMessage
+        where TMessage : IMessage
         where THandler : class, IAsyncHandler<TMessage>
         => VoidPlans.TryAdd(typeof(TMessage), new VoidPlanRoot<TMessage, THandler>(directHandlerFactory));
 
@@ -91,7 +91,7 @@ public static class GeneratedDispatchRoots
     /// activation would resolve them. Idempotent.
     /// </summary>
     public static void AddVoidPlan<TMessage, THandler>(Func<IServiceProvider, THandler> directHandlerFactory)
-        where TMessage : notnull, IMessage
+        where TMessage : IMessage
         where THandler : class, IAsyncHandler<TMessage>
         => VoidPlans.TryAdd(typeof(TMessage), new VoidPlanRoot<TMessage, THandler>(directHandlerFactory));
 
@@ -107,7 +107,7 @@ public static class GeneratedDispatchRoots
     /// Idempotent.
     /// </summary>
     public static void AddResultPlan<TMessage, TResult, THandler>()
-        where TMessage : notnull, IMessage
+        where TMessage : IMessage
         where THandler : class, IAsyncHandler<TMessage, TResult>
         => ResultPlans.TryAdd((typeof(TMessage), typeof(TResult)), new ResultPlanRoot<TMessage, TResult, THandler>());
 
@@ -118,7 +118,7 @@ public static class GeneratedDispatchRoots
     /// Idempotent.
     /// </summary>
     public static void AddResultPlan<TMessage, TResult, THandler>(Func<THandler> directHandlerFactory)
-        where TMessage : notnull, IMessage
+        where TMessage : IMessage
         where THandler : class, IAsyncHandler<TMessage, TResult>
         => ResultPlans.TryAdd((typeof(TMessage), typeof(TResult)), new ResultPlanRoot<TMessage, TResult, THandler>(directHandlerFactory));
 
@@ -129,7 +129,7 @@ public static class GeneratedDispatchRoots
     /// the contract. Idempotent.
     /// </summary>
     public static void AddResultPlan<TMessage, TResult, THandler>(Func<IServiceProvider, THandler> directHandlerFactory)
-        where TMessage : notnull, IMessage
+        where TMessage : IMessage
         where THandler : class, IAsyncHandler<TMessage, TResult>
         => ResultPlans.TryAdd((typeof(TMessage), typeof(TResult)), new ResultPlanRoot<TMessage, TResult, THandler>(directHandlerFactory));
 
@@ -146,14 +146,14 @@ public static class GeneratedDispatchRoots
     /// Idempotent.
     /// </summary>
     public static void AddStagedPlan<TMessage>(StagedVoidPlan<TMessage> plan)
-        where TMessage : notnull, IMessage
+        where TMessage : IMessage
         => StagedVoidPlans.TryAdd(typeof(TMessage), plan);
 
     /// <summary>
     /// Result-producing counterpart of <see cref="AddStagedPlan{TMessage}"/>. Idempotent.
     /// </summary>
     public static void AddStagedPlan<TMessage, TResult>(StagedResultPlan<TMessage, TResult> plan)
-        where TMessage : notnull, IMessage
+        where TMessage : IMessage
         => StagedResultPlans.TryAdd((typeof(TMessage), typeof(TResult)), plan);
 
     /// <summary>The staged void plan of the message type, or <c>null</c> when none was generated.</summary>

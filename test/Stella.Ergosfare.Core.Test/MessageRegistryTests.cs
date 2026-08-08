@@ -4,7 +4,6 @@ using Stella.Ergosfare.Core.Internal.Registry;
 using Stella.Ergosfare.Core.Internal.Registry.Descriptors;
 using Stella.Ergosfare.Test.Fixtures;
 using Stella.Ergosfare.Test.Fixtures.Stubs.Basic;
-using Xunit.Abstractions;
 
 namespace Stella.Ergosfare.Core.Test;
 
@@ -15,20 +14,15 @@ namespace Stella.Ergosfare.Core.Test;
 /// </summary>
 public class MessageRegistryTests: IClassFixture<MessageDependencyFixture>
 {
-    private readonly ITestOutputHelper _testOutputHelper;
     private MessageDependencyFixture _messageDependencyFixture;
-    
+
     /// <summary>
-    /// Initializes a new instance of <see cref="MessageRegistryTests"/> with the provided fixture and test output helper.
+    /// Initializes a new instance of <see cref="MessageRegistryTests"/> with the provided fixture.
     /// </summary>
     /// <param name="messageDependencyFixture">The fixture providing the <see cref="MessageRegistry"/> instance.</param>
-    /// <param name="testOutputHelper">The test output helper for logging.</param>
-    public MessageRegistryTests(
-        MessageDependencyFixture messageDependencyFixture,
-        ITestOutputHelper testOutputHelper)
+    public MessageRegistryTests(MessageDependencyFixture messageDependencyFixture)
     {
         _messageDependencyFixture = messageDependencyFixture;
-        _testOutputHelper = testOutputHelper;
     }
 
     /// <summary>
@@ -166,7 +160,7 @@ public class MessageRegistryTests: IClassFixture<MessageDependencyFixture>
         var messageRegistry = _messageDependencyFixture.MessageRegistry;
         
         // Act
-        messageRegistry.Register(typeof(System.Console)); 
+        messageRegistry.Register(typeof(Console));
 
         // Assert
         Assert.Empty(messageRegistry);
@@ -260,7 +254,7 @@ public class MessageRegistryTests: IClassFixture<MessageDependencyFixture>
             .GetField("_newMessages", BindingFlags.NonPublic | BindingFlags.Instance);
         var newMessagesList = (List<MessageDescriptor>)newMessagesField?.GetValue(messageRegistry)!;
        
-        newMessagesList!.Add(new MessageDescriptor(typeof(StubMessage)));
+        newMessagesList.Add(new MessageDescriptor(typeof(StubMessage)));
         messageRegistry.Register(typeof(StubMessage));
         Assert.DoesNotContain(
             newMessagesList,

@@ -75,7 +75,7 @@ public class ResultAdapterServiceTests : IClassFixture<ResultAdapterFixtures>
         var ex = _fixture.ResultAdapterService.LookupException("anything");
 
         Assert.IsType<InvalidOperationException>(ex);
-        Assert.Equal("adapted", ex?.Message);
+        Assert.Equal("adapted", ex.Message);
     }
 
     /// <summary>
