@@ -32,7 +32,7 @@ internal static class RegistrationEmitter
     private const string CommandBuilderFullName = "global::Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.CommandModuleBuilder";
     private const string QueryBuilderFullName = "global::Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.QueryModuleBuilder";
     private const string EventBuilderFullName = "global::Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.EventModuleBuilder";
-    private const string DispatchRootsFullName = "global::Stella.Ergosfare.Core.Abstractions.GeneratedDispatchRoots";
+    private const string DispatchRootsFullName = "global::Stella.Ergosfare.Core.Abstractions.DispatchRoots.GeneratedDispatchRoots";
     private const string DescriptorCatalogFullName = "global::Stella.Ergosfare.Core.Abstractions.GeneratedDescriptorCatalog";
 
     /// <summary>
@@ -343,7 +343,7 @@ internal static class RegistrationEmitter
     }
 
     private const string HandlersNamespace = "global::Stella.Ergosfare.Core.Abstractions.Handlers.";
-    private const string StagedCompositionFullName = "global::Stella.Ergosfare.Core.Abstractions.StagedPlanComposition";
+    private const string StagedCompositionFullName = "global::Stella.Ergosfare.Core.Abstractions.StagedPlans.StagedPlanComposition";
     private const string ExecutionContextFullName = "global::Stella.Ergosfare.Core.Abstractions.IExecutionContext";
     private const string AbortedExceptionFullName = "global::Stella.Ergosfare.Core.Abstractions.Exceptions.ExecutionAbortedException";
     private const string ValueTaskFullName = "global::System.Threading.Tasks.ValueTask";
@@ -372,7 +372,7 @@ internal static class RegistrationEmitter
             var isVoid = plan.ResultTypeExpression is null;
 
             StartMember(sb, ref wroteMember);
-            sb.Append("        private sealed class StagedPlan").Append(i).Append(" : global::Stella.Ergosfare.Core.Abstractions.");
+            sb.Append("        private sealed class StagedPlan").Append(i).Append(" : global::Stella.Ergosfare.Core.Abstractions.StagedPlans.");
 
             if (isVoid)
             {

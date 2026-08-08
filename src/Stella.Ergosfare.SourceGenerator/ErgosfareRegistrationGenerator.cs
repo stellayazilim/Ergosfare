@@ -57,7 +57,7 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     private const string AttributeNamespace = "Stella.Ergosfare.Core.Abstractions.Attributes";
 
     private const string MessageRegistryMetadataName = "Stella.Ergosfare.Core.Abstractions.Registry.IMessageRegistry";
-    private const string DispatchRootsMetadataName = "Stella.Ergosfare.Core.Abstractions.GeneratedDispatchRoots";
+    private const string DispatchRootsMetadataName = "Stella.Ergosfare.Core.Abstractions.DispatchRoots.GeneratedDispatchRoots";
     private const string DescriptorFactoryMetadataName = "Stella.Ergosfare.Core.Abstractions.Registry.Descriptors.HandlerDescriptors";
     private const string CommandBuilderMetadataName = "Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.CommandModuleBuilder";
     private const string QueryBuilderMetadataName = "Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.QueryModuleBuilder";
