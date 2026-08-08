@@ -1,3 +1,105 @@
+## v2.6.0-preview – '2026-08-08'
+
+Preview release. The theme: **interceptor-bearing pipelines go compile-time.** The plan
+work so far stopped where interceptors began — a message with a single handler dispatched
+through a compile-time plan, but one interceptor pushed the whole dispatch onto the runtime
+strategy's generic machinery. This release bakes the entire pipeline: the source generator
+now emits one bespoke plan class per interceptor-bearing message, running
+pre → handler → post (with exception and final semantics) as straight-line typed calls,
+participants constructed directly where that is provably identical to container activation.
+Every plan stays advisory: the executor re-validates the baked composition against the
+registry per version and falls back to the runtime strategy on any mismatch — behavior
+never changes, a stale plan only loses its speedup. Three defective flavored interceptor
+contracts and two registry-cache races are also fixed.
+
+### Staged pipeline plans
+
+* A message whose discovered pipeline is one async handler plus interceptors gets a sealed
+  `StagedVoidPlan<TMessage>`/`StagedResultPlan<TMessage, TResult>` emitted: stage order is
+  baked exactly as the runtime shape builder computes it (direct segment first, weight
+  descending, ordinal type-name tie-break), and each call's contract arm — the invocation
+  strategy's pattern match — is resolved at compile time, variance-aware. Anything
+  unmodelable (grouped/keyed participants, multi-registrations, contracts no arm serves)
+  disqualifies the message rather than risking divergence.
+* The hosting executor's advisory gate compares the baked `StagedPlanComposition` against
+  the live pipeline once per registry version — an ordered type-reference comparison,
+  never on the dispatch path — and requires unmemoized instances and no result adapters.
+* A strategy-parity matrix executes emitted plans end to end: message rewrite by
+  pre-interceptors, stage order, exception capture with strategy-identical swallowing,
+  propagation without an exception stage, `context.Abort()` skipping the exception stage
+  while finals still run, and post-interceptor result rewrite.
+
+### Direct construction, now for whole pipelines
+
+* Plan factories accept dependency-injected handlers: `AddVoidPlan`/`AddResultPlan` gain
+  `Func<IServiceProvider, THandler>` overloads, and the generator emits
+  `static provider => new THandler(provider.GetRequiredService<TDep>(), ...)` under a
+  strict gate — exactly one public constructor (the single shape where the container's
+  selection has no choice), plain or `[FromKeyedServices]` service parameters, nothing
+  optional, nothing disposable.
+* Staged plans fuse the same idea across the whole pipeline: an emitted `ExecuteDirect`
+  variant constructs every participant with a visible `new` (dependencies still resolve
+  from the dispatching provider). The executor uses it only after verifying at runtime
+  that every participant's registration is the module's own plain transient one; any
+  override falls back to the provider-resolving variant, with the composition gate above
+  both. The visible `new` also lets the JIT stack-allocate non-escaping participants —
+  something a container resolution structurally hides.
+* Measured (7800X3D, .NET 9.0.11): an intercepted void command (one pre- and one
+  post-interceptor) drops from **198.2 ns / 104 B** on the strategy path to
+  **49.2 ns / 24 B** through the fused staged plan — 4× faster with the pre/post/handler
+  transients stack-allocated; an intercepted `IQuery<int>` drops from
+  **198.3 ns / 144 B to 83.5 ns / 72 B**. Plain planned dispatches are unchanged
+  (void 21.0 ns, memoized 23.8 ns / 0 B).
+
+### Interceptor contract fixes
+
+* `ICommandExceptionInterceptor<TCommand>` extended the result-typed
+  `IAsyncExceptionInterceptor<TCommand, object>`, which no invocation-strategy arm can
+  match on a void pipeline (its internal `ValueTask` result carrier is a value type — no
+  variance): the exception stage itself threw `NotSupportedException`, burying the
+  handler's exception. Re-based on the result-agnostic contract; implementors compile
+  unchanged (the erased member signature is identical).
+* `IQueryFinalInterceptor` (non-generic) had the same defect via
+  `IAsyncFinalInterceptor<IQuery, object>` — the final stage failed for every value-typed
+  query result. Re-based likewise.
+* `IQueryPostInterceptor<TQuery>` closed its base over `IQuery` instead of `TQuery`,
+  silently applying the interceptor to **every** query in the application. It now targets
+  `TQuery` — see Notes.
+
+### Registry race stamps
+
+* Dependency and shape cache entries are stamped with the registry version their build
+  started at, and reads match on the stamp: a dependency build racing a runtime
+  registration can no longer be served as fresh after the invalidation clear — previously
+  a stale pipeline could stick until the next (possibly never-coming) version bump. Every
+  version-guarded executor and the broadcast/stream plan slots now read the version before
+  building, for the same reason.
+
+### Analyzer infos
+
+* **ERGOSG003** (info): a handler with multiple public constructors keeps the container's
+  constructor selection in play, so generated plans skip its direct-construction fast
+  path — collapse to one public constructor to enable it.
+* **ERGOSG004** (info): `[FromServices]` has no effect on constructor parameters —
+  constructor injection resolves services regardless.
+
+### Notes
+
+* **Behavioral fix worth auditing:** code that (knowingly or not) relied on an
+  `IQueryPostInterceptor<TQuery>` running for *other* queries must move that interceptor
+  to the non-generic `IQueryPostInterceptor`. The typed form now does what its name says.
+* **Source-compat:** the dispatch-root and staged-plan types moved into dedicated
+  namespaces (`Stella.Ergosfare.Core.Abstractions.DispatchRoots` / `.StagedPlans`);
+  code referencing `GeneratedDispatchRoots` or the plan bases directly needs a using
+  update. Generated code and the generator's version probes were updated in lockstep —
+  against older packages emission degrades gracefully, as always.
+* Per-dispatch invoker allocations in the strategy layer are gone (the four interceptor
+  invokers became static); the interceptor-bearing strategy path itself is otherwise
+  unchanged and remains the permanent fallback.
+* Housekeeping: one type per file across the runtime, and a solution-wide inspection
+  sweep — deliberate patterns (lock-free readers, static-generic slots, allocation-free
+  group matching) now carry explicit suppressions with rationale.
+
 ## v2.5.0-preview – '2026-08-08'
 
 Preview release. The theme: **group filtering becomes first-class, and manual registration
