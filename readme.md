@@ -164,49 +164,63 @@ dotnet run -c Release -f net9.0 --project test/Stella.Ergosfare.Benchmarking
 ```
 
 Environment: BenchmarkDotNet v0.15.8 · Windows 11 · AMD Ryzen 7 7800X3D · .NET 9.0.11
-(RyuJIT x86-64-v4). Measured 2026-07-28, on the tree released as v2.2.0-preview.
+(RyuJIT x86-64-v4). Measured 2026-08-08, on the tree released as v2.6.0-preview. Every row
+is a **single dispatch** of a no-op handler through the public mediator interfaces.
 
-Two shapes are measured, for three mediators:
+Two shapes are measured:
 
-- **Typical usage** — how an application normally sends messages: the library's public
-  mediator interface, one shared DI scope for the whole loop.
-- **Web-server shape** — a fresh DI scope for every dispatch, mimicking one scope per
-  HTTP request (the shape ASP.NET Core gives you).
+- **Typical usage** — the mediators resolved once from a shared scope (background workers,
+  message-pump loops).
+- **Web-server shape** — a fresh DI scope and mediator resolution for every dispatch,
+  mimicking one scope per HTTP request (the shape ASP.NET Core gives you).
 
-| Scenario (100k dispatches/op) | Mean | Allocated | Gen0/1k ops |
+Typical usage:
+
+| Scenario (per dispatch) | Mean | Allocated |
+|---|---:|---:|
+| Command — runtime registration | 33.2 ns | 24 B |
+| Command — generated plan (`RegisterGenerated`) | **21.0 ns** | 24 B |
+| Command — memoized handlers | 23.8 ns | **0 B** |
+| Command + 2 interceptors — runtime strategy | 198.2 ns | 104 B |
+| Command + 2 interceptors — **staged plan** | **49.2 ns** | **24 B** |
+| Query (`IQuery<int>`) — generated plan | 25.3 ns | 24 B |
+| Query + 2 interceptors — **staged plan** | **83.5 ns** | 72 B |
+| Event publish (two handlers) | 52.1 ns | 48 B |
+| Grouped command (`GroupSet`) | 35.1 ns | 24 B |
+| MediatR — command / query / publish | 61.1 / 55.2 / 92.3 ns | 192 / 192 / 440 B |
+| Mediator (martinothamar) — command / query / publish | 8.0 / 8.0 / 16.1 ns | 0 B |
+
+Web-server shape (scope creation included in every row):
+
+| Per dispatch | Ergosfare | MediatR | Mediator (martinothamar) |
 |---|---:|---:|---:|
-| **Ergosfare** — typical usage | **2.97 ms** | **2.29 MB** | 47 |
-| **MediatR** — typical usage | 5.79 ms | 18.31 MB | 375 |
-| **LiteBus** — typical usage | 139.62 ms | 714.87 MB | 14 750 |
-| **Ergosfare** — web-server shape | **8.46 ms** | **21.36 MB** | 438 |
-| **MediatR** — web-server shape | 10.28 ms | 33.57 MB | 688 |
-| Ergosfare — internal engine path (reference row) | 6.31 ms | 5.34 MB | 109 |
+| Command | 95.0 ns / 192 B | 114.2 ns / 352 B | 54.8 ns / 128 B |
+| Query | 96.6 ns / 200 B | 105.8 ns / 352 B | 54.2 ns / 128 B |
+| Publish | 100.5 ns / 232 B | 139.1 ns / 600 B | 59.2 ns / 128 B |
 
 Scenario notes:
 
-- The typical-usage rows are the headline: Ergosfare runs the loop in **about half
-  MediatR's time** while allocating **an eighth of its garbage**, with Gen0 collection
-  pressure down accordingly — pooled execution contexts and the `ValueTask`-first
-  pipeline for the allocation, straight-through dispatch and the executor's cached plan
-  for the time.
-- The web-server shape is the closer race. Ergosfare leads on both axes, but by ~18% on
-  time against ~36% on allocation, and that row is dominated by DI scope creation, which
-  both libraries pay identically. It read 18.81 ms / 38.91 MB before v2.2.0-preview.
-- The *internal engine path* row drives `IMessageMediator.Mediate` with pre-built
-  `MediateOptions` — a separate entry point that runs its own resolve and mediation
-  strategies, so it reaches neither the executor's cached plan nor the straight-through
-  path. That is why it now trails the public facade. It remains supported for custom
-  mediation strategies; you would not write ordinary application code this way.
-- LiteBus is included as a reference point: Ergosfare's API surface was heavily inspired
-  by it, but the runtime is an independent implementation.
-- Transient handlers intentionally allocate one instance per dispatch (that is what a
-  transient registration declares). Dispatch-heavy single-scope loops that want instance
-  reuse should register handlers as singletons or call `ForceMemoizedHandlers()`.
+- Against **MediatR**, Ergosfare leads every row on both axes — roughly 2–3× on time and
+  2–8× on allocation in typical usage, and it stays ahead in the scope-dominated
+  web-server shape.
+- **Mediator** (martinothamar's source-generated library) is faster on raw nanoseconds by
+  design: it carries no execution context, no runtime registry, and resolves its
+  singleton handlers without touching the container per dispatch. Ergosfare's default
+  24 B is the transient handler instance itself — what a transient registration
+  declares — and drops to 0 B with singleton handlers or `ForceMemoizedHandlers()`.
+- The **staged plan** rows are the interceptor story: an interceptor-bearing pipeline
+  used to cost ~6× a bare dispatch on the runtime strategy; the source-generated staged
+  plan runs the same pipeline — same order, same exception and final semantics,
+  re-validated against the registry per version — in straight-line code at ~1.5× the
+  bare dispatch, with the participant instances stack-allocated by the JIT where they
+  do not escape.
+- Everything above uses default, out-of-the-box settings for all three libraries.
 
 Row ↔ BenchmarkDotNet method mapping, for matching against your own runs:
-`StellaErgosfare_PublicApi` / `MediatR` / `LiteBus_PublicApi` (typical usage),
-`StellaErgosfare_PublicApi_ScopePerDispatch` / `MediatR_ScopePerDispatch` (web-server
-shape), `StellaErgosfare` (internal engine path).
+`Command_Void`, `Command_Void_Generated`, `Command_Void_Memoized`,
+`Command_Void_Intercepted`, `Command_Void_Intercepted_Generated`, `Query_Result_Generated`,
+`Query_Result_Intercepted_Generated`, `Event_Publish`, `Command_Void_Grouped_GroupSet`,
+`MediatR_*`, `MediatorSg_*`, and the `*_Scoped` variants for the web-server shape.
 
 ## Dispatch architecture
 
