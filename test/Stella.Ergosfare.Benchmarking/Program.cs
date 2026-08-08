@@ -313,7 +313,8 @@ public class MediationBenchmark
     /// void pipeline plans process-wide, and the targeted setup keeps that installation
     /// away from the runtime-registration rows' processes so the comparison stays honest.
     /// </summary>
-    [GlobalSetup(Targets = [nameof(Command_Void_Generated), nameof(Query_Result_Generated)])]
+    [GlobalSetup(Targets = [nameof(Command_Void_Generated), nameof(Query_Result_Generated),
+        nameof(Command_Void_Intercepted_Generated), nameof(Query_Result_Intercepted_Generated)])]
     public void SetupGenerated()
     {
         _ergosfareGenerated = new ServiceCollection()
@@ -328,7 +329,8 @@ public class MediationBenchmark
         _generatedQueries = _ergosfareGenerated.GetRequiredService<IQueryMediator>();
     }
 
-    [GlobalCleanup(Targets = [nameof(Command_Void_Generated), nameof(Query_Result_Generated)])]
+    [GlobalCleanup(Targets = [nameof(Command_Void_Generated), nameof(Query_Result_Generated),
+        nameof(Command_Void_Intercepted_Generated), nameof(Query_Result_Intercepted_Generated)])]
     public void CleanupGenerated()
     {
         _ergosfareGenerated.Dispose();
@@ -400,6 +402,18 @@ public class MediationBenchmark
 
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask<int> Query_Result_Generated() => _generatedQueries.QueryAsync(_intQuery);
+
+    /// <summary>
+    /// The staged-plan lane: the same interceptor-bearing pipelines as the
+    /// <c>*_Intercepted</c> rows, dispatched through the generated provider whose
+    /// <c>RegisterGenerated</c> installed bespoke staged plans — the strategy machinery
+    /// those baseline rows pay for is replaced by straight-line emitted code.
+    /// </summary>
+    [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask Command_Void_Intercepted_Generated() => _generatedCommands.SendAsync(_interceptedCommand);
+
+    [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask<int> Query_Result_Intercepted_Generated() => _generatedQueries.QueryAsync(_interceptedIntQuery);
 
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask Command_Void_Grouped() => _commands.SendAsync(_groupedCommand, _groupedCommandSettings);

@@ -36,6 +36,10 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 ///     factories for handlers with <c>[FromKeyedServices]</c> parameters; without it such
 ///     handlers keep the factory-less plan form.
 /// </param>
+/// <param name="DispatchRootsHasStagedPlans">
+///     Whether the store exposes <c>AddStagedPlan</c> (staged pipeline plans for
+///     interceptor-bearing messages); older packages simply skip the staged emission.
+/// </param>
 /// <param name="HasDescriptorCatalog">
 ///     Whether <c>GeneratedDescriptorCatalog</c> is resolvable — the lookup that makes
 ///     runtime <c>Register&lt;THandler&gt;()</c> reflection-free for generator-modeled
@@ -56,4 +60,5 @@ internal readonly record struct ModuleBuilderAvailability(
     bool DispatchRootsHasPlanFactories,
     bool DispatchRootsHasProviderPlanFactories,
     bool HasKeyedServiceExtensions,
+    bool DispatchRootsHasStagedPlans,
     bool HasDescriptorCatalog);
