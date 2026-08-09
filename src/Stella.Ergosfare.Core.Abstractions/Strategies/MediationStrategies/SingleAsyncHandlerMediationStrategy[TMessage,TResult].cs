@@ -55,15 +55,23 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
         {
             throw new ArgumentNullException(nameof(messageDependencies));
         }
-        if (messageDependencies.Handlers.Count > 1)
+        // Direct and covariantly matched handlers are one candidate set; see the void
+        // strategy for the reasoning.
+        var handlers = messageDependencies.Handlers;
+        var indirectHandlers = messageDependencies.IndirectHandlers;
+        var handlerCount = handlers.Count + indirectHandlers.Count;
+
+        if (handlerCount > 1)
         {
-            throw new MultipleHandlerFoundException(typeof(TMessage), messageDependencies.Handlers.Count);
+            throw new MultipleHandlerFoundException(typeof(TMessage), handlerCount);
         }
 
-        if (messageDependencies.Handlers.Count == 0)
+        if (handlerCount == 0)
         {
             throw new NoHandlerFoundException(typeof(TMessage), $"No handler is registered for {typeof(TMessage).Name}.");
         }
+
+        var soleHandler = handlers.Count == 1 ? handlers[0] : indirectHandlers[0];
 
         var preInterceptorCount = messageDependencies.PreInterceptors.Count;
         var postInterceptorCount = messageDependencies.PostInterceptors.Count;
@@ -79,7 +87,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
             // derived one — IHandler's `in TMessage` variance covers that), invoke the typed
             // member directly and skip the object-typed DIM bridge. Interface-erased
             // dispatches (TMessage = ICommand<T> etc.) fall back to the bridge.
-            var fastHandler = messageDependencies.Handlers[0].Resolve(serviceProvider);
+            var fastHandler = soleHandler.Resolve(serviceProvider);
 
             var fastResult = await InvokeHandler(fastHandler, message, context);
 
@@ -99,7 +107,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
                     messageDependencies, serviceProvider, message, context);
             }
 
-            var handler = messageDependencies.Handlers[0].Resolve(serviceProvider);
+            var handler = soleHandler.Resolve(serviceProvider);
 
             result = await InvokeHandler(handler, message, context);
 

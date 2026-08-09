@@ -231,7 +231,7 @@ than change by accident.
    covered both. Both now raise `NoHandlerFoundException` — which derives from
    `InvalidOperationException`, so callers who were catching the second case keep catching
    it — and the two stay told apart by the message alone. Pinned by the group-filtering
-   scenarios and `A_base_typed_handler_does_not_serve_a_derived_message_registered_in_its_own_right`.
+   scenarios.
 
 3. ~~**Events invert the default for "no handler."**~~ *Fixed.* Publishing an
    *unregistered* event type used to throw `NoHandlerFoundException` whatever the caller
@@ -256,13 +256,31 @@ than change by accident.
    app. This area keeps its own `[ExcludeFromDiscovery]` types and registers nothing at
    marker level (rule 3 above), which is what makes `UnknownEvent` mean what it says here.
 
-4. **Covariance applies to interceptors but not to main handlers.** An interceptor
-   registered against a supertype joins a derived message's pipeline. A *handler*
-   registered against a supertype only serves a derived message that has no descriptor of
-   its own — register the derived type (which `RegisterGenerated` does for every discovered
-   message) and the base handler becomes an indirect handler that single-handler mediation
-   never considers, so the dispatch fails. Pinned by the two
-   `A_base_typed_handler_*` scenarios.
+4. ~~**Covariance applies to interceptors but not to main handlers.**~~ *Fixed.* An
+   interceptor registered against a supertype joins a derived message's pipeline; a
+   *handler* registered against a supertype used to serve a derived message only while that
+   message had no descriptor of its own. Registering the derived type — which
+   `RegisterGenerated` does for every discovered message — filed the base handler as an
+   indirect one, and single-handler mediation never looked there, so the dispatch failed.
+
+   Direct and indirect handlers are one candidate set now, so whether a message has a
+   descriptor of its own no longer decides who serves it. Two candidates are a contest and
+   fail the dispatch with `MultipleHandlerFoundException` — the same outcome two direct
+   handlers produce, counted before anything resolves so neither claimant runs. Pinned by
+   the two `A_base_typed_handler_*` scenarios and
+   `A_direct_and_a_base_typed_handler_claiming_one_message_fail_the_dispatch`.
+
+   Two consequences worth knowing:
+
+   - **A group filter that empties the direct set now falls through to a covariantly
+     matched handler** rather than failing with `NoHandlerFoundException`. The filter is
+     applied to both sets while the shape is built, so an indirect handler that survives it
+     is a candidate like any other. No scenario pins this corner yet.
+   - **The compiled plans give such a message up.** A message with any base-typed main
+     handler is disqualified from every staged and single-handler plan: a plan bakes one
+     handler in and cannot express "this is contested", and the model cannot prove the
+     supertype registration is the only one the runtime will see. Those dispatches take the
+     reflective path, and the lane map is what says so.
 
 5. ~~**Runtime registry mutation is half-supported.**~~ *Partly fixed — the diagnosis, not
    the constraint.* Registering an interceptor type after the container is built changes
@@ -282,6 +300,13 @@ than change by accident.
    builds the pipeline the broken one could not. Pinned by
    `A_late_registered_interceptor_the_container_cannot_resolve_fails_the_next_dispatch`
    and `A_container_that_can_resolve_the_late_participant_builds_the_pipeline_the_broken_one_could_not`.
+
+   The check covers indirect main handlers too, which was the one corner where it could
+   have broken a dispatch that always worked: single-handler mediation never read that slot,
+   so an unresolvable handler sitting in it was harmless. Entry 4 closed that gap from the
+   other side — the slot is a candidate set now, so anything in it genuinely has to be
+   resolvable, and checking it is no longer eager. Only the events fan-out ever read it
+   before, and it always resolved what it read.
 
 6. ~~**A void pipeline's "result" is a `ValueTask` sentinel, except on abort.**~~ *Fixed.*
    Post, final and exception interceptors of a void command used to be handed a non-null
