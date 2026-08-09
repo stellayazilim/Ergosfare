@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Contract.Test.Harness;
+using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 
 namespace Stella.Ergosfare.Contract.Test.Sync;
@@ -58,7 +59,7 @@ public abstract class SyncSemanticsContract
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_synchronous_void_post_interceptor_is_handed_the_pipelines_completed_task()
+    public async Task A_synchronous_void_post_interceptor_is_handed_the_pipelines_unit_result()
     {
         await using var provider = CreateProvider();
         var recorder = NewRecorder();
@@ -66,12 +67,12 @@ public abstract class SyncSemanticsContract
         await provider.GetRequiredService<ICommandMediator>()
             .SendAsync(NewCommand("ok"), recorder.Commands());
 
-        Assert.Equal($"ok{SyncVocabulary.Rewritten}|{nameof(ValueTask)}", recorder.DetailOf("post"));
+        Assert.Equal($"ok{SyncVocabulary.Rewritten}|{nameof(Unit)}", recorder.DetailOf("post"));
     }
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_synchronous_void_final_interceptor_sees_the_completed_task_and_no_exception()
+    public async Task A_synchronous_void_final_interceptor_sees_the_unit_result_and_no_exception()
     {
         await using var provider = CreateProvider();
         var recorder = NewRecorder();
@@ -79,41 +80,43 @@ public abstract class SyncSemanticsContract
         await provider.GetRequiredService<ICommandMediator>()
             .SendAsync(NewCommand("ok"), recorder.Commands());
 
-        Assert.Equal($"ok{SyncVocabulary.Rewritten}|{nameof(ValueTask)}|none", recorder.DetailOf("final"));
+        Assert.Equal($"ok{SyncVocabulary.Rewritten}|{nameof(Unit)}|none", recorder.DetailOf("final"));
     }
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_void_pipelines_synchronous_stages_throw_NullReferenceException_when_the_handler_throws()
+    public async Task A_void_pipelines_synchronous_stages_run_with_an_empty_result_when_the_handler_throws()
     {
         await using var provider = CreateProvider();
         var recorder = NewRecorder();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        // Suspicious behavior, pinned as observed: the empty result slot of a void pipeline
-        // is unboxed into the ValueTask-typed parameter of the synchronous exception and
-        // final contracts. Both throw, the second one from a finally block, so the caller
-        // never sees the handler's own exception. See the suite README.
-        await Assert.ThrowsAsync<NullReferenceException>(
-            async () => await mediator.SendAsync(NewCommand("throw"), recorder.Commands()));
+        // The result slot is a reference type now, so the empty slot of a failed void
+        // pipeline reaches the synchronous exception and final contracts as null instead
+        // of being unboxed into a ValueTask parameter. Both stages run, and the handler's
+        // own exception is the one the pipeline goes on to handle.
+        await mediator.SendAsync(NewCommand("throw"), recorder.Commands());
 
-        recorder.AssertStages("pre", "handler");
+        recorder.AssertStages("pre", "handler", "exception", "final");
+        Assert.Equal($"throw{SyncVocabulary.Rewritten}|null|{nameof(SyncFailure)}", recorder.DetailOf("exception"));
+        Assert.Equal($"throw{SyncVocabulary.Rewritten}|null|{nameof(SyncFailure)}", recorder.DetailOf("final"));
     }
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_void_pipelines_synchronous_final_interceptor_throws_NullReferenceException_on_abort()
+    public async Task A_void_pipelines_synchronous_final_interceptor_runs_on_abort_with_no_result()
     {
         await using var provider = CreateProvider();
         var recorder = NewRecorder();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        // Same unboxing, reached through the abort path: ExecutionAbortedException never
-        // reaches the caller either.
-        await Assert.ThrowsAsync<NullReferenceException>(
+        // Same empty slot, reached through the abort path — the final stage sees it as
+        // null and ExecutionAbortedException reaches the caller unreplaced.
+        await Assert.ThrowsAsync<ExecutionAbortedException>(
             async () => await mediator.SendAsync(NewCommand("abort"), recorder.Commands()));
 
-        recorder.AssertStages("pre");
+        recorder.AssertStages("pre", "final");
+        Assert.Equal("abort|null|none", recorder.DetailOf("final"));
     }
 
     // -----------------------------------------------------------------------
@@ -213,5 +216,48 @@ public abstract class SyncSemanticsContract
             "pre:async-high", "pre:sync-mid", "pre:async-low",
             "handler",
             "post:sync-high", "post:async-low");
+    }
+
+    // -----------------------------------------------------------------------
+    // the result key a resultless pipeline matches on
+    //
+    // Appended rather than filed beside their siblings: a member inserted above
+    // renumbers the state machines below it and churns the lane map for no reason.
+    // -----------------------------------------------------------------------
+
+    /// <summary>The void command whose only post interceptor uses the pre-Unit result key.</summary>
+    protected abstract ISyncPayloadCommand NewStaleKeyCommand();
+
+    [Fact]
+    [Trait("Category", "Contract")]
+    public async Task A_synchronous_void_interceptor_is_matched_on_the_unit_result_key()
+    {
+        await using var provider = CreateProvider();
+        var recorder = NewRecorder();
+
+        await provider.GetRequiredService<ICommandMediator>()
+            .SendAsync(NewCommand("ok"), recorder.Commands());
+
+        // Both typed stages are declared as IPostInterceptor<T, Unit> / IFinalInterceptor<T, Unit>.
+        // Running at all is the pin: a resultless pipeline closes its stages over Unit, so a
+        // contract keyed on anything else is invisible to the pattern match.
+        recorder.AssertStages("pre", "handler", "post", "final");
+    }
+
+    [Fact]
+    [Trait("Category", "Contract")]
+    public async Task A_void_interceptor_keyed_on_the_old_result_type_fails_the_dispatch_loudly()
+    {
+        await using var provider = CreateProvider();
+        var recorder = NewRecorder();
+        var mediator = provider.GetRequiredService<ICommandMediator>();
+
+        // The deliberate break of the Unit migration: an interceptor still written against
+        // the completed-task key registers fine and then matches no arm. The dispatch says
+        // so instead of silently skipping the stage.
+        await Assert.ThrowsAsync<NotSupportedException>(
+            async () => await mediator.SendAsync(NewStaleKeyCommand(), recorder.Commands()));
+
+        Assert.DoesNotContain("post:stale", recorder.Stages);
     }
 }

@@ -44,11 +44,17 @@ public static class PipelineVocabulary
     /// <summary>The number a value query's handler produces.</summary>
     public const int HandlerValue = 7;
 
-    /// <summary>Renders a stage's result argument for the recorder.</summary>
+    /// <summary>
+    /// Renders a stage's result argument for the recorder. The <see cref="Unit"/> arm
+    /// compares by reference on purpose: a resultless pipeline must hand every stage the
+    /// one shared instance, and <c>"unit:other"</c> is what a scenario would print if it
+    /// ever stopped doing so.
+    /// </summary>
     public static string Describe(object? result) => result switch
     {
         null => "null",
         string text => text,
+        Unit unit => ReferenceEquals(unit, Unit.Value) ? nameof(Unit) : "unit:other",
         ValueTask => nameof(ValueTask),
         _ => result.ToString() ?? result.GetType().Name,
     };
@@ -151,7 +157,7 @@ public abstract class PayloadExceptionBase<TCommand> : ICommandExceptionIntercep
         context.Mark("exception",
             $"{command.Payload}|{PipelineVocabulary.Describe(result)}|{PipelineVocabulary.Describe(exception)}");
 
-        return ValueTask.FromResult<object>(ValueTask.CompletedTask);
+        return ValueTask.FromResult<object>(Unit.Value);
     }
 }
 

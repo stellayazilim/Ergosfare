@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Contract.Test.Harness;
+using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Queries.Abstractions;
 
@@ -59,7 +60,7 @@ public abstract class PostAbortSemanticsContract
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_void_pipelines_final_interceptor_is_handed_the_completed_task_after_a_post_abort()
+    public async Task A_void_pipelines_final_interceptor_is_handed_the_unit_result_after_a_post_abort()
     {
         await using var provider = CreateProvider();
         var recorder = NewRecorder();
@@ -69,8 +70,8 @@ public abstract class PostAbortSemanticsContract
             async () => await mediator.SendAsync(NewCommand(), recorder.Commands()));
 
         // A pre-interceptor abort leaves this null; by the post stage the handler has run,
-        // so the completed-task sentinel is already in the result slot and survives.
-        Assert.Equal($"{nameof(ValueTask)}|none", recorder.DetailOf("final"));
+        // so the pipeline's one result value is already in the slot and survives.
+        Assert.Equal($"{nameof(Unit)}|none", recorder.DetailOf("final"));
     }
 
     // -----------------------------------------------------------------------

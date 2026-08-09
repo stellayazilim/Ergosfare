@@ -1,3 +1,4 @@
+using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 
 namespace Stella.Ergosfare.Events.Abstractions;
@@ -21,4 +22,4 @@ namespace Stella.Ergosfare.Events.Abstractions;
 /// </para>
 /// </remarks>
 // ReSharper disable once UnusedType.Global
-public interface IEventExceptionInterceptor: IEvent, IAsyncExceptionInterceptor<IEvent, ValueTask>;
+public interface IEventExceptionInterceptor: IEvent, IAsyncExceptionInterceptor<IEvent, Unit>;

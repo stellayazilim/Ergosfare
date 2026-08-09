@@ -283,11 +283,34 @@ than change by accident.
    `A_late_registered_interceptor_the_container_cannot_resolve_fails_the_next_dispatch`
    and `A_container_that_can_resolve_the_late_participant_builds_the_pipeline_the_broken_one_could_not`.
 
-6. **A void pipeline's "result" is a `ValueTask` sentinel, except on abort.** Post, final
-   and exception interceptors of a void command are handed a non-null `ValueTask` as the
-   result argument even though the handler produced nothing — but on an aborted dispatch
-   the final interceptor gets `null`. Three different values (`ValueTask`, `null` from the
-   exception stage, `null` on abort) for "there is no result."
+6. ~~**A void pipeline's "result" is a `ValueTask` sentinel, except on abort.**~~ *Fixed.*
+   Post, final and exception interceptors of a void command used to be handed a non-null
+   `ValueTask` even though the handler produced nothing, while an aborted dispatch handed
+   the final interceptor `null` — three values for "there is no result." A resultless
+   pipeline now carries one: `Unit.Value`, the single instance of
+   `Stella.Ergosfare.Core.Abstractions.Unit`, from the moment the handler completes.
+
+   `null` is no longer a synonym for it; it kept its own meaning. It is the slot *before*
+   anything was produced, which is what the exception stage of a failed dispatch and the
+   final stage of a pre-interceptor abort see. A publish has nothing to produce and fills
+   the slot up front, so all three of its stages see `Unit.Value`. Pinned by
+   `A_void_pipelines_result_agnostic_stages_are_handed_the_shared_unit_instance`,
+   `A_void_pipelines_result_slot_is_empty_until_the_handler_has_run`, and the two publish
+   scenarios in `Events/EventPublishTests.cs`.
+
+   **`Unit` is a class, not a struct**, and that is load-bearing rather than a taste call —
+   see entry 8. Two consequences worth knowing:
+
+   - The result key of a resultless pipeline changed from `ValueTask` to `Unit`, and no
+     compiler can see it. An interceptor still written against
+     `IPostInterceptor<T, ValueTask>` registers exactly as before and then matches no arm,
+     so the dispatch fails with `NotSupportedException` instead of quietly skipping the
+     stage. The noise is deliberate. Pinned by
+     `A_void_interceptor_keyed_on_the_old_result_type_fails_the_dispatch_loudly`.
+   - The event facades moved with the key: `IEventExceptionInterceptor<T>` and
+     `IEventFinalInterceptor<T>` close over `Unit` now. `IEventPostInterceptor<T>` did not
+     change shape — it was already result-agnostic underneath, and its default
+     implementation stopped boxing on the way through.
 
 7. ~~**The generated staged-plan code emits nullable warnings into the consumer's
    build.**~~ *Fixed.* Building this project used to surface `CS8604` eight times per TFM
@@ -302,16 +325,23 @@ than change by accident.
    That job belongs to the [lane-map baseline](#lane-map-baseline) now, which names the
    lane that ran instead of inferring it from a warning.
 
-8. **A synchronous exception or final interceptor throws `NullReferenceException` on a
-   void pipeline.** The void pipeline carries a `ValueTask` in its result slot, but the
-   slot is still empty before the handler completes — and the synchronous contracts have no
-   result-agnostic flavor, so `FinalInterceptorInvocationStrategy.cs:59` (and its
-   exception-stage twin) unboxes that `null` into a `ValueTask` parameter. The emitted plan
-   does the same, through `ResultCast`'s `(ValueTask)result!`. Every failure path of such a
-   pipeline therefore ends in a `NullReferenceException`, which — thrown from a `finally` —
-   replaces both the handler's own exception and `ExecutionAbortedException`. Pinned by the
-   two `A_void_pipelines_synchronous_*` scenarios on both axes. Result-typed pipelines are
-   unaffected: `null` casts to `string?` and `default` boxes for value types.
+8. ~~**A synchronous exception or final interceptor throws `NullReferenceException` on a
+   void pipeline.**~~ *Fixed by entry 6, and the reason `Unit` is a class.* The result slot
+   travels as `object?` and is cast back to the pipeline's result type at every stage.
+   While that type was `ValueTask`, an empty slot meant unboxing `null` into a struct —
+   `FinalInterceptorInvocationStrategy.cs:59`, its exception-stage twin, and the emitted
+   plans' `ResultCast` — and the synchronous contracts have no result-agnostic flavor to
+   escape into. Every failure path of such a pipeline ended in a `NullReferenceException`
+   thrown from a `finally`, replacing both the handler's own exception and
+   `ExecutionAbortedException`.
+
+   `Unit` is a reference type, so the same cast on an empty slot yields `null` and the
+   stage simply observes that nothing was produced. **No cast expression changed** — the
+   crash was a property of the type in the slot, not of the code reading it. Pinned by
+   `A_void_pipelines_synchronous_stages_run_with_an_empty_result_when_the_handler_throws`
+   and `A_void_pipelines_synchronous_final_interceptor_runs_on_abort_with_no_result`, the
+   two scenarios that used to assert the crash. Result-typed pipelines were never affected:
+   `null` casts to `string?` and `default` boxes for value types.
 
 9. **A synchronous participant cannot be registered without a module marker.** The module
    builders reject any type that is not assignable to `ICommand` / `IQuery` / `IEvent`

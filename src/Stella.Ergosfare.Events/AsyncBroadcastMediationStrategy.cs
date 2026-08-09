@@ -94,10 +94,11 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
 
             if (messageDependencies.PostInterceptors.Count > 0)
             {
-                // A ValueTask may be awaited only once — the completed ValueTask stands in as the
-                // (meaningless for events) result object flowing through the interceptor stages.
-                await PostInterceptorInvocationStrategy<TMessage, ValueTask>.Invoke(
-                    messageDependencies, null, serviceProvider, message, CompletedResultBox.Instance, context);
+                // A publish produces nothing, so the result slot carries the one value a
+                // resultless pipeline has — the same Unit the single-handler void strategy
+                // and the emitted void plans hand their stages.
+                await PostInterceptorInvocationStrategy<TMessage, Unit>.Invoke(
+                    messageDependencies, null, serviceProvider, message, Unit.Value, context);
             }
         }
         catch (Exception e)
@@ -112,8 +113,8 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
                 throw;
             }
 
-            await ExceptionInterceptorInvocationStrategy<TMessage, ValueTask>.Invoke(
-                messageDependencies, serviceProvider, message, CompletedResultBox.Instance,
+            await ExceptionInterceptorInvocationStrategy<TMessage, Unit>.Invoke(
+                messageDependencies, serviceProvider, message, Unit.Value,
                 ExceptionDispatchInfo.Capture(e), context);
 
         }
@@ -122,8 +123,8 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
         {
             if (messageDependencies.FinalInterceptors.Count > 0)
             {
-                await FinalInterceptorInvocationStrategy<TMessage, ValueTask>.Invoke(
-                    messageDependencies, serviceProvider, message, CompletedResultBox.Instance, exception, context);
+                await FinalInterceptorInvocationStrategy<TMessage, Unit>.Invoke(
+                    messageDependencies, serviceProvider, message, Unit.Value, exception, context);
             }
         }
     }
