@@ -264,12 +264,24 @@ than change by accident.
    never considers, so the dispatch fails. Pinned by the two
    `A_base_typed_handler_*` scenarios.
 
-5. **Runtime registry mutation is half-supported.** Registering an interceptor type after
-   the container is built does change the next dispatch — but only if that type was already
-   in DI. Otherwise the next dispatch throws `InvalidOperationException: No service for
-   type ...`, and because the registry has no removal, that message type stays broken for
-   the rest of the process. Pinned by
-   `A_late_registered_interceptor_the_container_cannot_resolve_fails_the_next_dispatch`.
+5. ~~**Runtime registry mutation is half-supported.**~~ *Partly fixed — the diagnosis, not
+   the constraint.* Registering an interceptor type after the container is built changes
+   the next dispatch only if that type is also in DI. It used to fail with an opaque
+   `InvalidOperationException: No service for type ...`, raised part-way through the
+   dispatch by whichever stage first asked for the participant. Pipeline construction now
+   checks every planned participant against the container up front and raises
+   `UnresolvableParticipantException`, which names the message, names the participant and
+   states the remedy, before any stage runs.
+
+   **The underlying constraint stands and cannot be fixed here:** the registry is
+   process-wide, has no removal, and a container is per-application, so a participant
+   resolvable in one container may be absent from another. That is also why the check
+   cannot live in `Register` — only a pipeline being built in a container's context can
+   answer the question. What the fix does guarantee is that the failure is not sticky:
+   nothing is cached for a failed build, so a container that does register the participant
+   builds the pipeline the broken one could not. Pinned by
+   `A_late_registered_interceptor_the_container_cannot_resolve_fails_the_next_dispatch`
+   and `A_container_that_can_resolve_the_late_participant_builds_the_pipeline_the_broken_one_could_not`.
 
 6. **A void pipeline's "result" is a `ValueTask` sentinel, except on abort.** Post, final
    and exception interceptors of a void command are handed a non-null `ValueTask` as the
