@@ -170,6 +170,60 @@ public class StagedPlanEmissionTests
     }
 
     [Fact]
+    public void ReferenceTypedStages_EachTakeTheCastTheirOwnContractDeclares()
+    {
+        var result = GeneratorTestHost.Run("""
+            using System;
+            using System.Threading.Tasks;
+            using Stella.Ergosfare.Queries.Abstractions;
+
+            namespace TestApp
+            {
+                public sealed record StagedTextQuery : IQuery<string>;
+
+                public sealed class StagedTextQueryHandler : IQueryHandler<StagedTextQuery, string>
+                {
+                    public ValueTask<string> HandleAsync(StagedTextQuery message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                        => ValueTask.FromResult("ok");
+                }
+
+                public sealed class StagedTextQueryPost : IQueryPostInterceptor<StagedTextQuery, string>
+                {
+                    public ValueTask<string> HandleAsync(StagedTextQuery query, string queryResult, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                        => ValueTask.FromResult(queryResult);
+                }
+
+                public sealed class StagedTextQueryException : IQueryExceptionInterceptor<StagedTextQuery, string>
+                {
+                    public ValueTask<string?> HandleAsync(StagedTextQuery query, string? result, Exception exception, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                        => ValueTask.FromResult(result);
+                }
+
+                public sealed class StagedTextQueryFinal : IQueryFinalInterceptor<StagedTextQuery, string>
+                {
+                    public ValueTask HandleAsync(StagedTextQuery query, string? result, Exception? exception, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                        => default;
+                }
+            }
+            """);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.CompilationErrors);
+
+        // Every stage used to be cast to TResult?, and a cast to a nullable type resets
+        // the expression's nullable state to maybe-null however non-null the chain
+        // variable is. The post stage declares `TResult messageResult`, so that produced
+        // CS8604 in every consumer's build — an outright failure where warnings are
+        // errors. Value-typed results never showed it, which is why it survived so long.
+        Assert.DoesNotContain(result.OutputCompilation.GetDiagnostics(), d => d.Id == "CS8604");
+
+        // Post takes TResult; exception and final take TResult?.
+        Assert.Contains("(string)postChain, context);", result.GeneratedSource);
+        Assert.Contains("(string?)exceptionChain, e, context);", result.GeneratedSource);
+        Assert.Contains("(string?)result, exception, context);", result.GeneratedSource);
+    }
+
+    [Fact]
     public void ConstructibleParticipants_EmitTheDirectConstructionVariant()
     {
         var result = GeneratorTestHost.Run("""

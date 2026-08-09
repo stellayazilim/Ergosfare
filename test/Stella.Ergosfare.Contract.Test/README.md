@@ -256,17 +256,18 @@ than change by accident.
    the final interceptor gets `null`. Three different values (`ValueTask`, `null` from the
    exception stage, `null` on abort) for "there is no result."
 
-7. **The generated staged-plan code emits nullable warnings into the consumer's build.**
-   Building this project surfaces `CS8604` eight times per TFM in
-   `ErgosfareRegistrations.g.cs` — the emitted staged result plan passes a
-   possibly-null `string` into the post-interceptor's non-nullable `messageResult`
-   parameter. It appears once per reference-typed post interceptor per emitted plan body
-   (the direct and the provider-resolved one), so the count tracks how many staged result
-   plans carry post interceptors: two for `PipelineResultCommand`, two for the synchronous
-   `SyncResultCommand`, four for `AbortResultCommand`'s two post slots. The synchronous
-   ones prove the arm is not async-only: `IPostInterceptor<TMessage, TResult>.Handle` has
-   the same non-nullable parameter. Left unsuppressed on purpose: these are the only
-   warnings in this project and they are evidence the staged-plan lane is being exercised.
+7. ~~**The generated staged-plan code emits nullable warnings into the consumer's
+   build.**~~ *Fixed.* Building this project used to surface `CS8604` eight times per TFM
+   in `ErgosfareRegistrations.g.cs`: the emitted staged result plan cast its post chain to
+   `TResult?` and handed that to the post interceptor's non-nullable `messageResult`
+   parameter, which broke consumers building with `TreatWarningsAsErrors`. The emitter now
+   picks the cast from the stage contract — post takes `TResult`, exception and final take
+   `TResult?` — so **this project builds with zero warnings**, and a warning appearing here
+   again is a regression rather than a curiosity.
+
+   The count used to double as evidence that the staged-plan lane was being exercised.
+   That job belongs to the [lane-map baseline](#lane-map-baseline) now, which names the
+   lane that ran instead of inferring it from a warning.
 
 8. **A synchronous exception or final interceptor throws `NullReferenceException` on a
    void pipeline.** The void pipeline carries a `ValueTask` in its result slot, but the
