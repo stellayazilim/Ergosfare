@@ -6,9 +6,11 @@ on:
     branches:
       - "*"
   pull_request:
+    # "**" rather than "*": a single star does not match a slash, so a base branch
+    # like fix/modernization-phase-2 selects no workflow at all. Every pull request
+    # gets the gate regardless of what it targets.
     branches:
-      - main
-      - preview
+      - "**"
 
 jobs:
   unit-tests:
