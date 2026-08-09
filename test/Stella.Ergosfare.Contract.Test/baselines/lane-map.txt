@@ -618,6 +618,83 @@ GeneratedRegistrationPostAbortTests — stages: [handler, post:abort, final]
                        | Stella.Ergosfare.Contract.Test.Abort.AbortQueryFinalBase`1.HandleAsync
                          | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
 
+GeneratedRegistrationSyncEventHandlerTests — stages: [async, sync:object, sync:valuetask]
+  1. async
+     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract.A_publish_fans_out_to_the_synchronous_shapes_beside_their_asynchronous_sibling
+       | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+<A_publish_fans_out_to_the_synchronous_shapes_beside_their_asynchronous_sibling>d__9.MoveNext
+         | Stella.Ergosfare.Events.EventMediator.PublishAsync
+           | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Publish
+             | Stella.Ergosfare.Events.EventBroadcastInvoker`1.PublishStraightThrough
+               | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Invoke
+                 | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+AsyncSiblingHandlerBase`1.HandleAsync
+                   | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+  2. sync:object
+     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract.A_publish_fans_out_to_the_synchronous_shapes_beside_their_asynchronous_sibling
+       | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+<A_publish_fans_out_to_the_synchronous_shapes_beside_their_asynchronous_sibling>d__9.MoveNext
+         | Stella.Ergosfare.Events.EventMediator.PublishAsync
+           | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Publish
+             | Stella.Ergosfare.Events.EventBroadcastInvoker`1.PublishStraightThrough
+               | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Invoke
+                 | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+BareShapedHandlerBase`1.Handle
+                   | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+  3. sync:valuetask
+     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract.A_publish_fans_out_to_the_synchronous_shapes_beside_their_asynchronous_sibling
+       | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+<A_publish_fans_out_to_the_synchronous_shapes_beside_their_asynchronous_sibling>d__9.MoveNext
+         | Stella.Ergosfare.Events.EventMediator.PublishAsync
+           | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Publish
+             | Stella.Ergosfare.Events.EventBroadcastInvoker`1.PublishStraightThrough
+               | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Invoke
+                 | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+TaskShapedHandlerBase`1.Handle
+                   | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+
+GeneratedRegistrationSyncEventHandlerTests — stages: [pre, async, sync:object, sync:valuetask]
+  1. pre
+     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract.A_publish_that_carries_an_interceptor_still_reaches_the_synchronous_shapes
+       | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+<A_publish_that_carries_an_interceptor_still_reaches_the_synchronous_shapes>d__10.MoveNext
+         | Stella.Ergosfare.Events.EventMediator.PublishAsync
+           | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Publish
+             | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1.Mediate
+               | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1+<Mediate>d__2.MoveNext
+                 | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1.Invoke
+                   | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1+<Invoke>d__0.MoveNext
+                     | Stella.Ergosfare.Events.Abstractions.IEventPreInterceptor`1.Stella.Ergosfare.Core.Abstractions.Handlers.IAsyncPreInterceptor<TEvent>.HandleAsync
+                       | Stella.Ergosfare.Events.Abstractions.IEventPreInterceptor`1+<Stella-Ergosfare-Core-Abstractions-Handlers-IAsyncPreInterceptor<TEvent>-HandleAsync>d__0.MoveNext
+                         | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+GatePreBase`1.HandleAsync
+                           | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+  2. async
+     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract.A_publish_that_carries_an_interceptor_still_reaches_the_synchronous_shapes
+       | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+<A_publish_that_carries_an_interceptor_still_reaches_the_synchronous_shapes>d__10.MoveNext
+         | Stella.Ergosfare.Events.EventMediator.PublishAsync
+           | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Publish
+             | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1.Mediate
+               | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1+<Mediate>d__2.MoveNext
+                 | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1.PublishSequentially
+                   | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1+<PublishSequentially>d__4.MoveNext
+                     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+AsyncSiblingHandlerBase`1.HandleAsync
+                       | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+  3. sync:object
+     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract.A_publish_that_carries_an_interceptor_still_reaches_the_synchronous_shapes
+       | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+<A_publish_that_carries_an_interceptor_still_reaches_the_synchronous_shapes>d__10.MoveNext
+         | Stella.Ergosfare.Events.EventMediator.PublishAsync
+           | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Publish
+             | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1.Mediate
+               | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1+<Mediate>d__2.MoveNext
+                 | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1.PublishSequentially
+                   | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1+<PublishSequentially>d__4.MoveNext
+                     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+BareShapedHandlerBase`1.Handle
+                       | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+  4. sync:valuetask
+     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract.A_publish_that_carries_an_interceptor_still_reaches_the_synchronous_shapes
+       | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+<A_publish_that_carries_an_interceptor_still_reaches_the_synchronous_shapes>d__10.MoveNext
+         | Stella.Ergosfare.Events.EventMediator.PublishAsync
+           | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Publish
+             | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1.Mediate
+               | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1+<Mediate>d__2.MoveNext
+                 | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1.PublishSequentially
+                   | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1+<PublishSequentially>d__4.MoveNext
+                     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+TaskShapedHandlerBase`1.Handle
+                       | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+
 GeneratedRegistrationSyncMainHandlerTests — stages: [handler]
   1. handler  <- IHandler<T,ValueTask<string>>
      | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract.A_ValueTask_shaped_synchronous_handler_returns_its_value_to_the_caller
@@ -657,6 +734,60 @@ GeneratedRegistrationSyncMainHandlerTests — stages: [handler]
              | Stella.Ergosfare.Core.Internal.Mediator.ResultPipelineExecutor`2.Execute
                | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract+ResultStringHandlerBase`1.Handle
                  | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+
+GeneratedRegistrationSyncMainHandlerTests — stages: [pre, handler]
+  1. pre
+     | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract.A_ValueTask_shaped_synchronous_handler_behind_an_interceptor_still_returns_its_value
+       | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract+<A_ValueTask_shaped_synchronous_handler_behind_an_interceptor_still_returns_its_value>d__23.MoveNext
+         | Stella.Ergosfare.Commands.CommandMediator.SendAsync
+           | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
+             | Stella.Ergosfare.Core.Internal.Mediator.ResultPipelineExecutor`2.Execute
+               | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`2.Mediate
+                 | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`2+<Mediate>d__2.MoveNext
+                   | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1.Invoke
+                     | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1+<Invoke>d__0.MoveNext
+                       | Stella.Ergosfare.Commands.Abstractions.ICommandPreInterceptor`1.Stella.Ergosfare.Core.Abstractions.Handlers.IAsyncPreInterceptor<TCommand>.HandleAsync
+                         | Stella.Ergosfare.Commands.Abstractions.ICommandPreInterceptor`1+<Stella-Ergosfare-Core-Abstractions-Handlers-IAsyncPreInterceptor<TCommand>-HandleAsync>d__0.MoveNext
+                           | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract+GatePreBase`1.HandleAsync
+                             | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+  2. handler  <- IHandler<T,ValueTask<string>>
+     | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract.A_ValueTask_shaped_synchronous_handler_behind_an_interceptor_still_returns_its_value
+       | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract+<A_ValueTask_shaped_synchronous_handler_behind_an_interceptor_still_returns_its_value>d__23.MoveNext
+         | Stella.Ergosfare.Commands.CommandMediator.SendAsync
+           | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
+             | Stella.Ergosfare.Core.Internal.Mediator.ResultPipelineExecutor`2.Execute
+               | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`2.Mediate
+                 | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`2+<Mediate>d__2.MoveNext
+                   | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`2.InvokeHandler
+                     | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract+ResultTaskHandlerBase`1.Handle
+                       | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+
+GeneratedRegistrationSyncMainHandlerTests — stages: [pre, handler]
+  1. pre
+     | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract.A_ValueTask_shaped_synchronous_void_handler_serves_a_dispatch_that_carries_an_interceptor
+       | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract+<A_ValueTask_shaped_synchronous_void_handler_serves_a_dispatch_that_carries_an_interceptor>d__22.MoveNext
+         | Stella.Ergosfare.Commands.CommandMediator.SendAsync
+           | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
+             | Stella.Ergosfare.Core.Internal.Mediator.VoidPipelineExecutor`1.Execute
+               | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1.Mediate
+                 | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1+<Mediate>d__2.MoveNext
+                   | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1.Invoke
+                     | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1+<Invoke>d__0.MoveNext
+                       | Stella.Ergosfare.Commands.Abstractions.ICommandPreInterceptor`1.Stella.Ergosfare.Core.Abstractions.Handlers.IAsyncPreInterceptor<TCommand>.HandleAsync
+                         | Stella.Ergosfare.Commands.Abstractions.ICommandPreInterceptor`1+<Stella-Ergosfare-Core-Abstractions-Handlers-IAsyncPreInterceptor<TCommand>-HandleAsync>d__0.MoveNext
+                           | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract+GatePreBase`1.HandleAsync
+                             | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+  2. handler  <- IHandler<T,ValueTask>
+     | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract.A_ValueTask_shaped_synchronous_void_handler_serves_a_dispatch_that_carries_an_interceptor
+       | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract+<A_ValueTask_shaped_synchronous_void_handler_serves_a_dispatch_that_carries_an_interceptor>d__22.MoveNext
+         | Stella.Ergosfare.Commands.CommandMediator.SendAsync
+           | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
+             | Stella.Ergosfare.Core.Internal.Mediator.VoidPipelineExecutor`1.Execute
+               | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1.Mediate
+                 | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1+<Mediate>d__2.MoveNext
+                   | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1.InvokeHandler
+                     | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract+VoidTaskHandlerBase`1.Handle
+                       | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
 
 GeneratedRegistrationSyncMainHandlerTests — stages: [pre, handler]
   1. pre
@@ -1672,6 +1803,83 @@ RuntimeRegistrationPostAbortTests — stages: [handler, post:abort, final]
                            | Stella.Ergosfare.Contract.Test.Abort.AbortQueryFinalBase`1.HandleAsync
                              | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
 
+RuntimeRegistrationSyncEventHandlerTests — stages: [async, sync:object, sync:valuetask]
+  1. async
+     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract.A_publish_fans_out_to_the_synchronous_shapes_beside_their_asynchronous_sibling
+       | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+<A_publish_fans_out_to_the_synchronous_shapes_beside_their_asynchronous_sibling>d__9.MoveNext
+         | Stella.Ergosfare.Events.EventMediator.PublishAsync
+           | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Publish
+             | Stella.Ergosfare.Events.EventBroadcastInvoker`1.PublishStraightThrough
+               | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Invoke
+                 | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+AsyncSiblingHandlerBase`1.HandleAsync
+                   | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+  2. sync:object
+     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract.A_publish_fans_out_to_the_synchronous_shapes_beside_their_asynchronous_sibling
+       | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+<A_publish_fans_out_to_the_synchronous_shapes_beside_their_asynchronous_sibling>d__9.MoveNext
+         | Stella.Ergosfare.Events.EventMediator.PublishAsync
+           | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Publish
+             | Stella.Ergosfare.Events.EventBroadcastInvoker`1.PublishStraightThrough
+               | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Invoke
+                 | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+BareShapedHandlerBase`1.Handle
+                   | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+  3. sync:valuetask
+     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract.A_publish_fans_out_to_the_synchronous_shapes_beside_their_asynchronous_sibling
+       | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+<A_publish_fans_out_to_the_synchronous_shapes_beside_their_asynchronous_sibling>d__9.MoveNext
+         | Stella.Ergosfare.Events.EventMediator.PublishAsync
+           | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Publish
+             | Stella.Ergosfare.Events.EventBroadcastInvoker`1.PublishStraightThrough
+               | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Invoke
+                 | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+TaskShapedHandlerBase`1.Handle
+                   | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+
+RuntimeRegistrationSyncEventHandlerTests — stages: [pre, async, sync:object, sync:valuetask]
+  1. pre
+     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract.A_publish_that_carries_an_interceptor_still_reaches_the_synchronous_shapes
+       | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+<A_publish_that_carries_an_interceptor_still_reaches_the_synchronous_shapes>d__10.MoveNext
+         | Stella.Ergosfare.Events.EventMediator.PublishAsync
+           | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Publish
+             | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1.Mediate
+               | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1+<Mediate>d__2.MoveNext
+                 | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1.Invoke
+                   | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1+<Invoke>d__0.MoveNext
+                     | Stella.Ergosfare.Events.Abstractions.IEventPreInterceptor`1.Stella.Ergosfare.Core.Abstractions.Handlers.IAsyncPreInterceptor<TEvent>.HandleAsync
+                       | Stella.Ergosfare.Events.Abstractions.IEventPreInterceptor`1+<Stella-Ergosfare-Core-Abstractions-Handlers-IAsyncPreInterceptor<TEvent>-HandleAsync>d__0.MoveNext
+                         | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+GatePreBase`1.HandleAsync
+                           | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+  2. async
+     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract.A_publish_that_carries_an_interceptor_still_reaches_the_synchronous_shapes
+       | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+<A_publish_that_carries_an_interceptor_still_reaches_the_synchronous_shapes>d__10.MoveNext
+         | Stella.Ergosfare.Events.EventMediator.PublishAsync
+           | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Publish
+             | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1.Mediate
+               | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1+<Mediate>d__2.MoveNext
+                 | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1.PublishSequentially
+                   | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1+<PublishSequentially>d__4.MoveNext
+                     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+AsyncSiblingHandlerBase`1.HandleAsync
+                       | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+  3. sync:object
+     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract.A_publish_that_carries_an_interceptor_still_reaches_the_synchronous_shapes
+       | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+<A_publish_that_carries_an_interceptor_still_reaches_the_synchronous_shapes>d__10.MoveNext
+         | Stella.Ergosfare.Events.EventMediator.PublishAsync
+           | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Publish
+             | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1.Mediate
+               | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1+<Mediate>d__2.MoveNext
+                 | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1.PublishSequentially
+                   | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1+<PublishSequentially>d__4.MoveNext
+                     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+BareShapedHandlerBase`1.Handle
+                       | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+  4. sync:valuetask
+     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract.A_publish_that_carries_an_interceptor_still_reaches_the_synchronous_shapes
+       | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+<A_publish_that_carries_an_interceptor_still_reaches_the_synchronous_shapes>d__10.MoveNext
+         | Stella.Ergosfare.Events.EventMediator.PublishAsync
+           | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Publish
+             | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1.Mediate
+               | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1+<Mediate>d__2.MoveNext
+                 | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1.PublishSequentially
+                   | Stella.Ergosfare.Events.AsyncBroadcastMediationStrategy`1+<PublishSequentially>d__4.MoveNext
+                     | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+TaskShapedHandlerBase`1.Handle
+                       | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+
 RuntimeRegistrationSyncMainHandlerTests — stages: [handler]
   1. handler  <- IHandler<T,ValueTask<string>>
      | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract.A_ValueTask_shaped_synchronous_handler_returns_its_value_to_the_caller
@@ -1711,6 +1919,60 @@ RuntimeRegistrationSyncMainHandlerTests — stages: [handler]
              | Stella.Ergosfare.Core.Internal.Mediator.ResultPipelineExecutor`2.Execute
                | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract+ResultStringHandlerBase`1.Handle
                  | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+
+RuntimeRegistrationSyncMainHandlerTests — stages: [pre, handler]
+  1. pre
+     | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract.A_ValueTask_shaped_synchronous_handler_behind_an_interceptor_still_returns_its_value
+       | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract+<A_ValueTask_shaped_synchronous_handler_behind_an_interceptor_still_returns_its_value>d__23.MoveNext
+         | Stella.Ergosfare.Commands.CommandMediator.SendAsync
+           | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
+             | Stella.Ergosfare.Core.Internal.Mediator.ResultPipelineExecutor`2.Execute
+               | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`2.Mediate
+                 | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`2+<Mediate>d__2.MoveNext
+                   | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1.Invoke
+                     | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1+<Invoke>d__0.MoveNext
+                       | Stella.Ergosfare.Commands.Abstractions.ICommandPreInterceptor`1.Stella.Ergosfare.Core.Abstractions.Handlers.IAsyncPreInterceptor<TCommand>.HandleAsync
+                         | Stella.Ergosfare.Commands.Abstractions.ICommandPreInterceptor`1+<Stella-Ergosfare-Core-Abstractions-Handlers-IAsyncPreInterceptor<TCommand>-HandleAsync>d__0.MoveNext
+                           | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract+GatePreBase`1.HandleAsync
+                             | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+  2. handler  <- IHandler<T,ValueTask<string>>
+     | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract.A_ValueTask_shaped_synchronous_handler_behind_an_interceptor_still_returns_its_value
+       | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract+<A_ValueTask_shaped_synchronous_handler_behind_an_interceptor_still_returns_its_value>d__23.MoveNext
+         | Stella.Ergosfare.Commands.CommandMediator.SendAsync
+           | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
+             | Stella.Ergosfare.Core.Internal.Mediator.ResultPipelineExecutor`2.Execute
+               | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`2.Mediate
+                 | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`2+<Mediate>d__2.MoveNext
+                   | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`2.InvokeHandler
+                     | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract+ResultTaskHandlerBase`1.Handle
+                       | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+
+RuntimeRegistrationSyncMainHandlerTests — stages: [pre, handler]
+  1. pre
+     | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract.A_ValueTask_shaped_synchronous_void_handler_serves_a_dispatch_that_carries_an_interceptor
+       | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract+<A_ValueTask_shaped_synchronous_void_handler_serves_a_dispatch_that_carries_an_interceptor>d__22.MoveNext
+         | Stella.Ergosfare.Commands.CommandMediator.SendAsync
+           | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
+             | Stella.Ergosfare.Core.Internal.Mediator.VoidPipelineExecutor`1.Execute
+               | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1.Mediate
+                 | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1+<Mediate>d__2.MoveNext
+                   | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1.Invoke
+                     | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1+<Invoke>d__0.MoveNext
+                       | Stella.Ergosfare.Commands.Abstractions.ICommandPreInterceptor`1.Stella.Ergosfare.Core.Abstractions.Handlers.IAsyncPreInterceptor<TCommand>.HandleAsync
+                         | Stella.Ergosfare.Commands.Abstractions.ICommandPreInterceptor`1+<Stella-Ergosfare-Core-Abstractions-Handlers-IAsyncPreInterceptor<TCommand>-HandleAsync>d__0.MoveNext
+                           | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract+GatePreBase`1.HandleAsync
+                             | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+  2. handler  <- IHandler<T,ValueTask>
+     | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract.A_ValueTask_shaped_synchronous_void_handler_serves_a_dispatch_that_carries_an_interceptor
+       | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract+<A_ValueTask_shaped_synchronous_void_handler_serves_a_dispatch_that_carries_an_interceptor>d__22.MoveNext
+         | Stella.Ergosfare.Commands.CommandMediator.SendAsync
+           | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
+             | Stella.Ergosfare.Core.Internal.Mediator.VoidPipelineExecutor`1.Execute
+               | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1.Mediate
+                 | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1+<Mediate>d__2.MoveNext
+                   | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1.InvokeHandler
+                     | Stella.Ergosfare.Contract.Test.Sync.SyncMainHandlerContract+VoidTaskHandlerBase`1.Handle
+                       | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
 
 RuntimeRegistrationSyncMainHandlerTests — stages: [pre, handler]
   1. pre

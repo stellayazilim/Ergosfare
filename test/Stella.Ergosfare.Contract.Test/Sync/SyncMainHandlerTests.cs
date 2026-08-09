@@ -201,6 +201,45 @@ public abstract class SyncMainHandlerContract
         recorder.AssertStages("pre", "handler");
         Assert.Equal("sync-value", result);
     }
+
+    /// <summary>Void command served by an <c>IHandler&lt;T, ValueTask&gt;</c> behind an interceptor.</summary>
+    /// <remarks>
+    /// The two ValueTask-shaped intercepted members sit below the original scenarios on
+    /// purpose: a member inserted above them would renumber their compiler-generated state
+    /// machines and churn the lane-map baseline for a purely mechanical reason.
+    /// </remarks>
+    protected abstract ICommand NewInterceptedVoidTaskCommand();
+
+    /// <summary>String command served by an <c>IHandler&lt;T, ValueTask&lt;string&gt;&gt;</c> behind an interceptor.</summary>
+    protected abstract ICommand<string> NewInterceptedResultTaskCommand();
+
+    [Fact]
+    [Trait("Category", "Contract")]
+    public async Task A_ValueTask_shaped_synchronous_void_handler_serves_a_dispatch_that_carries_an_interceptor()
+    {
+        await using var provider = CreateProvider();
+        var recorder = NewRecorder();
+
+        await provider.GetRequiredService<ICommandMediator>()
+            .SendAsync(NewInterceptedVoidTaskCommand(), recorder.Commands());
+
+        recorder.AssertStages("pre", "handler");
+        Assert.Equal("IHandler<T,ValueTask>", recorder.DetailOf("handler"));
+    }
+
+    [Fact]
+    [Trait("Category", "Contract")]
+    public async Task A_ValueTask_shaped_synchronous_handler_behind_an_interceptor_still_returns_its_value()
+    {
+        await using var provider = CreateProvider();
+        var recorder = NewRecorder();
+
+        var result = await provider.GetRequiredService<ICommandMediator>()
+            .SendAsync(NewInterceptedResultTaskCommand(), recorder.Commands());
+
+        recorder.AssertStages("pre", "handler");
+        Assert.Equal("sync-task-value", result);
+    }
 }
 
 /// <summary>The synchronous main-handler types registered through generated descriptors.</summary>
@@ -261,6 +300,30 @@ public static class KeyedSyncMainTypes
     /// <inheritdoc />
     [DiscoveryKey("contract.sync")]
     public sealed class InterceptedResultPre : SyncMainHandlerContract.GatePreBase<InterceptedResultCommand>;
+
+    /// <summary>Void command whose ValueTask-shaped synchronous handler sits behind an interceptor.</summary>
+    [DiscoveryKey("contract.sync")]
+    public sealed class InterceptedVoidTaskCommand : ICommand;
+
+    /// <inheritdoc />
+    [DiscoveryKey("contract.sync")]
+    public sealed class InterceptedVoidTaskHandler : SyncMainHandlerContract.VoidTaskHandlerBase<InterceptedVoidTaskCommand>;
+
+    /// <inheritdoc />
+    [DiscoveryKey("contract.sync")]
+    public sealed class InterceptedVoidTaskPre : SyncMainHandlerContract.GatePreBase<InterceptedVoidTaskCommand>;
+
+    /// <summary>String command whose ValueTask-shaped synchronous handler sits behind an interceptor.</summary>
+    [DiscoveryKey("contract.sync")]
+    public sealed class InterceptedResultTaskCommand : ICommand<string>;
+
+    /// <inheritdoc />
+    [DiscoveryKey("contract.sync")]
+    public sealed class InterceptedResultTaskHandler : SyncMainHandlerContract.ResultTaskHandlerBase<InterceptedResultTaskCommand>;
+
+    /// <inheritdoc />
+    [DiscoveryKey("contract.sync")]
+    public sealed class InterceptedResultTaskPre : SyncMainHandlerContract.GatePreBase<InterceptedResultTaskCommand>;
 }
 
 /// <summary>The same shapes, hidden from the generator so <c>Register&lt;T&gt;()</c> is reflective.</summary>
@@ -321,6 +384,30 @@ public static class FallbackSyncMainTypes
     /// <inheritdoc />
     [ExcludeFromDiscovery]
     public sealed class InterceptedResultPre : SyncMainHandlerContract.GatePreBase<InterceptedResultCommand>;
+
+    /// <inheritdoc cref="KeyedSyncMainTypes.InterceptedVoidTaskCommand"/>
+    [ExcludeFromDiscovery]
+    public sealed class InterceptedVoidTaskCommand : ICommand;
+
+    /// <inheritdoc />
+    [ExcludeFromDiscovery]
+    public sealed class InterceptedVoidTaskHandler : SyncMainHandlerContract.VoidTaskHandlerBase<InterceptedVoidTaskCommand>;
+
+    /// <inheritdoc />
+    [ExcludeFromDiscovery]
+    public sealed class InterceptedVoidTaskPre : SyncMainHandlerContract.GatePreBase<InterceptedVoidTaskCommand>;
+
+    /// <inheritdoc cref="KeyedSyncMainTypes.InterceptedResultTaskCommand"/>
+    [ExcludeFromDiscovery]
+    public sealed class InterceptedResultTaskCommand : ICommand<string>;
+
+    /// <inheritdoc />
+    [ExcludeFromDiscovery]
+    public sealed class InterceptedResultTaskHandler : SyncMainHandlerContract.ResultTaskHandlerBase<InterceptedResultTaskCommand>;
+
+    /// <inheritdoc />
+    [ExcludeFromDiscovery]
+    public sealed class InterceptedResultTaskPre : SyncMainHandlerContract.GatePreBase<InterceptedResultTaskCommand>;
 }
 
 /// <summary>The synchronous main-handler contract under generated (keyed) registration.</summary>
@@ -351,6 +438,14 @@ public sealed class GeneratedRegistrationSyncMainHandlerTests : SyncMainHandlerC
     /// <inheritdoc />
     protected override ICommand<string> NewInterceptedResultCommand()
         => new KeyedSyncMainTypes.InterceptedResultCommand();
+
+    /// <inheritdoc />
+    protected override ICommand NewInterceptedVoidTaskCommand()
+        => new KeyedSyncMainTypes.InterceptedVoidTaskCommand();
+
+    /// <inheritdoc />
+    protected override ICommand<string> NewInterceptedResultTaskCommand()
+        => new KeyedSyncMainTypes.InterceptedResultTaskCommand();
 }
 
 /// <summary>The same contract under explicit runtime registration.</summary>
@@ -368,7 +463,11 @@ public sealed class RuntimeRegistrationSyncMainHandlerTests : SyncMainHandlerCon
                     .Register<FallbackSyncMainTypes.InterceptedVoidHandler>()
                     .Register<FallbackSyncMainTypes.InterceptedVoidPre>()
                     .Register<FallbackSyncMainTypes.InterceptedResultHandler>()
-                    .Register<FallbackSyncMainTypes.InterceptedResultPre>()))
+                    .Register<FallbackSyncMainTypes.InterceptedResultPre>()
+                    .Register<FallbackSyncMainTypes.InterceptedVoidTaskHandler>()
+                    .Register<FallbackSyncMainTypes.InterceptedVoidTaskPre>()
+                    .Register<FallbackSyncMainTypes.InterceptedResultTaskHandler>()
+                    .Register<FallbackSyncMainTypes.InterceptedResultTaskPre>()))
             .BuildServiceProvider();
 
     /// <inheritdoc />
@@ -389,4 +488,12 @@ public sealed class RuntimeRegistrationSyncMainHandlerTests : SyncMainHandlerCon
     /// <inheritdoc />
     protected override ICommand<string> NewInterceptedResultCommand()
         => new FallbackSyncMainTypes.InterceptedResultCommand();
+
+    /// <inheritdoc />
+    protected override ICommand NewInterceptedVoidTaskCommand()
+        => new FallbackSyncMainTypes.InterceptedVoidTaskCommand();
+
+    /// <inheritdoc />
+    protected override ICommand<string> NewInterceptedResultTaskCommand()
+        => new FallbackSyncMainTypes.InterceptedResultTaskCommand();
 }

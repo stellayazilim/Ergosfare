@@ -61,13 +61,13 @@ Both halves of that table are load-bearing, and both are easy to break by accide
 
 Every other area registers by its own discovery key (`contract.dispatch`,
 `contract.lifetime`, `contract.scope`, `contract.groups`, `contract.polymorphism`,
-`contract.events`, `contract.mutation`, `contract.context`, `contract.stream`,
-`contract.sync`, `contract.multi`, `contract.exclude`), which is also what keeps the
-pattern-less call above selecting only the three axes. Types that must never be
+`contract.events`, `contract.broadcast`, `contract.mutation`, `contract.context`,
+`contract.stream`, `contract.sync`, `contract.multi`, `contract.exclude`), which is also
+what keeps the pattern-less call above selecting only the three axes. Types that must never be
 auto-registered — never-registered messages, late-registered interceptors — carry
 `[ExcludeFromDiscovery]`.
 
-Three of the keyed areas are keyed *because* no plan can serve them, so both of their axes
+Four of the keyed areas are keyed *because* no plan can serve them, so both of their axes
 reach the reflective path by construction and the key costs nothing:
 
 - **`contract.sync`** (`Sync/SyncMainHandlerTests.cs`) — the bare-result contracts
@@ -78,6 +78,10 @@ reach the reflective path by construction and the key costs nothing:
   worse reason — see [suspicious behavior 10](#suspicious-behaviors-observed). Synchronous
   *interceptors* are neither: they do reach the emitted plans, which is why they live on
   the unkeyed axis above.
+- **`contract.broadcast`** (`Events/SyncEventHandlerTests.cs`) — a publish never enters a
+  compile-time plan: the generator emits plans for sole-handler command and query
+  dispatches only, so every event fans out through the reflective broadcast strategy and
+  its own synchronous pattern-match arms. The fan-out twin of `contract.sync`.
 - **`contract.multi`** (`Handlers/MultipleMainHandlerTests.cs`) — the sole-handler gate
   drops any message with more than one main handler.
 - **`contract.exclude`** (`Exclusion/PipelineExclusionTests.cs`) — the generator skips
@@ -281,9 +285,11 @@ than change by accident.
    that marker themselves — `ICommandPreInterceptor<T> : ICommand`. The synchronous
    contracts in `Core.Abstractions.Handlers` have no such facade, so a bare
    `IPreInterceptor<T>` is silently skipped by `RegisterGenerated`, and the dispatch fails
-   later with `InvalidOperationException: No handler is registered for X`. Every
-   synchronous participant in this suite therefore declares `: ICommand, IPreInterceptor<T>`
-   — see `Sync/SyncContracts.cs`.
+   later with `InvalidOperationException: No handler is registered for X`. The silence is
+   the scan path's alone: handing the same bare type to the explicit `Register<T>()` throws
+   `NotSupportedException` at registration instead. Every synchronous participant in this
+   suite therefore declares `: ICommand, IPreInterceptor<T>` — see `Sync/SyncContracts.cs`
+   (and `: IEvent, IHandler<T, ·>` on the broadcast side, `Events/SyncEventHandlerTests.cs`).
 
 10. **A `ValueTask`-shaped synchronous main handler breaks the consumer's build.** The plan
     computations gate on the descriptor's result type, and `IHandler<T, ValueTask>` /
