@@ -21,8 +21,19 @@ public class Program
 {
     public static void Main(string[] args)
     {
-        // Args flow through so filtered runs work, e.g. `-- --filter *Intercepted`.
-        BenchmarkRunner.Run<MediationBenchmark>(args: args);
+        // A bare run keeps its historical meaning: the whole MediationBenchmark table.
+        if (args.Length == 0)
+        {
+            BenchmarkRunner.Run<MediationBenchmark>();
+            return;
+        }
+
+        // With arguments the switcher selects across the benchmark classes, so
+        // `-- --filter *CachePressure*` reaches the measurement gate while
+        // `-- --filter *Intercepted*` still reaches the mediation rows.
+        BenchmarkSwitcher
+            .FromTypes([typeof(MediationBenchmark), typeof(CachePressureBenchmark)])
+            .Run(args);
     }
 }
 
