@@ -4,6 +4,7 @@ using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Contract.Test.Harness;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Generated;
 
@@ -92,9 +93,9 @@ public sealed class GroupFilteringTests
         await using var provider = CreateProvider();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        // A registered message whose handlers are all filtered out reports differently
-        // from a message type that was never registered at all — see the README.
-        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(
+        // A registered message whose handlers are all filtered out reports the same type
+        // as a message that was never registered at all; only the message differs.
+        var thrown = await Assert.ThrowsAsync<NoHandlerFoundException>(
             async () => await mediator.SendAsync(new ReportingOnly()));
 
         Assert.Contains(nameof(ReportingOnly), thrown.Message, StringComparison.Ordinal);
@@ -122,7 +123,7 @@ public sealed class GroupFilteringTests
         var mediator = provider.GetRequiredService<ICommandMediator>();
         var settings = new CommandMediationSettings { Filters = { Groups = new[] { Reporting } } };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<NoHandlerFoundException>(
             async () => await mediator.SendAsync(new Mixed(), settings));
     }
 
@@ -167,7 +168,7 @@ public sealed class GroupFilteringTests
         await using var provider = CreateProvider();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<NoHandlerFoundException>(
             async () => await mediator.SendAsync(new ReportingOnly(), GroupSet.Empty));
     }
 
@@ -181,5 +182,23 @@ public sealed class GroupFilteringTests
         await provider.GetRequiredService<ICommandMediator>().SendAsync(command, new[] { Reporting });
 
         Assert.True(command.Handled);
+    }
+
+    [Fact]
+    [Trait("Category", "Contract")]
+    public async Task A_filtered_out_dispatch_is_still_catchable_as_an_InvalidOperationException()
+    {
+        await using var provider = CreateProvider();
+        var mediator = provider.GetRequiredService<ICommandMediator>();
+
+        // This case threw a plain InvalidOperationException before the two "nothing will
+        // handle this" exceptions were unified. NoHandlerFoundException derives from it so
+        // that callers who were catching that keep catching it — the compatibility half of
+        // the unification, which nothing else here would notice losing.
+        var thrown = await Assert.ThrowsAsync<NoHandlerFoundException>(
+            async () => await mediator.SendAsync(new ReportingOnly()));
+
+        Assert.IsAssignableFrom<InvalidOperationException>(thrown);
+        Assert.Equal(typeof(ReportingOnly), thrown.MessageType);
     }
 }

@@ -224,16 +224,37 @@ than change by accident.
    `null` (or the result type's default). Pinned by
    `Aborting_with_a_result_value_still_throws_and_does_not_deliver_the_value`.
 
-2. **Two different exceptions mean "nothing will handle this."** A message type that is not
-   in the registry produces `NoHandlerFoundException`; a registered message whose handlers
-   are all filtered out by a group filter produces a plain
-   `InvalidOperationException("No handler is registered for X.")`. Callers cannot catch
-   both with one type.
+2. ~~**Two different exceptions mean "nothing will handle this."**~~ *Fixed.* A message
+   type absent from the registry used to produce `NoHandlerFoundException` while a
+   registered message whose handlers were all filtered out produced a plain
+   `InvalidOperationException("No handler is registered for X.")`, so no single `catch`
+   covered both. Both now raise `NoHandlerFoundException` — which derives from
+   `InvalidOperationException`, so callers who were catching the second case keep catching
+   it — and the two stay told apart by the message alone. Pinned by the group-filtering
+   scenarios and `A_base_typed_handler_does_not_serve_a_derived_message_registered_in_its_own_right`.
 
-3. **Events invert the default for "no handler."** Publishing a *registered* event nobody
-   handles is a silent no-op unless `ThrowIfNoHandlerFound` is set; publishing an
-   *unregistered* event type throws `NoHandlerFoundException` regardless of that flag. The
-   setting only controls the first case.
+3. ~~**Events invert the default for "no handler."**~~ *Fixed.* Publishing an
+   *unregistered* event type used to throw `NoHandlerFoundException` whatever the caller
+   asked for, while a *registered* event nobody handles was a silent no-op unless
+   `ThrowIfNoHandlerFound` was set — so the flag governed one of the two ways a publish
+   reaches nobody. Both obey it now, and the default for both is the silent no-op that
+   fire-and-forget implies. Pinned by
+   `Publishing_an_unregistered_event_type_is_a_no_op_like_a_registered_one` and
+   `Publishing_an_unregistered_event_type_throws_when_the_caller_asks_it_to`.
+
+   The cost is real and was taken deliberately: a misspelled or never-registered event
+   type used to announce itself and now goes quietly. `ThrowIfNoHandlerFound` is the way
+   to get that back for a publisher that must know someone listened.
+
+   What the old behavior really depended on is worth recording, because it is a trap for
+   anyone writing event tests anywhere: **"unregistered" is not a property of the event
+   type, it is a property of the whole process.** The resolve strategy falls back to the
+   first *assignable* descriptor, so a single participant registered against the `IEvent`
+   marker — a non-generic `IEventPreInterceptor`, say — gives every event type in the
+   process a descriptor, and nothing is unregistered from then on. The old throw therefore
+   fired or did not fire depending on whether such a participant existed anywhere in the
+   app. This area keeps its own `[ExcludeFromDiscovery]` types and registers nothing at
+   marker level (rule 3 above), which is what makes `UnknownEvent` mean what it says here.
 
 4. **Covariance applies to interceptors but not to main handlers.** An interceptor
    registered against a supertype joins a derived message's pipeline. A *handler*
@@ -243,12 +264,24 @@ than change by accident.
    never considers, so the dispatch fails. Pinned by the two
    `A_base_typed_handler_*` scenarios.
 
-5. **Runtime registry mutation is half-supported.** Registering an interceptor type after
-   the container is built does change the next dispatch — but only if that type was already
-   in DI. Otherwise the next dispatch throws `InvalidOperationException: No service for
-   type ...`, and because the registry has no removal, that message type stays broken for
-   the rest of the process. Pinned by
-   `A_late_registered_interceptor_the_container_cannot_resolve_fails_the_next_dispatch`.
+5. ~~**Runtime registry mutation is half-supported.**~~ *Partly fixed — the diagnosis, not
+   the constraint.* Registering an interceptor type after the container is built changes
+   the next dispatch only if that type is also in DI. It used to fail with an opaque
+   `InvalidOperationException: No service for type ...`, raised part-way through the
+   dispatch by whichever stage first asked for the participant. Pipeline construction now
+   checks every planned participant against the container up front and raises
+   `UnresolvableParticipantException`, which names the message, names the participant and
+   states the remedy, before any stage runs.
+
+   **The underlying constraint stands and cannot be fixed here:** the registry is
+   process-wide, has no removal, and a container is per-application, so a participant
+   resolvable in one container may be absent from another. That is also why the check
+   cannot live in `Register` — only a pipeline being built in a container's context can
+   answer the question. What the fix does guarantee is that the failure is not sticky:
+   nothing is cached for a failed build, so a container that does register the participant
+   builds the pipeline the broken one could not. Pinned by
+   `A_late_registered_interceptor_the_container_cannot_resolve_fails_the_next_dispatch`
+   and `A_container_that_can_resolve_the_late_participant_builds_the_pipeline_the_broken_one_could_not`.
 
 6. **A void pipeline's "result" is a `ValueTask` sentinel, except on abort.** Post, final
    and exception interceptors of a void command are handed a non-null `ValueTask` as the
@@ -256,17 +289,18 @@ than change by accident.
    the final interceptor gets `null`. Three different values (`ValueTask`, `null` from the
    exception stage, `null` on abort) for "there is no result."
 
-7. **The generated staged-plan code emits nullable warnings into the consumer's build.**
-   Building this project surfaces `CS8604` eight times per TFM in
-   `ErgosfareRegistrations.g.cs` — the emitted staged result plan passes a
-   possibly-null `string` into the post-interceptor's non-nullable `messageResult`
-   parameter. It appears once per reference-typed post interceptor per emitted plan body
-   (the direct and the provider-resolved one), so the count tracks how many staged result
-   plans carry post interceptors: two for `PipelineResultCommand`, two for the synchronous
-   `SyncResultCommand`, four for `AbortResultCommand`'s two post slots. The synchronous
-   ones prove the arm is not async-only: `IPostInterceptor<TMessage, TResult>.Handle` has
-   the same non-nullable parameter. Left unsuppressed on purpose: these are the only
-   warnings in this project and they are evidence the staged-plan lane is being exercised.
+7. ~~**The generated staged-plan code emits nullable warnings into the consumer's
+   build.**~~ *Fixed.* Building this project used to surface `CS8604` eight times per TFM
+   in `ErgosfareRegistrations.g.cs`: the emitted staged result plan cast its post chain to
+   `TResult?` and handed that to the post interceptor's non-nullable `messageResult`
+   parameter, which broke consumers building with `TreatWarningsAsErrors`. The emitter now
+   picks the cast from the stage contract — post takes `TResult`, exception and final take
+   `TResult?` — so **this project builds with zero warnings**, and a warning appearing here
+   again is a regression rather than a curiosity.
+
+   The count used to double as evidence that the staged-plan lane was being exercised.
+   That job belongs to the [lane-map baseline](#lane-map-baseline) now, which names the
+   lane that ran instead of inferring it from a warning.
 
 8. **A synchronous exception or final interceptor throws `NullReferenceException` on a
    void pipeline.** The void pipeline carries a `ValueTask` in its result slot, but the
@@ -285,7 +319,7 @@ than change by accident.
    that marker themselves — `ICommandPreInterceptor<T> : ICommand`. The synchronous
    contracts in `Core.Abstractions.Handlers` have no such facade, so a bare
    `IPreInterceptor<T>` is silently skipped by `RegisterGenerated`, and the dispatch fails
-   later with `InvalidOperationException: No handler is registered for X`. The silence is
+   later with `NoHandlerFoundException: No handler is registered for X`. The silence is
    the scan path's alone: handing the same bare type to the explicit `Register<T>()` throws
    `NotSupportedException` at registration instead. Every synchronous participant in this
    suite therefore declares `: ICommand, IPreInterceptor<T>` — see `Sync/SyncContracts.cs`
