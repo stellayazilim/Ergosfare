@@ -1,4 +1,4 @@
-using Stella.Ergosfare.Core.Abstractions.Exceptions;
+﻿using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Test.Fixtures;
 using Stella.Ergosfare.Test.Fixtures.Stubs.Basic;
@@ -111,7 +111,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
 
     /// <summary>
     /// A message with a descriptor but no direct handler must fail with an explicit
-    /// <see cref="InvalidOperationException"/>.
+    /// <see cref="NoHandlerFoundException"/>.
     /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
@@ -130,7 +130,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
                 new StubMessage(), dependencies, _executionContextFixture.Ctx, _messageDependencyFixture.ServiceProvider));
 
         // assert
-        Assert.IsType<InvalidOperationException>(exception);
+        Assert.IsType<NoHandlerFoundException>(exception);
 
         // cleanup
         _messageDependencyFixture.Dispose();

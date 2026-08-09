@@ -30,7 +30,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
     /// </returns>
     /// <exception cref="ArgumentNullException">Thrown if <paramref name="messageDependencies"/> is null.</exception>
     /// <exception cref="MultipleHandlerFoundException">Thrown if more than one handler is registered for the message.</exception>
-    /// <exception cref="InvalidOperationException">Thrown if no handler is registered for the message.</exception>
+    /// <exception cref="NoHandlerFoundException">Thrown if no handler is registered for the message.</exception>
     /// <remarks>
     /// <para>The mediation process follows this sequence:</para>
     /// <list type="number">
@@ -62,7 +62,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
 
         if (messageDependencies.Handlers.Count == 0)
         {
-            throw new InvalidOperationException($"No handler is registered for {typeof(TMessage).Name}.");
+            throw new NoHandlerFoundException(typeof(TMessage), $"No handler is registered for {typeof(TMessage).Name}.");
         }
 
         var preInterceptorCount = messageDependencies.PreInterceptors.Count;
