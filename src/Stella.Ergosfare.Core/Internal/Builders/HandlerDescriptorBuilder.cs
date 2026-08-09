@@ -53,6 +53,14 @@ internal sealed class HandlerDescriptorBuilder: IHandlerDescriptorBuilder
         // Asynchronous handlers are standalone contracts (no object-typed root); their
         // descriptors record the ValueTask carrier as the result type for parity with the
         // pre-severance descriptor shape.
+        //
+        // This stays ValueTask now that a resultless pipeline carries Unit in its result
+        // slot, and the distinction is the whole rule: a descriptor's ResultType is the
+        // handler's *return* type — the completion signal — not the value the interceptor
+        // stages are handed. Nothing matches a stage against it (the mediation strategies
+        // close their invocation strategies over the pipeline's result type instead), and
+        // the generator's void-plan gate reads it as exactly what it is: "the sole handler
+        // is the async void contract" (ErgosfareRegistrationGenerator.ComputeVoidPlans).
         foreach (var @interface in handlerType.GetInterfacesEqualTo(typeof(IAsyncHandler<>)))
         {
             yield return new MainHandlerDescriptor

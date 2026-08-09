@@ -24,16 +24,21 @@ namespace Stella.Ergosfare.Events.Abstractions;
 /// </para>
 /// </remarks>
 // ReSharper disable once UnusedType.Global
-public interface IEventExceptionInterceptor<in TEvent> : IEvent, IAsyncExceptionInterceptor<TEvent, ValueTask>
+public interface IEventExceptionInterceptor<in TEvent> : IEvent, IAsyncExceptionInterceptor<TEvent, Unit>
     where TEvent : notnull
 {
-    
-    /// <inheritdoc cref="IAsyncExceptionInterceptor{TEvent}.HandleAsync"/>
-    async ValueTask<object?> IAsyncExceptionInterceptor<TEvent, ValueTask>.HandleAsync(TEvent @event, ValueTask result,
+
+    /// <inheritdoc cref="IAsyncExceptionInterceptor{TEvent, TResult}.HandleAsync"/>
+    /// <remarks>
+    /// A publish has no result: the slot carries <see cref="Unit.Value"/> and is not
+    /// forwarded. The typed member below keeps its <see cref="ValueTask"/> parameter — it
+    /// only ever received the completed task — and gets it directly.
+    /// </remarks>
+    async ValueTask<object?> IAsyncExceptionInterceptor<TEvent, Unit>.HandleAsync(TEvent @event, Unit? result,
         Exception exception, IExecutionContext context)
     {
-        await HandleAsync(@event, result, exception, context);
-        return ValueTask.CompletedTask;
+        await HandleAsync(@event, ValueTask.CompletedTask, exception, context);
+        return Unit.Value;
     }
     
     
@@ -47,7 +52,7 @@ public interface IEventExceptionInterceptor<in TEvent> : IEvent, IAsyncException
     /// <param name="exception">The exception thrown during event handling.</param>
     /// <param name="context">The execution context for the current mediation pipeline.</param>
     /// <returns>A <see cref="ValueTask"/> representing the asynchronous exception handling operation.</returns>
-    new ValueTask HandleAsync(TEvent @event, ValueTask result, Exception exception, IExecutionContext context);
+    ValueTask HandleAsync(TEvent @event, ValueTask result, Exception exception, IExecutionContext context);
 }
 
 

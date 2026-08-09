@@ -35,4 +35,7 @@ public sealed class GeneratedRegistrationSyncTests : SyncSemanticsContract
 
     /// <inheritdoc />
     protected override ISyncPayloadCommand NewOrderedCommand() => new SyncOrderedCommand();
+
+    /// <inheritdoc />
+    protected override ISyncPayloadCommand NewStaleKeyCommand() => new StaleKeyCommand();
 }

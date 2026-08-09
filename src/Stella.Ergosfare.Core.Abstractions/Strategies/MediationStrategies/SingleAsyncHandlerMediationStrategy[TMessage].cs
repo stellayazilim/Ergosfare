@@ -75,7 +75,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
 
             await InvokeHandler(fastHandler, message, context);
 
-            var fastEx = resultAdapterService?.LookupException(CompletedResultBox.Instance);
+            var fastEx = resultAdapterService?.LookupException(Unit.Value);
 
             if (fastEx != null)
             {
@@ -85,10 +85,10 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             return;
         }
 
-        // A ValueTask may be awaited only once, so after consuming the handler's ValueTask
-        // the completed ValueTask.CompletedTask flows through the interceptor stages as the
-        // (meaningless for void pipelines) result object — it is safely multi-awaitable.
-        ValueTask? result = null;
+        // The handler's ValueTask is the completion signal and is consumed here; what flows
+        // on through the interceptor stages is the result slot, and a void pipeline has one
+        // value for it — Unit.Value once the handler has run, null before that.
+        Unit? result = null;
         Exception? exception = null;
         try
         {
@@ -101,9 +101,9 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             var handler = messageDependencies.Handlers[0].Resolve(serviceProvider);
 
             await InvokeHandler(handler, message, context);
-            result = ValueTask.CompletedTask;
+            result = Unit.Value;
 
-            var ex = resultAdapterService?.LookupException(CompletedResultBox.Instance);
+            var ex = resultAdapterService?.LookupException(Unit.Value);
 
             if (ex != null)
             {
@@ -112,7 +112,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
 
             if (postInterceptorCount > 0)
             {
-                var invokedPostResult = (ValueTask?) await PostInterceptorInvocationStrategy<TMessage, ValueTask>.Invoke(
+                var invokedPostResult = (Unit?) await PostInterceptorInvocationStrategy<TMessage, Unit>.Invoke(
                     messageDependencies, resultAdapterService, serviceProvider, message, result, context);
                 result = invokedPostResult ?? result;
             }
@@ -126,7 +126,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
                 throw;
             }
 
-            var invokedResult = (ValueTask?) await ExceptionInterceptorInvocationStrategy<TMessage, ValueTask>.Invoke(
+            var invokedResult = (Unit?) await ExceptionInterceptorInvocationStrategy<TMessage, Unit>.Invoke(
                 messageDependencies, serviceProvider, message, result, ExceptionDispatchInfo.Capture(e), context);
             result = invokedResult ?? result;
 
@@ -135,7 +135,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
         {
             if (finalInterceptorCount > 0)
             {
-                await FinalInterceptorInvocationStrategy<TMessage, ValueTask>.Invoke(
+                await FinalInterceptorInvocationStrategy<TMessage, Unit>.Invoke(
                     messageDependencies, serviceProvider, message, result, exception, context);
             }
         }

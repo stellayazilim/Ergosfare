@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Contract.Test.Harness;
+using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Queries.Abstractions;
 
@@ -210,7 +211,7 @@ public abstract class PipelineSemanticsContract
         await provider.GetRequiredService<ICommandMediator>()
             .SendAsync(NewCommand("ok"), recorder.Commands());
 
-        Assert.Equal($"ok+rewritten|{nameof(ValueTask)}|none", recorder.DetailOf("final"));
+        Assert.Equal($"ok+rewritten|{nameof(Unit)}|none", recorder.DetailOf("final"));
     }
 
     [Fact]
@@ -223,7 +224,7 @@ public abstract class PipelineSemanticsContract
         await provider.GetRequiredService<ICommandMediator>()
             .SendAsync(NewCommand("throw"), recorder.Commands());
 
-        Assert.Equal($"throw+rewritten|{nameof(ValueTask)}|{nameof(PipelineFailure)}", recorder.DetailOf("final"));
+        Assert.Equal($"throw+rewritten|{nameof(Unit)}|{nameof(PipelineFailure)}", recorder.DetailOf("final"));
     }
 
     [Fact]
@@ -359,5 +360,46 @@ public abstract class PipelineSemanticsContract
 
         await Assert.ThrowsAsync<PipelineFailure>(
             async () => await mediator.QueryAsync(NewBareValueQuery("throw")));
+    }
+
+    // -----------------------------------------------------------------------
+    // what a resultless pipeline puts in its result slot
+    //
+    // Appended rather than filed beside the void scenarios above: a member inserted
+    // there renumbers the state machines below it and churns the lane map for no reason.
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    [Trait("Category", "Contract")]
+    public async Task A_void_pipelines_result_agnostic_stages_are_handed_the_shared_unit_instance()
+    {
+        await using var provider = CreateProvider();
+        var recorder = NewRecorder();
+
+        await provider.GetRequiredService<ICommandMediator>()
+            .SendAsync(NewCommand("ok"), recorder.Commands());
+
+        // Post and final take `object`/`object?` and are handed the one Unit instance —
+        // the recorder's renderer compares it by reference, so "Unit" here means that
+        // instance and nothing else. The handler produced nothing; this is what "nothing"
+        // looks like from a stage's seat.
+        Assert.Equal($"ok+rewritten|{nameof(Unit)}", recorder.DetailOf("post"));
+        Assert.Equal($"ok+rewritten|{nameof(Unit)}|none", recorder.DetailOf("final"));
+    }
+
+    [Fact]
+    [Trait("Category", "Contract")]
+    public async Task A_void_pipelines_result_slot_is_empty_until_the_handler_has_run()
+    {
+        await using var provider = CreateProvider();
+        var recorder = NewRecorder();
+
+        await provider.GetRequiredService<ICommandMediator>()
+            .SendAsync(NewCommand("throw"), recorder.Commands());
+
+        // Unit is the produced result, not a stand-in for "no result yet": a pipeline that
+        // failed inside the handler reaches its exception stage with an empty slot. Being a
+        // reference type is what lets that slot stay empty instead of unboxing into a crash.
+        Assert.Equal($"throw+rewritten|null|{nameof(PipelineFailure)}", recorder.DetailOf("exception"));
     }
 }

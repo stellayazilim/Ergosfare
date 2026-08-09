@@ -62,6 +62,14 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     private const string EventBuilderMetadataName = "Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.EventModuleBuilder";
 
     private const string ValueTaskExpression = "global::System.Threading.Tasks.ValueTask";
+
+    /// <summary>
+    ///     The result representation of a pipeline that produces none — what the void
+    ///     plans' interceptor arms match against. <see cref="ValueTaskExpression"/> stays
+    ///     the completion signal (a void handler's return carrier), which is what the
+    ///     handler-descriptor gates below keep checking.
+    /// </summary>
+    private const string UnitExpression = "global::Stella.Ergosfare.Core.Abstractions.Unit";
     private const string DescriptorCatalogMetadataName = "Stella.Ergosfare.Core.Abstractions.GeneratedDescriptorCatalog";
 
     private const string StagedVoidPlanMetadataName = "Stella.Ergosfare.Core.Abstractions.StagedPlans.StagedVoidPlan";
@@ -1333,10 +1341,10 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         preCalls = postCalls = exceptionCalls = finalCalls = ImmutableArray<StagedCallModel>.Empty;
 
         // The pipeline result the arms match against: the declared result for result
-        // pipelines, the ValueTask carrier for void ones (a struct either way unless the
-        // declared result is a reference type).
-        var pipelineResultExpression = resultTypeExpression ?? ValueTaskExpression;
-        var pipelineResultIsValueType = resultTypeExpression is null || resultIsValueType;
+        // pipelines, Unit for void ones — a reference type, so a void pipeline is on the
+        // variance-bearing side of the checks below just like a class-typed result.
+        var pipelineResultExpression = resultTypeExpression ?? UnitExpression;
+        var pipelineResultIsValueType = resultTypeExpression is not null && resultIsValueType;
 
         var stages = new List<(RegistrableTypeModel Type, StagedCallArm Arm, bool Direct)>?[4];
 

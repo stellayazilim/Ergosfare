@@ -107,3 +107,21 @@ public sealed class OrderedSyncHighPost() : SyncOrderedPostBase<SyncOrderedComma
 [ExcludeFromDiscovery]
 [Weight(3)]
 public sealed class OrderedAsyncLowPost() : AsyncOrderedPostBase<SyncOrderedCommand>("post:async-low");
+
+// --- the pre-Unit result key -----------------------------------------------
+
+/// <inheritdoc cref="Generated.StaleKeyCommand"/>
+[ExcludeFromDiscovery]
+public sealed class StaleKeyCommand : ISyncPayloadCommand
+{
+    /// <inheritdoc />
+    public string Payload { get; set; } = string.Empty;
+}
+
+/// <inheritdoc />
+[ExcludeFromDiscovery]
+public sealed class StaleKeyCommandHandler : SyncVoidHandlerBase<StaleKeyCommand>;
+
+/// <inheritdoc />
+[ExcludeFromDiscovery]
+public sealed class StaleKeyCommandPost : StaleKeyVoidPostBase<StaleKeyCommand>;
