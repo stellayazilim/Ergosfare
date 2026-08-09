@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Abstractions.Registry;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
@@ -29,6 +30,7 @@ internal sealed class MessageDependenciesFactory(IServiceProvider serviceProvide
     private HandlerLifetimeRegistry? _handlerLifetimes;
     private ErgosfareRuntimeOptions? _runtimeOptions;
     private IServiceProvider? _memoizedGraphProvider;
+    private IServiceProviderIsService? _resolvabilityProbe;
     private bool _servicesResolved;
 
     /// <summary>
@@ -66,6 +68,7 @@ internal sealed class MessageDependenciesFactory(IServiceProvider serviceProvide
             _handlerLifetimes = serviceProvider.GetService<HandlerLifetimeRegistry>();
             _runtimeOptions = serviceProvider.GetService<ErgosfareRuntimeOptions>();
             _memoizedGraphProvider = serviceProvider.GetService<RootServiceProviderAccessor>()?.RootProvider ?? serviceProvider;
+            _resolvabilityProbe = serviceProvider.GetService<IServiceProviderIsService>();
             _servicesResolved = true;
         }
 
@@ -93,6 +96,14 @@ internal sealed class MessageDependenciesFactory(IServiceProvider serviceProvide
 
         var shape = cache.GetOrAddShape(messageType, groupsArray, descriptor, registryVersion);
 
+        // Fail fast here rather than in IMessageRegistry.Register: the registry is
+        // process-wide while containers are per-application, so the same participant can
+        // be resolvable in one container and absent from another — only a pipeline being
+        // built in a container's context can answer. Nothing is cached before this
+        // returns, so the failure is not sticky: a container that does register the
+        // participant builds the same pipeline and dispatches normally.
+        EnsureParticipantsResolvable(shape, messageType, _resolvabilityProbe);
+
         // Pipelines that are fully singleton-registered (or forced via MemoizeAllHandlers)
         // cache handler instances inside their references, pinned to the root provider.
         var memoizeInstances = (_runtimeOptions?.MemoizeAllHandlers ?? false)
@@ -104,5 +115,45 @@ internal sealed class MessageDependenciesFactory(IServiceProvider serviceProvide
         cache.AddDependencies(messageType, groupsArray, dependencies, registryVersion);
 
         return dependencies;
+    }
+
+    /// <summary>
+    /// Verifies every planned participant is something the container knows how to build,
+    /// before any of them is asked for.
+    /// </summary>
+    /// <remarks>
+    /// Uses <see cref="IServiceProviderIsService"/>, which answers from the registrations
+    /// without constructing anything — a plain resolution attempt would instantiate the
+    /// whole pipeline on every rebuild. Containers that do not offer it are left alone:
+    /// the participant then fails at resolution time, exactly as before this check
+    /// existed.
+    /// </remarks>
+    private static void EnsureParticipantsResolvable(
+        MessagePipelineShape shape, Type messageType, IServiceProviderIsService? probe)
+    {
+        if (probe is null)
+        {
+            return;
+        }
+
+        Check(shape.Handlers, messageType, probe);
+        Check(shape.IndirectHandlers, messageType, probe);
+        Check(shape.PreInterceptors, messageType, probe);
+        Check(shape.PostInterceptors, messageType, probe);
+        Check(shape.ExceptionInterceptors, messageType, probe);
+        Check(shape.FinalInterceptors, messageType, probe);
+
+        static void Check<TDescriptor>(
+            PlannedHandler<TDescriptor>[] planned, Type messageType, IServiceProviderIsService probe)
+            where TDescriptor : IHandlerDescriptor
+        {
+            for (var i = 0; i < planned.Length; i++)
+            {
+                if (!probe.IsService(planned[i].HandlerType))
+                {
+                    throw new UnresolvableParticipantException(messageType, planned[i].HandlerType);
+                }
+            }
+        }
     }
 }

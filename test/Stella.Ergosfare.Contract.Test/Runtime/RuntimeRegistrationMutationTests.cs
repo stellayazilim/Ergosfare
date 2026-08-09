@@ -4,6 +4,7 @@ using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Contract.Test.Harness;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Registry;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Generated;
@@ -164,10 +165,78 @@ public sealed class RuntimeRegistrationMutationTests
         // pipeline that now includes it cannot be constructed. See the README.
         provider.GetRequiredService<IMessageRegistry>().Register(typeof(UnresolvableLatePre));
 
-        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(
+        var thrown = await Assert.ThrowsAsync<UnresolvableParticipantException>(
             async () => await mediator.SendAsync(new PoisonTarget()));
 
         Assert.Contains(nameof(UnresolvableLatePre), thrown.Message, StringComparison.Ordinal);
+        Assert.Equal(typeof(PoisonTarget), thrown.MessageType);
+        Assert.Equal(typeof(UnresolvableLatePre), thrown.ParticipantType);
+    }
+
+    // --- recovery from an unresolvable late registration -----------------------
+
+    /// <summary>
+    /// The recovery scenario keeps types of its own. Sharing <see cref="PoisonTarget"/>
+    /// would make each scenario's outcome depend on which ran first: the registry is
+    /// process-wide and never forgets, so whichever registered the unresolvable
+    /// interceptor first would break the other's opening dispatch.
+    /// </summary>
+    [ExcludeFromDiscovery]
+    public sealed class RecoveryTarget : ICommand;
+
+    /// <inheritdoc cref="RecoveryTarget"/>
+    [ExcludeFromDiscovery]
+    public sealed class RecoveryTargetHandler : ICommandHandler<RecoveryTarget>
+    {
+        public ValueTask HandleAsync(RecoveryTarget command, IExecutionContext context)
+        {
+            context.Mark("handler");
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    /// <inheritdoc cref="RecoveryTarget"/>
+    [ExcludeFromDiscovery]
+    public sealed class UnresolvableRecoveryPre : ICommandPreInterceptor<RecoveryTarget>
+    {
+        public ValueTask<RecoveryTarget> HandleAsync(RecoveryTarget command, IExecutionContext context)
+        {
+            context.Mark("late");
+            return ValueTask.FromResult(command);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Contract")]
+    public async Task A_container_that_can_resolve_the_late_participant_builds_the_pipeline_the_broken_one_could_not()
+    {
+        await using var missing = new ServiceCollection()
+            .AddErgosfare(options => options
+                .AddCommandModule(commands => commands.Register<RecoveryTargetHandler>()))
+            .BuildServiceProvider();
+
+        await missing.GetRequiredService<ICommandMediator>().SendAsync(new RecoveryTarget());
+
+        missing.GetRequiredService<IMessageRegistry>().Register(typeof(UnresolvableRecoveryPre));
+
+        await Assert.ThrowsAsync<UnresolvableParticipantException>(
+            async () => await missing.GetRequiredService<ICommandMediator>().SendAsync(new RecoveryTarget()));
+
+        // The registry entry is permanent, so registering the participant with a container
+        // is the only way back — and it has to work. Nothing about the failed build is
+        // cached, so this container reaches the same pipeline the broken one could not,
+        // interceptor included.
+        await using var repaired = new ServiceCollection()
+            .AddErgosfare(options => options
+                .AddCommandModule(commands => commands
+                    .Register<RecoveryTargetHandler>()
+                    .Register<UnresolvableRecoveryPre>()))
+            .BuildServiceProvider();
+
+        var recorder = new PipelineRecorder();
+        await repaired.GetRequiredService<ICommandMediator>().SendAsync(new RecoveryTarget(), recorder.Commands());
+
+        recorder.AssertStages("late", "handler");
     }
 }
 

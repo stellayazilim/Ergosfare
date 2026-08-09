@@ -45,9 +45,13 @@ public class FinalInterceptorInvocationStrategyTests:
     public async Task Invoke_ShouldExecuteDirectAndIndirectFinalInterceptors()
     {
         _messageDependencyFixture = _messageDependencyFixture.New;
-        _messageDependencyFixture.MessageRegistry.Register(typeof(StubIndirectMessage));
-        _messageDependencyFixture.MessageRegistry.Register(typeof(StubFinalInterceptor));
-        _messageDependencyFixture.MessageRegistry.Register(typeof(StubIndirectFinalInterceptor));
+
+        // RegisterHandler rather than MessageRegistry.Register: it registers with the
+        // container as well, and building a pipeline now verifies its participants are
+        // resolvable there. Registry-only setup described a pipeline that could never
+        // have dispatched.
+        _messageDependencyFixture.RegisterHandler(
+            typeof(StubIndirectMessage), typeof(StubFinalInterceptor), typeof(StubIndirectFinalInterceptor));
 
         
         
