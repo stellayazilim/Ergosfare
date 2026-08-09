@@ -3,6 +3,7 @@ using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
+using Stella.Ergosfare.Contract.Test.Runtime;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Generated;
 
@@ -13,6 +14,14 @@ namespace Stella.Ergosfare.Contract.Test.Lifetime;
 /// are contract because lifetime says so — the scenarios below never assert on pooling or
 /// caching, only on what a user's own DI registration promises.
 /// </summary>
+/// <remarks>
+/// Serialized with the registry-mutating scenarios, for the mirror-image reason: memoized
+/// instances are pinned to a registry version, so a registration landing anywhere in the
+/// process between two of these dispatches drops the memoized instance and the count moves.
+/// The scenarios do not mutate the registry — they are sensitive to anything that does.
+/// See the suite README, <em>Suspicious behaviors observed</em> 11.
+/// </remarks>
+[Collection(RegistryMutationCollection.Name)]
 public sealed class HandlerLifetimeTests
 {
     private const string Key = "contract.lifetime";
