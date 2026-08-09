@@ -519,11 +519,25 @@ internal static class RegistrationEmitter
         }
     }
 
-    /// <summary>The strategy/invoker-parity cast of the chained object result back to the pipeline result type.</summary>
-    private static string ResultCast(string resultExpression, bool resultIsValueType, string operand)
+    /// <summary>
+    ///     The strategy/invoker-parity cast of the chained object result back to the
+    ///     pipeline result type.
+    /// </summary>
+    /// <param name="targetAcceptsNull">
+    ///     Whether the stage being called declares its result parameter as
+    ///     <c>TResult?</c>. Exception and final interceptors do; post interceptors declare
+    ///     a plain <c>TResult</c>. The distinction is load-bearing for reference-typed
+    ///     results: a cast to <c>TResult?</c> resets the expression's nullable state to
+    ///     maybe-null however non-null the chain variable is, so handing one to a post
+    ///     interceptor is CS8604 in the consumer's build — and a build failure outright
+    ///     where warnings are errors.
+    /// </param>
+    private static string ResultCast(string resultExpression, bool resultIsValueType, bool targetAcceptsNull, string operand)
         => resultIsValueType
             ? "(" + resultExpression + ")" + operand + "!"
-            : "(" + resultExpression + "?)" + operand;
+            : targetAcceptsNull
+                ? "(" + resultExpression + "?)" + operand
+                : "(" + resultExpression + ")" + operand;
 
     private static void EmitPreCalls(StringBuilder sb, StagedPlanModel plan, bool direct, string indent)
     {
@@ -564,6 +578,11 @@ internal static class RegistrationEmitter
         var pipelineResultIsValueType = plan.ResultTypeExpression is null || plan.ResultIsValueType;
         var extraArgument = exceptionArgument is null ? string.Empty : ", " + exceptionArgument;
 
+        // The exception argument doubles as the stage discriminator: only the exception
+        // stage carries one, and only the exception stage declares its result parameter
+        // nullable. The post stage takes TResult and object, not TResult? and object?.
+        var targetAcceptsNull = exceptionArgument is not null;
+
         sb.Append(indent).Append(chainVariable).Append(" = ");
 
         switch (call.Arm)
@@ -573,7 +592,7 @@ internal static class RegistrationEmitter
                   .Append('<').Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
                 AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                 sb.Append(").HandleAsync(message, ")
-                  .Append(ResultCast(pipelineResult, pipelineResultIsValueType, chainVariable))
+                  .Append(ResultCast(pipelineResult, pipelineResultIsValueType, targetAcceptsNull, chainVariable))
                   .Append(extraArgument).AppendLine(", context);");
                 break;
             case StagedCallArm.AsyncAgnostic:
@@ -589,7 +608,7 @@ internal static class RegistrationEmitter
                   .Append('<').Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
                 AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                 sb.Append(").Handle(message, ")
-                  .Append(ResultCast(pipelineResult, pipelineResultIsValueType, chainVariable))
+                  .Append(ResultCast(pipelineResult, pipelineResultIsValueType, targetAcceptsNull, chainVariable))
                   .Append(extraArgument).AppendLine(", context);");
                 break;
         }
@@ -600,6 +619,10 @@ internal static class RegistrationEmitter
         var pipelineResult = plan.ResultTypeExpression ?? ValueTaskFullName;
         var pipelineResultIsValueType = plan.ResultTypeExpression is null || plan.ResultIsValueType;
 
+        // Final interceptors declare `TResult? result` — the stage runs from a finally,
+        // so the pipeline may never have produced one.
+        const bool targetAcceptsNull = true;
+
         foreach (var call in plan.FinalCalls)
         {
             switch (call.Arm)
@@ -609,7 +632,7 @@ internal static class RegistrationEmitter
                       .Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
                     AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                     sb.Append(").HandleAsync(message, ")
-                      .Append(ResultCast(pipelineResult, pipelineResultIsValueType, resultExpressionText))
+                      .Append(ResultCast(pipelineResult, pipelineResultIsValueType, targetAcceptsNull, resultExpressionText))
                       .AppendLine(", exception, context);");
                     break;
                 case StagedCallArm.AsyncAgnostic:
@@ -623,7 +646,7 @@ internal static class RegistrationEmitter
                       .Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
                     AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                     sb.Append(").Handle(message, ")
-                      .Append(ResultCast(pipelineResult, pipelineResultIsValueType, resultExpressionText))
+                      .Append(ResultCast(pipelineResult, pipelineResultIsValueType, targetAcceptsNull, resultExpressionText))
                       .AppendLine(", exception, context);");
                     break;
             }
