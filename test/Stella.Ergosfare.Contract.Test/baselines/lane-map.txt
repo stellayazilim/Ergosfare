@@ -2596,6 +2596,16 @@ stages: [handler, post, final]
 
 stages: [handler:base]
   1. handler:base
+     | Stella.Ergosfare.Contract.Test.Polymorphism.PolymorphicDispatchTests.A_base_typed_handler_serves_a_derived_message_registered_in_its_own_right
+       | Stella.Ergosfare.Contract.Test.Polymorphism.PolymorphicDispatchTests+<A_base_typed_handler_serves_a_derived_message_registered_in_its_own_right>d__17.MoveNext
+         | Stella.Ergosfare.Commands.CommandMediator.SendAsync
+           | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
+             | Stella.Ergosfare.Core.Internal.Mediator.VoidPipelineExecutor`1.Execute
+               | Stella.Ergosfare.Contract.Test.Polymorphism.PolymorphicDispatchTests+LedgerEntryHandler.HandleAsync
+                 | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+
+stages: [handler:base]
+  1. handler:base
      | Stella.Ergosfare.Contract.Test.Polymorphism.PolymorphicDispatchTests.A_base_typed_handler_serves_a_derived_message_that_is_not_registered_itself
        | Stella.Ergosfare.Contract.Test.Polymorphism.PolymorphicDispatchTests+<A_base_typed_handler_serves_a_derived_message_that_is_not_registered_itself>d__16.MoveNext
          | Stella.Ergosfare.Commands.CommandMediator.SendAsync
