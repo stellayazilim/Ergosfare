@@ -19,7 +19,12 @@ changelog/**
 changelog/**/
 docs/**
 docs/**
-BenchmarkDotNet.Artifacts/
+# Benchmark output is per-run and throwaway — except the dated baselines the
+# modernization phases re-run and compare against, which are committed. Excluding the
+# directory's contents rather than the directory itself is what makes that re-inclusion
+# possible: git never descends into an excluded directory.
+**/BenchmarkDotNet.Artifacts/*
+!**/BenchmarkDotNet.Artifacts/baselines/
 
 # docfx output — the API reference is generated on demand (see
 # .github/workflows/api_reference.yml) and consumed by the docs site, never committed.
