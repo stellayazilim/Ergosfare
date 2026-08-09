@@ -27,6 +27,7 @@
     <File Path="coverlet.runsettings" />
     <Project Path="test/Stella.Ergosfare.Benchmarking/Stella.Ergosfare.Benchmarking.csproj" />
     <Project Path="test\Stella.Ergosfare.Command.Test\Stella.Ergosfare.Command.Test.csproj" />
+    <Project Path="test\Stella.Ergosfare.Contract.Test\Stella.Ergosfare.Contract.Test.csproj" />
     <Project Path="test\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test.csproj" />
     <Project Path="test\Stella.Ergosfare.Core.Test\Stella.Ergosfare.Core.Test.csproj" />
     <Project Path="test\Stella.Ergosfare.Events.Test\Stella.Ergosfare.Events.Test.csproj" />

@@ -29,8 +29,11 @@ jobs:
       - name: Restore Dependencies
         run: dotnet restore Stella.Ergosfare.slnx
 
+      # Category=Contract is the core-modernization safety net
+      # (test/Stella.Ergosfare.Contract.Test): it runs both registration axes on both
+      # TFMs and is named here explicitly so it can never fall out of CI unnoticed.
       - name: Run Unit Tests
         run: |
           dotnet test Stella.Ergosfare.slnx \
             --logger "trx;LogFileName=unit-tests.trx" \
-            --filter "Category=Unit"
+            --filter "Category=Unit|Category=Contract"
