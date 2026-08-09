@@ -2329,6 +2329,8 @@ RuntimeRegistrationSyncTests — stages: [pre]
 
 stages: []
 
+stages: []
+
 stages: [default]
   1. default
      | Stella.Ergosfare.Contract.Test.Events.EventPublishTests.A_default_publish_skips_grouped_handlers
