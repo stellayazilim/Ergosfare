@@ -80,7 +80,11 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
                 // filtering requested, loop the handler arrays directly — synchronously
                 // while handlers complete synchronously, bailing to an awaiting helper on
                 // the first suspension. No strategy or per-stage async frames.
-                if (dependencies is MessageDependencies { HasNoInterceptors: true } plan
+                if (dependencies is null)
+                {
+                    task = NoPipeline(settings?.ThrowIfNoHandlerFound ?? false);
+                }
+                else if (dependencies is MessageDependencies { HasNoInterceptors: true } plan
                     && (settings is null
                         || ReferenceEquals(settings.Filters.HandlerPredicate,
                             EventMediationSettings.EventMediationFilters.AcceptAllHandlers)))
@@ -93,6 +97,13 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
                 {
                     task = strategy.Mediate((TEvent)@event, dependencies, context, concreteMediator.ScopeProvider);
                 }
+            }
+            else if (resolveStrategy.Find(typeof(TEvent)) is null)
+            {
+                // Foreign mediator implementation: the Mediate path would raise
+                // NoHandlerFoundException from its own descriptor lookup whatever the
+                // caller asked for. Answer the flag here so every publish route agrees.
+                task = NoPipeline(settings?.ThrowIfNoHandlerFound ?? false);
             }
             else
             {
@@ -166,7 +177,11 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
                 ? GetPlan(engine.DependenciesFactory, resolveStrategy)
                 : GetGroupedPlan(engine.DependenciesFactory, resolveStrategy, groups);
 
-            if (dependencies is MessageDependencies { HasNoInterceptors: true } plan
+            if (dependencies is null)
+            {
+                task = NoPipeline(settings?.ThrowIfNoHandlerFound ?? false);
+            }
+            else if (dependencies is MessageDependencies { HasNoInterceptors: true } plan
                 && (settings is null
                     || ReferenceEquals(settings.Filters.HandlerPredicate,
                         EventMediationSettings.EventMediationFilters.AcceptAllHandlers)))
@@ -231,7 +246,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     private MessageDependenciesFactory? _cachedFactory;
     private int _cachedVersion = int.MinValue;
 
-    private IMessageDependencies GetPlan(
+    private IMessageDependencies? GetPlan(
         Core.Abstractions.Factories.IMessageDependenciesFactory dependenciesFactory,
         ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy)
     {
@@ -256,6 +271,17 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
             }
 
             var dependencies = BuildPlan(typedFactory, resolveStrategy, EmptyGroups);
+
+            if (dependencies is null)
+            {
+                // A missing descriptor is not cached here. The resolve strategy already
+                // caches its own negative lookup against the registry size, so the repeat
+                // cost is a dictionary hit — and leaving the slot untouched keeps the
+                // three cache fields consistent for concurrent readers, which a
+                // "cached null" would need a fourth field to express.
+                return null;
+            }
+
             _cachedDependencies = dependencies;
             _cachedFactory = typedFactory;
             _cachedVersion = registryVersion;
@@ -292,7 +318,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
         public readonly int Version = version;
     }
 
-    private IMessageDependencies GetGroupedPlan(
+    private IMessageDependencies? GetGroupedPlan(
         Core.Abstractions.Factories.IMessageDependenciesFactory dependenciesFactory,
         ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
         IEnumerable<string> groups)
@@ -319,6 +345,13 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
             // ReSharper disable once PossibleMultipleEnumeration
             var materialized = canonical?.Names ?? [.. groups];
             var dependencies = BuildPlan(typedFactory, resolveStrategy, materialized);
+
+            if (dependencies is null)
+            {
+                // Not slotted, for the reason GetPlan gives.
+                return null;
+            }
+
             _cachedGroupedPlan = new GroupedPlanSlot(
                 typedFactory, materialized, canonical, dependencies, registryVersion);
             return dependencies;
@@ -429,17 +462,34 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
         }
     }
 
-    private static IMessageDependencies BuildPlan(
+    /// <summary>
+    /// The pipeline plan for <typeparamref name="TEvent"/>, or <c>null</c> when the event
+    /// type has no descriptor at all.
+    /// </summary>
+    /// <remarks>
+    /// Null rather than an exception on purpose: an unregistered event type is the same
+    /// "nothing will handle this" as a registered one whose handlers are all filtered out,
+    /// and both are the caller's <see cref="EventMediationSettings.ThrowIfNoHandlerFound"/>
+    /// to answer. Only the publish site knows what the caller asked for, so the decision
+    /// belongs there and not here.
+    /// </remarks>
+    private static IMessageDependencies? BuildPlan(
         Core.Abstractions.Factories.IMessageDependenciesFactory factory,
         ActualTypeOrFirstAssignableTypeMessageResolveStrategy resolveStrategy,
         string[] groups)
     {
-        // Mirrors MessageMediator.Mediate's descriptor handling for the options the old
-        // path used: RegisterPlainMessagesOnSpot was never set for events, so an
-        // unregistered event type throws NoHandlerFoundException here as it did there.
-        var descriptor = resolveStrategy.Find(typeof(TEvent))
-                         ?? throw new NoHandlerFoundException(typeof(TEvent));
+        var descriptor = resolveStrategy.Find(typeof(TEvent));
 
-        return factory.Create(typeof(TEvent), descriptor, groups);
+        return descriptor is null ? null : factory.Create(typeof(TEvent), descriptor, groups);
     }
+
+    /// <summary>
+    /// The publish outcome for an event nothing will handle: the caller's flag decides,
+    /// and it decides the same way whether the event type is unregistered or merely
+    /// unhandled.
+    /// </summary>
+    private static ValueTask NoPipeline(bool throwIfNoHandlerFound)
+        => throwIfNoHandlerFound
+            ? ValueTask.FromException(new NoHandlerFoundException(typeof(TEvent)))
+            : default;
 }

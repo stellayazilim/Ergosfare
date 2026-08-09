@@ -233,10 +233,28 @@ than change by accident.
    it — and the two stay told apart by the message alone. Pinned by the group-filtering
    scenarios and `A_base_typed_handler_does_not_serve_a_derived_message_registered_in_its_own_right`.
 
-3. **Events invert the default for "no handler."** Publishing a *registered* event nobody
-   handles is a silent no-op unless `ThrowIfNoHandlerFound` is set; publishing an
-   *unregistered* event type throws `NoHandlerFoundException` regardless of that flag. The
-   setting only controls the first case.
+3. ~~**Events invert the default for "no handler."**~~ *Fixed.* Publishing an
+   *unregistered* event type used to throw `NoHandlerFoundException` whatever the caller
+   asked for, while a *registered* event nobody handles was a silent no-op unless
+   `ThrowIfNoHandlerFound` was set — so the flag governed one of the two ways a publish
+   reaches nobody. Both obey it now, and the default for both is the silent no-op that
+   fire-and-forget implies. Pinned by
+   `Publishing_an_unregistered_event_type_is_a_no_op_like_a_registered_one` and
+   `Publishing_an_unregistered_event_type_throws_when_the_caller_asks_it_to`.
+
+   The cost is real and was taken deliberately: a misspelled or never-registered event
+   type used to announce itself and now goes quietly. `ThrowIfNoHandlerFound` is the way
+   to get that back for a publisher that must know someone listened.
+
+   What the old behavior really depended on is worth recording, because it is a trap for
+   anyone writing event tests anywhere: **"unregistered" is not a property of the event
+   type, it is a property of the whole process.** The resolve strategy falls back to the
+   first *assignable* descriptor, so a single participant registered against the `IEvent`
+   marker — a non-generic `IEventPreInterceptor`, say — gives every event type in the
+   process a descriptor, and nothing is unregistered from then on. The old throw therefore
+   fired or did not fire depending on whether such a participant existed anywhere in the
+   app. This area keeps its own `[ExcludeFromDiscovery]` types and registers nothing at
+   marker level (rule 3 above), which is what makes `UnknownEvent` mean what it says here.
 
 4. **Covariance applies to interceptors but not to main handlers.** An interceptor
    registered against a supertype joins a derived message's pipeline. A *handler*
