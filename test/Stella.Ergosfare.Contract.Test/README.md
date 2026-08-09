@@ -29,13 +29,19 @@ Source-generated registration is the primary axis: the generator is referenced a
 analyzer, and containers are built with `RegisterGenerated(<discovery key>)`. Explicit
 `Register<T>()` is the fallback axis — the path the generated one degrades to.
 
-The pipeline scenarios in [`Pipeline/`](Pipeline) run under **both**, sharing their code
-through `PipelineSemanticsContract`:
+Three areas run under **both** axes, each sharing its scenarios through an abstract
+contract class and closing it over a per-axis type set:
+
+| Area | Contract | Generated types | Fallback types |
+| --- | --- | --- | --- |
+| Pipeline semantics | `Pipeline/PipelineSemanticsContract.cs` | `Pipeline/GeneratedPipelineTypes.cs` | `Pipeline/FallbackPipelineTypes.cs` |
+| Synchronous interceptors | `Sync/SyncSemanticsContract.cs` | `Sync/GeneratedSyncTypes.cs` | `Sync/FallbackSyncTypes.cs` |
+| Post-interceptor abort | `Abort/PostAbortSemanticsContract.cs` | `Abort/GeneratedPostAbortTypes.cs` | `Abort/FallbackPostAbortTypes.cs` |
 
 | Axis | Types | Registration | Executors actually reached |
 | --- | --- | --- | --- |
-| `GeneratedRegistrationPipelineTests` | `Pipeline/GeneratedPipelineTypes.cs` — top-level, unkeyed, ungrouped | `RegisterGenerated()` | `StagedVoidPipelineExecutor`, `StagedResultPipelineExecutor`, `GeneratedVoidPipelineExecutor` + the emitted `StagedPlanN` classes |
-| `RuntimeRegistrationPipelineTests` | `Pipeline/FallbackPipelineTypes.cs` — `[ExcludeFromDiscovery]` | `Register<T>()` | `VoidPipelineExecutor`, `ResultPipelineExecutor` + `SingleAsyncHandlerMediationStrategy` |
+| `GeneratedRegistration*Tests` | top-level, unkeyed, ungrouped | `RegisterGenerated()` | `StagedVoidPipelineExecutor`, `StagedResultPipelineExecutor`, `GeneratedVoidPipelineExecutor` + the emitted `StagedPlanN` classes |
+| `RuntimeRegistration*Tests` | `[ExcludeFromDiscovery]` | `Register<T>()` | `VoidPipelineExecutor`, `ResultPipelineExecutor` + `SingleAsyncHandlerMediationStrategy` |
 
 Both halves of that table are load-bearing, and both are easy to break by accident:
 
@@ -45,7 +51,9 @@ Both halves of that table are load-bearing, and both are easy to break by accide
   additionally must not be nested). Adding a `[DiscoveryKey]` here still registers through
   generated descriptors — and silently dispatches on the reflective executors, testing
   nothing the fallback axis does not already cover. The pattern-less `RegisterGenerated()`
-  is therefore **reserved for this axis**.
+  is therefore **reserved for the three areas above**, and every type they declare is local
+  to its own area: a message type shared with another area, or an interceptor registered
+  against something outside the area, would cross-contaminate the shared unkeyed pool.
 - **The fallback axis must stay `[ExcludeFromDiscovery]`.** The generator's descriptor
   catalog is populated by a module initializer for *every* type it models, so a type the
   generator has seen gets pre-computed descriptors even when registered with
@@ -53,10 +61,27 @@ Both halves of that table are load-bearing, and both are easy to break by accide
 
 Every other area registers by its own discovery key (`contract.dispatch`,
 `contract.lifetime`, `contract.scope`, `contract.groups`, `contract.polymorphism`,
-`contract.events`, `contract.mutation`, `contract.context`, `contract.stream`), which is
-also what keeps the pattern-less call above selecting only the pipeline axis. Types that
-must never be auto-registered — never-registered messages, late-registered interceptors —
-carry `[ExcludeFromDiscovery]`.
+`contract.events`, `contract.mutation`, `contract.context`, `contract.stream`,
+`contract.sync`, `contract.multi`, `contract.exclude`), which is also what keeps the
+pattern-less call above selecting only the three axes. Types that must never be
+auto-registered — never-registered messages, late-registered interceptors — carry
+`[ExcludeFromDiscovery]`.
+
+Three of the keyed areas are keyed *because* no plan can serve them, so both of their axes
+reach the reflective path by construction and the key costs nothing:
+
+- **`contract.sync`** (`Sync/SyncMainHandlerTests.cs`) — the bare-result contracts
+  (`IHandler<T, object>`, `IHandler<T, string>`) put the bare result type in their
+  descriptor rather than the `ValueTask` carrier every plan computation matches against
+  (`ErgosfareRegistrationGenerator.cs:1668`), so they are disqualified before discovery
+  keys are even considered. The `ValueTask`-shaped ones must stay keyed for a different and
+  worse reason — see [suspicious behavior 10](#suspicious-behaviors-observed). Synchronous
+  *interceptors* are neither: they do reach the emitted plans, which is why they live on
+  the unkeyed axis above.
+- **`contract.multi`** (`Handlers/MultipleMainHandlerTests.cs`) — the sole-handler gate
+  drops any message with more than one main handler.
+- **`contract.exclude`** (`Exclusion/PipelineExclusionTests.cs`) — the generator skips
+  messages carrying `[ExcludeFromPipeline]` rather than modeling the exclusion.
 
 ## Rules for anyone adding tests here
 
@@ -68,9 +93,11 @@ the test process, and it never forgets. Everything below follows from that.
    else.
 2. **Give your area its own discovery key, and never call the pattern-less
    `RegisterGenerated()`.** That overload registers every default-discovery construct in
-   the assembly, and it belongs to `GeneratedRegistrationPipelineTests` alone (see
-   [Registration axes](#registration-axes)). An unkeyed message anywhere else joins that
-   axis' containers and breaks its plan expectations.
+   the assembly, and it belongs to the three both-axis areas alone (see
+   [Registration axes](#registration-axes)). An unkeyed message anywhere else joins those
+   containers and can break their plan expectations. Reach for it only when the scenario
+   genuinely needs to run inside an emitted plan — and then keep every type the scenario
+   declares local to the new area.
 3. **Never assert on registry contents or counts, and never assume an empty registry.** By
    the time your test runs, other classes have registered their types into the same
    registry.
@@ -173,6 +200,12 @@ it is a question that must be answered in the PR:
 - Unexpected: the lanes diverged. Stop and report; do not update the baseline to make the
   diff go away.
 
+One diff shape is mechanical rather than behavioral: the emitted plan classes are numbered
+positionally (`StagedPlan0`, `StagedPlan1`, …), so adding an unkeyed message that qualifies
+for a plan renumbers the existing ones. That shows up as changed frames inside untouched
+sections. It is only benign when every removed line is a `StagedPlanN` frame and the shift
+is uniform — check that before waving it through.
+
 Frames are captured from a `Debug` build; a `Release` capture inlines differently and is
 not comparable to this file.
 
@@ -220,13 +253,67 @@ than change by accident.
    exception stage, `null` on abort) for "there is no result."
 
 7. **The generated staged-plan code emits nullable warnings into the consumer's build.**
-   Building this project surfaces `CS8604` twice in
+   Building this project surfaces `CS8604` eight times per TFM in
    `ErgosfareRegistrations.g.cs` — the emitted staged result plan passes a
-   possibly-null `string` into `IAsyncPostInterceptor<TMessage, TResult>.HandleAsync`,
-   whose `messageResult` parameter is non-nullable. It appears for any reference-typed
-   result whose pipeline qualifies for a staged plan. Left unsuppressed on purpose: it is
-   the only warning in this project and it is evidence the staged-plan lane is being
-   exercised.
+   possibly-null `string` into the post-interceptor's non-nullable `messageResult`
+   parameter. It appears once per reference-typed post interceptor per emitted plan body
+   (the direct and the provider-resolved one), so the count tracks how many staged result
+   plans carry post interceptors: two for `PipelineResultCommand`, two for the synchronous
+   `SyncResultCommand`, four for `AbortResultCommand`'s two post slots. The synchronous
+   ones prove the arm is not async-only: `IPostInterceptor<TMessage, TResult>.Handle` has
+   the same non-nullable parameter. Left unsuppressed on purpose: these are the only
+   warnings in this project and they are evidence the staged-plan lane is being exercised.
+
+8. **A synchronous exception or final interceptor throws `NullReferenceException` on a
+   void pipeline.** The void pipeline carries a `ValueTask` in its result slot, but the
+   slot is still empty before the handler completes — and the synchronous contracts have no
+   result-agnostic flavor, so `FinalInterceptorInvocationStrategy.cs:59` (and its
+   exception-stage twin) unboxes that `null` into a `ValueTask` parameter. The emitted plan
+   does the same, through `ResultCast`'s `(ValueTask)result!`. Every failure path of such a
+   pipeline therefore ends in a `NullReferenceException`, which — thrown from a `finally` —
+   replaces both the handler's own exception and `ExecutionAbortedException`. Pinned by the
+   two `A_void_pipelines_synchronous_*` scenarios on both axes. Result-typed pipelines are
+   unaffected: `null` casts to `string?` and `default` boxes for value types.
+
+9. **A synchronous participant cannot be registered without a module marker.** The module
+   builders reject any type that is not assignable to `ICommand` / `IQuery` / `IEvent`
+   (`CommandModuleBuilder.Register`), and the module-flavored interceptor facades inherit
+   that marker themselves — `ICommandPreInterceptor<T> : ICommand`. The synchronous
+   contracts in `Core.Abstractions.Handlers` have no such facade, so a bare
+   `IPreInterceptor<T>` is silently skipped by `RegisterGenerated`, and the dispatch fails
+   later with `InvalidOperationException: No handler is registered for X`. Every
+   synchronous participant in this suite therefore declares `: ICommand, IPreInterceptor<T>`
+   — see `Sync/SyncContracts.cs`.
+
+10. **A `ValueTask`-shaped synchronous main handler breaks the consumer's build.** The plan
+    computations gate on the descriptor's result type, and `IHandler<T, ValueTask>` /
+    `IHandler<T, ValueTask<TResult>>` record exactly the carrier they look for — so an
+    unkeyed one qualifies and the generator emits `AddVoidPlan<TMessage, THandler>` /
+    `AddResultPlan<…>` for it. Those methods constrain `THandler` to `IAsyncHandler<…>`,
+    which a synchronous handler does not implement, and the emitted file fails to compile
+    with `CS0311`. Both shapes were verified by temporarily un-keying them; both fail. This
+    is why `Sync/SyncMainHandlerTests.cs` keeps its types keyed — a compile error cannot be
+    pinned by a test, so this entry is the record. The runtime is not at fault:
+    `VoidPipelineExecutor` and the mediation strategies both have a working arm for these
+    handlers, and the keyed axis exercises it.
+
+11. **A memoized handler instance survives only until the next registration anywhere in the
+    process.** `ForceMemoizedHandlers` caches the instance inside the handler reference held
+    by a `MessageDependencies` object, and that object is cached against the registry
+    version (`MessageDependenciesFactory.Create` →
+    `MessageDescriptorCache.InvalidateIfRegistryChanged`). Registering a *new* type — in any
+    container, for any unrelated message — bumps `MessageRegistry.Version`, drops the cache
+    and rebuilds the references, so the next dispatch constructs a fresh "memoized"
+    instance. Duplicate registrations are free; only genuinely new types bump.
+    <br />This one was found the hard way. `ForceMemoizedHandlers_reuses_one_instance_across_dispatches`
+    had been passing since the suite was written, but the phase-1 areas added six more
+    classes whose first container build registers new types, widening the window enough to
+    fail roughly one run in ten. It is not a test defect and not a race in the registry: a
+    registration between two dispatches genuinely resets memoization. The scenario is now in
+    `RegistryMutationCollection` so nothing registers beside it — the only change this phase
+    made to an existing test file, and the reason is this entry. Whether memoized instances
+    should survive a refresh is a live question for the plan lifecycle
+    (freeze → refresh → re-freeze), not something to paper over here.
 
 ## Where it runs
 
