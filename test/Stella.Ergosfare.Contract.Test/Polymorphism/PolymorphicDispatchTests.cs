@@ -4,6 +4,7 @@ using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Contract.Test.Harness;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Events.Abstractions;
 using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
@@ -168,7 +169,7 @@ public sealed class PolymorphicDispatchTests
         // Covariant command dispatch is resolution-time only: once the derived type has a
         // descriptor of its own, the base-typed handler is an indirect handler there and
         // single-handler mediation never considers it. See the README.
-        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(
+        var thrown = await Assert.ThrowsAsync<NoHandlerFoundException>(
             async () => await mediator.SendAsync(new DepositEntry()));
 
         Assert.Contains(nameof(DepositEntry), thrown.Message, StringComparison.Ordinal);

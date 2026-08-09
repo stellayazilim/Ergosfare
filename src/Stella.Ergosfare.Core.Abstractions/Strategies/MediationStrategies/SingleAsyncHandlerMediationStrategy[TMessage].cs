@@ -34,7 +34,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
     /// <param name="serviceProvider">The provider of the scope this dispatch runs in; handlers and interceptors resolve from it.</param>
     /// <returns>A task representing the asynchronous mediation operation.</returns>
     /// <exception cref="MultipleHandlerFoundException">Thrown when more than one handler is found for the message type.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when no handler is registered for the message type.</exception>
+    /// <exception cref="NoHandlerFoundException">Thrown when no handler is registered for the message type.</exception>
     /// <remarks>
     ///     Pre-interceptors, the main handler and post-interceptors run in sequence; with no
     ///     interceptors registered the handler is invoked directly on a fast path. If an
@@ -55,7 +55,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
 
         if (messageDependencies.Handlers.Count == 0)
         {
-            throw new InvalidOperationException($"No handler is registered for {typeof(TMessage).Name}.");
+            throw new NoHandlerFoundException(typeof(TMessage), $"No handler is registered for {typeof(TMessage).Name}.");
         }
 
         var preInterceptorCount = messageDependencies.PreInterceptors.Count;

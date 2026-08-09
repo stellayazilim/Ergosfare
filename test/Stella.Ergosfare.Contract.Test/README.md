@@ -224,11 +224,14 @@ than change by accident.
    `null` (or the result type's default). Pinned by
    `Aborting_with_a_result_value_still_throws_and_does_not_deliver_the_value`.
 
-2. **Two different exceptions mean "nothing will handle this."** A message type that is not
-   in the registry produces `NoHandlerFoundException`; a registered message whose handlers
-   are all filtered out by a group filter produces a plain
-   `InvalidOperationException("No handler is registered for X.")`. Callers cannot catch
-   both with one type.
+2. ~~**Two different exceptions mean "nothing will handle this."**~~ *Fixed.* A message
+   type absent from the registry used to produce `NoHandlerFoundException` while a
+   registered message whose handlers were all filtered out produced a plain
+   `InvalidOperationException("No handler is registered for X.")`, so no single `catch`
+   covered both. Both now raise `NoHandlerFoundException` — which derives from
+   `InvalidOperationException`, so callers who were catching the second case keep catching
+   it — and the two stay told apart by the message alone. Pinned by the group-filtering
+   scenarios and `A_base_typed_handler_does_not_serve_a_derived_message_registered_in_its_own_right`.
 
 3. **Events invert the default for "no handler."** Publishing a *registered* event nobody
    handles is a silent no-op unless `ThrowIfNoHandlerFound` is set; publishing an
@@ -286,7 +289,7 @@ than change by accident.
    that marker themselves — `ICommandPreInterceptor<T> : ICommand`. The synchronous
    contracts in `Core.Abstractions.Handlers` have no such facade, so a bare
    `IPreInterceptor<T>` is silently skipped by `RegisterGenerated`, and the dispatch fails
-   later with `InvalidOperationException: No handler is registered for X`. The silence is
+   later with `NoHandlerFoundException: No handler is registered for X`. The silence is
    the scan path's alone: handing the same bare type to the explicit `Register<T>()` throws
    `NotSupportedException` at registration instead. Every synchronous participant in this
    suite therefore declares `: ICommand, IPreInterceptor<T>` — see `Sync/SyncContracts.cs`

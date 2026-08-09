@@ -1,4 +1,4 @@
-using Stella.Ergosfare.Core.Abstractions.Exceptions;
+﻿using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Test.Fixtures;
 using Stella.Ergosfare.Test.Fixtures.Stubs.Stream;
@@ -89,7 +89,7 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests :
 
     /// <summary>
     /// A message with a descriptor but no direct stream handler must fail with an explicit
-    /// <see cref="InvalidOperationException"/> when enumeration starts.
+    /// <see cref="NoHandlerFoundException"/> when enumeration starts.
     /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
@@ -112,7 +112,7 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests :
         });
 
         // assert
-        Assert.IsType<InvalidOperationException>(exception);
+        Assert.IsType<NoHandlerFoundException>(exception);
 
         // cleanup
         _messageDependencyFixture.Dispose();

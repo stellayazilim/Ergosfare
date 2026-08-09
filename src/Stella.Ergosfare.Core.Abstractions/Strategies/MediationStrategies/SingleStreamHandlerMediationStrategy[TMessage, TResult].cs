@@ -41,7 +41,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
     /// An <see cref="IAsyncEnumerable{TResult}"/> representing the asynchronous stream of results produced by the handler.
     /// </returns>
     /// <exception cref="MultipleHandlerFoundException">Thrown if more than one handler is registered for the message.</exception>
-    /// <exception cref="InvalidOperationException">Thrown if no handler is registered for the message.</exception>
+    /// <exception cref="NoHandlerFoundException">Thrown if no handler is registered for the message.</exception>
     public async IAsyncEnumerable<TResult> Mediate(TMessage message, IMessageDependencies messageDependencies,
         IExecutionContext context, IServiceProvider serviceProvider)
     {
@@ -52,7 +52,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
 
         if (messageDependencies.Handlers.Count == 0)
         {
-            throw new InvalidOperationException($"No handler is registered for {typeof(TMessage).Name}.");
+            throw new NoHandlerFoundException(typeof(TMessage), $"No handler is registered for {typeof(TMessage).Name}.");
         }
 
         var handler = messageDependencies.Handlers[0].Resolve(serviceProvider);
