@@ -425,6 +425,7 @@ public class MediationBenchmark
     private ICommandMediator _commands = null!;
     private ICommandMediator _generatedCommands = null!;
     private ICommandMediator _memoizedCommands = null!;
+    private IQueryMediator _memoizedQueries = null!;
     private IQueryMediator _queries = null!;
     private IQueryMediator _generatedQueries = null!;
     private IEventMediator _events = null!;
@@ -594,7 +595,8 @@ public class MediationBenchmark
     /// reaches the same shape without the switch. Isolated to its own process via targets,
     /// like the generated variant above.
     /// </summary>
-    [GlobalSetup(Targets = [nameof(Command_Void_Memoized)])]
+    [GlobalSetup(Targets = [nameof(Command_Void_Memoized), nameof(Query_Result_Memoized),
+        nameof(Query_Result_Pipeline5_Memoized)])]
     public void SetupMemoized()
     {
         _ergosfareMemoized = new ServiceCollection()
@@ -602,13 +604,29 @@ public class MediationBenchmark
             {
                 options.ForceMemoizedHandlers();
                 options.AddCommandModule(commands => commands.Register<VoidCommandHandler>());
+                options.AddQueryModule(queries =>
+                {
+                    queries.Register<IntQueryHandler>();
+                    queries.Register<PipelineIntQueryHandler>();
+                    queries.Register<PipelineValidationPreInterceptor>();
+                    queries.Register<PipelineRewritePreInterceptor>();
+                    queries.Register<PipelineResultPostInterceptor>();
+                    queries.Register<PipelineRecoveryExceptionInterceptor>();
+                    queries.Register<PipelineFinalInterceptor>();
+                });
             })
             .BuildServiceProvider();
 
         _memoizedCommands = _ergosfareMemoized.GetRequiredService<ICommandMediator>();
+        _memoizedQueries = _ergosfareMemoized.GetRequiredService<IQueryMediator>();
+
+        AssertPipelineScenario(
+            () => _memoizedQueries.QueryAsync(_pipelineIntQuery).AsTask().GetAwaiter().GetResult(),
+            "Ergosfare (memoized)");
     }
 
-    [GlobalCleanup(Targets = [nameof(Command_Void_Memoized)])]
+    [GlobalCleanup(Targets = [nameof(Command_Void_Memoized), nameof(Query_Result_Memoized),
+        nameof(Query_Result_Pipeline5_Memoized)])]
     public void CleanupMemoized()
     {
         _ergosfareMemoized.Dispose();
@@ -688,6 +706,22 @@ public class MediationBenchmark
     /// <summary>Five closed-generic Mediator behaviors with the equivalent purposes.</summary>
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask<int> MediatorSg_Send_Result_Pipeline5() => _martinMediator.Send(_mediatorSgPipelineInt);
+
+    // ------------------------------------------------------------------
+    // Singleton-path rows — the apples-to-apples comparison against
+    // Mediator's singleton default: ForceMemoizedHandlers resolves each
+    // participant graph once and reuses it, which is Ergosfare's
+    // singleton-equivalent shape.
+    // ------------------------------------------------------------------
+
+    [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask<int> Query_Result_Memoized() => _memoizedQueries.QueryAsync(_intQuery);
+
+    /// <summary>The five-participant pipeline with memoized participants. Memoized
+    /// compositions run the strategy path — the staged-plan gate deliberately steps
+    /// aside for them — so this row also measures that open optimization gap.</summary>
+    [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask<int> Query_Result_Pipeline5_Memoized() => _memoizedQueries.QueryAsync(_pipelineIntQuery);
 
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask Command_Void_Grouped() => _commands.SendAsync(_groupedCommand, _groupedCommandSettings);
