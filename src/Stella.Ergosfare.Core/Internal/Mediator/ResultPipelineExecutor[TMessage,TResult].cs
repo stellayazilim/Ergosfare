@@ -30,11 +30,10 @@ internal sealed class ResultPipelineExecutor<TMessage, TResult>(
     private readonly bool _foreignAdapters = resultAdapterService is not null and not ResultAdapterService;
 
     // Dependencies cached per executor (executors are already per message type + groups),
-    // re-validated against the registry version — turns the per-dispatch factory call and
-    // cache lookup into a single field read + version compare.
+    // resolved once and frozen — turns the per-dispatch factory call and cache lookup
+    // into a single field read.
     private IMessageDependencies? _cachedDependencies;
     private MessageDependencies? _cachedFastDependencies;
-    private int _cachedVersion = int.MinValue;
 
     public ValueTask<TResult> Execute(object message, IExecutionContext context, IServiceProvider serviceProvider)
     {
@@ -73,22 +72,18 @@ internal sealed class ResultPipelineExecutor<TMessage, TResult>(
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
-            // Read before the build: a registration completing mid-build must land as a
-            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
-            var registryVersion = typedFactory.CurrentRegistryVersion;
+            // Frozen registry: dependencies resolve once per executor and are never
+            // re-validated — a registration after the first dispatch is not observed.
             var cached = _cachedDependencies;
 
-            if (cached is not null && _cachedVersion == registryVersion)
+            if (cached is not null)
             {
                 return cached;
             }
 
-            // Create runs the registry-version invalidation and rebuilds; races are benign —
-            // both writers publish equivalent, idempotent state.
             var dependencies = typedFactory.Create(typeof(TMessage), descriptor, groups);
             _cachedFastDependencies = dependencies as MessageDependencies;
             _cachedDependencies = dependencies;
-            _cachedVersion = registryVersion;
             return dependencies;
         }
 
