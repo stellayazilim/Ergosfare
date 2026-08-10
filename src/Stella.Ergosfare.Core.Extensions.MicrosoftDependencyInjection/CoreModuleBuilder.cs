@@ -47,6 +47,7 @@ public class CoreModuleBuilder(IMessageRegistry registry): IModuleBuilder
     /// </summary>
     /// <param name="assembly">The assembly whose types should be registered as messages.</param>
     /// <returns>The current <see cref="IModuleBuilder"/> instance for fluent chaining.</returns>
+    [Obsolete("Reflection-based assembly scanning is deprecated and will be removed in the next release. Use source-generated RegisterGenerated() — or RegisterGenerated(pattern) for discovery keys — and Register<T>() for explicit registrations.")]
     [RequiresUnreferencedCode("Assembly scanning discovers types via reflection; trimming may remove them. Register types explicitly (or use source-generated registration) in trimmed or AOT applications.")]
     public IModuleBuilder RegisterFromAssembly(Assembly assembly)
         => RegisterFromAssembly(assembly, DiscoveryKeyAttribute.DefaultKey);
@@ -59,6 +60,7 @@ public class CoreModuleBuilder(IMessageRegistry registry): IModuleBuilder
     /// <param name="assembly">The assembly whose types should be registered as messages.</param>
     /// <param name="discoveryKeyPattern">The discovery key pattern to select types by.</param>
     /// <returns>The current <see cref="IModuleBuilder"/> instance for fluent chaining.</returns>
+    [Obsolete("Reflection-based assembly scanning is deprecated and will be removed in the next release. Use source-generated RegisterGenerated() — or RegisterGenerated(pattern) for discovery keys — and Register<T>() for explicit registrations.")]
     [RequiresUnreferencedCode("Assembly scanning discovers types via reflection; trimming may remove them. Register types explicitly (or use source-generated registration) in trimmed or AOT applications.")]
     public IModuleBuilder RegisterFromAssembly(Assembly assembly, string discoveryKeyPattern)
     {

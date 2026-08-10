@@ -43,6 +43,7 @@ public interface IModuleBuilder
     /// <returns>
     /// The current <see cref="IModuleBuilder"/> instance to allow for fluent chaining.
     /// </returns>
+    [Obsolete("Reflection-based assembly scanning is deprecated and will be removed in the next release. Use source-generated RegisterGenerated() — or RegisterGenerated(pattern) for discovery keys — and Register<T>() for explicit registrations.")]
     [RequiresUnreferencedCode("Assembly scanning discovers types via reflection; trimming may remove them. Register types explicitly (or use source-generated registration) in trimmed or AOT applications.")]
     IModuleBuilder RegisterFromAssembly(Assembly assembly);
 }

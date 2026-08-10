@@ -84,6 +84,7 @@ public sealed class CommandModuleBuilder
     /// </summary>
     /// <param name="assembly">The assembly from which to register command types.</param>
     /// <returns>The current <see cref="CommandModuleBuilder" /> instance for method chaining.</returns>
+    [Obsolete("Reflection-based assembly scanning is deprecated and will be removed in the next release. Use source-generated RegisterGenerated() — or RegisterGenerated(pattern) for discovery keys — and Register<T>() for explicit registrations.")]
     [RequiresUnreferencedCode("Assembly scanning discovers command types via reflection; trimming may remove them. Register commands explicitly (or use source-generated registration) in trimmed or AOT applications.")]
     public CommandModuleBuilder RegisterFromAssembly(Assembly assembly)
         => RegisterFromAssembly(assembly, DiscoveryKeyAttribute.DefaultKey);
@@ -96,6 +97,7 @@ public sealed class CommandModuleBuilder
     /// <param name="assembly">The assembly from which to register command types.</param>
     /// <param name="discoveryKeyPattern">The discovery key pattern to select types by.</param>
     /// <returns>The current <see cref="CommandModuleBuilder" /> instance for method chaining.</returns>
+    [Obsolete("Reflection-based assembly scanning is deprecated and will be removed in the next release. Use source-generated RegisterGenerated() — or RegisterGenerated(pattern) for discovery keys — and Register<T>() for explicit registrations.")]
     [RequiresUnreferencedCode("Assembly scanning discovers command types via reflection; trimming may remove them. Register commands explicitly (or use source-generated registration) in trimmed or AOT applications.")]
     public CommandModuleBuilder RegisterFromAssembly(Assembly assembly, string discoveryKeyPattern)
     {
