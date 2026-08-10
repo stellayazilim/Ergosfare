@@ -3080,6 +3080,33 @@ stages: [direct:audit, direct:notify, indirect:interface]
                  | Stella.Ergosfare.Contract.Test.Polymorphism.PolymorphicDispatchTests+ShipmentInterfaceHandler.HandleAsync
                    | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
 
+stages: [early, handler]
+  1. early
+     | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests.A_registration_before_the_first_dispatch_joins_the_pipeline
+       | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+<A_registration_before_the_first_dispatch_joins_the_pipeline>d__15.MoveNext
+         | Stella.Ergosfare.Commands.CommandMediator.SendAsync
+           | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
+             | Stella.Ergosfare.Core.Internal.Mediator.VoidPipelineExecutor`1.Execute
+               | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1.Mediate
+                 | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1+<Mediate>d__2.MoveNext
+                   | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1.Invoke
+                     | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1+<Invoke>d__0.MoveNext
+                       | Stella.Ergosfare.Commands.Abstractions.ICommandPreInterceptor`1.Stella.Ergosfare.Core.Abstractions.Handlers.IAsyncPreInterceptor<TCommand>.HandleAsync
+                         | Stella.Ergosfare.Commands.Abstractions.ICommandPreInterceptor`1+<Stella-Ergosfare-Core-Abstractions-Handlers-IAsyncPreInterceptor<TCommand>-HandleAsync>d__0.MoveNext
+                           | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+EarlyPre.HandleAsync
+                             | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+  2. handler
+     | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests.A_registration_before_the_first_dispatch_joins_the_pipeline
+       | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+<A_registration_before_the_first_dispatch_joins_the_pipeline>d__15.MoveNext
+         | Stella.Ergosfare.Commands.CommandMediator.SendAsync
+           | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
+             | Stella.Ergosfare.Core.Internal.Mediator.VoidPipelineExecutor`1.Execute
+               | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1.Mediate
+                 | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1+<Mediate>d__2.MoveNext
+                   | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1.InvokeHandler
+                     | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+EarlyTargetHandler.HandleAsync
+                       | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+
 stages: [handler, exception, final]
   1. handler
      | Stella.Ergosfare.Contract.Test.Events.EventPublishTests.A_failed_publishs_exception_and_final_stages_are_handed_the_shared_unit_instance
@@ -3237,8 +3264,8 @@ stages: [handler]
 
 stages: [handler]
   1. handler
-     | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests.A_generated_pipeline_picks_up_an_interceptor_registered_after_it_ran
-       | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+<A_generated_pipeline_picks_up_an_interceptor_registered_after_it_ran>d__10.MoveNext
+     | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests.A_registration_after_a_generated_pipelines_first_dispatch_is_not_observed
+       | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+<A_registration_after_a_generated_pipelines_first_dispatch_is_not_observed>d__13.MoveNext
          | Stella.Ergosfare.Commands.CommandMediator.SendAsync
            | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
              | Stella.Ergosfare.Core.Internal.Mediator.VoidPipelineExecutor`1.Execute
@@ -3247,8 +3274,28 @@ stages: [handler]
 
 stages: [handler]
   1. handler
-     | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests.A_runtime_registered_pipeline_picks_up_an_interceptor_registered_after_it_ran
-       | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+<A_runtime_registered_pipeline_picks_up_an_interceptor_registered_after_it_ran>d__11.MoveNext
+     | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests.A_registration_after_a_generated_pipelines_first_dispatch_is_not_observed
+       | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+<A_registration_after_a_generated_pipelines_first_dispatch_is_not_observed>d__13.MoveNext
+         | Stella.Ergosfare.Commands.CommandMediator.SendAsync
+           | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
+             | Stella.Ergosfare.Core.Internal.Mediator.VoidPipelineExecutor`1.Execute
+               | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+GeneratedTargetHandler.HandleAsync
+                 | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+
+stages: [handler]
+  1. handler
+     | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests.A_registration_after_a_runtime_pipelines_first_dispatch_is_not_observed
+       | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+<A_registration_after_a_runtime_pipelines_first_dispatch_is_not_observed>d__14.MoveNext
+         | Stella.Ergosfare.Commands.CommandMediator.SendAsync
+           | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
+             | Stella.Ergosfare.Core.Internal.Mediator.VoidPipelineExecutor`1.Execute
+               | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+RuntimeTargetHandler.HandleAsync
+                 | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
+
+stages: [handler]
+  1. handler
+     | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests.A_registration_after_a_runtime_pipelines_first_dispatch_is_not_observed
+       | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+<A_registration_after_a_runtime_pipelines_first_dispatch_is_not_observed>d__14.MoveNext
          | Stella.Ergosfare.Commands.CommandMediator.SendAsync
            | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
              | Stella.Ergosfare.Core.Internal.Mediator.VoidPipelineExecutor`1.Execute
@@ -3274,87 +3321,6 @@ stages: [invoice, warehouse]
                | Stella.Ergosfare.Events.EventBroadcastInvoker`1.Invoke
                  | Stella.Ergosfare.Contract.Test.Events.EventPublishTests+OrderPlacedWarehouseHandler.HandleAsync
                    | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
-
-stages: [late, handler]
-  1. late
-     | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests.A_container_that_can_resolve_the_late_participant_builds_the_pipeline_the_broken_one_could_not
-       | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+<A_container_that_can_resolve_the_late_participant_builds_the_pipeline_the_broken_one_could_not>d__16.MoveNext
-         | Stella.Ergosfare.Commands.CommandMediator.SendAsync
-           | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
-             | Stella.Ergosfare.Core.Internal.Mediator.VoidPipelineExecutor`1.Execute
-               | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1.Mediate
-                 | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1+<Mediate>d__2.MoveNext
-                   | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1.Invoke
-                     | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1+<Invoke>d__0.MoveNext
-                       | Stella.Ergosfare.Commands.Abstractions.ICommandPreInterceptor`1.Stella.Ergosfare.Core.Abstractions.Handlers.IAsyncPreInterceptor<TCommand>.HandleAsync
-                         | Stella.Ergosfare.Commands.Abstractions.ICommandPreInterceptor`1+<Stella-Ergosfare-Core-Abstractions-Handlers-IAsyncPreInterceptor<TCommand>-HandleAsync>d__0.MoveNext
-                           | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+UnresolvableRecoveryPre.HandleAsync
-                             | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
-  2. handler
-     | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests.A_container_that_can_resolve_the_late_participant_builds_the_pipeline_the_broken_one_could_not
-       | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+<A_container_that_can_resolve_the_late_participant_builds_the_pipeline_the_broken_one_could_not>d__16.MoveNext
-         | Stella.Ergosfare.Commands.CommandMediator.SendAsync
-           | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
-             | Stella.Ergosfare.Core.Internal.Mediator.VoidPipelineExecutor`1.Execute
-               | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1.Mediate
-                 | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1+<Mediate>d__2.MoveNext
-                   | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1.InvokeHandler
-                     | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+RecoveryTargetHandler.HandleAsync
-                       | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
-
-stages: [late, handler]
-  1. late
-     | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests.A_generated_pipeline_picks_up_an_interceptor_registered_after_it_ran
-       | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+<A_generated_pipeline_picks_up_an_interceptor_registered_after_it_ran>d__10.MoveNext
-         | Stella.Ergosfare.Commands.CommandMediator.SendAsync
-           | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
-             | Stella.Ergosfare.Core.Internal.Mediator.VoidPipelineExecutor`1.Execute
-               | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1.Mediate
-                 | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1+<Mediate>d__2.MoveNext
-                   | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1.Invoke
-                     | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1+<Invoke>d__0.MoveNext
-                       | Stella.Ergosfare.Commands.Abstractions.ICommandPreInterceptor`1.Stella.Ergosfare.Core.Abstractions.Handlers.IAsyncPreInterceptor<TCommand>.HandleAsync
-                         | Stella.Ergosfare.Commands.Abstractions.ICommandPreInterceptor`1+<Stella-Ergosfare-Core-Abstractions-Handlers-IAsyncPreInterceptor<TCommand>-HandleAsync>d__0.MoveNext
-                           | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+GeneratedLatePre.HandleAsync
-                             | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
-  2. handler
-     | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests.A_generated_pipeline_picks_up_an_interceptor_registered_after_it_ran
-       | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+<A_generated_pipeline_picks_up_an_interceptor_registered_after_it_ran>d__10.MoveNext
-         | Stella.Ergosfare.Commands.CommandMediator.SendAsync
-           | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
-             | Stella.Ergosfare.Core.Internal.Mediator.VoidPipelineExecutor`1.Execute
-               | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1.Mediate
-                 | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1+<Mediate>d__2.MoveNext
-                   | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1.InvokeHandler
-                     | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+GeneratedTargetHandler.HandleAsync
-                       | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
-
-stages: [late, handler]
-  1. late
-     | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests.A_runtime_registered_pipeline_picks_up_an_interceptor_registered_after_it_ran
-       | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+<A_runtime_registered_pipeline_picks_up_an_interceptor_registered_after_it_ran>d__11.MoveNext
-         | Stella.Ergosfare.Commands.CommandMediator.SendAsync
-           | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
-             | Stella.Ergosfare.Core.Internal.Mediator.VoidPipelineExecutor`1.Execute
-               | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1.Mediate
-                 | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1+<Mediate>d__2.MoveNext
-                   | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1.Invoke
-                     | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1+<Invoke>d__0.MoveNext
-                       | Stella.Ergosfare.Commands.Abstractions.ICommandPreInterceptor`1.Stella.Ergosfare.Core.Abstractions.Handlers.IAsyncPreInterceptor<TCommand>.HandleAsync
-                         | Stella.Ergosfare.Commands.Abstractions.ICommandPreInterceptor`1+<Stella-Ergosfare-Core-Abstractions-Handlers-IAsyncPreInterceptor<TCommand>-HandleAsync>d__0.MoveNext
-                           | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+RuntimeLatePre.HandleAsync
-                             | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
-  2. handler
-     | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests.A_runtime_registered_pipeline_picks_up_an_interceptor_registered_after_it_ran
-       | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+<A_runtime_registered_pipeline_picks_up_an_interceptor_registered_after_it_ran>d__11.MoveNext
-         | Stella.Ergosfare.Commands.CommandMediator.SendAsync
-           | Stella.Ergosfare.Core.MessageDispatchEngine.DispatchAsync
-             | Stella.Ergosfare.Core.Internal.Mediator.VoidPipelineExecutor`1.Execute
-               | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1.Mediate
-                 | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1+<Mediate>d__2.MoveNext
-                   | Stella.Ergosfare.Core.Abstractions.Strategies.SingleAsyncHandlerMediationStrategy`1.InvokeHandler
-                     | Stella.Ergosfare.Contract.Test.Runtime.RuntimeRegistrationMutationTests+RuntimeTargetHandler.HandleAsync
-                       | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
 
 stages: [pre:audited, handler]
   1. pre:audited
