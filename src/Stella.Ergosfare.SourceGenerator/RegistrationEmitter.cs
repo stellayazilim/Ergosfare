@@ -653,6 +653,66 @@ internal static class RegistrationEmitter
         }
     }
 
+    /// <summary>
+    ///     Emits the exception stage's chain calls, guarding every filtered participant
+    ///     with the compile-time <c>is</c> test its runtime filter probe would apply.
+    /// </summary>
+    /// <remarks>
+    ///     When every participant is filtered, none of them may turn out to accept the
+    ///     exception — and a stage that ran nobody has handled nothing, so the plan
+    ///     rethrows exactly as the runtime stage does. A single unfiltered participant
+    ///     makes that impossible, and the flag is not emitted at all.
+    /// </remarks>
+    private static void EmitExceptionCalls(
+        StringBuilder sb, StagedPlanModel plan, bool direct, string chainVariable, string indent)
+    {
+        var alwaysMatches = false;
+
+        foreach (var call in plan.ExceptionCalls)
+        {
+            if (call.ExceptionFilterExpression is null)
+            {
+                alwaysMatches = true;
+                break;
+            }
+        }
+
+        if (!alwaysMatches)
+        {
+            sb.Append(indent).AppendLine("var matchedExceptionInterceptor = false;");
+        }
+
+        foreach (var call in plan.ExceptionCalls)
+        {
+            if (call.ExceptionFilterExpression is null)
+            {
+                EmitChainCall(sb, plan, call, direct, "ExceptionInterceptor", chainVariable, "e", indent);
+                continue;
+            }
+
+            sb.Append(indent).Append("if (e is ").Append(call.ExceptionFilterExpression).AppendLine(")");
+            sb.Append(indent).AppendLine("{");
+
+            if (!alwaysMatches)
+            {
+                sb.Append(indent).AppendLine("    matchedExceptionInterceptor = true;");
+            }
+
+            EmitChainCall(sb, plan, call, direct, "ExceptionInterceptor", chainVariable, "e", indent + "    ");
+            sb.Append(indent).AppendLine("}");
+        }
+
+        if (alwaysMatches)
+        {
+            return;
+        }
+
+        sb.Append(indent).AppendLine("if (!matchedExceptionInterceptor)");
+        sb.Append(indent).AppendLine("{");
+        sb.Append(indent).AppendLine("    throw;");
+        sb.Append(indent).AppendLine("}");
+    }
+
     private static void EmitVoidExecuteBody(StringBuilder sb, StagedPlanModel plan, bool direct)
     {
         var needsResult = !plan.PostCalls.IsEmpty || !plan.ExceptionCalls.IsEmpty || !plan.FinalCalls.IsEmpty;
@@ -719,10 +779,7 @@ internal static class RegistrationEmitter
         {
             sb.AppendLine("                    var resultBeforeExceptions = result;");
 
-            foreach (var call in plan.ExceptionCalls)
-            {
-                EmitChainCall(sb, plan, call, direct, "ExceptionInterceptor", "result", "e", "                    ");
-            }
+            EmitExceptionCalls(sb, plan, direct, "result", "                    ");
 
             sb.Append("                    var invokedExceptionResult = (").Append(UnitFullName).AppendLine("?) result;");
             sb.AppendLine("                    result = invokedExceptionResult == null ? resultBeforeExceptions : result;");
@@ -808,10 +865,7 @@ internal static class RegistrationEmitter
         {
             sb.AppendLine("                    object? exceptionChain = result;");
 
-            foreach (var call in plan.ExceptionCalls)
-            {
-                EmitChainCall(sb, plan, call, direct, "ExceptionInterceptor", "exceptionChain", "e", "                    ");
-            }
+            EmitExceptionCalls(sb, plan, direct, "exceptionChain", "                    ");
 
             if (plan.ResultIsValueType)
             {

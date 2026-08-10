@@ -37,6 +37,7 @@ contract class and closing it over a per-axis type set:
 | Pipeline semantics | `Pipeline/PipelineSemanticsContract.cs` | `Pipeline/GeneratedPipelineTypes.cs` | `Pipeline/FallbackPipelineTypes.cs` |
 | Synchronous interceptors | `Sync/SyncSemanticsContract.cs` | `Sync/GeneratedSyncTypes.cs` | `Sync/FallbackSyncTypes.cs` |
 | Post-interceptor abort | `Abort/PostAbortSemanticsContract.cs` | `Abort/GeneratedPostAbortTypes.cs` | `Abort/FallbackPostAbortTypes.cs` |
+| Typed exception filters | `ExceptionFilters/ExceptionFilterSemanticsContract.cs` | `ExceptionFilters/GeneratedExceptionFilterTypes.cs` | `ExceptionFilters/FallbackExceptionFilterTypes.cs` |
 
 | Axis | Types | Registration | Executors actually reached |
 | --- | --- | --- | --- |
@@ -51,7 +52,7 @@ Both halves of that table are load-bearing, and both are easy to break by accide
   additionally must not be nested). Adding a `[DiscoveryKey]` here still registers through
   generated descriptors — and silently dispatches on the reflective executors, testing
   nothing the fallback axis does not already cover. The pattern-less `RegisterGenerated()`
-  is therefore **reserved for the three areas above**, and every type they declare is local
+  is therefore **reserved for the four areas above**, and every type they declare is local
   to its own area: a message type shared with another area, or an interceptor registered
   against something outside the area, would cross-contaminate the shared unkeyed pool.
 - **The fallback axis must stay `[ExcludeFromDiscovery]`.** The generator's descriptor
@@ -87,6 +88,14 @@ reach the reflective path by construction and the key costs nothing:
 - **`contract.exclude`** (`Exclusion/PipelineExclusionTests.cs`) — the generator skips
   messages carrying `[ExcludeFromPipeline]` rather than modeling the exclusion.
 
+One gate is deliberately left unpinned, because no assertion can see it: an exception
+interceptor that implements the non-generic `IExceptionInterceptorFilter` by hand — rather
+than declaring one `IExceptionInterceptorFilter<TException>` — has no compile-time exception
+type, so the generator disqualifies the whole plan and the dispatch falls back to the
+reflective stage, which asks the instance. Both paths then produce the same observable
+behavior; only the lane map would show the difference. Do not write such an interceptor in
+the unkeyed pool: it would take an area's plans down without failing a single test.
+
 ## Rules for anyone adding tests here
 
 **The `MessageRegistry` is process-wide.** It is a singleton shared by every container in
@@ -97,7 +106,7 @@ the test process, and it never forgets. Everything below follows from that.
    else.
 2. **Give your area its own discovery key, and never call the pattern-less
    `RegisterGenerated()`.** That overload registers every default-discovery construct in
-   the assembly, and it belongs to the three both-axis areas alone (see
+   the assembly, and it belongs to the four both-axis areas alone (see
    [Registration axes](#registration-axes)). An unkeyed message anywhere else joins those
    containers and can break their plan expectations. Reach for it only when the scenario
    genuinely needs to run inside an emitted plan — and then keep every type the scenario
@@ -120,6 +129,11 @@ the test process, and it never forgets. Everything below follows from that.
 7. **No sleeps.** Use `TaskCompletionSource` if async coordination is ever needed. Every
    scenario here completes synchronously today.
 8. **Hand-written stubs, no Moq.** The repository is phasing mocks out.
+9. **Give your area its own exception types.** Since typed exception interceptors match on
+   assignability, an exception type is now a selector as much as a message type is: an
+   interceptor declaring a widely-used base type accepts faults thrown by scenarios that
+   have never heard of it. Declare the faults your area throws inside the area, and never
+   filter on a framework exception type.
 
 ## How a scenario observes a dispatch
 
