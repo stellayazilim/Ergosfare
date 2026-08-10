@@ -1,0 +1,14 @@
+﻿<Solution>
+  <Folder Name="/app/">
+    <Project Path="Stella.Ergosfare.E2E.Domain\Stella.Ergosfare.E2E.Domain.csproj" />
+    <Project Path="Stella.Ergosfare.E2E.Contracts\Stella.Ergosfare.E2E.Contracts.csproj" />
+    <Project Path="Stella.Ergosfare.E2E.Infrastructure\Stella.Ergosfare.E2E.Infrastructure.csproj" />
+    <Project Path="Stella.Ergosfare.E2E.UseCases\Stella.Ergosfare.E2E.UseCases.csproj" />
+    <Project Path="Stella.Ergosfare.E2E.Api\Stella.Ergosfare.E2E.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <!-- The library under test, referenced from local src so e2e runs this branch's code. -->
+    <Project Path="..\..\src\Stella.Ergosfare\Stella.Ergosfare.csproj" />
+    <Project Path="..\..\src\Stella.Ergosfare.SourceGenerator\Stella.Ergosfare.SourceGenerator.csproj" />
+  </Folder>
+</Solution>

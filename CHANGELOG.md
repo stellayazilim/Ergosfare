@@ -125,14 +125,16 @@ implied. Three changes are source-breaking and all three are listed under Notes.
 Measured on this tree (7800X3D, .NET 9.0.11, BenchmarkDotNet v0.15.8), against the same
 rows as v2.6.0-preview:
 
-* Planned dispatch: void **21.0 → 19.4 ns**, query **25.3 → 24.4 ns**; the staged plan
-  rows follow — intercepted void **49.2 → 45.4 ns**, intercepted query
-  **83.5 → 78.8 ns**. The freeze is most of it: an executor no longer re-reads the
-  registry version per dispatch, and a planned one skips the dependency graph entirely
-  once its first dispatch has validated the lane.
-* The **reflective** interceptor path gains the most from the `Unit` representation:
-  intercepted void drops **198.2 ns / 104 B → 149.2 ns / 72 B**, the 32 bytes being the
-  per-dispatch boxed `ValueTask` that used to sit in the result slot.
+* Planned dispatch: void **21.0 → 19.9 ns**, query **25.3 → 24.0 ns**; the staged plan
+  rows hold — intercepted void **49.2 → 46.9 ns**, intercepted query **83.5 → 83.4 ns**.
+  The freeze is most of it: an executor no longer re-reads the registry version per
+  dispatch, and a planned one skips the dependency graph entirely once its first dispatch
+  has validated the lane.
+* The **reflective** interceptor path gains from the `Unit` representation where it
+  counts: intercepted void allocates **104 B → 72 B**, the 32 bytes being the per-dispatch
+  boxed `ValueTask` that used to sit in the result slot. Its wall clock moves with it
+  (198.2 → ~168 ns), though that row's run-to-run spread is wide enough that the
+  allocation is the part to trust.
 * One design note for anyone profiling their own dispatch layer: the abort short circuit
   first landed as a `try`/`catch` around each executor's fast-path invocation, which cost
   9–24% on every interceptor-less row without ever being on a throwing path — a method
@@ -158,6 +160,12 @@ rows as v2.6.0-preview:
   of v2.2.0 and the preview line removes it next.
 * Housekeeping: `UnresolvableParticipantException` drops `[Serializable]`, matching the
   recorded decision on the exception surface.
+* The benchmark table now speaks the public surface: the internal-engine rows are gone —
+  nothing but the facades reaches that entry point — and a **five-participant pipeline**
+  row joins, running the same five purposes (validate, rewrite the message, rewrite the
+  result, armed exception recovery, always-runs final) as Ergosfare interceptors, MediatR
+  behaviors and Mediator behaviors, each in its own idiomatic construct and default
+  lifetime.
 
 ## v2.6.0-preview – '2026-08-08'
 

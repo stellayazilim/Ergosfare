@@ -183,60 +183,49 @@ Environment: BenchmarkDotNet v0.15.8 · Windows 11 · AMD Ryzen 7 7800X3D · .NE
 (RyuJIT x86-64-v4). Measured 2026-08-11, on the tree released as v2.7.0-preview. Every row
 is a **single dispatch** of a no-op handler through the public mediator interfaces.
 
-Two shapes are measured:
+Four scenarios, each written the way the library in question would write it, at that
+library's default lifetime.
 
-- **Typical usage** — the mediators resolved once from a shared scope (background workers,
-  message-pump loops).
-- **Web-server shape** — a fresh DI scope and mediator resolution for every dispatch,
-  mimicking one scope per HTTP request (the shape ASP.NET Core gives you).
-
-Typical usage:
-
-| Scenario (per dispatch) | Mean | Allocated |
-|---|---:|---:|
-| Command — runtime registration | 30.5 ns | 24 B |
-| Command — generated plan (`RegisterGenerated`) | **19.4 ns** | 24 B |
-| Command — memoized handlers | 24.9 ns | **0 B** |
-| Command + 2 interceptors — runtime strategy | 149.2 ns | 72 B |
-| Command + 2 interceptors — **staged plan** | **45.4 ns** | **24 B** |
-| Query (`IQuery<int>`) — generated plan | 24.4 ns | 24 B |
-| Query + 2 interceptors — **staged plan** | **78.8 ns** | 72 B |
-| Event publish (two handlers) | 51.0 ns | 48 B |
-| Grouped command (`GroupSet`) | 32.6 ns | 24 B |
-| MediatR — command / query / publish | 65.4 / 54.9 / 88.4 ns | 192 / 192 / 440 B |
-| Mediator (martinothamar) — command / query / publish | 8.4 / 8.0 / 16.2 ns | 0 B |
-
-Web-server shape (scope creation included in every row):
+Mediators resolved once — background workers, message-pump loops:
 
 | Per dispatch | Ergosfare | MediatR | Mediator (martinothamar) |
 |---|---:|---:|---:|
-| Command | 84.6 ns / 192 B | 110.8 ns / 352 B | 52.8 ns / 128 B |
-| Query | 97.8 ns / 200 B | 107.7 ns / 352 B | 56.6 ns / 128 B |
-| Publish | 105.2 ns / 232 B | 138.6 ns / 600 B | 59.4 ns / 128 B |
+| Command, nothing returned | **19.9 ns** / 24 B | 60.4 ns / 192 B | 8.5 ns / 0 B |
+| Query returning a value | **24.0 ns** / 24 B | 54.9 ns / 192 B | 9.1 ns / 0 B |
+| Query through five participants | **120.2 ns** / 96 B | 205.6 ns / 1008 B | 61.4 ns / 0 B |
+| Event to two handlers | **50.5 ns** / 48 B | 89.7 ns / 440 B | 16.2 ns / 0 B |
 
-Scenario notes:
+One DI scope per dispatch — the shape ASP.NET Core gives you, scope creation and mediator
+resolution included in every row:
 
-- Against **MediatR**, Ergosfare leads every row on both axes — up to 3.4× on time and
-  2–8× on allocation in typical usage, and it stays ahead in the scope-dominated
-  web-server shape.
+| Per dispatch | Ergosfare | MediatR | Mediator (martinothamar) |
+|---|---:|---:|---:|
+| Command | **92.5 ns** / 192 B | 113.2 ns / 352 B | 54.8 ns / 128 B |
+| Query | **90.6 ns** / 200 B | 110.0 ns / 352 B | 50.8 ns / 128 B |
+| Event | **106.4 ns** / 232 B | 146.3 ns / 600 B | 57.1 ns / 128 B |
+
+Reading the rows:
+
+- **The five participants** are the same five purposes in all three libraries: validate the
+  message, rewrite the message, rewrite the result, an armed exception recovery that never
+  fires on the happy path, and an always-runs final touch. Ergosfare runs them as
+  interceptors through a source-generated staged plan; MediatR and Mediator run them as
+  pipeline behaviors. This is the row that says what a real pipeline costs.
+- **Against MediatR**, Ergosfare leads every scenario on both axes — 2–3× on time, 8–10× on
+  allocation — and stays ahead once a per-request scope dominates the measurement.
 - **Mediator** (martinothamar's source-generated library) is faster on raw nanoseconds by
-  design: it carries no execution context, no runtime registry, and resolves its
-  singleton handlers without touching the container per dispatch. Ergosfare's default
-  24 B is the transient handler instance itself — what a transient registration
-  declares — and drops to 0 B with singleton handlers or `ForceMemoizedHandlers()`.
-- The **staged plan** rows are the interceptor story: an interceptor-bearing pipeline
-  costs ~5× a bare dispatch on the runtime strategy; the source-generated staged plan
-  runs the same pipeline — same order, same exception and final semantics, validated
-  against the live registry when the pipeline is built — in straight-line code at ~1.5×
-  the bare dispatch, with the participant instances stack-allocated by the JIT where they
-  do not escape.
-- Everything above uses default, out-of-the-box settings for all three libraries.
+  design: no execution context, no runtime registry, and singleton handlers resolved
+  without touching the container per dispatch. Ergosfare's 24 B is the transient handler
+  instance itself — what a transient registration declares — and drops to 0 B with
+  singleton handlers or `ForceMemoizedHandlers()`.
+- Ergosfare's command, query and pipeline rows register through `RegisterGenerated()`, what
+  the quick start sets up. The event row registers at runtime: a publish takes the same
+  broadcast lane either way, since generated registration changes what registration costs,
+  not how a publish runs.
 
-Row ↔ BenchmarkDotNet method mapping, for matching against your own runs:
-`Command_Void`, `Command_Void_Generated`, `Command_Void_Memoized`,
-`Command_Void_Intercepted`, `Command_Void_Intercepted_Generated`, `Query_Result_Generated`,
-`Query_Result_Intercepted_Generated`, `Event_Publish`, `Command_Void_Grouped_GroupSet`,
-`MediatR_*`, `MediatorSg_*`, and the `*_Scoped` variants for the web-server shape.
+The benchmark project carries more rows than these — the runtime-registration, memoized and
+grouped lanes exist to catch regressions in library development, and are not part of the
+comparison above.
 
 ## Dispatch architecture
 

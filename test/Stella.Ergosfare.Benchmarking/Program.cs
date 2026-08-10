@@ -407,11 +407,13 @@ public sealed class MediatrResultRewriteBehavior : IPipelineBehavior<MediatrPipe
 /// usage: background workers, message-pump loops).</para>
 /// <para><b>Scoped</b> — a fresh DI scope per dispatch (the web-request shape; includes
 /// scope creation and mediator resolution in every measurement).</para>
-/// Each category carries the raw <see cref="IMessageMediator"/> engine dispatch as its
-/// baseline — that is the floor the public facades add their convenience on top of, and
-/// the Ratio column reads as "what does the facade (or MediatR) cost relative to it".
-/// Within each category: a void dispatch, a result-returning dispatch, and a two-handler
-/// event publish, for Ergosfare and the competitors alike.
+/// Every row dispatches through a public mediator facade — the surface an application
+/// actually calls; the internal engine is not benchmarked separately, since nothing but
+/// the facades reaches it. Each category's baseline is Ergosfare's plain command
+/// dispatch, so the Ratio column reads as "what does this shape, lane or library cost
+/// relative to a bare command". Within each category: a void dispatch, a
+/// result-returning dispatch, a five-participant pipeline and a two-handler event
+/// publish, for Ergosfare and the competitors alike.
 /// <para>Competitors run their out-of-the-box defaults: MediatR (reflection-based,
 /// transient handlers) as the ubiquitous baseline, and martinothamar/Mediator
 /// (source-generated dispatch, singleton lifetime by default) as the fastest widely-used
@@ -431,8 +433,6 @@ public class MediationBenchmark
     private ServiceProvider _mediatr = null!;
     private ServiceProvider _mediatorSg = null!;
 
-    private IMessageMediator _engine = null!;
-    private MessageDispatchEngine _dispatchEngine = null!;
     private ICommandMediator _commands = null!;
     private ICommandMediator _generatedCommands = null!;
     private ICommandMediator _memoizedCommands = null!;
@@ -505,8 +505,6 @@ public class MediationBenchmark
             })
             .BuildServiceProvider();
 
-        _engine = _ergosfare.GetRequiredService<IMessageMediator>();
-        _dispatchEngine = _ergosfare.GetRequiredService<MessageDispatchEngine>();
         _commands = _ergosfare.GetRequiredService<ICommandMediator>();
         _queries = _ergosfare.GetRequiredService<IQueryMediator>();
         _events = _ergosfare.GetRequiredService<IEventMediator>();
@@ -648,16 +646,6 @@ public class MediationBenchmark
     // ------------------------------------------------------------------
 
     [Benchmark(Baseline = true), BenchmarkCategory("Root")]
-    public ValueTask Engine_Void() => _engine.DispatchAsync(_voidCommand);
-
-    /// <summary>
-    /// Typed engine dispatch: the compile-time message type resolves the executor from a
-    /// static-generic holder — no dictionary lookup on the hot path.
-    /// </summary>
-    [Benchmark, BenchmarkCategory("Root")]
-    public ValueTask Engine_Void_Typed() => _dispatchEngine.DispatchVoidAsync(_voidCommand, _ergosfare);
-
-    [Benchmark, BenchmarkCategory("Root")]
     public ValueTask Command_Void() => _commands.SendAsync(_voidCommand);
 
     [Benchmark, BenchmarkCategory("Root")]
@@ -776,13 +764,6 @@ public class MediationBenchmark
     // ------------------------------------------------------------------
 
     [Benchmark(Baseline = true), BenchmarkCategory("Scoped")]
-    public async Task Engine_Void_Scoped()
-    {
-        using var scope = _ergosfare.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<IMessageMediator>().DispatchAsync(_voidCommand);
-    }
-
-    [Benchmark, BenchmarkCategory("Scoped")]
     public async Task Command_Void_Scoped()
     {
         using var scope = _ergosfare.CreateScope();

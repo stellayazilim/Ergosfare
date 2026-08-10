@@ -119,10 +119,10 @@ tasks:
   e2e:
     desc: Boot the sample Todo app and assert the .http suite with ijhttp.
     cmds:
-      # run.mjs builds+boots e2e/Stella.Ergosfare.E2E.Api, waits for /health, runs the
-      # ijhttp suite, then tears the app down and propagates ijhttp's exit code. Needs the
-      # JetBrains HTTP Client CLI (ijhttp) on PATH.
-      - node e2e/run.mjs
+      # run.mjs builds+boots examples/e2e/Stella.Ergosfare.E2E.Api, waits for /health, runs
+      # the ijhttp suite, then tears the app down and propagates ijhttp's exit code. Needs
+      # the JetBrains HTTP Client CLI (ijhttp) on PATH.
+      - node examples/e2e/run.mjs
 
   # ---------------------------------------------------------------- mcp
   #
