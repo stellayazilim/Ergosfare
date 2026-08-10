@@ -346,11 +346,12 @@ public class StagedPlanExecutionParityTests
 
         var command = (ICommand<string>)Activator.CreateInstance(commandType)!;
 
-        await Assert.ThrowsAsync<ExecutionAbortedException>(async () =>
-            await provider.GetRequiredService<ICommandMediator>().SendAsync(command));
+        var result = await provider.GetRequiredService<ICommandMediator>().SendAsync(command);
 
         // The abort never reaches the handler, is invisible to the exception stage, and
-        // the final stage still runs — the strategy's exact contract.
+        // the final stage still runs — the strategy's exact contract. Nothing had been
+        // produced, so the caller gets the result type's default and no exception.
+        Assert.Null(result);
         Assert.Equal(["pre", "final"], Entries);
     }
 

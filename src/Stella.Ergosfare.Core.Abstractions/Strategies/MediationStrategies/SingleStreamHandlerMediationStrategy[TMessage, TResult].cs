@@ -41,21 +41,27 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
     /// An <see cref="IAsyncEnumerable{TResult}"/> representing the asynchronous stream of results produced by the handler.
     /// </returns>
     /// <exception cref="MultipleHandlerFoundException">Thrown if more than one handler is registered for the message.</exception>
-    /// <exception cref="InvalidOperationException">Thrown if no handler is registered for the message.</exception>
+    /// <exception cref="NoHandlerFoundException">Thrown if no handler is registered for the message.</exception>
     public async IAsyncEnumerable<TResult> Mediate(TMessage message, IMessageDependencies messageDependencies,
         IExecutionContext context, IServiceProvider serviceProvider)
     {
-        if (messageDependencies.Handlers.Count > 1)
+        // Direct and covariantly matched handlers are one candidate set; see
+        // SingleAsyncHandlerMediationStrategy{TMessage} for the reasoning.
+        var handlers = messageDependencies.Handlers;
+        var indirectHandlers = messageDependencies.IndirectHandlers;
+        var handlerCount = handlers.Count + indirectHandlers.Count;
+
+        if (handlerCount > 1)
         {
-            throw new MultipleHandlerFoundException(typeof(TMessage), messageDependencies.Handlers.Count);
+            throw new MultipleHandlerFoundException(typeof(TMessage), handlerCount);
         }
 
-        if (messageDependencies.Handlers.Count == 0)
+        if (handlerCount == 0)
         {
-            throw new InvalidOperationException($"No handler is registered for {typeof(TMessage).Name}.");
+            throw new NoHandlerFoundException(typeof(TMessage), $"No handler is registered for {typeof(TMessage).Name}.");
         }
 
-        var handler = messageDependencies.Handlers[0].Resolve(serviceProvider);
+        var handler = (handlers.Count == 1 ? handlers[0] : indirectHandlers[0]).Resolve(serviceProvider);
 
         // enumerator to consume
         IAsyncEnumerable<TResult>? enumerable = null;

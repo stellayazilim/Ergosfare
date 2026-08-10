@@ -347,6 +347,13 @@ internal static class RegistrationEmitter
     private const string ExecutionContextFullName = "global::Stella.Ergosfare.Core.Abstractions.IExecutionContext";
     private const string AbortedExceptionFullName = "global::Stella.Ergosfare.Core.Abstractions.Exceptions.ExecutionAbortedException";
     private const string ValueTaskFullName = "global::System.Threading.Tasks.ValueTask";
+
+    /// <summary>
+    ///     The result representation of a pipeline that produces none. Distinct from
+    ///     <see cref="ValueTaskFullName"/>, which stays the completion signal: a void plan
+    ///     still returns a <c>ValueTask</c>, it just carries <c>Unit.Value</c> in its slot.
+    /// </summary>
+    private const string UnitFullName = "global::Stella.Ergosfare.Core.Abstractions.Unit";
     private const string GetRequiredServiceFullName = "global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService";
 
     /// <summary>
@@ -387,13 +394,6 @@ internal static class RegistrationEmitter
             }
 
             sb.AppendLine("        {");
-
-            if (isVoid)
-            {
-                sb.Append("            private static readonly object CompletedVoidResult = default(")
-                  .Append(ValueTaskFullName).AppendLine(");");
-                sb.AppendLine();
-            }
 
             sb.Append("            private static readonly ").Append(StagedCompositionFullName)
               .Append(" BakedComposition = new ").Append(StagedCompositionFullName).AppendLine("(");
@@ -519,11 +519,25 @@ internal static class RegistrationEmitter
         }
     }
 
-    /// <summary>The strategy/invoker-parity cast of the chained object result back to the pipeline result type.</summary>
-    private static string ResultCast(string resultExpression, bool resultIsValueType, string operand)
+    /// <summary>
+    ///     The strategy/invoker-parity cast of the chained object result back to the
+    ///     pipeline result type.
+    /// </summary>
+    /// <param name="targetAcceptsNull">
+    ///     Whether the stage being called declares its result parameter as
+    ///     <c>TResult?</c>. Exception and final interceptors do; post interceptors declare
+    ///     a plain <c>TResult</c>. The distinction is load-bearing for reference-typed
+    ///     results: a cast to <c>TResult?</c> resets the expression's nullable state to
+    ///     maybe-null however non-null the chain variable is, so handing one to a post
+    ///     interceptor is CS8604 in the consumer's build — and a build failure outright
+    ///     where warnings are errors.
+    /// </param>
+    private static string ResultCast(string resultExpression, bool resultIsValueType, bool targetAcceptsNull, string operand)
         => resultIsValueType
             ? "(" + resultExpression + ")" + operand + "!"
-            : "(" + resultExpression + "?)" + operand;
+            : targetAcceptsNull
+                ? "(" + resultExpression + "?)" + operand
+                : "(" + resultExpression + ")" + operand;
 
     private static void EmitPreCalls(StringBuilder sb, StagedPlanModel plan, bool direct, string indent)
     {
@@ -560,9 +574,14 @@ internal static class RegistrationEmitter
         string? exceptionArgument,
         string indent)
     {
-        var pipelineResult = plan.ResultTypeExpression ?? ValueTaskFullName;
-        var pipelineResultIsValueType = plan.ResultTypeExpression is null || plan.ResultIsValueType;
+        var pipelineResult = plan.ResultTypeExpression ?? UnitFullName;
+        var pipelineResultIsValueType = plan.ResultTypeExpression is not null && plan.ResultIsValueType;
         var extraArgument = exceptionArgument is null ? string.Empty : ", " + exceptionArgument;
+
+        // The exception argument doubles as the stage discriminator: only the exception
+        // stage carries one, and only the exception stage declares its result parameter
+        // nullable. The post stage takes TResult and object, not TResult? and object?.
+        var targetAcceptsNull = exceptionArgument is not null;
 
         sb.Append(indent).Append(chainVariable).Append(" = ");
 
@@ -573,7 +592,7 @@ internal static class RegistrationEmitter
                   .Append('<').Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
                 AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                 sb.Append(").HandleAsync(message, ")
-                  .Append(ResultCast(pipelineResult, pipelineResultIsValueType, chainVariable))
+                  .Append(ResultCast(pipelineResult, pipelineResultIsValueType, targetAcceptsNull, chainVariable))
                   .Append(extraArgument).AppendLine(", context);");
                 break;
             case StagedCallArm.AsyncAgnostic:
@@ -589,7 +608,7 @@ internal static class RegistrationEmitter
                   .Append('<').Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
                 AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                 sb.Append(").Handle(message, ")
-                  .Append(ResultCast(pipelineResult, pipelineResultIsValueType, chainVariable))
+                  .Append(ResultCast(pipelineResult, pipelineResultIsValueType, targetAcceptsNull, chainVariable))
                   .Append(extraArgument).AppendLine(", context);");
                 break;
         }
@@ -597,8 +616,12 @@ internal static class RegistrationEmitter
 
     private static void EmitFinalCalls(StringBuilder sb, StagedPlanModel plan, bool direct, string resultExpressionText, string indent)
     {
-        var pipelineResult = plan.ResultTypeExpression ?? ValueTaskFullName;
-        var pipelineResultIsValueType = plan.ResultTypeExpression is null || plan.ResultIsValueType;
+        var pipelineResult = plan.ResultTypeExpression ?? UnitFullName;
+        var pipelineResultIsValueType = plan.ResultTypeExpression is not null && plan.ResultIsValueType;
+
+        // Final interceptors declare `TResult? result` — the stage runs from a finally,
+        // so the pipeline may never have produced one.
+        const bool targetAcceptsNull = true;
 
         foreach (var call in plan.FinalCalls)
         {
@@ -609,7 +632,7 @@ internal static class RegistrationEmitter
                       .Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
                     AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                     sb.Append(").HandleAsync(message, ")
-                      .Append(ResultCast(pipelineResult, pipelineResultIsValueType, resultExpressionText))
+                      .Append(ResultCast(pipelineResult, pipelineResultIsValueType, targetAcceptsNull, resultExpressionText))
                       .AppendLine(", exception, context);");
                     break;
                 case StagedCallArm.AsyncAgnostic:
@@ -623,11 +646,71 @@ internal static class RegistrationEmitter
                       .Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
                     AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                     sb.Append(").Handle(message, ")
-                      .Append(ResultCast(pipelineResult, pipelineResultIsValueType, resultExpressionText))
+                      .Append(ResultCast(pipelineResult, pipelineResultIsValueType, targetAcceptsNull, resultExpressionText))
                       .AppendLine(", exception, context);");
                     break;
             }
         }
+    }
+
+    /// <summary>
+    ///     Emits the exception stage's chain calls, guarding every filtered participant
+    ///     with the compile-time <c>is</c> test its runtime filter probe would apply.
+    /// </summary>
+    /// <remarks>
+    ///     When every participant is filtered, none of them may turn out to accept the
+    ///     exception — and a stage that ran nobody has handled nothing, so the plan
+    ///     rethrows exactly as the runtime stage does. A single unfiltered participant
+    ///     makes that impossible, and the flag is not emitted at all.
+    /// </remarks>
+    private static void EmitExceptionCalls(
+        StringBuilder sb, StagedPlanModel plan, bool direct, string chainVariable, string indent)
+    {
+        var alwaysMatches = false;
+
+        foreach (var call in plan.ExceptionCalls)
+        {
+            if (call.ExceptionFilterExpression is null)
+            {
+                alwaysMatches = true;
+                break;
+            }
+        }
+
+        if (!alwaysMatches)
+        {
+            sb.Append(indent).AppendLine("var matchedExceptionInterceptor = false;");
+        }
+
+        foreach (var call in plan.ExceptionCalls)
+        {
+            if (call.ExceptionFilterExpression is null)
+            {
+                EmitChainCall(sb, plan, call, direct, "ExceptionInterceptor", chainVariable, "e", indent);
+                continue;
+            }
+
+            sb.Append(indent).Append("if (e is ").Append(call.ExceptionFilterExpression).AppendLine(")");
+            sb.Append(indent).AppendLine("{");
+
+            if (!alwaysMatches)
+            {
+                sb.Append(indent).AppendLine("    matchedExceptionInterceptor = true;");
+            }
+
+            EmitChainCall(sb, plan, call, direct, "ExceptionInterceptor", chainVariable, "e", indent + "    ");
+            sb.Append(indent).AppendLine("}");
+        }
+
+        if (alwaysMatches)
+        {
+            return;
+        }
+
+        sb.Append(indent).AppendLine("if (!matchedExceptionInterceptor)");
+        sb.Append(indent).AppendLine("{");
+        sb.Append(indent).AppendLine("    throw;");
+        sb.Append(indent).AppendLine("}");
     }
 
     private static void EmitVoidExecuteBody(StringBuilder sb, StagedPlanModel plan, bool direct)
@@ -638,11 +721,18 @@ internal static class RegistrationEmitter
         if (!needsGuards)
         {
             // Pre-only pipeline: with zero exception and final stages the strategy's
-            // try/catch/finally is a no-op shell — exceptions propagate unchanged.
-            EmitPreCalls(sb, plan, direct, "                ");
-            sb.Append("                await ");
+            // try/catch/finally collapses to the abort arm alone — exceptions propagate
+            // unchanged, an abort completes the dispatch with nothing to hand back.
+            sb.AppendLine("                try");
+            sb.AppendLine("                {");
+            EmitPreCalls(sb, plan, direct, "                    ");
+            sb.Append("                    await ");
             AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
             sb.AppendLine(".HandleAsync(message, context);");
+            sb.AppendLine("                }");
+            sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
+            sb.AppendLine("                {");
+            sb.AppendLine("                }");
             return;
         }
 
@@ -654,7 +744,7 @@ internal static class RegistrationEmitter
         sb.Append("                    await ");
         AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
         sb.AppendLine(".HandleAsync(message, context);");
-        sb.AppendLine("                    result = CompletedVoidResult;");
+        sb.Append("                    result = ").Append(UnitFullName).AppendLine(".Value;");
 
         if (!plan.PostCalls.IsEmpty)
         {
@@ -663,15 +753,21 @@ internal static class RegistrationEmitter
                 EmitChainCall(sb, plan, call, direct, "PostInterceptor", "result", null, "                    ");
             }
 
-            // The strategy's post epilogue: a null post result restores the completed
-            // task; anything non-ValueTask fails the closed nullable cast, exactly like
-            // the strategy's own cast would.
-            sb.Append("                    var invokedPostResult = (").Append(ValueTaskFullName).AppendLine("?) result;");
-            sb.AppendLine("                    result = invokedPostResult == null ? CompletedVoidResult : result;");
+            // The strategy's post epilogue: a null post result restores the pipeline's
+            // one result value; anything that is not a Unit fails the closed nullable
+            // cast, exactly like the strategy's own cast would.
+            sb.Append("                    var invokedPostResult = (").Append(UnitFullName).AppendLine("?) result;");
+            sb.Append("                    result = invokedPostResult == null ? ").Append(UnitFullName).AppendLine(".Value : result;");
         }
 
         sb.AppendLine("                }");
-        sb.Append("                catch (global::System.Exception e) when (e is not ").Append(AbortedExceptionFullName).AppendLine(")");
+        // A short circuit, not a failure: the exception stage is skipped, the caller sees
+        // no exception, and the result produced so far survives into the final stage and
+        // the return — the strategy's own abort arm, emitted.
+        sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
+        sb.AppendLine("                {");
+        sb.AppendLine("                }");
+        sb.AppendLine("                catch (global::System.Exception e)");
         sb.AppendLine("                {");
         sb.AppendLine("                    exception = e;");
 
@@ -683,12 +779,9 @@ internal static class RegistrationEmitter
         {
             sb.AppendLine("                    var resultBeforeExceptions = result;");
 
-            foreach (var call in plan.ExceptionCalls)
-            {
-                EmitChainCall(sb, plan, call, direct, "ExceptionInterceptor", "result", "e", "                    ");
-            }
+            EmitExceptionCalls(sb, plan, direct, "result", "                    ");
 
-            sb.Append("                    var invokedExceptionResult = (").Append(ValueTaskFullName).AppendLine("?) result;");
+            sb.Append("                    var invokedExceptionResult = (").Append(UnitFullName).AppendLine("?) result;");
             sb.AppendLine("                    result = invokedExceptionResult == null ? resultBeforeExceptions : result;");
         }
 
@@ -706,10 +799,19 @@ internal static class RegistrationEmitter
 
         if (!needsGuards)
         {
-            EmitPreCalls(sb, plan, direct, "                ");
-            sb.Append("                return await ");
+            // Pre-only pipeline; see the void body. Nothing was produced when an abort
+            // unwinds through here, so the caller gets the result type's default.
+            sb.AppendLine("                try");
+            sb.AppendLine("                {");
+            EmitPreCalls(sb, plan, direct, "                    ");
+            sb.Append("                    return await ");
             AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
             sb.AppendLine(".HandleAsync(message, context);");
+            sb.AppendLine("                }");
+            sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    return default!;");
+            sb.AppendLine("                }");
             return;
         }
 
@@ -745,7 +847,13 @@ internal static class RegistrationEmitter
         }
 
         sb.AppendLine("                }");
-        sb.Append("                catch (global::System.Exception e) when (e is not ").Append(AbortedExceptionFullName).AppendLine(")");
+        // A short circuit, not a failure: the exception stage is skipped, the caller sees
+        // no exception, and the result produced so far survives into the final stage and
+        // the return — the strategy's own abort arm, emitted.
+        sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
+        sb.AppendLine("                {");
+        sb.AppendLine("                }");
+        sb.AppendLine("                catch (global::System.Exception e)");
         sb.AppendLine("                {");
         sb.AppendLine("                    exception = e;");
 
@@ -757,10 +865,7 @@ internal static class RegistrationEmitter
         {
             sb.AppendLine("                    object? exceptionChain = result;");
 
-            foreach (var call in plan.ExceptionCalls)
-            {
-                EmitChainCall(sb, plan, call, direct, "ExceptionInterceptor", "exceptionChain", "e", "                    ");
-            }
+            EmitExceptionCalls(sb, plan, direct, "exceptionChain", "                    ");
 
             if (plan.ResultIsValueType)
             {

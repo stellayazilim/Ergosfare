@@ -98,7 +98,7 @@ public class DispatchItemsAndInvalidationTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task Send_ShouldPickUpRuntimeRegistrations_AfterWarmingTheExecutorCache()
+    public async Task Send_ShouldNotObserveRegistrations_AfterWarmingTheExecutorCache()
     {
         var provider = new ServiceCollection()
             .AddTransient<LateRegisteredInterceptor>()
@@ -115,14 +115,14 @@ public class DispatchItemsAndInvalidationTests
         await mediator.SendAsync(new LateInterceptedCommand(), warm);
         Assert.False(warm.Items.ContainsKey("lateInterceptorRan"));
 
-        // A runtime registration bumps the registry version; the cached plan must rebuild
-        // and the dispatch must leave the fast path for the full pipeline.
+        // A registration after the first dispatch is not observed: the executor's frozen
+        // pipeline keeps the zero-interceptor fast path.
         registry.Register(typeof(LateRegisteredInterceptor));
 
         var probe = new CommandMediationSettings();
         await mediator.SendAsync(new LateInterceptedCommand(), probe);
 
-        Assert.Equal(true, probe.Items["lateInterceptorRan"]);
+        Assert.False(probe.Items.ContainsKey("lateInterceptorRan"));
     }
 
     public sealed class ResultCommand : ICommand<int> { }

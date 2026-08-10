@@ -34,7 +34,7 @@ registry scan, no `AsyncLocal`, and no per-dispatch context allocation on the ho
 |----------|-----------|
 | Compile-time registration | Source generator discovers handlers in your compilation **and referenced assemblies**, pre-computes descriptors, emits `RegisterGenerated()` |
 | Reflection-free dispatch | Generated dispatch roots close executor generics at compile time; pipeline plans pre-close generic handler types |
-| ~3.0 ms · ~2.3 MB / 100k dispatches | Pooled execution contexts, `ValueTask`-first surface, straight-through dispatch for single-handler pipelines (MediatR: ~5.8 ms · 18.3 MB) |
+| ~1.9 ms · ~2.3 MB / 100k dispatches | Pooled execution contexts, `ValueTask`-first surface, straight-through dispatch for single-handler pipelines — generated plan lane (MediatR: ~6.5 ms · 18.3 MB) |
 | Nested dispatch | `context.CreateScope()` — isolated child context with inherited cancellation for mediator calls inside handlers |
 | DI-lifetime correctness | Instances resolve per dispatch from the calling scope: singleton → container-cached, scoped → one per scope, transient → one per dispatch |
 | Native AOT & trimming | Every construct referenced statically via `typeof`; dispatch roots anchor all generic instantiations, value-type messages included |
@@ -68,8 +68,9 @@ var id = await mediator.SendAsync(new CreateProduct("Laptop"));
 
 `RegisterGenerated()` is emitted into your project by the source generator: every message,
 handler and interceptor in the compilation — and in referenced assemblies — registers with
-pre-computed descriptors, no reflection involved. `RegisterFromAssembly(...)` remains
-available as the runtime-scanning escape hatch (e.g. plugins loaded at runtime).
+pre-computed descriptors, no reflection involved. `RegisterFromAssembly(...)` is still
+there as the runtime-scanning escape hatch, but it is on its way out — the stable line
+marks it `[Obsolete]` as of v2.2.0 and the preview line removes it next.
 
 ## Compile-time discovery
 
@@ -113,8 +114,23 @@ Selection and ordering are declarative:
   the message type itself always run; main handlers are never affected.
 - **Covariant matching.** An interceptor registered for a base type or interface
   (`IEventPreInterceptor`, `ICommandPreInterceptor<IAuditedCommand>`) applies to every
-  assignable message. Event broadcast delivers to covariantly matched *handlers* too —
-  the event's own handlers first, then base/interface registrations.
+  assignable message. Main handlers match covariantly too: a handler registered against a
+  supertype serves every assignable message, and a message claimed by both a direct and a
+  covariant handler is contested (`MultipleHandlerFoundException`). Event broadcast
+  delivers to covariantly matched handlers, the event's own first.
+- **Typed exception interceptors.** `...ExceptionInterceptorFor<TException>` (message- and
+  result-typed arities too) receives the exception already typed — no opening `if (ex is
+  X)`. Matching follows catch semantics and leaves ordering alone; the filter decides only
+  who is *eligible*. An exception is swallowed when a **matching** interceptor ran — if
+  none matches, the original leaves the pipeline unwrapped, stack intact.
+- **`context.Abort()` short-circuits.** The rest of the pipeline is skipped, final
+  interceptors still run, and the caller receives what the pipeline had already produced —
+  the handler's result if the abort came after it, the result type's default if before.
+  No exception reaches the caller.
+- **A resultless pipeline carries `Unit.Value`.** Post, final and exception interceptors of
+  a void command or an event see that one shared instance where a result would be; `null`
+  means the slot before anything was produced — what the exception stage of a failed
+  dispatch sees.
 
 ## Nested dispatch — scopes
 
@@ -156,71 +172,60 @@ the duration of its dispatch.
 
 ### Benchmarks
 
-BenchmarkDotNet, `[MemoryDiagnoser]`; each operation performs **100 000 sequential
-dispatches** of a no-op handler. Source: [`test/Stella.Ergosfare.Benchmarking`](test/Stella.Ergosfare.Benchmarking/Program.cs).
+BenchmarkDotNet, `[MemoryDiagnoser]`. Source:
+[`test/Stella.Ergosfare.Benchmarking`](test/Stella.Ergosfare.Benchmarking/Program.cs).
 
 ```bash
 dotnet run -c Release -f net9.0 --project test/Stella.Ergosfare.Benchmarking
 ```
 
 Environment: BenchmarkDotNet v0.15.8 · Windows 11 · AMD Ryzen 7 7800X3D · .NET 9.0.11
-(RyuJIT x86-64-v4). Measured 2026-08-08, on the tree released as v2.6.0-preview. Every row
+(RyuJIT x86-64-v4). Measured 2026-08-11, on the tree released as v2.7.0-preview. Every row
 is a **single dispatch** of a no-op handler through the public mediator interfaces.
 
-Two shapes are measured:
+Four scenarios, each written the way the library in question would write it, at that
+library's default lifetime.
 
-- **Typical usage** — the mediators resolved once from a shared scope (background workers,
-  message-pump loops).
-- **Web-server shape** — a fresh DI scope and mediator resolution for every dispatch,
-  mimicking one scope per HTTP request (the shape ASP.NET Core gives you).
-
-Typical usage:
-
-| Scenario (per dispatch) | Mean | Allocated |
-|---|---:|---:|
-| Command — runtime registration | 33.2 ns | 24 B |
-| Command — generated plan (`RegisterGenerated`) | **21.0 ns** | 24 B |
-| Command — memoized handlers | 23.8 ns | **0 B** |
-| Command + 2 interceptors — runtime strategy | 198.2 ns | 104 B |
-| Command + 2 interceptors — **staged plan** | **49.2 ns** | **24 B** |
-| Query (`IQuery<int>`) — generated plan | 25.3 ns | 24 B |
-| Query + 2 interceptors — **staged plan** | **83.5 ns** | 72 B |
-| Event publish (two handlers) | 52.1 ns | 48 B |
-| Grouped command (`GroupSet`) | 35.1 ns | 24 B |
-| MediatR — command / query / publish | 61.1 / 55.2 / 92.3 ns | 192 / 192 / 440 B |
-| Mediator (martinothamar) — command / query / publish | 8.0 / 8.0 / 16.1 ns | 0 B |
-
-Web-server shape (scope creation included in every row):
+Mediators resolved once — background workers, message-pump loops:
 
 | Per dispatch | Ergosfare | MediatR | Mediator (martinothamar) |
 |---|---:|---:|---:|
-| Command | 95.0 ns / 192 B | 114.2 ns / 352 B | 54.8 ns / 128 B |
-| Query | 96.6 ns / 200 B | 105.8 ns / 352 B | 54.2 ns / 128 B |
-| Publish | 100.5 ns / 232 B | 139.1 ns / 600 B | 59.2 ns / 128 B |
+| Command, nothing returned | **19.9 ns** / 24 B | 60.4 ns / 192 B | 8.5 ns / 0 B |
+| Query returning a value | **24.0 ns** / 24 B | 54.9 ns / 192 B | 9.1 ns / 0 B |
+| Query through five participants | **120.2 ns** / 96 B | 205.6 ns / 1008 B | 61.4 ns / 0 B |
+| Event to two handlers | **50.5 ns** / 48 B | 89.7 ns / 440 B | 16.2 ns / 0 B |
 
-Scenario notes:
+One DI scope per dispatch — the shape ASP.NET Core gives you, scope creation and mediator
+resolution included in every row:
 
-- Against **MediatR**, Ergosfare leads every row on both axes — roughly 2–3× on time and
-  2–8× on allocation in typical usage, and it stays ahead in the scope-dominated
-  web-server shape.
+| Per dispatch | Ergosfare | MediatR | Mediator (martinothamar) |
+|---|---:|---:|---:|
+| Command | **92.5 ns** / 192 B | 113.2 ns / 352 B | 54.8 ns / 128 B |
+| Query | **90.6 ns** / 200 B | 110.0 ns / 352 B | 50.8 ns / 128 B |
+| Event | **106.4 ns** / 232 B | 146.3 ns / 600 B | 57.1 ns / 128 B |
+
+Reading the rows:
+
+- **The five participants** are the same five purposes in all three libraries: validate the
+  message, rewrite the message, rewrite the result, an armed exception recovery that never
+  fires on the happy path, and an always-runs final touch. Ergosfare runs them as
+  interceptors through a source-generated staged plan; MediatR and Mediator run them as
+  pipeline behaviors. This is the row that says what a real pipeline costs.
+- **Against MediatR**, Ergosfare leads every scenario on both axes — 2–3× on time, 8–10× on
+  allocation — and stays ahead once a per-request scope dominates the measurement.
 - **Mediator** (martinothamar's source-generated library) is faster on raw nanoseconds by
-  design: it carries no execution context, no runtime registry, and resolves its
-  singleton handlers without touching the container per dispatch. Ergosfare's default
-  24 B is the transient handler instance itself — what a transient registration
-  declares — and drops to 0 B with singleton handlers or `ForceMemoizedHandlers()`.
-- The **staged plan** rows are the interceptor story: an interceptor-bearing pipeline
-  used to cost ~6× a bare dispatch on the runtime strategy; the source-generated staged
-  plan runs the same pipeline — same order, same exception and final semantics,
-  re-validated against the registry per version — in straight-line code at ~1.5× the
-  bare dispatch, with the participant instances stack-allocated by the JIT where they
-  do not escape.
-- Everything above uses default, out-of-the-box settings for all three libraries.
+  design: no execution context, no runtime registry, and singleton handlers resolved
+  without touching the container per dispatch. Ergosfare's 24 B is the transient handler
+  instance itself — what a transient registration declares — and drops to 0 B with
+  singleton handlers or `ForceMemoizedHandlers()`.
+- Ergosfare's command, query and pipeline rows register through `RegisterGenerated()`, what
+  the quick start sets up. The event row registers at runtime: a publish takes the same
+  broadcast lane either way, since generated registration changes what registration costs,
+  not how a publish runs.
 
-Row ↔ BenchmarkDotNet method mapping, for matching against your own runs:
-`Command_Void`, `Command_Void_Generated`, `Command_Void_Memoized`,
-`Command_Void_Intercepted`, `Command_Void_Intercepted_Generated`, `Query_Result_Generated`,
-`Query_Result_Intercepted_Generated`, `Event_Publish`, `Command_Void_Grouped_GroupSet`,
-`MediatR_*`, `MediatorSg_*`, and the `*_Scoped` variants for the web-server shape.
+The benchmark project carries more rows than these — the runtime-registration, memoized and
+grouped lanes exist to catch regressions in library development, and are not part of the
+comparison above.
 
 ## Dispatch architecture
 
@@ -236,7 +241,9 @@ source generator          ──►    MessageRegistry ──► descriptor ─�
 
 - **Registry & descriptors.** Generated registration supplies pre-computed descriptors;
   explicit `Register<T>()` and runtime scanning feed the same registry (idempotent, safe
-  to combine).
+  to combine). **The registration window closes at a message's first dispatch:** whatever
+  is registered by then joins its pipeline, which is then frozen — later registrations are
+  not observed by it.
 - **Pipeline plan.** Six fixed stages per message: main handlers (direct/indirect split)
   and four interceptor stages, each a pre-ordered array — direct entries first, then
   covariant, ordered by weight. Group filters and `[ExcludeFromPipeline]` apply here,

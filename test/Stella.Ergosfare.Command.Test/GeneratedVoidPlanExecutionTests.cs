@@ -78,7 +78,7 @@ public class GeneratedVoidPlanExecutionTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task PlannedDispatch_StillPicksUpRuntimeRegistrations()
+    public async Task PlannedDispatch_DoesNotObserveRegistrationsAfterTheFirstDispatch()
     {
         GeneratedDispatchRoots.AddVoidPlan<LatePlannedCommand, LatePlannedCommandHandler>();
 
@@ -97,14 +97,14 @@ public class GeneratedVoidPlanExecutionTests
         await mediator.SendAsync(new LatePlannedCommand(), warm);
         Assert.False(warm.Items.ContainsKey("lateInterceptorRan"));
 
-        // A runtime registration bumps the registry version; the plan's cached pipeline
-        // must rebuild and leave the fast path for the full interceptor pipeline.
+        // A registration after the first dispatch is not observed: the plan's pipeline
+        // froze on the devirtualized fast path and stays there.
         registry.Register(typeof(LatePlannedInterceptor));
 
         var probe = new CommandMediationSettings();
         await mediator.SendAsync(new LatePlannedCommand(), probe);
 
-        Assert.Equal(true, probe.Items["lateInterceptorRan"]);
+        Assert.False(probe.Items.ContainsKey("lateInterceptorRan"));
     }
 
     [ExcludeFromDiscovery]

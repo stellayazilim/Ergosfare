@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Internal.Contexts;
 using Stella.Ergosfare.Core.Internal.Mediator;
@@ -65,6 +66,16 @@ public sealed class MessageDispatchEngine
         {
             task = executor.Execute(message, context, serviceProvider);
         }
+        catch (ExecutionAbortedException)
+        {
+            // The executor lane's abort handling: the engine's frame already carries an
+            // exception-handling region for the pooled context, so the abort arm is free
+            // here — where the same arm inside Execute taxes every dispatch with a region
+            // that keeps Execute out of its caller. Nothing was produced when a
+            // zero-interceptor handler aborts, so the dispatch simply completes.
+            ErgosfareExecutionContextPool.Return(context);
+            return default;
+        }
         catch
         {
             ErgosfareExecutionContextPool.Return(context);
@@ -88,6 +99,10 @@ public sealed class MessageDispatchEngine
             try
             {
                 await task;
+            }
+            catch (ExecutionAbortedException)
+            {
+                // An abort the handler captured into its task; see the synchronous arm.
             }
             finally
             {
@@ -136,6 +151,13 @@ public sealed class MessageDispatchEngine
         {
             task = executor.Execute(message, context, serviceProvider);
         }
+        catch (ExecutionAbortedException)
+        {
+            // See the untyped void overload: the abort arm rides the frame's existing
+            // exception-handling region.
+            ErgosfareExecutionContextPool.Return(context);
+            return default;
+        }
         catch
         {
             ErgosfareExecutionContextPool.Return(context);
@@ -156,6 +178,10 @@ public sealed class MessageDispatchEngine
             try
             {
                 await task;
+            }
+            catch (ExecutionAbortedException)
+            {
+                // An abort the handler captured into its task; see the synchronous arm.
             }
             finally
             {
@@ -183,6 +209,13 @@ public sealed class MessageDispatchEngine
         {
             task = executor.Execute(message, context, serviceProvider);
         }
+        catch (ExecutionAbortedException)
+        {
+            // See the void overload: nothing was produced when a zero-interceptor handler
+            // aborts, so the caller gets the result type's default.
+            ErgosfareExecutionContextPool.Return(context);
+            return default;
+        }
         catch
         {
             ErgosfareExecutionContextPool.Return(context);
@@ -204,6 +237,11 @@ public sealed class MessageDispatchEngine
             try
             {
                 return await task;
+            }
+            catch (ExecutionAbortedException)
+            {
+                // An abort the handler captured into its task; see the synchronous arm.
+                return default!;
             }
             finally
             {
@@ -229,7 +267,17 @@ public sealed class MessageDispatchEngine
 
         var executor = _executorCache.GetVoidExecutor(message.GetType(), groups);
 
-        return executor.Execute(message, context, serviceProvider);
+        // Caller-owned context, so there is no pooled-return frame to ride: this overload
+        // carries the executor lane's abort arm itself. It serves nested and
+        // externally-contexted dispatches, not the pooled hot path.
+        try
+        {
+            return AbortShortCircuit.Guard(executor.Execute(message, context, serviceProvider));
+        }
+        catch (ExecutionAbortedException)
+        {
+            return default;
+        }
     }
 
     /// <summary>
@@ -245,6 +293,14 @@ public sealed class MessageDispatchEngine
 
         var executor = _executorCache.GetExecutor<TResult>(message.GetType(), groups);
 
-        return executor.Execute(message, context, serviceProvider);
+        // Caller-owned context; see the void overload above.
+        try
+        {
+            return AbortShortCircuit.Guard(executor.Execute(message, context, serviceProvider));
+        }
+        catch (ExecutionAbortedException)
+        {
+            return default;
+        }
     }
 }

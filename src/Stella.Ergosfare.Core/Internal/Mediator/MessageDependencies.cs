@@ -82,7 +82,13 @@ internal sealed class MessageDependencies : IMessageDependencies
             && ExceptionInterceptors.Count == 0
             && FinalInterceptors.Count == 0;
 
-        FastSingleHandler = HasNoInterceptors && Handlers.Count == 1 ? Handlers[0] : null;
+        // The candidate set the single-handler strategies resolve against is direct plus
+        // indirect, so the executors' short circuit has to count both — a message with one
+        // direct and one covariantly matched handler is contested, and must reach the
+        // strategy to be told so rather than quietly running the direct one.
+        FastSingleHandler = HasNoInterceptors && Handlers.Count + IndirectHandlers.Count == 1
+            ? Handlers.Count == 1 ? Handlers[0] : IndirectHandlers[0]
+            : null;
         MemoizedInstances = memoizedProvider is not null;
     }
 
@@ -101,8 +107,9 @@ internal sealed class MessageDependencies : IMessageDependencies
     internal bool HasNoInterceptors { get; }
 
     /// <summary>
-    /// The sole main handler when the pipeline has exactly one handler and no interceptor
-    /// stages; <c>null</c> otherwise. Computed once at construction.
+    /// The sole main handler — direct or covariantly matched — when the pipeline has
+    /// exactly one and no interceptor stages; <c>null</c> otherwise. Computed once at
+    /// construction.
     /// </summary>
     internal IHandlerReference<IHandler, IMainHandlerDescriptor>? FastSingleHandler { get; }
 

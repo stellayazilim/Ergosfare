@@ -30,7 +30,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
     /// </returns>
     /// <exception cref="ArgumentNullException">Thrown if <paramref name="messageDependencies"/> is null.</exception>
     /// <exception cref="MultipleHandlerFoundException">Thrown if more than one handler is registered for the message.</exception>
-    /// <exception cref="InvalidOperationException">Thrown if no handler is registered for the message.</exception>
+    /// <exception cref="NoHandlerFoundException">Thrown if no handler is registered for the message.</exception>
     /// <remarks>
     /// <para>The mediation process follows this sequence:</para>
     /// <list type="number">
@@ -55,15 +55,23 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
         {
             throw new ArgumentNullException(nameof(messageDependencies));
         }
-        if (messageDependencies.Handlers.Count > 1)
+        // Direct and covariantly matched handlers are one candidate set; see the void
+        // strategy for the reasoning.
+        var handlers = messageDependencies.Handlers;
+        var indirectHandlers = messageDependencies.IndirectHandlers;
+        var handlerCount = handlers.Count + indirectHandlers.Count;
+
+        if (handlerCount > 1)
         {
-            throw new MultipleHandlerFoundException(typeof(TMessage), messageDependencies.Handlers.Count);
+            throw new MultipleHandlerFoundException(typeof(TMessage), handlerCount);
         }
 
-        if (messageDependencies.Handlers.Count == 0)
+        if (handlerCount == 0)
         {
-            throw new InvalidOperationException($"No handler is registered for {typeof(TMessage).Name}.");
+            throw new NoHandlerFoundException(typeof(TMessage), $"No handler is registered for {typeof(TMessage).Name}.");
         }
+
+        var soleHandler = handlers.Count == 1 ? handlers[0] : indirectHandlers[0];
 
         var preInterceptorCount = messageDependencies.PreInterceptors.Count;
         var postInterceptorCount = messageDependencies.PostInterceptors.Count;
@@ -79,9 +87,20 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
             // derived one — IHandler's `in TMessage` variance covers that), invoke the typed
             // member directly and skip the object-typed DIM bridge. Interface-erased
             // dispatches (TMessage = ICommand<T> etc.) fall back to the bridge.
-            var fastHandler = messageDependencies.Handlers[0].Resolve(serviceProvider);
+            var fastHandler = soleHandler.Resolve(serviceProvider);
 
-            var fastResult = await InvokeHandler(fastHandler, message, context);
+            TResult fastResult;
+
+            try
+            {
+                fastResult = await InvokeHandler(fastHandler, message, context);
+            }
+            catch (ExecutionAbortedException)
+            {
+                // The handler short-circuited before producing anything, so there is
+                // nothing to hand back but the result type's default.
+                return default!;
+            }
 
             var fastEx = resultAdapterService?.LookupException(fastResult);
             if (fastEx is not null) throw fastEx;
@@ -99,7 +118,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
                     messageDependencies, serviceProvider, message, context);
             }
 
-            var handler = messageDependencies.Handlers[0].Resolve(serviceProvider);
+            var handler = soleHandler.Resolve(serviceProvider);
 
             result = await InvokeHandler(handler, message, context);
 
@@ -116,9 +135,11 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
         }
         catch (ExecutionAbortedException)
         {
-            throw;
+            // A short circuit, not a failure: the exception stage is skipped, the caller
+            // sees no exception, and `result` — whatever the pipeline had produced by the
+            // time the abort unwound — is what the final stage and the caller both get.
         }
-        catch (Exception e) when (e is not ExecutionAbortedException)
+        catch (Exception e)
         {
             exception = e;
 

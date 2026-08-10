@@ -1,7 +1,12 @@
+using System.Collections;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Registry;
+using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
+using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Events.Abstractions;
 using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
@@ -414,5 +419,87 @@ public class BroadcastFastLaneTests
             .PublishAsync(new ScopedEvent(), settings);
 
         Assert.Same(expected, settings.Items["probe"]);
+    }
+
+    [ExcludeFromDiscovery]
+    public sealed class NeverRegisteredEvent : IEvent { }
+
+    /// <summary>
+    /// An <see cref="IMessageMediator"/> that is not the concrete <c>MessageMediator</c>,
+    /// so the invoker takes its foreign-mediator branch. Every member throws: an
+    /// unregistered event must be answered by the caller's flag before the Mediate path —
+    /// which raises unconditionally — is ever reached.
+    /// </summary>
+    private sealed class UnreachableMediator : IMessageMediator
+    {
+        public ValueTask DispatchAsync(object message, IDictionary<object, object?>? items = null,
+            CancellationToken cancellationToken = default, IEnumerable<string>? groups = null)
+            => throw new UnreachableException();
+
+        public ValueTask<TResult> DispatchAsync<TResult>(object message, IDictionary<object, object?>? items = null,
+            CancellationToken cancellationToken = default, IEnumerable<string>? groups = null)
+            => throw new UnreachableException();
+
+        public ValueTask DispatchAsync(object message, IExecutionContext context, IEnumerable<string>? groups = null)
+            => throw new UnreachableException();
+
+        public ValueTask<TResult> DispatchAsync<TResult>(object message, IExecutionContext context,
+            IEnumerable<string>? groups = null)
+            => throw new UnreachableException();
+
+        public TMessageResult Mediate<TMessage, TMessageResult>(TMessage message,
+            MediateOptions<TMessage, TMessageResult> options) where TMessage : notnull
+            => throw new UnreachableException();
+    }
+
+    /// <summary>
+    /// An empty registry, so "this type has no descriptor" is true by construction.
+    /// </summary>
+    /// <remarks>
+    /// The shared registry cannot express it: this assembly registers
+    /// <c>ExcludeFromPipelineTests.BroadPre</c>, a non-generic <c>IEventPreInterceptor</c>
+    /// and therefore a descriptor for <c>IEvent</c> itself. From that registration onward
+    /// the resolve strategy's assignable fallback answers for *every* event type, and
+    /// nothing in the process is unregistered any more. Which test ran first would decide
+    /// this one's outcome.
+    /// </remarks>
+    private sealed class EmptyRegistry : IMessageRegistry
+    {
+        public int Count => 0;
+
+        public IEnumerator<IMessageDescriptor> GetEnumerator()
+            => Enumerable.Empty<IMessageDescriptor>().GetEnumerator();
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+        public void Register(
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)]
+            Type type)
+            => throw new UnreachableException();
+
+        public void RegisterDescriptors(IEnumerable<IHandlerDescriptor> descriptors)
+            => throw new UnreachableException();
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task Publish_ShouldHonorThrowIfNoHandlerFound_ForAnUnregisteredType_OnAForeignMediator()
+    {
+        await using var provider = Build();
+
+        var mediator = new EventMediator(
+            new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(new EmptyRegistry()),
+            provider.GetRequiredService<IResultAdapterService>(),
+            new UnreachableMediator());
+
+        // Default: silent, exactly as for a registered event nobody handles. Reaching the
+        // Mediate path at all is the failure — it raises whatever the caller asked for.
+        await mediator.PublishAsync(new NeverRegisteredEvent());
+
+        await Assert.ThrowsAsync<NoHandlerFoundException>(async () =>
+            await mediator.PublishAsync(
+                new NeverRegisteredEvent(),
+                new EventMediationSettings { ThrowIfNoHandlerFound = true }));
     }
 }

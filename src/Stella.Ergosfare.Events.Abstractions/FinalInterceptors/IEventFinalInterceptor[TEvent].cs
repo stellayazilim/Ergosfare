@@ -1,3 +1,4 @@
+using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 
 namespace Stella.Ergosfare.Events.Abstractions;
@@ -24,4 +25,4 @@ namespace Stella.Ergosfare.Events.Abstractions;
 /// </remarks>
 // ReSharper disable once UnusedType.Global
 public interface IEventFinalInterceptor<in TEvent>:
-    IEvent, IAsyncFinalInterceptor<TEvent, ValueTask> where TEvent : IEvent;
+    IEvent, IAsyncFinalInterceptor<TEvent, Unit> where TEvent : IEvent;

@@ -25,7 +25,6 @@ internal sealed class StagedResultPipelineExecutor<TMessage, TResult>(
     private readonly bool _foreignAdapters = resultAdapterService is not null and not ResultAdapterService;
 
     private IMessageDependencies? _cachedDependencies;
-    private int _cachedVersion = int.MinValue;
     private bool _useStagedPlan;
     private bool _useDirectConstruction;
 
@@ -47,12 +46,11 @@ internal sealed class StagedResultPipelineExecutor<TMessage, TResult>(
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
-            // Read before the build: a registration completing mid-build must land as a
-            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
-            var registryVersion = typedFactory.CurrentRegistryVersion;
+            // Frozen registry: dependencies resolve once per executor and are never
+            // re-validated — a registration after the first dispatch is not observed.
             var cached = _cachedDependencies;
 
-            if (cached is not null && _cachedVersion == registryVersion)
+            if (cached is not null)
             {
                 return cached;
             }
@@ -66,7 +64,6 @@ internal sealed class StagedResultPipelineExecutor<TMessage, TResult>(
             _useDirectConstruction = _useStagedPlan
                 && plan.SupportsDirectConstruction
                 && StagedPlanGate.AllPlainTransient(typedFactory, plan.Composition);
-            _cachedVersion = registryVersion;
             return dependencies;
         }
 

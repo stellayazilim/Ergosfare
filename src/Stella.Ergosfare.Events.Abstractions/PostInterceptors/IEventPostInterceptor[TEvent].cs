@@ -24,14 +24,20 @@ namespace Stella.Ergosfare.Events.Abstractions;
 // ReSharper disable once UnusedType.Global
 public interface IEventPostInterceptor<in TEvent> : IEvent, IAsyncPostInterceptor<TEvent> where TEvent : notnull
 {
-    /// <inheritdoc cref="IAsyncPostInterceptor{TEvent, ValueTask}.HandleAsync"/>
+    /// <inheritdoc cref="IAsyncPostInterceptor{TEvent}.HandleAsync"/>
+    /// <remarks>
+    /// A publish has no result: the slot carries <see cref="Unit.Value"/> and is not
+    /// forwarded. The typed member below keeps its <see cref="ValueTask"/> parameter — it
+    /// only ever received the completed task — and gets it directly, so nothing is cast
+    /// out of the slot and nothing is boxed back into it.
+    /// </remarks>
     async ValueTask<object> IAsyncPostInterceptor<TEvent>.HandleAsync(TEvent @event, object result, IExecutionContext context)
     {
-        // The cast is required so this call binds to the typed member below; without it
-        // the simple-name call resolved back to the inherited interface member — i.e.
-        // this very implementation — and recursed infinitely.
-        await HandleAsync(@event, (ValueTask) result, context);
-        return ValueTask.CompletedTask;
+        // The ValueTask argument is what binds this call to the typed member below: an
+        // object-typed one resolves back to the inherited interface member — this very
+        // implementation — and recurses infinitely.
+        await HandleAsync(@event, ValueTask.CompletedTask, context);
+        return Unit.Value;
     }
     
     

@@ -52,6 +52,7 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     private const string EventMarkerNamespace = "Stella.Ergosfare.Events.Abstractions";
 
     private const string HandlerContractNamespace = "Stella.Ergosfare.Core.Abstractions.Handlers";
+    private const string ExceptionFilterContractName = "IExceptionInterceptorFilter";
     private const string AttributeNamespace = "Stella.Ergosfare.Core.Abstractions.Attributes";
 
     private const string MessageRegistryMetadataName = "Stella.Ergosfare.Core.Abstractions.Registry.IMessageRegistry";
@@ -62,6 +63,14 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     private const string EventBuilderMetadataName = "Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.EventModuleBuilder";
 
     private const string ValueTaskExpression = "global::System.Threading.Tasks.ValueTask";
+
+    /// <summary>
+    ///     The result representation of a pipeline that produces none — what the void
+    ///     plans' interceptor arms match against. <see cref="ValueTaskExpression"/> stays
+    ///     the completion signal (a void handler's return carrier), which is what the
+    ///     handler-descriptor gates below keep checking.
+    /// </summary>
+    private const string UnitExpression = "global::Stella.Ergosfare.Core.Abstractions.Unit";
     private const string DescriptorCatalogMetadataName = "Stella.Ergosfare.Core.Abstractions.GeneratedDescriptorCatalog";
 
     private const string StagedVoidPlanMetadataName = "Stella.Ergosfare.Core.Abstractions.StagedPlans.StagedVoidPlan";
@@ -749,6 +758,8 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
 
         ImmutableArray<ContractShapeModel>.Builder? shapes = null;
 
+        ReadExceptionFilter(symbol, out var exceptionFilterExpression, out var undecidableExceptionFilter);
+
         foreach (var iface in symbol.AllInterfaces)
         {
             if (iface.Arity is not (1 or 2) || !IsInNamespace(iface, HandlerContractNamespace))
@@ -777,13 +788,16 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                     NormalizedTypeExpression(arguments[0]), null),
                 "IExceptionInterceptor" when iface.Arity == 2 => new ContractShapeModel(
                     DescriptorKind.ExceptionInterceptor, IsAsync: false, IsResultTyped: true,
-                    NormalizedTypeExpression(arguments[0]), VerbatimTypeExpression(arguments[1])),
+                    NormalizedTypeExpression(arguments[0]), VerbatimTypeExpression(arguments[1]),
+                    exceptionFilterExpression, undecidableExceptionFilter),
                 "IAsyncExceptionInterceptor" when iface.Arity == 2 => new ContractShapeModel(
                     DescriptorKind.ExceptionInterceptor, IsAsync: true, IsResultTyped: true,
-                    NormalizedTypeExpression(arguments[0]), VerbatimTypeExpression(arguments[1])),
+                    NormalizedTypeExpression(arguments[0]), VerbatimTypeExpression(arguments[1]),
+                    exceptionFilterExpression, undecidableExceptionFilter),
                 "IAsyncExceptionInterceptor" when iface.Arity == 1 => new ContractShapeModel(
                     DescriptorKind.ExceptionInterceptor, IsAsync: true, IsResultTyped: false,
-                    NormalizedTypeExpression(arguments[0]), null),
+                    NormalizedTypeExpression(arguments[0]), null,
+                    exceptionFilterExpression, undecidableExceptionFilter),
                 "IFinalInterceptor" when iface.Arity == 2 => new ContractShapeModel(
                     DescriptorKind.FinalInterceptor, IsAsync: false, IsResultTyped: true,
                     NormalizedTypeExpression(arguments[0]), VerbatimTypeExpression(arguments[1])),
@@ -803,6 +817,59 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         }
 
         return shapes?.ToImmutable() ?? ImmutableArray<ContractShapeModel>.Empty;
+    }
+
+    /// <summary>
+    ///     Reads the exception type an interceptor accepts off its
+    ///     <c>IExceptionInterceptorFilter&lt;TException&gt;</c>, so the staged plan can
+    ///     bake the runtime stage's filter probe in as an <c>is</c> test.
+    /// </summary>
+    /// <remarks>
+    ///     Only the single-generic-filter shape is decidable. A type carrying the
+    ///     non-generic filter without exactly one generic one has written its own
+    ///     <c>Matches</c> (or has several to disambiguate by hand), and no compile-time test
+    ///     reproduces it — the plan is disqualified instead of guessing, and the dispatch
+    ///     asks the instance through the runtime stage.
+    /// </remarks>
+    private static void ReadExceptionFilter(INamedTypeSymbol symbol, out string? filterExpression, out bool undecidable)
+    {
+        filterExpression = null;
+        undecidable = false;
+
+        var carriesFilter = false;
+        var genericFilterCount = 0;
+
+        foreach (var iface in symbol.AllInterfaces)
+        {
+            if (iface.Name != ExceptionFilterContractName || !IsInNamespace(iface, HandlerContractNamespace))
+            {
+                continue;
+            }
+
+            if (iface.Arity == 0)
+            {
+                carriesFilter = true;
+                continue;
+            }
+
+            if (iface.Arity == 1)
+            {
+                genericFilterCount++;
+                filterExpression = VerbatimTypeExpression(iface.TypeArguments[0]);
+            }
+        }
+
+        if (!carriesFilter)
+        {
+            filterExpression = null;
+            return;
+        }
+
+        if (genericFilterCount != 1)
+        {
+            filterExpression = null;
+            undecidable = true;
+        }
     }
 
     private static bool HasExcludeFromDiscovery(ImmutableArray<AttributeData> attributes)
@@ -1259,6 +1326,11 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 continue;
             }
 
+            if (HasCovariantMainHandler(type, handlerCounts))
+            {
+                continue;
+            }
+
             var (handler, handlerDescriptor) = soleHandlers[type.TypeofExpression];
 
             if (!handler.IsAccessible || !handler.DiscoveryKeys.IsEmpty || handler.GroupsExpression is not null)
@@ -1333,12 +1405,12 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         preCalls = postCalls = exceptionCalls = finalCalls = ImmutableArray<StagedCallModel>.Empty;
 
         // The pipeline result the arms match against: the declared result for result
-        // pipelines, the ValueTask carrier for void ones (a struct either way unless the
-        // declared result is a reference type).
-        var pipelineResultExpression = resultTypeExpression ?? ValueTaskExpression;
-        var pipelineResultIsValueType = resultTypeExpression is null || resultIsValueType;
+        // pipelines, Unit for void ones — a reference type, so a void pipeline is on the
+        // variance-bearing side of the checks below just like a class-typed result.
+        var pipelineResultExpression = resultTypeExpression ?? UnitExpression;
+        var pipelineResultIsValueType = resultTypeExpression is not null && resultIsValueType;
 
-        var stages = new List<(RegistrableTypeModel Type, StagedCallArm Arm, bool Direct)>?[4];
+        var stages = new List<(RegistrableTypeModel Type, StagedCallArm Arm, bool Direct, string? ExceptionFilter)>?[4];
 
         foreach (var candidate in types)
         {
@@ -1408,12 +1480,12 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 }
 
                 if (!TrySelectArm(candidate, kind, message, pipelineResultExpression, pipelineResultIsValueType,
-                        out var arm))
+                        out var arm, out var exceptionFilter))
                 {
                     return false;
                 }
 
-                (stages[kindIndex] ??= []).Add((candidate, arm, matchedDirect));
+                (stages[kindIndex] ??= []).Add((candidate, arm, matchedDirect, exceptionFilter));
                 _ = matchedMessageKey;
             }
         }
@@ -1438,9 +1510,11 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         RegistrableTypeModel message,
         string pipelineResultExpression,
         bool pipelineResultIsValueType,
-        out StagedCallArm arm)
+        out StagedCallArm arm,
+        out string? exceptionFilter)
     {
         arm = default;
+        exceptionFilter = null;
 
         var hasAsyncTyped = false;
         var hasAsyncAgnostic = false;
@@ -1452,6 +1526,16 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             {
                 continue;
             }
+
+            // A filter the string model cannot reproduce takes the whole plan down: an
+            // emitted call with no guard runs an interceptor that declined the exception,
+            // and — worse — makes the stage count it as having handled one.
+            if (shape.HasUndecidableExceptionFilter)
+            {
+                return false;
+            }
+
+            exceptionFilter = shape.ExceptionFilterExpression;
 
             // Message-side variance: exact match always works; a base/interface
             // registration matches only for reference-typed messages.
@@ -1544,7 +1628,7 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     ///     non-generic, so the display name equals the runtime <c>Type.FullName</c>).
     /// </summary>
     private static ImmutableArray<StagedCallModel> OrderStage(
-        List<(RegistrableTypeModel Type, StagedCallArm Arm, bool Direct)>? entries,
+        List<(RegistrableTypeModel Type, StagedCallArm Arm, bool Direct, string? ExceptionFilter)>? entries,
         bool hasKeyedServiceExtensions)
     {
         if (entries is null)
@@ -1570,10 +1654,11 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
 
         var calls = ImmutableArray.CreateBuilder<StagedCallModel>(entries.Count);
 
-        foreach (var (type, arm, _) in entries)
+        foreach (var (type, arm, _, exceptionFilter) in entries)
         {
             calls.Add(new StagedCallModel(
-                type.TypeofExpression, arm, GatedConstructionExpression(type, hasKeyedServiceExtensions)));
+                type.TypeofExpression, arm, GatedConstructionExpression(type, hasKeyedServiceExtensions),
+                exceptionFilter));
         }
 
         return calls.MoveToImmutable();
@@ -1738,6 +1823,11 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             return false;
         }
 
+        if (HasCovariantMainHandler(type, handlerCounts))
+        {
+            return false;
+        }
+
         if (interceptedMessages.Contains(type.TypeofExpression))
         {
             return false;
@@ -1748,6 +1838,34 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         return handler.IsAccessible
                && handler.DiscoveryKeys.IsEmpty
                && handler.GroupsExpression is null;
+    }
+
+    /// <summary>
+    ///     Whether any main handler is registered against a base type or interface of the
+    ///     message. Single-handler mediation treats those as candidates alongside the
+    ///     direct ones, so a message that has both is contested and must fail its dispatch
+    ///     — something a plan, which bakes one handler in, cannot express. Disqualifying
+    ///     here keeps the compiled lane and the reflective one telling the same story.
+    /// </summary>
+    /// <remarks>
+    ///     Deliberately blunt: a message whose only handler is covariantly matched is
+    ///     dispatchable and could in principle be planned (<c>IAsyncHandler</c>'s
+    ///     <c>in TMessage</c> variance admits the base-typed handler), but the model has no
+    ///     way to prove the supertype registration is the only one the runtime will see.
+    ///     Those dispatches take the reflective path, as they did before covariance reached
+    ///     main handlers at all.
+    /// </remarks>
+    private static bool HasCovariantMainHandler(RegistrableTypeModel type, Dictionary<string, int> handlerCounts)
+    {
+        foreach (var assignableKey in type.AssignableKeys)
+        {
+            if (handlerCounts.ContainsKey(assignableKey))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void AddModels(
