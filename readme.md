@@ -123,10 +123,13 @@ Selection and ordering are declarative:
   X)`. Matching follows catch semantics and leaves ordering alone; the filter decides only
   who is *eligible*. An exception is swallowed when a **matching** interceptor ran — if
   none matches, the original leaves the pipeline unwrapped, stack intact.
-- **`context.Abort()` short-circuits.** The rest of the pipeline is skipped, final
-  interceptors still run, and the caller receives what the pipeline had already produced —
-  the handler's result if the abort came after it, the result type's default if before.
-  No exception reaches the caller.
+- **`context.Abort()` stops the pipeline and tells the caller.** Nothing downstream runs —
+  not the exception stage (an abort is not a failure), not the final stage — and the
+  caller receives `ExecutionAbortedException` rather than a default it would have to tell
+  apart from a real result. `Abort(reason)` and `Abort(reason, value)` put something on the
+  signal for the caller to act on. A dispatch whose participants can abort is one you wrap
+  in a `try`; if you would rather carry outcomes as values, that is what result adapters
+  are for.
 - **A resultless pipeline carries `Unit.Value`.** Post, final and exception interceptors of
   a void command or an event see that one shared instance where a result would be; `null`
   means the slot before anything was produced — what the exception stage of a failed
@@ -150,8 +153,9 @@ public async ValueTask HandleAsync(PlaceOrder msg, IExecutionContext ctx)
 - The child starts with **clean items** — inner state never pollutes the outer scope —
   and **inherits the parent's cancellation token**, so nested work can't escape the outer
   cancellation chain (and forgetting to thread the token is impossible).
-- An inner `Abort()` ends only the inner pipeline; the outer handler decides what happens
-  next. Parallel inner dispatches with separate scopes are safe.
+- An inner `Abort()` surfaces to the outer handler — which is the inner dispatch's call
+  site, so it is who decides: catch it and carry on, or let it end the outer pipeline too.
+  Parallel inner dispatches with separate scopes are safe.
 - All facades accept the child: `SendAsync`, `QueryAsync`, `PublishAsync` overloads take
   an `IExecutionContext`; disposal returns the pooled child.
 
@@ -212,12 +216,24 @@ Reading the rows:
   interceptors through a source-generated staged plan; MediatR and Mediator run them as
   pipeline behaviors. This is the row that says what a real pipeline costs.
 - **Against MediatR**, Ergosfare leads every scenario on both axes — 2–3× on time, 8–10× on
-  allocation — and stays ahead once a per-request scope dominates the measurement.
+  allocation — and stays ahead once a per-request scope dominates the measurement. Both
+  libraries are doing the same work there: resolving a mediator and a handler out of the
+  new scope on every dispatch.
 - **Mediator** (martinothamar's source-generated library) is faster on raw nanoseconds by
   design: no execution context, no runtime registry, and singleton handlers resolved
-  without touching the container per dispatch. Ergosfare's 24 B is the transient handler
-  instance itself — what a transient registration declares — and drops to 0 B with
-  singleton handlers or `ForceMemoizedHandlers()`.
+  without touching the container per dispatch.
+- **The scoped table is not like-for-like for Mediator, and it should not be read as one.**
+  Its default lifetime is singleton, so inside a per-request scope its mediator and
+  handlers are still the same instances — the row prices scope creation plus a singleton
+  dispatch, not per-scope resolution. Ergosfare's and MediatR's rows price the thing the
+  table is about. Read Mediator's numbers there as the floor a library pays when it opts
+  out of per-scope lifetimes, not as the same job done faster.
+- **Lifetimes are yours, not the mediator's.** Ergosfare resolves handler instances per
+  dispatch from the *dispatching scope's* provider, so the container's own rules apply:
+  singleton is container-cached, scoped is one per scope, transient is one per dispatch.
+  The module registers handlers transient by default, which is where the 24 B comes from —
+  it is the handler instance. Register them singleton, or call `ForceMemoizedHandlers()`,
+  and the rows drop to 0 B.
 - Ergosfare's command, query and pipeline rows register through `RegisterGenerated()`, what
   the quick start sets up. The event row registers at runtime: a publish takes the same
   broadcast lane either way, since generated registration changes what registration costs,

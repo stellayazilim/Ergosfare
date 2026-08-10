@@ -117,5 +117,7 @@ public class QueryInterceptorDefaultImplementationTests
             return false;
         }
         public void Abort() => throw new NotSupportedException();
+        public void Abort(string? reason) => throw new NotSupportedException();
+        public void Abort(string? reason, object? value) => throw new NotSupportedException();
     }
 }

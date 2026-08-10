@@ -26,22 +26,27 @@ implied. Three changes are source-breaking and all three are listed under Notes.
   dispatch costs exactly its retired instruction count (345 for the generated void lane).
 * Both are wired into the solution and CI; pull requests into every base branch are gated.
 
-### Abort is a short circuit, not something the caller catches
+### Abort stops the pipeline, and says so
 
-* `IExecutionContext.Abort(messageResult)` **loses its parameter** (source-breaking). The
-  documented "result to abort with" reached nobody, and the `ExecutionAbortedException` it
-  raised travelled all the way out to the caller — the contract was wrong in both
-  directions.
-* An abort now short-circuits. The caller receives whatever the pipeline had already
-  produced: the handler's result when the abort came after it, the result type's default
-  when it came before. **No exception reaches the caller on any path.** Final interceptors
-  run as always, handed the same value the caller gets.
-* `ExecutionAbortedException` stays as the unwind mechanism and is documented as an
-  implementation detail of it: catching it in participant code defeats the abort rather
-  than observing it.
-* Four places run pipelines and all four learned it — both single-handler strategies, the
-  broadcast strategy, the emitted plans (including pre-only shells that previously had no
-  try/catch at all), and the executors' interceptor-less fast path.
+* `IExecutionContext.Abort(messageResult)` **loses its parameter** (source-breaking) and
+  gains overloads that carry what a caller can actually use: `Abort()`, `Abort(reason)`,
+  `Abort(reason, value)`. The old argument claimed to set the pipeline's *result*, which a
+  stopped pipeline does not have; it reached nobody and the XML doc described a contract
+  the code never implemented.
+* **An abort stops the pipeline where it stands.** Nothing downstream runs: not the rest of
+  the aborting participant's own stage, not the exception stage — an abort is not a
+  failure and exception interceptors exist to handle failures — and not the final stage.
+* **It reaches the caller**, as `ExecutionAbortedException` carrying `Reason` and `Value`.
+  The work was asked for by the call site, so the call site is who hears that it did not
+  happen; a returned default would be indistinguishable from a handler that legitimately
+  produced nothing. A pipeline whose participants can abort is one the caller wraps in a
+  `try`. Applications that prefer outcomes as values still have the result-adapter surface.
+* **The mechanism no longer varies by pipeline shape.** With interceptors or without, the
+  signal travels straight out: the strategies and the emitted plans only mark themselves
+  aborted so their own final stage is skipped, and the executors and the dispatch engine
+  carry no abort code at all. Nested dispatch follows the same rule — an inner abort
+  surfaces to the outer handler, which is the inner dispatch's call site and decides
+  whether to catch it.
 
 ### One value for a pipeline that produces none
 
@@ -146,6 +151,11 @@ rows as v2.6.0-preview:
 
 ### Notes
 
+* **Behavioral break worth auditing:** an abort now reaches the caller. Code that relied on
+  a dispatch completing quietly after a participant aborted — and on final interceptors
+  running afterwards — has to catch `ExecutionAbortedException` at the call site, or stop
+  aborting. This is the loud direction on purpose: the previous silence was
+  indistinguishable from a handler that produced nothing.
 * **Source-breaking (three):** `Abort()` lost its parameter; `IEventFinalInterceptor<T>`,
   the non-generic `IEventFinalInterceptor` and the non-generic
   `IEventExceptionInterceptor` are pure aliases whose inherited member now takes `Unit?`

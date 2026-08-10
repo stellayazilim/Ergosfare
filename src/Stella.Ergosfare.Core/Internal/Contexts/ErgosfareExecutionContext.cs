@@ -171,14 +171,18 @@ internal sealed class ErgosfareExecutionContext(
 
     /// <inheritdoc />
     /// <remarks>
-    /// <see cref="ExecutionAbortedException"/> is how the short circuit travels: it unwinds
-    /// the participant and everything between it and the mediation strategy (or the baked
-    /// plan), which catches it, skips the exception stage and returns the result produced so
-    /// far. It is an implementation detail of the unwind and never reaches the caller — a
-    /// <c>catch</c> for it in participant code would defeat the abort, not observe it.
+    /// Nothing catches this on the way out. The stages that do have exception handling —
+    /// the strategies and the emitted plans — filter it through untouched and skip their
+    /// own remaining work, so what the caller receives is the participant's own signal with
+    /// its stack intact.
     /// </remarks>
-    public void Abort()
-    {
-        throw new ExecutionAbortedException();
-    }
+    public void Abort() => throw new ExecutionAbortedException();
+
+    /// <inheritdoc />
+    /// <remarks><inheritdoc cref="Abort()" path="/remarks"/></remarks>
+    public void Abort(string? reason) => throw new ExecutionAbortedException(reason);
+
+    /// <inheritdoc />
+    /// <remarks><inheritdoc cref="Abort()" path="/remarks"/></remarks>
+    public void Abort(string? reason, object? value) => throw new ExecutionAbortedException(reason, value);
 }

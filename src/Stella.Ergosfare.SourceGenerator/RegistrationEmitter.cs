@@ -729,24 +729,19 @@ internal static class RegistrationEmitter
 
         if (!needsGuards)
         {
-            // Pre-only pipeline: with zero exception and final stages the strategy's
-            // try/catch/finally collapses to the abort arm alone — exceptions propagate
-            // unchanged, an abort completes the dispatch with nothing to hand back.
-            sb.AppendLine("                try");
-            sb.AppendLine("                {");
-            EmitPreCalls(sb, plan, direct, "                    ");
-            sb.Append("                    await ");
+            // Pre-only pipeline: with zero exception and final stages there is nothing to
+            // skip and nothing to clean up, so no guard at all — exceptions and aborts
+            // alike travel out untouched.
+            EmitPreCalls(sb, plan, direct, "                ");
+            sb.Append("                await ");
             AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
             sb.AppendLine(".HandleAsync(message, context);");
-            sb.AppendLine("                }");
-            sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
-            sb.AppendLine("                {");
-            sb.AppendLine("                }");
             return;
         }
 
         sb.AppendLine("                object? result = null;");
         sb.AppendLine("                global::System.Exception? exception = null;");
+        sb.AppendLine("                var aborted = false;");
         sb.AppendLine("                try");
         sb.AppendLine("                {");
         EmitPreCalls(sb, plan, direct, "                    ");
@@ -770,11 +765,13 @@ internal static class RegistrationEmitter
         }
 
         sb.AppendLine("                }");
-        // A short circuit, not a failure: the exception stage is skipped, the caller sees
-        // no exception, and the result produced so far survives into the final stage and
-        // the return — the strategy's own abort arm, emitted.
+        // A participant stopped the pipeline: nothing else runs — not the exception stage,
+        // not the final stage — and the signal continues to the caller. The strategy's own
+        // abort arm, emitted.
         sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
         sb.AppendLine("                {");
+        sb.AppendLine("                    aborted = true;");
+        sb.AppendLine("                    throw;");
         sb.AppendLine("                }");
         sb.AppendLine("                catch (global::System.Exception e)");
         sb.AppendLine("                {");
@@ -797,7 +794,10 @@ internal static class RegistrationEmitter
         sb.AppendLine("                }");
         sb.AppendLine("                finally");
         sb.AppendLine("                {");
-        EmitFinalCalls(sb, plan, direct, "result", "                    ");
+        sb.AppendLine("                    if (!aborted)");
+        sb.AppendLine("                    {");
+        EmitFinalCalls(sb, plan, direct, "result", "                        ");
+        sb.AppendLine("                    }");
         sb.AppendLine("                }");
     }
 
@@ -808,24 +808,18 @@ internal static class RegistrationEmitter
 
         if (!needsGuards)
         {
-            // Pre-only pipeline; see the void body. Nothing was produced when an abort
-            // unwinds through here, so the caller gets the result type's default.
-            sb.AppendLine("                try");
-            sb.AppendLine("                {");
-            EmitPreCalls(sb, plan, direct, "                    ");
-            sb.Append("                    return await ");
+            // Pre-only pipeline; see the void body. No guard: with nothing to skip and
+            // nothing to clean up, exceptions and aborts alike travel out untouched.
+            EmitPreCalls(sb, plan, direct, "                ");
+            sb.Append("                return await ");
             AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
             sb.AppendLine(".HandleAsync(message, context);");
-            sb.AppendLine("                }");
-            sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
-            sb.AppendLine("                {");
-            sb.AppendLine("                    return default!;");
-            sb.AppendLine("                }");
             return;
         }
 
         sb.Append("                ").Append(resultExpression).AppendLine(" result = default!;");
         sb.AppendLine("                global::System.Exception? exception = null;");
+        sb.AppendLine("                var aborted = false;");
         sb.AppendLine("                try");
         sb.AppendLine("                {");
         EmitPreCalls(sb, plan, direct, "                    ");
@@ -856,11 +850,12 @@ internal static class RegistrationEmitter
         }
 
         sb.AppendLine("                }");
-        // A short circuit, not a failure: the exception stage is skipped, the caller sees
-        // no exception, and the result produced so far survives into the final stage and
-        // the return — the strategy's own abort arm, emitted.
+        // A participant stopped the pipeline: nothing else runs — not the exception stage,
+        // not the final stage — and the signal continues to the caller.
         sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
         sb.AppendLine("                {");
+        sb.AppendLine("                    aborted = true;");
+        sb.AppendLine("                    throw;");
         sb.AppendLine("                }");
         sb.AppendLine("                catch (global::System.Exception e)");
         sb.AppendLine("                {");
@@ -890,7 +885,10 @@ internal static class RegistrationEmitter
         sb.AppendLine("                }");
         sb.AppendLine("                finally");
         sb.AppendLine("                {");
-        EmitFinalCalls(sb, plan, direct, "result", "                    ");
+        sb.AppendLine("                    if (!aborted)");
+        sb.AppendLine("                    {");
+        EmitFinalCalls(sb, plan, direct, "result", "                        ");
+        sb.AppendLine("                    }");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                return result;");

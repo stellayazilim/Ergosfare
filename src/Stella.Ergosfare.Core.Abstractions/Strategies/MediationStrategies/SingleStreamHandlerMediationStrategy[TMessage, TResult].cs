@@ -86,10 +86,11 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         }
         catch (ExecutionAbortedException)
         {
-            // aborted early no need to _consume
-            _consume = false;
+            // A participant stopped the pipeline before a single chunk existed. Nothing
+            // else runs — the final stage below included — and the signal reaches whoever
+            // is enumerating.
             _executionAborted = true;
-
+            throw;
         }
         catch (Exception exception) when (exception is not ExecutionAbortedException)
         {
@@ -112,25 +113,23 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
             }
             catch (ExecutionAbortedException)
             {
-                _consume = false;
+                // Stopped mid-stream: the chunks already yielded stand, nothing further is
+                // produced, and the signal reaches the enumerating caller.
                 _executionAborted = true;
-                
+                throw;
             }
             catch (Exception exception) when (exception is not ExecutionAbortedException)
             {
                 _consume = false;
                 _unknownException = exception;
             }
-            if (item is not null && _consume && _unknownException is null && !_executionAborted)
+            if (item is not null && _consume && _unknownException is null)
                 yield return item;
             if (!_consume || _unknownException is not null)
             {
-          
+
                 break; // exit loop to run post-interceptors
             }
-
-            if (_executionAborted)
-                yield break; // stop pipeline early
         }
         try
         {
@@ -142,9 +141,13 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
             }
         }
         catch (ExecutionAbortedException)
-        { /*all chunks _consumed no action need*/ }
+        {
+            // A post-interceptor stopped the pipeline; see the arms above.
+            _executionAborted = true;
+            throw;
+        }
         catch (Exception exception) when (exception is not ExecutionAbortedException)
-        { 
+        {
             _unknownException = exception;
         }
         try
@@ -163,8 +166,11 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         }
         finally
         {
-            await FinalInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>.Invoke(
-                messageDependencies, serviceProvider, message, enumerator, _unknownException, context);
+            if (!_executionAborted)
+            {
+                await FinalInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>.Invoke(
+                    messageDependencies, serviceProvider, message, enumerator, _unknownException, context);
+            }
         }
     }
     
