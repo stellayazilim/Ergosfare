@@ -26,7 +26,6 @@ internal sealed class VoidPipelineExecutor<TMessage>(
 
     private IMessageDependencies? _cachedDependencies;
     private MessageDependencies? _cachedFastDependencies;
-    private int _cachedVersion = int.MinValue;
 
     public ValueTask Execute(object message, IExecutionContext context, IServiceProvider serviceProvider)
     {
@@ -60,12 +59,11 @@ internal sealed class VoidPipelineExecutor<TMessage>(
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
-            // Read before the build: a registration completing mid-build must land as a
-            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
-            var registryVersion = typedFactory.CurrentRegistryVersion;
+            // Frozen registry: dependencies resolve once per executor and are never
+            // re-validated — a registration after the first dispatch is not observed.
             var cached = _cachedDependencies;
 
-            if (cached is not null && _cachedVersion == registryVersion)
+            if (cached is not null)
             {
                 return cached;
             }
@@ -73,7 +71,6 @@ internal sealed class VoidPipelineExecutor<TMessage>(
             var dependencies = typedFactory.Create(typeof(TMessage), descriptor, groups);
             _cachedFastDependencies = dependencies as MessageDependencies;
             _cachedDependencies = dependencies;
-            _cachedVersion = registryVersion;
             return dependencies;
         }
 

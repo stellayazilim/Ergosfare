@@ -159,7 +159,7 @@ public class StagedPlanExecutionTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task RuntimeRegistration_FallsBackToTheStrategy()
+    public async Task RuntimeRegistration_DoesNotDislodgeTheFrozenPlan()
     {
         GeneratedDispatchRoots.AddStagedPlan(new FallbackCommandPlan());
 
@@ -182,18 +182,15 @@ public class StagedPlanExecutionTests
         await mediator.SendAsync(beforeRegistration);
         Assert.Equal(["staged", "pre", "handler"], beforeRegistration.Order);
 
-        // A runtime registration bumps the registry version; the next rebuild sees a
-        // second pre-interceptor the plan was not baked for — the advisory contract
-        // demands the strategy path, which runs both interceptors.
+        // A registration after the first dispatch is not observed: the staged plan froze
+        // with the composition it validated, and the extra interceptor never joins.
         provider.GetRequiredService<IMessageRegistry>().Register(typeof(ExtraFallbackCommandPreInterceptor));
 
         var afterRegistration = new FallbackCommand();
         await mediator.SendAsync(afterRegistration);
 
-        Assert.DoesNotContain("staged", afterRegistration.Order);
-        Assert.Contains("pre", afterRegistration.Order);
-        Assert.Contains("extra-pre", afterRegistration.Order);
-        Assert.Equal("handler", afterRegistration.Order[^1]);
+        Assert.Equal(["staged", "pre", "handler"], afterRegistration.Order);
+        Assert.DoesNotContain("extra-pre", afterRegistration.Order);
     }
 
     [ExcludeFromDiscovery]

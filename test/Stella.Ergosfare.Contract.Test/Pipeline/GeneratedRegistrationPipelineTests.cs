@@ -53,4 +53,8 @@ public sealed class GeneratedRegistrationPipelineTests : PipelineSemanticsContra
 
     /// <inheritdoc />
     protected override ICommand NewOrderedCommand() => new OrderedCommand();
+
+    /// <inheritdoc />
+    protected override IPayloadCommand NewAsyncTypedCommand(string payload)
+        => new AsyncTypedPipelineCommand { Payload = payload };
 }

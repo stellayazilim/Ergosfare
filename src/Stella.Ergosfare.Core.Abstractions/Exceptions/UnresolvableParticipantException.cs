@@ -14,7 +14,6 @@ namespace Stella.Ergosfare.Core.Abstractions.Exceptions;
 /// </remarks>
 /// <param name="messageType">The message type whose pipeline could not be built.</param>
 /// <param name="participantType">The participant the container cannot resolve.</param>
-[Serializable]
 public class UnresolvableParticipantException(Type messageType, Type participantType)
     : InvalidOperationException(
         $"The pipeline for '{messageType.Name}' includes '{participantType.FullName ?? participantType.Name}', " +
