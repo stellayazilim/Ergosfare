@@ -29,8 +29,9 @@ public class ExecutionContextTests
         // modify dictionary after construction (should still reference the same instance)
         items.Add("foo", "bar");
 
-        // act & assert: aborting should throw and set the MessageResult
-        Assert.Throws<ExecutionAbortedException>(() => ctx.Abort("baz"));
+        // act & assert: aborting raises the internal unwind signal, which the mediation
+        // strategy — not the caller — catches; nothing here stands between the two.
+        Assert.Throws<ExecutionAbortedException>(() => ctx.Abort());
         Assert.Equal(token, ctx.CancellationToken);
         Assert.Equal(items, ctx.Items);
         

@@ -283,4 +283,61 @@ public sealed class EventPublishTests
         Assert.Equal(nameof(Unit), recorder.DetailOf("exception"));
         Assert.Equal(nameof(Unit), recorder.DetailOf("final"));
     }
+
+    // -----------------------------------------------------------------------
+    // aborting a publish
+    // -----------------------------------------------------------------------
+
+    /// <summary>An event whose post stage aborts after the handlers have run.</summary>
+    [DiscoveryKey(Key)]
+    public sealed class Recalled : IEvent;
+
+    [DiscoveryKey(Key)]
+    public sealed class RecalledHandler : IEventHandler<Recalled>
+    {
+        public ValueTask HandleAsync(Recalled @event, IExecutionContext context)
+        {
+            context.Mark("handler");
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    /// <inheritdoc cref="AnnouncedPost"/>
+    [DiscoveryKey(Key)]
+    public sealed class RecalledAbortingPost : IEvent, IAsyncPostInterceptor<Recalled>
+    {
+        public ValueTask<object> HandleAsync(Recalled @event, object result, IExecutionContext context)
+        {
+            context.Mark("post:abort");
+            context.Abort();
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    /// <inheritdoc cref="AnnouncedPost"/>
+    [DiscoveryKey(Key)]
+    public sealed class RecalledFinal : IEvent, IAsyncFinalInterceptor<Recalled>
+    {
+        public ValueTask HandleAsync(
+            Recalled @event, object? result, Exception? exception, IExecutionContext context)
+        {
+            context.Mark("final", $"{Describe(result)}|{(exception is null ? "none" : exception.GetType().Name)}");
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Contract")]
+    public async Task Aborting_a_publish_completes_it_without_an_exception()
+    {
+        await using var provider = CreateProvider();
+        var recorder = new PipelineRecorder();
+
+        // A publish short-circuits like any other dispatch: the exception stage never sees
+        // the abort, the final stage still runs, and the publisher gets no exception.
+        await provider.GetRequiredService<IEventMediator>().PublishAsync(new Recalled(), recorder.Events());
+
+        recorder.AssertStages("handler", "post:abort", "final");
+        Assert.Equal($"{nameof(Unit)}|none", recorder.DetailOf("final"));
+    }
 }

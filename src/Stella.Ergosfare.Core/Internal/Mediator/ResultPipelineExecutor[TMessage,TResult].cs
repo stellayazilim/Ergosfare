@@ -1,4 +1,5 @@
-﻿using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
@@ -48,14 +49,24 @@ internal sealed class ResultPipelineExecutor<TMessage, TResult>(
         {
             var handler = handlerReference.Resolve(serviceProvider);
 
-            switch (handler)
+            // The strategy is skipped here, so its abort handling has to be too; see
+            // AbortShortCircuit. Nothing was produced when a zero-interceptor handler
+            // aborts, so the caller gets the result type's default.
+            try
             {
-                case IAsyncHandler<TMessage, TResult> asyncHandler:
-                    return asyncHandler.HandleAsync((TMessage)message, context);
-                case IHandler<TMessage, ValueTask<TResult>> valueTaskShaped:
-                    return valueTaskShaped.Handle((TMessage)message, context);
-                case IHandler<TMessage, TResult> syncHandler:
-                    return ValueTask.FromResult(syncHandler.Handle((TMessage)message, context));
+                switch (handler)
+                {
+                    case IAsyncHandler<TMessage, TResult> asyncHandler:
+                        return AbortShortCircuit.Guard(asyncHandler.HandleAsync((TMessage)message, context));
+                    case IHandler<TMessage, ValueTask<TResult>> valueTaskShaped:
+                        return AbortShortCircuit.Guard(valueTaskShaped.Handle((TMessage)message, context));
+                    case IHandler<TMessage, TResult> syncHandler:
+                        return ValueTask.FromResult(syncHandler.Handle((TMessage)message, context));
+                }
+            }
+            catch (ExecutionAbortedException)
+            {
+                return ValueTask.FromResult<TResult>(default!);
             }
 
             // Unsupported handler contract: fall through so the strategy raises its

@@ -661,11 +661,18 @@ internal static class RegistrationEmitter
         if (!needsGuards)
         {
             // Pre-only pipeline: with zero exception and final stages the strategy's
-            // try/catch/finally is a no-op shell — exceptions propagate unchanged.
-            EmitPreCalls(sb, plan, direct, "                ");
-            sb.Append("                await ");
+            // try/catch/finally collapses to the abort arm alone — exceptions propagate
+            // unchanged, an abort completes the dispatch with nothing to hand back.
+            sb.AppendLine("                try");
+            sb.AppendLine("                {");
+            EmitPreCalls(sb, plan, direct, "                    ");
+            sb.Append("                    await ");
             AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
             sb.AppendLine(".HandleAsync(message, context);");
+            sb.AppendLine("                }");
+            sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
+            sb.AppendLine("                {");
+            sb.AppendLine("                }");
             return;
         }
 
@@ -694,7 +701,13 @@ internal static class RegistrationEmitter
         }
 
         sb.AppendLine("                }");
-        sb.Append("                catch (global::System.Exception e) when (e is not ").Append(AbortedExceptionFullName).AppendLine(")");
+        // A short circuit, not a failure: the exception stage is skipped, the caller sees
+        // no exception, and the result produced so far survives into the final stage and
+        // the return — the strategy's own abort arm, emitted.
+        sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
+        sb.AppendLine("                {");
+        sb.AppendLine("                }");
+        sb.AppendLine("                catch (global::System.Exception e)");
         sb.AppendLine("                {");
         sb.AppendLine("                    exception = e;");
 
@@ -729,10 +742,19 @@ internal static class RegistrationEmitter
 
         if (!needsGuards)
         {
-            EmitPreCalls(sb, plan, direct, "                ");
-            sb.Append("                return await ");
+            // Pre-only pipeline; see the void body. Nothing was produced when an abort
+            // unwinds through here, so the caller gets the result type's default.
+            sb.AppendLine("                try");
+            sb.AppendLine("                {");
+            EmitPreCalls(sb, plan, direct, "                    ");
+            sb.Append("                    return await ");
             AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
             sb.AppendLine(".HandleAsync(message, context);");
+            sb.AppendLine("                }");
+            sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    return default!;");
+            sb.AppendLine("                }");
             return;
         }
 
@@ -768,7 +790,13 @@ internal static class RegistrationEmitter
         }
 
         sb.AppendLine("                }");
-        sb.Append("                catch (global::System.Exception e) when (e is not ").Append(AbortedExceptionFullName).AppendLine(")");
+        // A short circuit, not a failure: the exception stage is skipped, the caller sees
+        // no exception, and the result produced so far survives into the final stage and
+        // the return — the strategy's own abort arm, emitted.
+        sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
+        sb.AppendLine("                {");
+        sb.AppendLine("                }");
+        sb.AppendLine("                catch (global::System.Exception e)");
         sb.AppendLine("                {");
         sb.AppendLine("                    exception = e;");
 

@@ -1,4 +1,5 @@
-﻿using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
@@ -54,19 +55,28 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
                 ? _directHandlerFactory is not null ? _directHandlerFactory() : _providerHandlerFactory!(serviceProvider)
                 : handlerReference.Resolve(serviceProvider);
 
-            if (handler is THandler planned)
+            // The strategy is skipped here, so its abort handling has to be too; see
+            // AbortShortCircuit.
+            try
             {
-                return planned.HandleAsync((TMessage)message, context);
-            }
+                if (handler is THandler planned)
+                {
+                    return AbortShortCircuit.Guard(planned.HandleAsync((TMessage)message, context));
+                }
 
-            switch (handler)
+                switch (handler)
+                {
+                    case IAsyncHandler<TMessage, TResult> asyncHandler:
+                        return AbortShortCircuit.Guard(asyncHandler.HandleAsync((TMessage)message, context));
+                    case IHandler<TMessage, ValueTask<TResult>> valueTaskShaped:
+                        return AbortShortCircuit.Guard(valueTaskShaped.Handle((TMessage)message, context));
+                    case IHandler<TMessage, TResult> syncHandler:
+                        return ValueTask.FromResult(syncHandler.Handle((TMessage)message, context));
+                }
+            }
+            catch (ExecutionAbortedException)
             {
-                case IAsyncHandler<TMessage, TResult> asyncHandler:
-                    return asyncHandler.HandleAsync((TMessage)message, context);
-                case IHandler<TMessage, ValueTask<TResult>> valueTaskShaped:
-                    return valueTaskShaped.Handle((TMessage)message, context);
-                case IHandler<TMessage, TResult> syncHandler:
-                    return ValueTask.FromResult(syncHandler.Handle((TMessage)message, context));
+                return ValueTask.FromResult<TResult>(default!);
             }
         }
 

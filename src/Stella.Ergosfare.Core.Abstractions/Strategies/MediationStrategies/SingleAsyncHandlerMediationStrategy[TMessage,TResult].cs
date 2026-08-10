@@ -89,7 +89,18 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
             // dispatches (TMessage = ICommand<T> etc.) fall back to the bridge.
             var fastHandler = soleHandler.Resolve(serviceProvider);
 
-            var fastResult = await InvokeHandler(fastHandler, message, context);
+            TResult fastResult;
+
+            try
+            {
+                fastResult = await InvokeHandler(fastHandler, message, context);
+            }
+            catch (ExecutionAbortedException)
+            {
+                // The handler short-circuited before producing anything, so there is
+                // nothing to hand back but the result type's default.
+                return default!;
+            }
 
             var fastEx = resultAdapterService?.LookupException(fastResult);
             if (fastEx is not null) throw fastEx;
@@ -124,9 +135,11 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult>(IResu
         }
         catch (ExecutionAbortedException)
         {
-            throw;
+            // A short circuit, not a failure: the exception stage is skipped, the caller
+            // sees no exception, and `result` — whatever the pipeline had produced by the
+            // time the abort unwound — is what the final stage and the caller both get.
         }
-        catch (Exception e) when (e is not ExecutionAbortedException)
+        catch (Exception e)
         {
             exception = e;
 
