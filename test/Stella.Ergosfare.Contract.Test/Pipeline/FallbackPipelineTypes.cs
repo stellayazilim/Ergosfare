@@ -180,3 +180,29 @@ public sealed class OrderedHighPost() : OrderedPostBase<OrderedCommand>("post:hi
 [ExcludeFromDiscovery]
 [Weight(3)]
 public sealed class OrderedLowPost() : OrderedPostBase<OrderedCommand>("post:low");
+
+// --- void command, async typed interceptors ---------------------------------
+
+/// <inheritdoc cref="Generated.AsyncTypedPipelineCommand"/>
+[ExcludeFromDiscovery]
+public sealed class AsyncTypedPipelineCommand : IPayloadCommand
+{
+    /// <inheritdoc />
+    public string Payload { get; set; } = string.Empty;
+}
+
+/// <inheritdoc />
+[ExcludeFromDiscovery]
+public sealed class AsyncTypedPipelineCommandHandler : PayloadHandlerBase<AsyncTypedPipelineCommand>;
+
+/// <inheritdoc />
+[ExcludeFromDiscovery]
+public sealed class AsyncTypedPipelineCommandPost : AsyncTypedPostBase<AsyncTypedPipelineCommand>;
+
+/// <inheritdoc />
+[ExcludeFromDiscovery]
+public sealed class AsyncTypedPipelineCommandException : AsyncTypedExceptionBase<AsyncTypedPipelineCommand>;
+
+/// <inheritdoc />
+[ExcludeFromDiscovery]
+public sealed class AsyncTypedPipelineCommandFinal : AsyncTypedFinalBase<AsyncTypedPipelineCommand>;

@@ -153,3 +153,24 @@ public sealed class OrderedHighPost() : OrderedPostBase<OrderedCommand>("post:hi
 /// <inheritdoc />
 [Weight(3)]
 public sealed class OrderedLowPost() : OrderedPostBase<OrderedCommand>("post:low");
+
+// --- void command, async typed interceptors ---------------------------------
+
+/// <summary>Void command whose post, exception and final stages bind async typed over <c>Unit</c>.</summary>
+public sealed class AsyncTypedPipelineCommand : IPayloadCommand
+{
+    /// <inheritdoc />
+    public string Payload { get; set; } = string.Empty;
+}
+
+/// <inheritdoc />
+public sealed class AsyncTypedPipelineCommandHandler : PayloadHandlerBase<AsyncTypedPipelineCommand>;
+
+/// <inheritdoc />
+public sealed class AsyncTypedPipelineCommandPost : AsyncTypedPostBase<AsyncTypedPipelineCommand>;
+
+/// <inheritdoc />
+public sealed class AsyncTypedPipelineCommandException : AsyncTypedExceptionBase<AsyncTypedPipelineCommand>;
+
+/// <inheritdoc />
+public sealed class AsyncTypedPipelineCommandFinal : AsyncTypedFinalBase<AsyncTypedPipelineCommand>;
