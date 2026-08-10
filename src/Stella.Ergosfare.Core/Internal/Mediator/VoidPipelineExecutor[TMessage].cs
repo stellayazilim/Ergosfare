@@ -38,25 +38,18 @@ internal sealed class VoidPipelineExecutor<TMessage>(
         {
             var handler = handlerReference.Resolve(serviceProvider);
 
-            // The strategy is skipped here, so its abort handling has to be too; see
-            // AbortShortCircuit. The try covers a handler that aborts synchronously, the
-            // guard the one that captured the abort into its task.
-            try
+            // The strategy is skipped here, and with it its abort handling. That arm lives
+            // in the engine's dispatch frame — an exception-handling region here would keep
+            // Execute out of its caller on every dispatch; see MessageDispatchEngine.
+            switch (handler)
             {
-                switch (handler)
-                {
-                    case IAsyncHandler<TMessage> asyncHandler:
-                        return AbortShortCircuit.Guard(asyncHandler.HandleAsync((TMessage)message, context));
-                    case IHandler<TMessage, ValueTask> valueTaskShaped:
-                        return AbortShortCircuit.Guard(valueTaskShaped.Handle((TMessage)message, context));
-                    case IHandler<TMessage, object> syncHandler:
-                        syncHandler.Handle((TMessage)message, context);
-                        return ValueTask.CompletedTask;
-                }
-            }
-            catch (ExecutionAbortedException)
-            {
-                return ValueTask.CompletedTask;
+                case IAsyncHandler<TMessage> asyncHandler:
+                    return asyncHandler.HandleAsync((TMessage)message, context);
+                case IHandler<TMessage, ValueTask> valueTaskShaped:
+                    return valueTaskShaped.Handle((TMessage)message, context);
+                case IHandler<TMessage, object> syncHandler:
+                    syncHandler.Handle((TMessage)message, context);
+                    return ValueTask.CompletedTask;
             }
         }
 
