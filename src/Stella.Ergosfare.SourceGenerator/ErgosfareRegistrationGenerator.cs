@@ -1267,6 +1267,11 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 continue;
             }
 
+            if (HasCovariantMainHandler(type, handlerCounts))
+            {
+                continue;
+            }
+
             var (handler, handlerDescriptor) = soleHandlers[type.TypeofExpression];
 
             if (!handler.IsAccessible || !handler.DiscoveryKeys.IsEmpty || handler.GroupsExpression is not null)
@@ -1746,6 +1751,11 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             return false;
         }
 
+        if (HasCovariantMainHandler(type, handlerCounts))
+        {
+            return false;
+        }
+
         if (interceptedMessages.Contains(type.TypeofExpression))
         {
             return false;
@@ -1756,6 +1766,34 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         return handler.IsAccessible
                && handler.DiscoveryKeys.IsEmpty
                && handler.GroupsExpression is null;
+    }
+
+    /// <summary>
+    ///     Whether any main handler is registered against a base type or interface of the
+    ///     message. Single-handler mediation treats those as candidates alongside the
+    ///     direct ones, so a message that has both is contested and must fail its dispatch
+    ///     — something a plan, which bakes one handler in, cannot express. Disqualifying
+    ///     here keeps the compiled lane and the reflective one telling the same story.
+    /// </summary>
+    /// <remarks>
+    ///     Deliberately blunt: a message whose only handler is covariantly matched is
+    ///     dispatchable and could in principle be planned (<c>IAsyncHandler</c>'s
+    ///     <c>in TMessage</c> variance admits the base-typed handler), but the model has no
+    ///     way to prove the supertype registration is the only one the runtime will see.
+    ///     Those dispatches take the reflective path, as they did before covariance reached
+    ///     main handlers at all.
+    /// </remarks>
+    private static bool HasCovariantMainHandler(RegistrableTypeModel type, Dictionary<string, int> handlerCounts)
+    {
+        foreach (var assignableKey in type.AssignableKeys)
+        {
+            if (handlerCounts.ContainsKey(assignableKey))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void AddModels(

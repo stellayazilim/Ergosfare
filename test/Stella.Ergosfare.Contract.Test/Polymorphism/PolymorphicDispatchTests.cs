@@ -161,18 +161,19 @@ public sealed class PolymorphicDispatchTests
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_base_typed_handler_does_not_serve_a_derived_message_registered_in_its_own_right()
+    public async Task A_base_typed_handler_serves_a_derived_message_registered_in_its_own_right()
     {
         await using var provider = CreateProvider();
-        var mediator = provider.GetRequiredService<ICommandMediator>();
+        var recorder = new PipelineRecorder();
+        var command = new DepositEntry();
 
-        // Covariant command dispatch is resolution-time only: once the derived type has a
-        // descriptor of its own, the base-typed handler is an indirect handler there and
-        // single-handler mediation never considers it. See the README.
-        var thrown = await Assert.ThrowsAsync<NoHandlerFoundException>(
-            async () => await mediator.SendAsync(new DepositEntry()));
+        // Registering the derived type in its own right files the base-typed handler as an
+        // indirect one for it. Single-handler mediation considers those too, so whether the
+        // message has a descriptor of its own no longer decides who serves it.
+        await provider.GetRequiredService<ICommandMediator>().SendAsync(command, recorder.Commands());
 
-        Assert.Contains(nameof(DepositEntry), thrown.Message, StringComparison.Ordinal);
+        recorder.AssertStages("handler:base");
+        Assert.Equal(nameof(DepositEntry), command.SeenType);
     }
 
     [Fact]
@@ -186,5 +187,47 @@ public sealed class PolymorphicDispatchTests
             .PublishAsync(new ShipmentDispatched(), recorder.Events());
 
         recorder.AssertStages("direct:audit", "direct:notify", "indirect:interface");
+    }
+
+    // --- a derived message claimed from both sides -----------------------------
+    //
+    // Appended rather than filed beside the other ledger types: a member inserted above
+    // renumbers the state machines below it and churns the lane map for no reason.
+
+    /// <summary>Registered in its own right and handled in its own right, under a handled base.</summary>
+    [DiscoveryKey(Key)]
+    public sealed class WithdrawalEntry : LedgerEntry;
+
+    /// <summary>The direct claim on <see cref="WithdrawalEntry"/>; the base handler is the other one.</summary>
+    [DiscoveryKey(Key)]
+    public sealed class WithdrawalEntryHandler : ICommandHandler<WithdrawalEntry>
+    {
+        public ValueTask HandleAsync(WithdrawalEntry command, IExecutionContext context)
+        {
+            command.SeenType = command.GetType().Name;
+            context.Mark("handler:direct");
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Contract")]
+    public async Task A_direct_and_a_base_typed_handler_claiming_one_message_fail_the_dispatch()
+    {
+        await using var provider = CreateProvider();
+        var recorder = new PipelineRecorder();
+        var mediator = provider.GetRequiredService<ICommandMediator>();
+
+        // Covariance reaching main handlers means a derived message can be claimed twice:
+        // directly and through its base. That is the same contest two direct handlers
+        // create, and it fails the same way rather than picking a winner.
+        var thrown = await Assert.ThrowsAsync<MultipleHandlerFoundException>(
+            async () => await mediator.SendAsync(new WithdrawalEntry(), recorder.Commands()));
+
+        Assert.Contains(nameof(WithdrawalEntry), thrown.Message, StringComparison.Ordinal);
+        Assert.Contains("2", thrown.Message, StringComparison.Ordinal);
+
+        // Counted before anything resolves: neither claimant runs.
+        Assert.Empty(recorder.Stages);
     }
 }

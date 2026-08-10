@@ -169,11 +169,15 @@ internal sealed class ErgosfareExecutionContext(
     }
 
 
-    /// <summary>
-    /// Aborts the current mediation by throwing <see cref="ExecutionAbortedException"/>.
-    /// </summary>
-    /// <param name="messageResult">The result to abort with, when the pipeline requires one.</param>
-    public void Abort(object? messageResult = null)
+    /// <inheritdoc />
+    /// <remarks>
+    /// <see cref="ExecutionAbortedException"/> is how the short circuit travels: it unwinds
+    /// the participant and everything between it and the mediation strategy (or the baked
+    /// plan), which catches it, skips the exception stage and returns the result produced so
+    /// far. It is an implementation detail of the unwind and never reaches the caller — a
+    /// <c>catch</c> for it in participant code would defeat the abort, not observe it.
+    /// </remarks>
+    public void Abort()
     {
         throw new ExecutionAbortedException();
     }

@@ -48,15 +48,25 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             throw new ArgumentNullException(nameof(messageDependencies));
         }
 
-        if (messageDependencies.Handlers.Count > 1)
+        // Direct and covariantly matched handlers are one candidate set: a handler written
+        // against a supertype serves this message whether or not the message has a
+        // descriptor of its own. Counted before anything resolves, so a contested message
+        // runs neither handler.
+        var handlers = messageDependencies.Handlers;
+        var indirectHandlers = messageDependencies.IndirectHandlers;
+        var handlerCount = handlers.Count + indirectHandlers.Count;
+
+        if (handlerCount > 1)
         {
-            throw new MultipleHandlerFoundException(typeof(TMessage), messageDependencies.Handlers.Count);
+            throw new MultipleHandlerFoundException(typeof(TMessage), handlerCount);
         }
 
-        if (messageDependencies.Handlers.Count == 0)
+        if (handlerCount == 0)
         {
             throw new NoHandlerFoundException(typeof(TMessage), $"No handler is registered for {typeof(TMessage).Name}.");
         }
+
+        var soleHandler = handlers.Count == 1 ? handlers[0] : indirectHandlers[0];
 
         var preInterceptorCount = messageDependencies.PreInterceptors.Count;
         var postInterceptorCount = messageDependencies.PostInterceptors.Count;
@@ -71,9 +81,18 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             // Typed seam: direct typed invocation when the dispatch TMessage satisfies the
             // handler's message type (`in TMessage` variance; `out TResult` admits ValueTask<T>
             // for a ValueTask slot). Interface-erased dispatches fall back to the DIM bridge.
-            var fastHandler = messageDependencies.Handlers[0].Resolve(serviceProvider);
+            var fastHandler = soleHandler.Resolve(serviceProvider);
 
-            await InvokeHandler(fastHandler, message, context);
+            try
+            {
+                await InvokeHandler(fastHandler, message, context);
+            }
+            catch (ExecutionAbortedException)
+            {
+                // The handler short-circuited its own dispatch. There is nothing to return
+                // and no stage left to tell, so the dispatch simply completes.
+                return;
+            }
 
             var fastEx = resultAdapterService?.LookupException(Unit.Value);
 
@@ -98,7 +117,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
                     messageDependencies, serviceProvider, message, context);
             }
 
-            var handler = messageDependencies.Handlers[0].Resolve(serviceProvider);
+            var handler = soleHandler.Resolve(serviceProvider);
 
             await InvokeHandler(handler, message, context);
             result = Unit.Value;
@@ -117,7 +136,13 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
                 result = invokedPostResult ?? result;
             }
         }
-        catch (Exception e) when (e is not ExecutionAbortedException)
+        catch (ExecutionAbortedException)
+        {
+            // A short circuit, not a failure: the exception stage is skipped, the caller
+            // sees no exception, and the final stage below still runs with whatever the
+            // pipeline had produced.
+        }
+        catch (Exception e)
         {
             exception = e;
 

@@ -101,6 +101,12 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
                     messageDependencies, null, serviceProvider, message, Unit.Value, context);
             }
         }
+        catch (ExecutionAbortedException)
+        {
+            // A short circuit, not a failure: a participant stopped the publish, the
+            // exception stage is skipped and the caller sees no exception. Final
+            // interceptors below still run.
+        }
         catch (Exception e)
         {
             exception = e;
