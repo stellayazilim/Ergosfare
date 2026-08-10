@@ -1,3 +1,164 @@
+## v2.7.0-preview – '2026-08-11'
+
+Preview release. The theme: **the dispatch contract, pinned and then corrected.** Every
+release so far made the pipeline faster; this one asks what it actually promises. A
+contract suite — public surface only, both registration axes, one captured lane map —
+went in first, grew from 83 scenarios to 193, and turned four long-standing "that is just
+how it behaves" corners into decisions: an abort that surfaced as an exception, a
+resultless pipeline that carried three different values for "nothing", a supertype's
+handler that served a derived message only until that message was registered in its own
+right, and two failures that said "nothing will handle this" in two types. Exception
+interceptors gain a typed form, and the registration window is now stated rather than
+implied. Three changes are source-breaking and all three are listed under Notes.
+
+### The contract suite
+
+* A test project that exercises **only the public dispatch surface**, running every
+  scenario on **both registration axes** — source-generated and runtime-registered — from
+  shared bases, so a divergence between the two shows up as one subclass failing.
+* Its second output is a **lane map**: a captured stack dump per scenario, committed as a
+  baseline and re-captured every phase. Green tests say behavior held; the lane map says
+  behavior held *through the same path*, which is the only early warning a dispatch
+  redesign gets.
+* A **cache-pressure gate** joins it: the two elementary shapes pinned to one logical
+  core, with hardware counters when the console is elevated. Its 2026-08-11 capture
+  reports ~0 cache misses and ~0 branch mispredictions on every lane — on this host a
+  dispatch costs exactly its retired instruction count (345 for the generated void lane).
+* Both are wired into the solution and CI; pull requests into every base branch are gated.
+
+### Abort is a short circuit, not something the caller catches
+
+* `IExecutionContext.Abort(messageResult)` **loses its parameter** (source-breaking). The
+  documented "result to abort with" reached nobody, and the `ExecutionAbortedException` it
+  raised travelled all the way out to the caller — the contract was wrong in both
+  directions.
+* An abort now short-circuits. The caller receives whatever the pipeline had already
+  produced: the handler's result when the abort came after it, the result type's default
+  when it came before. **No exception reaches the caller on any path.** Final interceptors
+  run as always, handed the same value the caller gets.
+* `ExecutionAbortedException` stays as the unwind mechanism and is documented as an
+  implementation detail of it: catching it in participant code defeats the abort rather
+  than observing it.
+* Four places run pipelines and all four learned it — both single-handler strategies, the
+  broadcast strategy, the emitted plans (including pre-only shells that previously had no
+  try/catch at all), and the executors' interceptor-less fast path.
+
+### One value for a pipeline that produces none
+
+* Post, final and exception interceptors of a resultless pipeline were handed three
+  different things to mean "there is no result": a completed `ValueTask` after the handler
+  ran, `null` when it threw, `null` again on abort. A resultless pipeline now carries one
+  value — `Unit.Value`, the single instance of `Stella.Ergosfare.Core.Abstractions.Unit`.
+* `null` keeps its own meaning rather than becoming a synonym: it is the slot *before*
+  anything was produced, which is what a failed dispatch's exception stage and an aborted
+  pipeline's final stage see.
+* `Unit` is a **class**, and that is load-bearing. While the empty slot's type was
+  `ValueTask`, a synchronous void pipeline's failure path unboxed `null` into a struct and
+  died with a `NullReferenceException` thrown from a `finally` — replacing both the
+  handler's own exception and the abort. A reference type retires that without a single
+  cast expression changing.
+
+### A supertype's handler serves the derived message either way
+
+* Covariance reached interceptors but stopped short of main handlers: a handler registered
+  against a supertype served a derived message only while that message had no descriptor
+  of its own. Registering the derived type filed the base handler as indirect, and
+  single-handler mediation read only the direct list — so the dispatch failed with
+  `NoHandlerFoundException`, and the failure arrived by merely adding a type to the
+  assembly.
+* Direct and indirect handlers are **one candidate set** now. A message claimed twice —
+  once directly, once covariantly — fails the same way two direct claims already did
+  (`MultipleHandlerFoundException`, neither handler run), and the count still happens
+  before anything resolves.
+* The compiled lane gives such messages up deliberately: a plan bakes one handler in and
+  cannot express "this is contested", so a message with a main handler on any assignable
+  key takes the reflective path rather than letting the two axes disagree.
+
+### Exception interceptors that declare the exception type they accept
+
+* New `...ExceptionInterceptorFor<TException>` facades across all three modules (with
+  message- and result-typed arities): the exception arrives **typed**, so an interceptor
+  written for one fault no longer opens with `if (ex is X)`.
+* Matching follows catch semantics; ordering is untouched — the existing weight-then-name
+  rule decides who runs, the filter only decides who is eligible.
+* The rule "an exception interceptor is registered, so the exception is swallowed" is
+  refined to "a **matching** one ran". When nothing matches, the original exception leaves
+  the pipeline unwrapped with its stack intact — without this, one declining interceptor
+  would have silently eaten the failure.
+* Both dispatch paths learn it from the same source: the runtime stage probes each
+  instance through an erased filter, the generator reads `TException` off the typed probe
+  and bakes an `is` test into the emitted plan. A filter the generator cannot read as a
+  single compile-time type disqualifies the plan rather than guessing.
+
+### "Nothing will handle this" now says so once
+
+* A message absent from the registry raised `NoHandlerFoundException`; a registered
+  message whose handlers were all filtered out of the dispatch raised a plain
+  `InvalidOperationException`. Both are `NoHandlerFoundException` now — and it derives
+  from `InvalidOperationException`, so existing catches keep matching. It also gains a
+  `MessageType` property, and the two cases stay told apart by the message text.
+* `ThrowIfNoHandlerFound` governs **every** way a publish reaches nobody. Previously an
+  unregistered event type threw regardless of the flag while a registered-but-unhandled
+  one was silent — and which one you got depended on whether any participant anywhere in
+  the app was registered against the `IEvent` marker. Both obey the flag now; the default
+  for both is silence, which is what fire-and-forget means.
+* A pipeline that includes a participant the container cannot resolve fails with
+  `UnresolvableParticipantException` — naming the message, the participant and the remedy
+  — before any stage runs, instead of an opaque "No service for type" raised part-way
+  through by whichever stage asked first.
+
+### The pipeline freezes at its first dispatch
+
+* A message's pipeline is resolved once and frozen. Registration keeps its full meaning up
+  to that message's first dispatch; **a registration made after it is not observed**
+  (behavioral break — see Notes).
+* What this buys: the registry version guard was the fast path's one recurring per-dispatch
+  cost, and the contract it paid for — registration-after-use — was exercised by nothing
+  but its own tests. The generated executors go further and cache the whole fast-lane
+  verdict, so a planned dispatch constructs and invokes its handler without touching the
+  dependency graph at all.
+* A participant the container cannot resolve now fails that first dispatch rather than the
+  next one; the diagnosis is unchanged.
+
+### Performance
+
+Measured on this tree (7800X3D, .NET 9.0.11, BenchmarkDotNet v0.15.8), against the same
+rows as v2.6.0-preview:
+
+* Planned dispatch: void **21.0 → 19.4 ns**, query **25.3 → 24.4 ns**; the staged plan
+  rows follow — intercepted void **49.2 → 45.4 ns**, intercepted query
+  **83.5 → 78.8 ns**. The freeze is most of it: an executor no longer re-reads the
+  registry version per dispatch, and a planned one skips the dependency graph entirely
+  once its first dispatch has validated the lane.
+* The **reflective** interceptor path gains the most from the `Unit` representation:
+  intercepted void drops **198.2 ns / 104 B → 149.2 ns / 72 B**, the 32 bytes being the
+  per-dispatch boxed `ValueTask` that used to sit in the result slot.
+* One design note for anyone profiling their own dispatch layer: the abort short circuit
+  first landed as a `try`/`catch` around each executor's fast-path invocation, which cost
+  9–24% on every interceptor-less row without ever being on a throwing path — a method
+  carrying an exception-handling region does not inline into its caller. The arm moved to
+  the engine's dispatch frame, which already had a region for returning the pooled
+  context, and the cost went to zero. Hoisting it into helper methods measured *worse*;
+  the helper carries the region too.
+
+
+### Notes
+
+* **Source-breaking (three):** `Abort()` lost its parameter; `IEventFinalInterceptor<T>`,
+  the non-generic `IEventFinalInterceptor` and the non-generic
+  `IEventExceptionInterceptor` are pure aliases whose inherited member now takes `Unit?`
+  where it took `ValueTask?` (CS0535, one-word fix); and code that registered participants
+  after a message's first dispatch no longer sees them join. `IEventPostInterceptor` and
+  `IEventExceptionInterceptor<TEvent>` are unaffected — they carry their own members.
+* **Worth auditing:** a message that has both a direct handler and a covariantly matched
+  one is now contested and fails the dispatch; previously the direct one quietly won.
+* The staged-plan emitter casts each stage to the annotation its own contract declares —
+  consumer builds no longer break with CS8604 on the emitted post-chain.
+* `RegisterFromAssembly(...)` is on its way out: the stable line marks it `[Obsolete]` as
+  of v2.2.0 and the preview line removes it next.
+* Housekeeping: `UnresolvableParticipantException` drops `[Serializable]`, matching the
+  recorded decision on the exception surface.
+
 ## v2.6.0-preview – '2026-08-08'
 
 Preview release. The theme: **interceptor-bearing pipelines go compile-time.** The plan
