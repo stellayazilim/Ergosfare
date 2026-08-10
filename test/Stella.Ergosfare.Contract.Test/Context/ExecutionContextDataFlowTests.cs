@@ -3,6 +3,7 @@ using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Generated;
 
@@ -169,12 +170,18 @@ public sealed class ExecutionContextDataFlowTests
         }
     }
 
-    /// <summary>The outer dispatch, which nests the aborting one and carries on.</summary>
+    /// <summary>The outer dispatch, which nests the aborting one.</summary>
     [DiscoveryKey(Key)]
     public sealed class Outer : ICommand
     {
-        /// <summary>Whether the outer handler survived the nested abort.</summary>
+        /// <summary>Whether the outer handler carried on past the nested abort.</summary>
         public bool ReachedTheEnd;
+
+        /// <summary>Whether the outer handler caught the nested abort itself.</summary>
+        public bool CaughtTheAbort;
+
+        /// <summary>Whether the outer handler should catch it rather than let it travel.</summary>
+        public bool CatchIt;
     }
 
     /// <inheritdoc cref="Outer"/>
@@ -184,7 +191,22 @@ public sealed class ExecutionContextDataFlowTests
         public async ValueTask HandleAsync(Outer command, IExecutionContext context)
         {
             using var scope = context.CreateScope();
-            await mediator.SendAsync(new Inner(), scope.Context);
+
+            if (command.CatchIt)
+            {
+                try
+                {
+                    await mediator.SendAsync(new Inner(), scope.Context);
+                }
+                catch (ExecutionAbortedException)
+                {
+                    command.CaughtTheAbort = true;
+                }
+            }
+            else
+            {
+                await mediator.SendAsync(new Inner(), scope.Context);
+            }
 
             command.ReachedTheEnd = true;
         }
@@ -192,16 +214,31 @@ public sealed class ExecutionContextDataFlowTests
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_nested_dispatchs_abort_stops_at_its_own_dispatch()
+    public async Task A_nested_dispatchs_abort_surfaces_to_the_handler_that_nested_it()
     {
         await using var provider = CreateProvider();
         var command = new Outer();
 
-        // The abort's unwind is scoped to the dispatch that raised it. Nothing crosses the
-        // nested call back into the outer pipeline — the outer handler resumes on the next
-        // line and the outer dispatch completes normally.
+        // The outer handler is the inner dispatch's call site, so it is who hears that the
+        // inner one did not happen. Not catching it ends the outer dispatch too.
+        await Assert.ThrowsAsync<ExecutionAbortedException>(
+            async () => await provider.GetRequiredService<ICommandMediator>().SendAsync(command));
+
+        Assert.False(command.ReachedTheEnd);
+    }
+
+    [Fact]
+    [Trait("Category", "Contract")]
+    public async Task A_handler_that_catches_a_nested_abort_carries_on()
+    {
+        await using var provider = CreateProvider();
+        var command = new Outer { CatchIt = true };
+
+        // Catching it is how a handler says "that inner step was optional" — the outer
+        // pipeline then completes normally.
         await provider.GetRequiredService<ICommandMediator>().SendAsync(command);
 
+        Assert.True(command.CaughtTheAbort);
         Assert.True(command.ReachedTheEnd);
     }
 }

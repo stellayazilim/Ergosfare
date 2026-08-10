@@ -26,22 +26,27 @@ implied. Three changes are source-breaking and all three are listed under Notes.
   dispatch costs exactly its retired instruction count (345 for the generated void lane).
 * Both are wired into the solution and CI; pull requests into every base branch are gated.
 
-### Abort is a short circuit, not something the caller catches
+### Abort stops the pipeline, and says so
 
-* `IExecutionContext.Abort(messageResult)` **loses its parameter** (source-breaking). The
-  documented "result to abort with" reached nobody, and the `ExecutionAbortedException` it
-  raised travelled all the way out to the caller — the contract was wrong in both
-  directions.
-* An abort now short-circuits. The caller receives whatever the pipeline had already
-  produced: the handler's result when the abort came after it, the result type's default
-  when it came before. **No exception reaches the caller on any path.** Final interceptors
-  run as always, handed the same value the caller gets.
-* `ExecutionAbortedException` stays as the unwind mechanism and is documented as an
-  implementation detail of it: catching it in participant code defeats the abort rather
-  than observing it.
-* Four places run pipelines and all four learned it — both single-handler strategies, the
-  broadcast strategy, the emitted plans (including pre-only shells that previously had no
-  try/catch at all), and the executors' interceptor-less fast path.
+* `IExecutionContext.Abort(messageResult)` **loses its parameter** (source-breaking) and
+  gains overloads that carry what a caller can actually use: `Abort()`, `Abort(reason)`,
+  `Abort(reason, value)`. The old argument claimed to set the pipeline's *result*, which a
+  stopped pipeline does not have; it reached nobody and the XML doc described a contract
+  the code never implemented.
+* **An abort stops the pipeline where it stands.** Nothing downstream runs: not the rest of
+  the aborting participant's own stage, not the exception stage — an abort is not a
+  failure and exception interceptors exist to handle failures — and not the final stage.
+* **It reaches the caller**, as `ExecutionAbortedException` carrying `Reason` and `Value`.
+  The work was asked for by the call site, so the call site is who hears that it did not
+  happen; a returned default would be indistinguishable from a handler that legitimately
+  produced nothing. A pipeline whose participants can abort is one the caller wraps in a
+  `try`. Applications that prefer outcomes as values still have the result-adapter surface.
+* **The mechanism no longer varies by pipeline shape.** With interceptors or without, the
+  signal travels straight out: the strategies and the emitted plans only mark themselves
+  aborted so their own final stage is skipped, and the executors and the dispatch engine
+  carry no abort code at all. Nested dispatch follows the same rule — an inner abort
+  surfaces to the outer handler, which is the inner dispatch's call site and decides
+  whether to catch it.
 
 ### One value for a pipeline that produces none
 
@@ -120,6 +125,33 @@ implied. Three changes are source-breaking and all three are listed under Notes.
 * A participant the container cannot resolve now fails that first dispatch rather than the
   next one; the diagnosis is unchanged.
 
+### Generated code stays silent in your compilation
+
+* A handler whose result is a **nullable reference type** — `IQueryHandler<GetTodo, TodoDto?>`
+  — made the generator emit a dispatch root with the annotation dropped, and the constraint
+  mismatch raised **CS8631 in the consuming build**. Nothing was wrong at runtime, but a
+  project with `TreatWarningsAsErrors` simply failed to compile over a file it cannot edit.
+* The emitted file now opens the annotation context and closes the warning one
+  (`#nullable enable annotations` / `#nullable disable warnings`). Annotations stay legal
+  because the emitted code writes `T?` where a contract declares it; warnings go because
+  this file lands in someone else's compilation under their settings. The phase-2 emitter
+  fix (F7, CS8604) was the first instance of that family, this was the second — closing the
+  class beats patching each site as it appears.
+
+### Ahead-of-time, in a real application
+
+* The e2e sample — the multi-assembly Todo app the suite boots for its HTTP assertions —
+  now **publishes with `PublishAot`**, and its assertions run against the native binary.
+  The NativeAOT smoke already covered the dispatch shapes; what it could not cover is what
+  this app is: registration that discovers handlers in a *referenced* assembly, an
+  interceptor one assembly away from the API, and the emitted staged plans. Those are
+  compiled ahead of time now, and the CS8631 above is what that gate caught first.
+* Getting there meant replacing what could not survive AOT: persistence moved from EF Core
+  to raw `Microsoft.Data.Sqlite` (an ORM's runtime model building is precisely what AOT
+  cannot do), and endpoint discovery moved from the reflection strategy to
+  `Stella.MinimalApi`'s own source generator. Both are sample-side changes; the library
+  needed nothing.
+
 ### Performance
 
 Measured on this tree (7800X3D, .NET 9.0.11, BenchmarkDotNet v0.15.8), against the same
@@ -146,6 +178,11 @@ rows as v2.6.0-preview:
 
 ### Notes
 
+* **Behavioral break worth auditing:** an abort now reaches the caller. Code that relied on
+  a dispatch completing quietly after a participant aborted — and on final interceptors
+  running afterwards — has to catch `ExecutionAbortedException` at the call site, or stop
+  aborting. This is the loud direction on purpose: the previous silence was
+  indistinguishable from a handler that produced nothing.
 * **Source-breaking (three):** `Abort()` lost its parameter; `IEventFinalInterceptor<T>`,
   the non-generic `IEventFinalInterceptor` and the non-generic
   `IEventExceptionInterceptor` are pure aliases whose inherited member now takes `Unit?`

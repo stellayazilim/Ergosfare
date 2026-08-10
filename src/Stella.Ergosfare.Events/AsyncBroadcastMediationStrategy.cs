@@ -68,6 +68,7 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
             return;
         }
         Exception? exception = null;
+        var aborted = false;
         try
         {
             // Empty stages are skipped outright — an invoker pass over an empty stage is a
@@ -103,9 +104,10 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
         }
         catch (ExecutionAbortedException)
         {
-            // A short circuit, not a failure: a participant stopped the publish, the
-            // exception stage is skipped and the caller sees no exception. Final
-            // interceptors below still run.
+            // A participant stopped the publish. Nothing else runs — not the exception
+            // stage, not the final stage below — and the signal continues to the publisher.
+            aborted = true;
+            throw;
         }
         catch (Exception e)
         {
@@ -127,7 +129,7 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
 
         finally
         {
-            if (messageDependencies.FinalInterceptors.Count > 0)
+            if (messageDependencies.FinalInterceptors.Count > 0 && !aborted)
             {
                 await FinalInterceptorInvocationStrategy<TMessage, Unit>.Invoke(
                     messageDependencies, serviceProvider, message, Unit.Value, exception, context);

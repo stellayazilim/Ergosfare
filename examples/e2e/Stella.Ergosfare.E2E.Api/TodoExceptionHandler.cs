@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Diagnostics;
-using Microsoft.AspNetCore.Mvc;
 using Stella.Ergosfare.E2E.Domain;
 
 namespace Stella.Ergosfare.E2E.Api;
@@ -25,9 +24,10 @@ public sealed class TodoExceptionHandler : IExceptionHandler
             return false;
         }
 
-        httpContext.Response.StatusCode = status;
-        await httpContext.Response.WriteAsJsonAsync(
-            new ProblemDetails { Status = status, Title = title }, cancellationToken);
+        // Results.Problem rather than a hand-written ProblemDetails: the framework owns the
+        // serializer for its own type, so this response needs nothing from the app's JSON
+        // context.
+        await Results.Problem(title: title, statusCode: status).ExecuteAsync(httpContext);
 
         return true;
     }

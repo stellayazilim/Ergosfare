@@ -238,25 +238,36 @@ than change by accident.
    argument, so the documented "result to abort with" reached nobody — and the exception
    itself surfaced to the caller, which the XML doc did not mention either.
 
-   Aborting is a short circuit now. The parameter is gone from the signature (it never
-   worked, and no shim pretends otherwise), and the caller receives **what the pipeline had
-   already produced**: the handler's result when the abort came after it, the result type's
-   default when it came before. No exception reaches the caller on any path, the
-   exception-interceptor stage never sees the abort, and final interceptors run as they
-   always do — handed the same value the caller gets, with no exception.
+   **Abort is a signal now, and it stops the pipeline.** Nothing downstream of the aborting
+   participant runs: not the rest of its own stage, not the exception stage (an abort is not
+   a failure), not the final stage. There is no result to deliver either — a stopped
+   pipeline did not produce one — so the caller is told rather than handed a default it
+   would have to interpret. `ExecutionAbortedException` is that signal, and it is part of
+   the contract: a dispatch whose participants can abort is one the caller wraps in a
+   `try`. Applications that would rather carry outcomes as values have the result-adapter
+   surface for that.
 
-   `ExecutionAbortedException` still exists and is still what travels: it unwinds the
-   participant up to the mediation strategy or the baked plan, which catches it. It is an
-   implementation detail of the unwind, not a signal to catch — a `catch` for it in
-   participant code defeats the abort rather than observing it.
+   The overloads say what the participant wants said: `Abort()`, `Abort(reason)` and
+   `Abort(reason, value)`, arriving on the exception as `Reason` and `Value`. The old
+   parameter's mistake was claiming to set the pipeline's *result*; a stopped pipeline has
+   none, and what a caller actually needs is why.
 
-   Pinned across the areas that reach each arm: `Abort/` for "already produced" on all three
-   result shapes, the `Aborting_*` and `A_*_abort_*` scenarios in `Pipeline/` and `Sync/`
-   for "nothing produced yet",
-   `A_handler_aborting_a_pipeline_with_no_interceptors_completes_the_dispatch` and its
-   result twin for the interceptor-free lane the executors serve without ever entering a
-   strategy, `Aborting_a_publish_completes_it_without_an_exception` for the fan-out, and
-   `A_nested_dispatchs_abort_stops_at_its_own_dispatch` for the scoped-child case.
+   The mechanism no longer varies by pipeline shape, which is the other half of the fix:
+   with interceptors or without, the signal travels straight out. The strategies and the
+   emitted plans only mark themselves aborted so their own final stage is skipped; the
+   executors and the engine have no abort code at all, and the `AbortShortCircuit` helper
+   that carried the old semantics is gone.
+
+   Pinned across the areas that reach each arm: `Abort/` for aborting after a result was
+   produced, on all three result shapes; the `Aborting_*` and `A_*_abort_*` scenarios in
+   `Pipeline/` and `Sync/` for aborting before the handler;
+   `A_handler_aborting_a_pipeline_with_no_interceptors_reaches_the_caller` and its result
+   twin for the interceptor-free lane the executors serve without ever entering a strategy;
+   `Aborting_a_publish_reaches_the_publisher` for the fan-out; and, for the scoped-child
+   case, `A_nested_dispatchs_abort_surfaces_to_the_handler_that_nested_it` with
+   `A_handler_that_catches_a_nested_abort_carries_on` beside it — the outer handler is the
+   inner dispatch's call site, so it is who hears it, and catching is how it says the inner
+   step was optional.
 
 2. ~~**Two different exceptions mean "nothing will handle this."**~~ *Fixed.* A message
    type absent from the registry used to produce `NoHandlerFoundException` while a
@@ -408,9 +419,9 @@ than change by accident.
    `Unit` is a reference type, so the same cast on an empty slot yields `null` and the
    stage simply observes that nothing was produced. **No cast expression changed** — the
    crash was a property of the type in the slot, not of the code reading it. Pinned by
-   `A_void_pipelines_synchronous_stages_run_with_an_empty_result_when_the_handler_throws`
-   and `A_void_pipelines_synchronous_final_interceptor_runs_on_abort_with_no_result`, the
-   two scenarios that used to assert the crash. Result-typed pipelines were never affected:
+   `A_void_pipelines_synchronous_stages_run_with_an_empty_result_when_the_handler_throws`,
+   the scenario that used to assert the crash; its abort twin now pins that the synchronous
+   final stage does not run at all when the pipeline is cut (entry 1). Result-typed pipelines were never affected:
    `null` casts to `string?` and `default` boxes for value types.
 
 9. **A synchronous participant cannot be registered without a module marker.** The module

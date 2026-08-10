@@ -83,16 +83,9 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             // for a ValueTask slot). Interface-erased dispatches fall back to the DIM bridge.
             var fastHandler = soleHandler.Resolve(serviceProvider);
 
-            try
-            {
-                await InvokeHandler(fastHandler, message, context);
-            }
-            catch (ExecutionAbortedException)
-            {
-                // The handler short-circuited its own dispatch. There is nothing to return
-                // and no stage left to tell, so the dispatch simply completes.
-                return;
-            }
+            // No abort arm here: a handler that stops its own dispatch has nothing left to
+            // tell and no stage left to skip, so the signal simply travels to the caller.
+            await InvokeHandler(fastHandler, message, context);
 
             var fastEx = resultAdapterService?.LookupException(Unit.Value);
 
@@ -109,6 +102,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
         // value for it — Unit.Value once the handler has run, null before that.
         Unit? result = null;
         Exception? exception = null;
+        var aborted = false;
         try
         {
             if (preInterceptorCount > 0)
@@ -138,9 +132,10 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
         }
         catch (ExecutionAbortedException)
         {
-            // A short circuit, not a failure: the exception stage is skipped, the caller
-            // sees no exception, and the final stage below still runs with whatever the
-            // pipeline had produced.
+            // A participant stopped the pipeline. Nothing else runs — not the exception
+            // stage, not the final stage below — and the signal continues to the caller.
+            aborted = true;
+            throw;
         }
         catch (Exception e)
         {
@@ -158,7 +153,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
         }
         finally
         {
-            if (finalInterceptorCount > 0)
+            if (finalInterceptorCount > 0 && !aborted)
             {
                 await FinalInterceptorInvocationStrategy<TMessage, Unit>.Invoke(
                     messageDependencies, serviceProvider, message, result, exception, context);
