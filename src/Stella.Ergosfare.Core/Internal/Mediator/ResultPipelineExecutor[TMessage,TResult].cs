@@ -49,24 +49,17 @@ internal sealed class ResultPipelineExecutor<TMessage, TResult>(
         {
             var handler = handlerReference.Resolve(serviceProvider);
 
-            // The strategy is skipped here, so its abort handling has to be too; see
-            // AbortShortCircuit. Nothing was produced when a zero-interceptor handler
-            // aborts, so the caller gets the result type's default.
-            try
+            // The strategy is skipped here, and with it its abort handling. That arm lives
+            // in the engine's dispatch frame — an exception-handling region here would keep
+            // Execute out of its caller on every dispatch; see MessageDispatchEngine.
+            switch (handler)
             {
-                switch (handler)
-                {
-                    case IAsyncHandler<TMessage, TResult> asyncHandler:
-                        return AbortShortCircuit.Guard(asyncHandler.HandleAsync((TMessage)message, context));
-                    case IHandler<TMessage, ValueTask<TResult>> valueTaskShaped:
-                        return AbortShortCircuit.Guard(valueTaskShaped.Handle((TMessage)message, context));
-                    case IHandler<TMessage, TResult> syncHandler:
-                        return ValueTask.FromResult(syncHandler.Handle((TMessage)message, context));
-                }
-            }
-            catch (ExecutionAbortedException)
-            {
-                return ValueTask.FromResult<TResult>(default!);
+                case IAsyncHandler<TMessage, TResult> asyncHandler:
+                    return asyncHandler.HandleAsync((TMessage)message, context);
+                case IHandler<TMessage, ValueTask<TResult>> valueTaskShaped:
+                    return valueTaskShaped.Handle((TMessage)message, context);
+                case IHandler<TMessage, TResult> syncHandler:
+                    return ValueTask.FromResult(syncHandler.Handle((TMessage)message, context));
             }
 
             // Unsupported handler contract: fall through so the strategy raises its
