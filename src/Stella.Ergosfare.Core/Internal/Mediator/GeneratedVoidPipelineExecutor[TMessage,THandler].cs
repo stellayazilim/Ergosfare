@@ -14,10 +14,10 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// reference exactly like <see cref="VoidPipelineExecutor{TMessage}"/> but invokes it
 /// through the closed <typeparamref name="THandler"/> type, so the call devirtualizes
 /// (and inlines for sealed handlers) instead of walking the contract pattern match. The
-/// plan is advisory: the same registry-version-guarded dependency cache re-validates the
-/// pipeline, and any mismatch — interceptors registered at runtime, a differently-typed
-/// handler instance, configured adapters — falls back to the runtime dispatch shape,
-/// preserving semantics exactly.
+/// plan is advisory: the dependency cache validates the pipeline on the first dispatch,
+/// and any mismatch — a differently-typed handler instance, configured adapters — falls
+/// back to the runtime dispatch shape, preserving semantics exactly. The validated shape
+/// is frozen; a registration after the first dispatch is not observed.
 /// </summary>
 internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
     IMessageDescriptor descriptor,
@@ -47,7 +47,6 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
 
     private IMessageDependencies? _cachedDependencies;
     private MessageDependencies? _cachedFastDependencies;
-    private int _cachedVersion = int.MinValue;
 
     // Re-validated with the dependency cache: true only while the registry's sole handler
     // is the planned type, instances are not memoized, and the handler's effective DI
@@ -55,8 +54,19 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
     // which GetRequiredService is observably nothing but a constructor call.
     private bool _useDirectConstruction;
 
+    // True once the first dispatch has validated the entire fast lane — planned handler
+    // type, direct construction, no adapters. From then on the planned handler is
+    // constructed and invoked without touching dependencies at all.
+    private bool _fastDirect;
+
     public ValueTask Execute(object message, IExecutionContext context, IServiceProvider serviceProvider)
     {
+        if (_fastDirect)
+        {
+            var direct = _directHandlerFactory is not null ? _directHandlerFactory() : _providerHandlerFactory!(serviceProvider);
+            return direct.HandleAsync((TMessage)message, context);
+        }
+
         var dependencies = GetDependencies();
 
         if (_cachedFastDependencies?.FastSingleHandler is { } handlerReference
@@ -74,29 +84,23 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
             // match. A runtime re-registration can put a differently-typed handler here;
             // the contract switch below then dispatches it exactly as the runtime
             // executor would.
-            // The strategy is skipped here, so its abort handling has to be too; see
-            // AbortShortCircuit.
-            try
+            // The strategy is skipped here, and with it its abort handling. That arm lives
+            // in the engine's dispatch frame — an exception-handling region here would keep
+            // Execute out of its caller on every dispatch; see MessageDispatchEngine.
+            if (handler is THandler planned)
             {
-                if (handler is THandler planned)
-                {
-                    return AbortShortCircuit.Guard(planned.HandleAsync((TMessage)message, context));
-                }
-
-                switch (handler)
-                {
-                    case IAsyncHandler<TMessage> asyncHandler:
-                        return AbortShortCircuit.Guard(asyncHandler.HandleAsync((TMessage)message, context));
-                    case IHandler<TMessage, ValueTask> valueTaskShaped:
-                        return AbortShortCircuit.Guard(valueTaskShaped.Handle((TMessage)message, context));
-                    case IHandler<TMessage, object> syncHandler:
-                        syncHandler.Handle((TMessage)message, context);
-                        return ValueTask.CompletedTask;
-                }
+                return planned.HandleAsync((TMessage)message, context);
             }
-            catch (ExecutionAbortedException)
+
+            switch (handler)
             {
-                return ValueTask.CompletedTask;
+                case IAsyncHandler<TMessage> asyncHandler:
+                    return asyncHandler.HandleAsync((TMessage)message, context);
+                case IHandler<TMessage, ValueTask> valueTaskShaped:
+                    return valueTaskShaped.Handle((TMessage)message, context);
+                case IHandler<TMessage, object> syncHandler:
+                    syncHandler.Handle((TMessage)message, context);
+                    return ValueTask.CompletedTask;
             }
         }
 
@@ -107,12 +111,11 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
-            // Read before the build: a registration completing mid-build must land as a
-            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
-            var registryVersion = typedFactory.CurrentRegistryVersion;
+            // Frozen registry: dependencies resolve once per executor and are never
+            // re-validated — a registration after the first dispatch is not observed.
             var cached = _cachedDependencies;
 
-            if (cached is not null && _cachedVersion == registryVersion)
+            if (cached is not null)
             {
                 return cached;
             }
@@ -125,7 +128,9 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
                 && fastDependencies is { MemoizedInstances: false, FastSingleHandler.HandlerType: var plannedType }
                 && plannedType == typeof(THandler)
                 && typedFactory.IsPlainTransientRegistration(typeof(THandler));
-            _cachedVersion = registryVersion;
+            _fastDirect = _useDirectConstruction
+                && !_foreignAdapters
+                && (_concreteAdapters is null || _concreteAdapters.IsEmpty);
             return dependencies;
         }
 

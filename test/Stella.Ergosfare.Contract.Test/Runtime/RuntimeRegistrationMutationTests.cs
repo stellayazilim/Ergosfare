@@ -12,14 +12,14 @@ using Stella.Ergosfare.Generated;
 namespace Stella.Ergosfare.Contract.Test.Runtime;
 
 /// <summary>
-/// Registering into a warm container: after the pipeline for a message has already run
-/// once, adding an interceptor through the public registry must change the next dispatch —
-/// under generated registration exactly as under runtime registration.
+/// Registering into a warm container: a message's pipeline freezes at its first dispatch.
+/// A registration made before that dispatch joins the pipeline; one made after it is not
+/// observed — under generated registration exactly as under runtime registration.
 /// </summary>
 /// <remarks>
-/// Serialized against the rest of the suite: these are the only scenarios that mutate the
-/// process-wide registry after a container is live, and the version bump they cause
-/// invalidates every container's cached pipeline.
+/// Serialized against the rest of the suite: these scenarios put types into the
+/// process-wide registry mid-test, and the freeze-order semantics they pin would blur
+/// beside parallel neighbors.
 /// </remarks>
 [Collection(RegistryMutationCollection.Name)]
 public sealed class RuntimeRegistrationMutationTests
@@ -43,7 +43,7 @@ public sealed class RuntimeRegistrationMutationTests
 
     /// <summary>
     /// Excluded from discovery so no registration path can install it early: the scenario
-    /// must observe a pipeline that genuinely lacked it before the mutation.
+    /// must observe a pipeline that genuinely lacked it when it froze.
     /// </summary>
     [ExcludeFromDiscovery]
     public sealed class GeneratedLatePre : ICommandPreInterceptor<GeneratedTarget>
@@ -81,7 +81,38 @@ public sealed class RuntimeRegistrationMutationTests
         }
     }
 
-    // --- unresolvable late registration ----------------------------------------
+    // --- registration before the freeze -----------------------------------------
+
+    /// <summary>
+    /// Its own message type: the positive control must own the first dispatch of the
+    /// message it registers into, or another scenario's freeze would decide its outcome.
+    /// </summary>
+    [ExcludeFromDiscovery]
+    public sealed class EarlyTarget : ICommand;
+
+    /// <inheritdoc cref="EarlyTarget"/>
+    [ExcludeFromDiscovery]
+    public sealed class EarlyTargetHandler : ICommandHandler<EarlyTarget>
+    {
+        public ValueTask HandleAsync(EarlyTarget command, IExecutionContext context)
+        {
+            context.Mark("handler");
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    /// <inheritdoc cref="EarlyTarget"/>
+    [ExcludeFromDiscovery]
+    public sealed class EarlyPre : ICommandPreInterceptor<EarlyTarget>
+    {
+        public ValueTask<EarlyTarget> HandleAsync(EarlyTarget command, IExecutionContext context)
+        {
+            context.Mark("early");
+            return ValueTask.FromResult(command);
+        }
+    }
+
+    // --- unresolvable participant ----------------------------------------------
 
     /// <summary>
     /// Its own message type: the registry never forgets, so the scenario below leaves this
@@ -96,7 +127,7 @@ public sealed class RuntimeRegistrationMutationTests
         public ValueTask HandleAsync(PoisonTarget command, IExecutionContext context) => ValueTask.CompletedTask;
     }
 
-    /// <summary>Registered nowhere in DI, to pin what an unresolvable late type does.</summary>
+    /// <summary>Registered nowhere in DI, to pin what an unresolvable participant does.</summary>
     [ExcludeFromDiscovery]
     public sealed class UnresolvableLatePre : ICommandPreInterceptor<PoisonTarget>
     {
@@ -106,7 +137,7 @@ public sealed class RuntimeRegistrationMutationTests
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_generated_pipeline_picks_up_an_interceptor_registered_after_it_ran()
+    public async Task A_registration_after_a_generated_pipelines_first_dispatch_is_not_observed()
     {
         await using var provider = new ServiceCollection()
             .AddTransient<GeneratedLatePre>()
@@ -121,14 +152,16 @@ public sealed class RuntimeRegistrationMutationTests
 
         provider.GetRequiredService<IMessageRegistry>().Register(typeof(GeneratedLatePre));
 
+        // The pipeline froze at the first dispatch: the interceptor is in the registry and
+        // resolvable from the container, and still does not run.
         var after = new PipelineRecorder();
         await mediator.SendAsync(new GeneratedTarget(), after.Commands());
-        after.AssertStages("late", "handler");
+        after.AssertStages("handler");
     }
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_runtime_registered_pipeline_picks_up_an_interceptor_registered_after_it_ran()
+    public async Task A_registration_after_a_runtime_pipelines_first_dispatch_is_not_observed()
     {
         await using var provider = new ServiceCollection()
             .AddTransient<RuntimeLatePre>()
@@ -146,24 +179,44 @@ public sealed class RuntimeRegistrationMutationTests
 
         var after = new PipelineRecorder();
         await mediator.SendAsync(new RuntimeTarget(), after.Commands());
-        after.AssertStages("late", "handler");
+        after.AssertStages("handler");
     }
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_late_registered_interceptor_the_container_cannot_resolve_fails_the_next_dispatch()
+    public async Task A_registration_before_the_first_dispatch_joins_the_pipeline()
+    {
+        await using var provider = new ServiceCollection()
+            .AddTransient<EarlyPre>()
+            .AddErgosfare(options => options
+                .AddCommandModule(commands => commands.Register<EarlyTargetHandler>()))
+            .BuildServiceProvider();
+
+        // The freeze happens at the first dispatch, not at container build: a registration
+        // landing between the two still joins the pipeline.
+        provider.GetRequiredService<IMessageRegistry>().Register(typeof(EarlyPre));
+
+        var recorder = new PipelineRecorder();
+        await provider.GetRequiredService<ICommandMediator>().SendAsync(new EarlyTarget(), recorder.Commands());
+
+        recorder.AssertStages("early", "handler");
+    }
+
+    [Fact]
+    [Trait("Category", "Contract")]
+    public async Task A_participant_the_container_cannot_resolve_fails_the_first_dispatch()
     {
         await using var provider = new ServiceCollection()
             .AddErgosfare(options => options
                 .AddCommandModule(commands => commands.Register<PoisonTargetHandler>()))
             .BuildServiceProvider();
 
-        var mediator = provider.GetRequiredService<ICommandMediator>();
-        await mediator.SendAsync(new PoisonTarget());
-
         // The registry accepts the type, but the container was built without it: the
-        // pipeline that now includes it cannot be constructed. See the README.
+        // pipeline that includes it cannot be constructed, and the first dispatch is
+        // where that is discovered. See the README.
         provider.GetRequiredService<IMessageRegistry>().Register(typeof(UnresolvableLatePre));
+
+        var mediator = provider.GetRequiredService<ICommandMediator>();
 
         var thrown = await Assert.ThrowsAsync<UnresolvableParticipantException>(
             async () => await mediator.SendAsync(new PoisonTarget()));
@@ -171,72 +224,6 @@ public sealed class RuntimeRegistrationMutationTests
         Assert.Contains(nameof(UnresolvableLatePre), thrown.Message, StringComparison.Ordinal);
         Assert.Equal(typeof(PoisonTarget), thrown.MessageType);
         Assert.Equal(typeof(UnresolvableLatePre), thrown.ParticipantType);
-    }
-
-    // --- recovery from an unresolvable late registration -----------------------
-
-    /// <summary>
-    /// The recovery scenario keeps types of its own. Sharing <see cref="PoisonTarget"/>
-    /// would make each scenario's outcome depend on which ran first: the registry is
-    /// process-wide and never forgets, so whichever registered the unresolvable
-    /// interceptor first would break the other's opening dispatch.
-    /// </summary>
-    [ExcludeFromDiscovery]
-    public sealed class RecoveryTarget : ICommand;
-
-    /// <inheritdoc cref="RecoveryTarget"/>
-    [ExcludeFromDiscovery]
-    public sealed class RecoveryTargetHandler : ICommandHandler<RecoveryTarget>
-    {
-        public ValueTask HandleAsync(RecoveryTarget command, IExecutionContext context)
-        {
-            context.Mark("handler");
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    /// <inheritdoc cref="RecoveryTarget"/>
-    [ExcludeFromDiscovery]
-    public sealed class UnresolvableRecoveryPre : ICommandPreInterceptor<RecoveryTarget>
-    {
-        public ValueTask<RecoveryTarget> HandleAsync(RecoveryTarget command, IExecutionContext context)
-        {
-            context.Mark("late");
-            return ValueTask.FromResult(command);
-        }
-    }
-
-    [Fact]
-    [Trait("Category", "Contract")]
-    public async Task A_container_that_can_resolve_the_late_participant_builds_the_pipeline_the_broken_one_could_not()
-    {
-        await using var missing = new ServiceCollection()
-            .AddErgosfare(options => options
-                .AddCommandModule(commands => commands.Register<RecoveryTargetHandler>()))
-            .BuildServiceProvider();
-
-        await missing.GetRequiredService<ICommandMediator>().SendAsync(new RecoveryTarget());
-
-        missing.GetRequiredService<IMessageRegistry>().Register(typeof(UnresolvableRecoveryPre));
-
-        await Assert.ThrowsAsync<UnresolvableParticipantException>(
-            async () => await missing.GetRequiredService<ICommandMediator>().SendAsync(new RecoveryTarget()));
-
-        // The registry entry is permanent, so registering the participant with a container
-        // is the only way back — and it has to work. Nothing about the failed build is
-        // cached, so this container reaches the same pipeline the broken one could not,
-        // interceptor included.
-        await using var repaired = new ServiceCollection()
-            .AddErgosfare(options => options
-                .AddCommandModule(commands => commands
-                    .Register<RecoveryTargetHandler>()
-                    .Register<UnresolvableRecoveryPre>()))
-            .BuildServiceProvider();
-
-        var recorder = new PipelineRecorder();
-        await repaired.GetRequiredService<ICommandMediator>().SendAsync(new RecoveryTarget(), recorder.Commands());
-
-        recorder.AssertStages("late", "handler");
     }
 }
 

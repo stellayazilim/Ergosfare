@@ -441,4 +441,50 @@ public abstract class PipelineSemanticsContract
         Assert.Null(result);
         recorder.AssertStages("handler");
     }
+
+    // -----------------------------------------------------------------------
+    // async typed interceptors over the Unit slot
+    //
+    // Appended for the same reason as the blocks above — the factory included: an
+    // abstract member inserted among the ones at the top would renumber every state
+    // machine below it.
+    // -----------------------------------------------------------------------
+
+    /// <summary>The void command whose post, exception and final stages bind async typed over Unit.</summary>
+    protected abstract IPayloadCommand NewAsyncTypedCommand(string payload);
+
+    [Fact]
+    [Trait("Category", "Contract")]
+    public async Task A_void_pipelines_async_typed_stages_are_handed_the_shared_unit_instance()
+    {
+        await using var provider = CreateProvider();
+        var recorder = NewRecorder();
+
+        await provider.GetRequiredService<ICommandMediator>()
+            .SendAsync(NewAsyncTypedCommand("ok"), recorder.Commands());
+
+        // The third contract shape a resultless stage can take: result-agnostic and sync
+        // typed are pinned elsewhere, this is IAsyncXInterceptor<TMessage, Unit>. Same
+        // slot, same shared instance, compared by reference in the renderer.
+        recorder.AssertStages("handler", "post", "final");
+        Assert.Equal($"ok|{nameof(Unit)}", recorder.DetailOf("post"));
+        Assert.Equal($"ok|{nameof(Unit)}|none", recorder.DetailOf("final"));
+    }
+
+    [Fact]
+    [Trait("Category", "Contract")]
+    public async Task A_void_pipelines_async_typed_exception_stage_sees_the_empty_slot()
+    {
+        await using var provider = CreateProvider();
+        var recorder = NewRecorder();
+
+        await provider.GetRequiredService<ICommandMediator>()
+            .SendAsync(NewAsyncTypedCommand("throw"), recorder.Commands());
+
+        // The handler failed before producing, so the async typed exception arm is handed
+        // an empty slot; the Unit.Value it returns is what the final stage then sees.
+        recorder.AssertStages("handler", "exception", "final");
+        Assert.Equal($"throw|null|{nameof(PipelineFailure)}", recorder.DetailOf("exception"));
+        Assert.Equal($"throw|{nameof(Unit)}|{nameof(PipelineFailure)}", recorder.DetailOf("final"));
+    }
 }
