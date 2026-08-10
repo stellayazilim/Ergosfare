@@ -125,6 +125,33 @@ implied. Three changes are source-breaking and all three are listed under Notes.
 * A participant the container cannot resolve now fails that first dispatch rather than the
   next one; the diagnosis is unchanged.
 
+### Generated code stays silent in your compilation
+
+* A handler whose result is a **nullable reference type** — `IQueryHandler<GetTodo, TodoDto?>`
+  — made the generator emit a dispatch root with the annotation dropped, and the constraint
+  mismatch raised **CS8631 in the consuming build**. Nothing was wrong at runtime, but a
+  project with `TreatWarningsAsErrors` simply failed to compile over a file it cannot edit.
+* The emitted file now opens the annotation context and closes the warning one
+  (`#nullable enable annotations` / `#nullable disable warnings`). Annotations stay legal
+  because the emitted code writes `T?` where a contract declares it; warnings go because
+  this file lands in someone else's compilation under their settings. The phase-2 emitter
+  fix (F7, CS8604) was the first instance of that family, this was the second — closing the
+  class beats patching each site as it appears.
+
+### Ahead-of-time, in a real application
+
+* The e2e sample — the multi-assembly Todo app the suite boots for its HTTP assertions —
+  now **publishes with `PublishAot`**, and its assertions run against the native binary.
+  The NativeAOT smoke already covered the dispatch shapes; what it could not cover is what
+  this app is: registration that discovers handlers in a *referenced* assembly, an
+  interceptor one assembly away from the API, and the emitted staged plans. Those are
+  compiled ahead of time now, and the CS8631 above is what that gate caught first.
+* Getting there meant replacing what could not survive AOT: persistence moved from EF Core
+  to raw `Microsoft.Data.Sqlite` (an ORM's runtime model building is precisely what AOT
+  cannot do), and endpoint discovery moved from the reflection strategy to
+  `Stella.MinimalApi`'s own source generator. Both are sample-side changes; the library
+  needed nothing.
+
 ### Performance
 
 Measured on this tree (7800X3D, .NET 9.0.11, BenchmarkDotNet v0.15.8), against the same
