@@ -1,3 +1,13 @@
+## v2.2.0 – '2026-08-10'
+
+Stable release. Deprecates the reflection-based assembly-scanning surface: the
+`RegisterFromAssembly` overloads on the four module builders, the `IModuleBuilder` seam
+and `ResultAdapterBuilder`'s scan now carry `[Obsolete]` and warn at build time, one
+release ahead of their removal. Compile-time discovery is the migration target —
+`RegisterGenerated()` / `RegisterGenerated(pattern)` and `Register<T>()`, adapters via
+`Register<TAdapter>()`. No API removals and no behavior changes in this release; the
+builders' tests keep pinning the obsolete surface until the removal lands.
+
 ## v2.1.0 – '2026-08-07'
 
 Stable release. Promotes the entire preview cycle since v2.0.0 to the stable channel — the
