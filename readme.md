@@ -68,8 +68,9 @@ var id = await mediator.SendAsync(new CreateProduct("Laptop"));
 
 `RegisterGenerated()` is emitted into your project by the source generator: every message,
 handler and interceptor in the compilation — and in referenced assemblies — registers with
-pre-computed descriptors, no reflection involved. `RegisterFromAssembly(...)` remains
-available as the runtime-scanning escape hatch (e.g. plugins loaded at runtime).
+pre-computed descriptors, no reflection involved. `RegisterFromAssembly(...)` is deprecated
+and will be removed in the next release; until then it remains as the runtime-scanning
+escape hatch.
 
 ## Compile-time discovery
 

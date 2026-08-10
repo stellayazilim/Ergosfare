@@ -85,6 +85,7 @@ public class EventModuleBuilder(
     /// </summary>
     /// <param name="assembly">The assembly to scan for types implementing <see cref="IEvent"/>.</param>
     /// <returns>The current <see cref="EventModuleBuilder"/> instance for fluent chaining.</returns>
+    [Obsolete("Reflection-based assembly scanning is deprecated and will be removed in the next release. Use source-generated RegisterGenerated() — or RegisterGenerated(pattern) for discovery keys — and Register<T>() for explicit registrations.")]
     [RequiresUnreferencedCode("Assembly scanning discovers event types via reflection; trimming may remove them. Register events explicitly (or use source-generated registration) in trimmed or AOT applications.")]
     public EventModuleBuilder RegisterFromAssembly(Assembly assembly)
         => RegisterFromAssembly(assembly, DiscoveryKeyAttribute.DefaultKey);
@@ -97,6 +98,7 @@ public class EventModuleBuilder(
     /// <param name="assembly">The assembly to scan for types implementing <see cref="IEvent"/>.</param>
     /// <param name="discoveryKeyPattern">The discovery key pattern to select types by.</param>
     /// <returns>The current <see cref="EventModuleBuilder"/> instance for fluent chaining.</returns>
+    [Obsolete("Reflection-based assembly scanning is deprecated and will be removed in the next release. Use source-generated RegisterGenerated() — or RegisterGenerated(pattern) for discovery keys — and Register<T>() for explicit registrations.")]
     [RequiresUnreferencedCode("Assembly scanning discovers event types via reflection; trimming may remove them. Register events explicitly (or use source-generated registration) in trimmed or AOT applications.")]
     public EventModuleBuilder RegisterFromAssembly(Assembly assembly, string discoveryKeyPattern)
     {

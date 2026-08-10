@@ -59,6 +59,7 @@ public class ResultAdapterBuilder(IResultAdapterService resultAdapterService)
     /// This scans for non-abstract, concrete classes that implement <see cref="IResultAdapter"/>.
     /// Each matching type is instantiated and registered.
     /// </remarks>
+    [Obsolete("Reflection-based assembly scanning is deprecated and will be removed in the next release. Register adapters explicitly with Register<TAdapter>().")]
     [RequiresUnreferencedCode("Assembly scanning discovers adapter types via reflection; trimming may remove them. Register adapters explicitly in trimmed or AOT applications.")]
     public ResultAdapterBuilder RegisterFromAssembly(Assembly assembly)
     {

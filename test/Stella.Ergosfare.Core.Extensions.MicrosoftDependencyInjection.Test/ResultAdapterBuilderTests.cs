@@ -1,3 +1,7 @@
+// This file intentionally exercises the obsolete reflection-scanning surface until the
+// preview line removes it; the deprecation warning is expected and suppressed.
+#pragma warning disable CS0618
+
 using Stella.Ergosfare.Core.Abstractions;
 using System.Reflection;
 
