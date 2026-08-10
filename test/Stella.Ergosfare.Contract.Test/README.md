@@ -218,11 +218,30 @@ not comparable to this file.
 Pinned as-is. Each is a candidate for the modernization to decide on deliberately rather
 than change by accident.
 
-1. **`IExecutionContext.Abort(object? messageResult)` ignores its argument.** The
-   implementation throws `ExecutionAbortedException` unconditionally; the documented
-   "result to abort with" never reaches the caller, and the final interceptor is handed
-   `null` (or the result type's default). Pinned by
-   `Aborting_with_a_result_value_still_throws_and_does_not_deliver_the_value`.
+1. ~~**`IExecutionContext.Abort(object? messageResult)` ignores its argument.**~~ *Fixed.*
+   The implementation threw `ExecutionAbortedException` unconditionally and never read the
+   argument, so the documented "result to abort with" reached nobody — and the exception
+   itself surfaced to the caller, which the XML doc did not mention either.
+
+   Aborting is a short circuit now. The parameter is gone from the signature (it never
+   worked, and no shim pretends otherwise), and the caller receives **what the pipeline had
+   already produced**: the handler's result when the abort came after it, the result type's
+   default when it came before. No exception reaches the caller on any path, the
+   exception-interceptor stage never sees the abort, and final interceptors run as they
+   always do — handed the same value the caller gets, with no exception.
+
+   `ExecutionAbortedException` still exists and is still what travels: it unwinds the
+   participant up to the mediation strategy or the baked plan, which catches it. It is an
+   implementation detail of the unwind, not a signal to catch — a `catch` for it in
+   participant code defeats the abort rather than observing it.
+
+   Pinned across the areas that reach each arm: `Abort/` for "already produced" on all three
+   result shapes, the `Aborting_*` and `A_*_abort_*` scenarios in `Pipeline/` and `Sync/`
+   for "nothing produced yet",
+   `A_handler_aborting_a_pipeline_with_no_interceptors_completes_the_dispatch` and its
+   result twin for the interceptor-free lane the executors serve without ever entering a
+   strategy, `Aborting_a_publish_completes_it_without_an_exception` for the fan-out, and
+   `A_nested_dispatchs_abort_stops_at_its_own_dispatch` for the scoped-child case.
 
 2. ~~**Two different exceptions mean "nothing will handle this."**~~ *Fixed.* A message
    type absent from the registry used to produce `NoHandlerFoundException` while a
@@ -231,7 +250,7 @@ than change by accident.
    covered both. Both now raise `NoHandlerFoundException` — which derives from
    `InvalidOperationException`, so callers who were catching the second case keep catching
    it — and the two stay told apart by the message alone. Pinned by the group-filtering
-   scenarios and `A_base_typed_handler_does_not_serve_a_derived_message_registered_in_its_own_right`.
+   scenarios.
 
 3. ~~**Events invert the default for "no handler."**~~ *Fixed.* Publishing an
    *unregistered* event type used to throw `NoHandlerFoundException` whatever the caller
@@ -256,13 +275,31 @@ than change by accident.
    app. This area keeps its own `[ExcludeFromDiscovery]` types and registers nothing at
    marker level (rule 3 above), which is what makes `UnknownEvent` mean what it says here.
 
-4. **Covariance applies to interceptors but not to main handlers.** An interceptor
-   registered against a supertype joins a derived message's pipeline. A *handler*
-   registered against a supertype only serves a derived message that has no descriptor of
-   its own — register the derived type (which `RegisterGenerated` does for every discovered
-   message) and the base handler becomes an indirect handler that single-handler mediation
-   never considers, so the dispatch fails. Pinned by the two
-   `A_base_typed_handler_*` scenarios.
+4. ~~**Covariance applies to interceptors but not to main handlers.**~~ *Fixed.* An
+   interceptor registered against a supertype joins a derived message's pipeline; a
+   *handler* registered against a supertype used to serve a derived message only while that
+   message had no descriptor of its own. Registering the derived type — which
+   `RegisterGenerated` does for every discovered message — filed the base handler as an
+   indirect one, and single-handler mediation never looked there, so the dispatch failed.
+
+   Direct and indirect handlers are one candidate set now, so whether a message has a
+   descriptor of its own no longer decides who serves it. Two candidates are a contest and
+   fail the dispatch with `MultipleHandlerFoundException` — the same outcome two direct
+   handlers produce, counted before anything resolves so neither claimant runs. Pinned by
+   the two `A_base_typed_handler_*` scenarios and
+   `A_direct_and_a_base_typed_handler_claiming_one_message_fail_the_dispatch`.
+
+   Two consequences worth knowing:
+
+   - **A group filter that empties the direct set now falls through to a covariantly
+     matched handler** rather than failing with `NoHandlerFoundException`. The filter is
+     applied to both sets while the shape is built, so an indirect handler that survives it
+     is a candidate like any other. No scenario pins this corner yet.
+   - **The compiled plans give such a message up.** A message with any base-typed main
+     handler is disqualified from every staged and single-handler plan: a plan bakes one
+     handler in and cannot express "this is contested", and the model cannot prove the
+     supertype registration is the only one the runtime will see. Those dispatches take the
+     reflective path, and the lane map is what says so.
 
 5. ~~**Runtime registry mutation is half-supported.**~~ *Partly fixed — the diagnosis, not
    the constraint.* Registering an interceptor type after the container is built changes
@@ -283,11 +320,41 @@ than change by accident.
    `A_late_registered_interceptor_the_container_cannot_resolve_fails_the_next_dispatch`
    and `A_container_that_can_resolve_the_late_participant_builds_the_pipeline_the_broken_one_could_not`.
 
-6. **A void pipeline's "result" is a `ValueTask` sentinel, except on abort.** Post, final
-   and exception interceptors of a void command are handed a non-null `ValueTask` as the
-   result argument even though the handler produced nothing — but on an aborted dispatch
-   the final interceptor gets `null`. Three different values (`ValueTask`, `null` from the
-   exception stage, `null` on abort) for "there is no result."
+   The check covers indirect main handlers too, which was the one corner where it could
+   have broken a dispatch that always worked: single-handler mediation never read that slot,
+   so an unresolvable handler sitting in it was harmless. Entry 4 closed that gap from the
+   other side — the slot is a candidate set now, so anything in it genuinely has to be
+   resolvable, and checking it is no longer eager. Only the events fan-out ever read it
+   before, and it always resolved what it read.
+
+6. ~~**A void pipeline's "result" is a `ValueTask` sentinel, except on abort.**~~ *Fixed.*
+   Post, final and exception interceptors of a void command used to be handed a non-null
+   `ValueTask` even though the handler produced nothing, while an aborted dispatch handed
+   the final interceptor `null` — three values for "there is no result." A resultless
+   pipeline now carries one: `Unit.Value`, the single instance of
+   `Stella.Ergosfare.Core.Abstractions.Unit`, from the moment the handler completes.
+
+   `null` is no longer a synonym for it; it kept its own meaning. It is the slot *before*
+   anything was produced, which is what the exception stage of a failed dispatch and the
+   final stage of a pre-interceptor abort see. A publish has nothing to produce and fills
+   the slot up front, so all three of its stages see `Unit.Value`. Pinned by
+   `A_void_pipelines_result_agnostic_stages_are_handed_the_shared_unit_instance`,
+   `A_void_pipelines_result_slot_is_empty_until_the_handler_has_run`, and the two publish
+   scenarios in `Events/EventPublishTests.cs`.
+
+   **`Unit` is a class, not a struct**, and that is load-bearing rather than a taste call —
+   see entry 8. Two consequences worth knowing:
+
+   - The result key of a resultless pipeline changed from `ValueTask` to `Unit`, and no
+     compiler can see it. An interceptor still written against
+     `IPostInterceptor<T, ValueTask>` registers exactly as before and then matches no arm,
+     so the dispatch fails with `NotSupportedException` instead of quietly skipping the
+     stage. The noise is deliberate. Pinned by
+     `A_void_interceptor_keyed_on_the_old_result_type_fails_the_dispatch_loudly`.
+   - The event facades moved with the key: `IEventExceptionInterceptor<T>` and
+     `IEventFinalInterceptor<T>` close over `Unit` now. `IEventPostInterceptor<T>` did not
+     change shape — it was already result-agnostic underneath, and its default
+     implementation stopped boxing on the way through.
 
 7. ~~**The generated staged-plan code emits nullable warnings into the consumer's
    build.**~~ *Fixed.* Building this project used to surface `CS8604` eight times per TFM
@@ -302,16 +369,23 @@ than change by accident.
    That job belongs to the [lane-map baseline](#lane-map-baseline) now, which names the
    lane that ran instead of inferring it from a warning.
 
-8. **A synchronous exception or final interceptor throws `NullReferenceException` on a
-   void pipeline.** The void pipeline carries a `ValueTask` in its result slot, but the
-   slot is still empty before the handler completes — and the synchronous contracts have no
-   result-agnostic flavor, so `FinalInterceptorInvocationStrategy.cs:59` (and its
-   exception-stage twin) unboxes that `null` into a `ValueTask` parameter. The emitted plan
-   does the same, through `ResultCast`'s `(ValueTask)result!`. Every failure path of such a
-   pipeline therefore ends in a `NullReferenceException`, which — thrown from a `finally` —
-   replaces both the handler's own exception and `ExecutionAbortedException`. Pinned by the
-   two `A_void_pipelines_synchronous_*` scenarios on both axes. Result-typed pipelines are
-   unaffected: `null` casts to `string?` and `default` boxes for value types.
+8. ~~**A synchronous exception or final interceptor throws `NullReferenceException` on a
+   void pipeline.**~~ *Fixed by entry 6, and the reason `Unit` is a class.* The result slot
+   travels as `object?` and is cast back to the pipeline's result type at every stage.
+   While that type was `ValueTask`, an empty slot meant unboxing `null` into a struct —
+   `FinalInterceptorInvocationStrategy.cs:59`, its exception-stage twin, and the emitted
+   plans' `ResultCast` — and the synchronous contracts have no result-agnostic flavor to
+   escape into. Every failure path of such a pipeline ended in a `NullReferenceException`
+   thrown from a `finally`, replacing both the handler's own exception and
+   `ExecutionAbortedException`.
+
+   `Unit` is a reference type, so the same cast on an empty slot yields `null` and the
+   stage simply observes that nothing was produced. **No cast expression changed** — the
+   crash was a property of the type in the slot, not of the code reading it. Pinned by
+   `A_void_pipelines_synchronous_stages_run_with_an_empty_result_when_the_handler_throws`
+   and `A_void_pipelines_synchronous_final_interceptor_runs_on_abort_with_no_result`, the
+   two scenarios that used to assert the crash. Result-typed pipelines were never affected:
+   `null` casts to `string?` and `default` boxes for value types.
 
 9. **A synchronous participant cannot be registered without a module marker.** The module
    builders reject any type that is not assignable to `ICommand` / `IQuery` / `IEvent`

@@ -347,6 +347,13 @@ internal static class RegistrationEmitter
     private const string ExecutionContextFullName = "global::Stella.Ergosfare.Core.Abstractions.IExecutionContext";
     private const string AbortedExceptionFullName = "global::Stella.Ergosfare.Core.Abstractions.Exceptions.ExecutionAbortedException";
     private const string ValueTaskFullName = "global::System.Threading.Tasks.ValueTask";
+
+    /// <summary>
+    ///     The result representation of a pipeline that produces none. Distinct from
+    ///     <see cref="ValueTaskFullName"/>, which stays the completion signal: a void plan
+    ///     still returns a <c>ValueTask</c>, it just carries <c>Unit.Value</c> in its slot.
+    /// </summary>
+    private const string UnitFullName = "global::Stella.Ergosfare.Core.Abstractions.Unit";
     private const string GetRequiredServiceFullName = "global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService";
 
     /// <summary>
@@ -387,13 +394,6 @@ internal static class RegistrationEmitter
             }
 
             sb.AppendLine("        {");
-
-            if (isVoid)
-            {
-                sb.Append("            private static readonly object CompletedVoidResult = default(")
-                  .Append(ValueTaskFullName).AppendLine(");");
-                sb.AppendLine();
-            }
 
             sb.Append("            private static readonly ").Append(StagedCompositionFullName)
               .Append(" BakedComposition = new ").Append(StagedCompositionFullName).AppendLine("(");
@@ -574,8 +574,8 @@ internal static class RegistrationEmitter
         string? exceptionArgument,
         string indent)
     {
-        var pipelineResult = plan.ResultTypeExpression ?? ValueTaskFullName;
-        var pipelineResultIsValueType = plan.ResultTypeExpression is null || plan.ResultIsValueType;
+        var pipelineResult = plan.ResultTypeExpression ?? UnitFullName;
+        var pipelineResultIsValueType = plan.ResultTypeExpression is not null && plan.ResultIsValueType;
         var extraArgument = exceptionArgument is null ? string.Empty : ", " + exceptionArgument;
 
         // The exception argument doubles as the stage discriminator: only the exception
@@ -616,8 +616,8 @@ internal static class RegistrationEmitter
 
     private static void EmitFinalCalls(StringBuilder sb, StagedPlanModel plan, bool direct, string resultExpressionText, string indent)
     {
-        var pipelineResult = plan.ResultTypeExpression ?? ValueTaskFullName;
-        var pipelineResultIsValueType = plan.ResultTypeExpression is null || plan.ResultIsValueType;
+        var pipelineResult = plan.ResultTypeExpression ?? UnitFullName;
+        var pipelineResultIsValueType = plan.ResultTypeExpression is not null && plan.ResultIsValueType;
 
         // Final interceptors declare `TResult? result` — the stage runs from a finally,
         // so the pipeline may never have produced one.
@@ -661,11 +661,18 @@ internal static class RegistrationEmitter
         if (!needsGuards)
         {
             // Pre-only pipeline: with zero exception and final stages the strategy's
-            // try/catch/finally is a no-op shell — exceptions propagate unchanged.
-            EmitPreCalls(sb, plan, direct, "                ");
-            sb.Append("                await ");
+            // try/catch/finally collapses to the abort arm alone — exceptions propagate
+            // unchanged, an abort completes the dispatch with nothing to hand back.
+            sb.AppendLine("                try");
+            sb.AppendLine("                {");
+            EmitPreCalls(sb, plan, direct, "                    ");
+            sb.Append("                    await ");
             AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
             sb.AppendLine(".HandleAsync(message, context);");
+            sb.AppendLine("                }");
+            sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
+            sb.AppendLine("                {");
+            sb.AppendLine("                }");
             return;
         }
 
@@ -677,7 +684,7 @@ internal static class RegistrationEmitter
         sb.Append("                    await ");
         AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
         sb.AppendLine(".HandleAsync(message, context);");
-        sb.AppendLine("                    result = CompletedVoidResult;");
+        sb.Append("                    result = ").Append(UnitFullName).AppendLine(".Value;");
 
         if (!plan.PostCalls.IsEmpty)
         {
@@ -686,15 +693,21 @@ internal static class RegistrationEmitter
                 EmitChainCall(sb, plan, call, direct, "PostInterceptor", "result", null, "                    ");
             }
 
-            // The strategy's post epilogue: a null post result restores the completed
-            // task; anything non-ValueTask fails the closed nullable cast, exactly like
-            // the strategy's own cast would.
-            sb.Append("                    var invokedPostResult = (").Append(ValueTaskFullName).AppendLine("?) result;");
-            sb.AppendLine("                    result = invokedPostResult == null ? CompletedVoidResult : result;");
+            // The strategy's post epilogue: a null post result restores the pipeline's
+            // one result value; anything that is not a Unit fails the closed nullable
+            // cast, exactly like the strategy's own cast would.
+            sb.Append("                    var invokedPostResult = (").Append(UnitFullName).AppendLine("?) result;");
+            sb.Append("                    result = invokedPostResult == null ? ").Append(UnitFullName).AppendLine(".Value : result;");
         }
 
         sb.AppendLine("                }");
-        sb.Append("                catch (global::System.Exception e) when (e is not ").Append(AbortedExceptionFullName).AppendLine(")");
+        // A short circuit, not a failure: the exception stage is skipped, the caller sees
+        // no exception, and the result produced so far survives into the final stage and
+        // the return — the strategy's own abort arm, emitted.
+        sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
+        sb.AppendLine("                {");
+        sb.AppendLine("                }");
+        sb.AppendLine("                catch (global::System.Exception e)");
         sb.AppendLine("                {");
         sb.AppendLine("                    exception = e;");
 
@@ -711,7 +724,7 @@ internal static class RegistrationEmitter
                 EmitChainCall(sb, plan, call, direct, "ExceptionInterceptor", "result", "e", "                    ");
             }
 
-            sb.Append("                    var invokedExceptionResult = (").Append(ValueTaskFullName).AppendLine("?) result;");
+            sb.Append("                    var invokedExceptionResult = (").Append(UnitFullName).AppendLine("?) result;");
             sb.AppendLine("                    result = invokedExceptionResult == null ? resultBeforeExceptions : result;");
         }
 
@@ -729,10 +742,19 @@ internal static class RegistrationEmitter
 
         if (!needsGuards)
         {
-            EmitPreCalls(sb, plan, direct, "                ");
-            sb.Append("                return await ");
+            // Pre-only pipeline; see the void body. Nothing was produced when an abort
+            // unwinds through here, so the caller gets the result type's default.
+            sb.AppendLine("                try");
+            sb.AppendLine("                {");
+            EmitPreCalls(sb, plan, direct, "                    ");
+            sb.Append("                    return await ");
             AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
             sb.AppendLine(".HandleAsync(message, context);");
+            sb.AppendLine("                }");
+            sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    return default!;");
+            sb.AppendLine("                }");
             return;
         }
 
@@ -768,7 +790,13 @@ internal static class RegistrationEmitter
         }
 
         sb.AppendLine("                }");
-        sb.Append("                catch (global::System.Exception e) when (e is not ").Append(AbortedExceptionFullName).AppendLine(")");
+        // A short circuit, not a failure: the exception stage is skipped, the caller sees
+        // no exception, and the result produced so far survives into the final stage and
+        // the return — the strategy's own abort arm, emitted.
+        sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
+        sb.AppendLine("                {");
+        sb.AppendLine("                }");
+        sb.AppendLine("                catch (global::System.Exception e)");
         sb.AppendLine("                {");
         sb.AppendLine("                    exception = e;");
 

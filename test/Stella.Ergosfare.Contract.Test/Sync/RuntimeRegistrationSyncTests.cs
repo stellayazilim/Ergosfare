@@ -37,7 +37,9 @@ public sealed class RuntimeRegistrationSyncTests : SyncSemanticsContract
                     .Register<OrderedSyncMidPre>()
                     .Register<OrderedAsyncHighPre>()
                     .Register<OrderedAsyncLowPost>()
-                    .Register<OrderedSyncHighPost>()))
+                    .Register<OrderedSyncHighPost>()
+                    .Register<StaleKeyCommandHandler>()
+                    .Register<StaleKeyCommandPost>()))
             .BuildServiceProvider();
 
     /// <inheritdoc />
@@ -49,4 +51,7 @@ public sealed class RuntimeRegistrationSyncTests : SyncSemanticsContract
 
     /// <inheritdoc />
     protected override ISyncPayloadCommand NewOrderedCommand() => new SyncOrderedCommand();
+
+    /// <inheritdoc />
+    protected override ISyncPayloadCommand NewStaleKeyCommand() => new StaleKeyCommand();
 }

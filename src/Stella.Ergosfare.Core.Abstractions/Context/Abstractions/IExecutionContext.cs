@@ -71,15 +71,22 @@ public interface IExecutionContext
     ExecutionContextScope CreateScope();
 
     /// <summary>
-    /// Aborts the execution of the current mediation operation.
+    /// Short-circuits the current mediation: nothing after the calling participant runs,
+    /// and the caller gets whatever the pipeline had produced by then.
     /// </summary>
-    /// <param name="messageResult">
-    /// The message result to set before aborting. Required if the message has a specific result type
-    /// and the execution is aborted in the pre-handler phase.
-    /// </param>
     /// <remarks>
-    /// When called, execution is immediately aborted and no further handlers are executed.
-    /// If a message result is required, it must be provided to satisfy the result type requirement.
+    /// <para>
+    /// Aborting is not a failure. The caller sees no exception, the exception-interceptor
+    /// stage does not run, and the remaining stages of the aborting participant's own stage
+    /// are skipped. Final interceptors still run — they always do — and are handed the same
+    /// result the caller receives, with no exception.
+    /// </para>
+    /// <para>
+    /// What the caller receives is what the pipeline had already produced. Abort after the
+    /// handler has run and its result is delivered; abort before it and there is nothing to
+    /// deliver, so the caller gets <c>null</c> or the result type's default. A resultless
+    /// dispatch simply completes.
+    /// </para>
     /// </remarks>
-    void Abort(object? messageResult = null);
+    void Abort();
 }

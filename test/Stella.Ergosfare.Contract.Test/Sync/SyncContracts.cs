@@ -41,11 +41,12 @@ public static class SyncVocabulary
     /// <summary>What a synchronous string exception interceptor falls back to.</summary>
     public const string StringFallback = "sync-fallback";
 
-    /// <summary>Renders a stage's result argument for the recorder.</summary>
+    /// <inheritdoc cref="Pipeline.PipelineVocabulary.Describe(object?)"/>
     public static string Describe(object? result) => result switch
     {
         null => "null",
         string text => text,
+        Unit unit => ReferenceEquals(unit, Unit.Value) ? nameof(Unit) : "unit:other",
         ValueTask => nameof(ValueTask),
         _ => result.ToString() ?? result.GetType().Name,
     };
@@ -123,11 +124,11 @@ public abstract class SyncVoidPreBase<TCommand> : ICommand, IPreInterceptor<TCom
 
 /// <summary>Records the message and result a synchronous void post-interceptor is handed.</summary>
 [ExcludeFromDiscovery]
-public abstract class SyncVoidPostBase<TCommand> : ICommand, IPostInterceptor<TCommand, ValueTask>
+public abstract class SyncVoidPostBase<TCommand> : ICommand, IPostInterceptor<TCommand, Unit>
     where TCommand : class, ISyncPayloadCommand
 {
     /// <inheritdoc />
-    public object Handle(TCommand message, ValueTask messageResult, IExecutionContext context)
+    public object Handle(TCommand message, Unit messageResult, IExecutionContext context)
     {
         context.Mark("post", $"{message.Payload}|{SyncVocabulary.Describe(messageResult)}");
         return messageResult;
@@ -137,14 +138,15 @@ public abstract class SyncVoidPostBase<TCommand> : ICommand, IPostInterceptor<TC
 /// <summary>
 /// Records everything a synchronous void exception interceptor is handed — when it is
 /// reached at all. There is no result-agnostic synchronous flavor, so the void pipeline's
-/// empty result slot meets a <see cref="ValueTask"/>-typed parameter here.
+/// result slot meets a <see cref="Unit"/>-typed parameter here; before the handler has run
+/// there is nothing in it and the parameter arrives <c>null</c>.
 /// </summary>
 [ExcludeFromDiscovery]
-public abstract class SyncVoidExceptionBase<TCommand> : ICommand, IExceptionInterceptor<TCommand, ValueTask>
+public abstract class SyncVoidExceptionBase<TCommand> : ICommand, IExceptionInterceptor<TCommand, Unit>
     where TCommand : class, ISyncPayloadCommand
 {
     /// <inheritdoc />
-    public object? Handle(TCommand message, ValueTask messageResult, Exception exception, IExecutionContext context)
+    public object? Handle(TCommand message, Unit? messageResult, Exception exception, IExecutionContext context)
     {
         context.Mark("exception",
             $"{message.Payload}|{SyncVocabulary.Describe(messageResult)}|{SyncVocabulary.Describe(exception)}");
@@ -155,11 +157,11 @@ public abstract class SyncVoidExceptionBase<TCommand> : ICommand, IExceptionInte
 
 /// <inheritdoc cref="SyncVoidExceptionBase{TCommand}"/>
 [ExcludeFromDiscovery]
-public abstract class SyncVoidFinalBase<TCommand> : ICommand, IFinalInterceptor<TCommand, ValueTask>
+public abstract class SyncVoidFinalBase<TCommand> : ICommand, IFinalInterceptor<TCommand, Unit>
     where TCommand : class, ISyncPayloadCommand
 {
     /// <inheritdoc />
-    public void Handle(TCommand message, ValueTask result, Exception? exception, IExecutionContext executionContext)
+    public void Handle(TCommand message, Unit? result, Exception? exception, IExecutionContext executionContext)
         => executionContext.Mark("final",
             $"{message.Payload}|{SyncVocabulary.Describe(result)}|{SyncVocabulary.Describe(exception)}");
 }
@@ -277,11 +279,11 @@ public abstract class AsyncOrderedPreBase<TCommand>(string slot) : ICommandPreIn
 
 /// <summary>A synchronous post-interceptor that only announces which slot it is.</summary>
 [ExcludeFromDiscovery]
-public abstract class SyncOrderedPostBase<TCommand>(string slot) : ICommand, IPostInterceptor<TCommand, ValueTask>
+public abstract class SyncOrderedPostBase<TCommand>(string slot) : ICommand, IPostInterceptor<TCommand, Unit>
     where TCommand : class, ISyncPayloadCommand
 {
     /// <inheritdoc />
-    public object Handle(TCommand message, ValueTask messageResult, IExecutionContext context)
+    public object Handle(TCommand message, Unit messageResult, IExecutionContext context)
     {
         context.Mark(slot);
         return messageResult;
@@ -298,5 +300,29 @@ public abstract class AsyncOrderedPostBase<TCommand>(string slot) : ICommandPost
     {
         context.Mark(slot);
         return ValueTask.FromResult(result);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// the pre-Unit result key
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// A synchronous void post-interceptor still written against the result key a resultless
+/// pipeline used to carry. It compiles and it registers — the registry has no opinion on
+/// result types — but the pipeline closes its stages over <see cref="Unit"/> now, so no
+/// pattern-match arm claims this contract and the dispatch fails loudly rather than
+/// skipping the stage. That noise is the point: the migration is a compile-time-invisible
+/// key change, and silence would let a stage quietly stop running.
+/// </summary>
+[ExcludeFromDiscovery]
+public abstract class StaleKeyVoidPostBase<TCommand> : ICommand, IPostInterceptor<TCommand, ValueTask>
+    where TCommand : class, ISyncPayloadCommand
+{
+    /// <inheritdoc />
+    public object Handle(TCommand message, ValueTask messageResult, IExecutionContext context)
+    {
+        context.Mark("post:stale");
+        return messageResult;
     }
 }

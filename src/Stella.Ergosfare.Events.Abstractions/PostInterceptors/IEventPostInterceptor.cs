@@ -27,14 +27,14 @@ namespace Stella.Ergosfare.Events.Abstractions;
 public interface IEventPostInterceptor : IEvent, IAsyncPostInterceptor<IEvent>
 {
     
-    /// <inheritdoc cref="IAsyncPostInterceptor{TEvent, ValueTask}.HandleAsync"/>
+    /// <inheritdoc cref="IEventPostInterceptor{TEvent}.HandleAsync(TEvent, object, IExecutionContext)"/>
     async ValueTask<object> IAsyncPostInterceptor<IEvent>.HandleAsync(IEvent @event, object result, IExecutionContext context)
     {
-        // The cast is required so this call binds to the typed member below; without it
-        // the simple-name call resolved back to the inherited interface member — i.e.
-        // this very implementation — and recursed infinitely.
-        await HandleAsync(@event, (ValueTask) result, context);
-        return ValueTask.CompletedTask;
+        // The ValueTask argument is what binds this call to the typed member below: an
+        // object-typed one resolves back to the inherited interface member — this very
+        // implementation — and recurses infinitely.
+        await HandleAsync(@event, ValueTask.CompletedTask, context);
+        return Unit.Value;
     }
 
     /// <summary>

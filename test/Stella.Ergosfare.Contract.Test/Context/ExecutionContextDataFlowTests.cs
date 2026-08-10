@@ -148,4 +148,60 @@ public sealed class ExecutionContextDataFlowTests
         Assert.False(second.Items.ContainsKey("secret"));
         Assert.Equal("data", first.Items["secret"]);
     }
+
+    // --- a nested dispatch that aborts ------------------------------------------
+    //
+    // Appended rather than filed with the other types: a member inserted above renumbers
+    // the state machines below it and churns the lane map for no reason.
+
+    /// <summary>Dispatched from inside another handler, through a child scope.</summary>
+    [DiscoveryKey(Key)]
+    public sealed class Inner : ICommand;
+
+    /// <summary>Aborts its own dispatch and nothing else.</summary>
+    [DiscoveryKey(Key)]
+    public sealed class InnerHandler : ICommandHandler<Inner>
+    {
+        public ValueTask HandleAsync(Inner command, IExecutionContext context)
+        {
+            context.Abort();
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    /// <summary>The outer dispatch, which nests the aborting one and carries on.</summary>
+    [DiscoveryKey(Key)]
+    public sealed class Outer : ICommand
+    {
+        /// <summary>Whether the outer handler survived the nested abort.</summary>
+        public bool ReachedTheEnd;
+    }
+
+    /// <inheritdoc cref="Outer"/>
+    [DiscoveryKey(Key)]
+    public sealed class OuterHandler(ICommandMediator mediator) : ICommandHandler<Outer>
+    {
+        public async ValueTask HandleAsync(Outer command, IExecutionContext context)
+        {
+            using var scope = context.CreateScope();
+            await mediator.SendAsync(new Inner(), scope.Context);
+
+            command.ReachedTheEnd = true;
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Contract")]
+    public async Task A_nested_dispatchs_abort_stops_at_its_own_dispatch()
+    {
+        await using var provider = CreateProvider();
+        var command = new Outer();
+
+        // The abort's unwind is scoped to the dispatch that raised it. Nothing crosses the
+        // nested call back into the outer pipeline — the outer handler resumes on the next
+        // line and the outer dispatch completes normally.
+        await provider.GetRequiredService<ICommandMediator>().SendAsync(command);
+
+        Assert.True(command.ReachedTheEnd);
+    }
 }

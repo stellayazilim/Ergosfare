@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Contract.Test.Harness;
+using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Queries.Abstractions;
 
@@ -45,32 +46,30 @@ public abstract class PostAbortSemanticsContract
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task Aborting_from_a_post_interceptor_surfaces_ExecutionAbortedException_to_the_caller()
+    public async Task Aborting_from_a_post_interceptor_completes_the_dispatch_without_an_exception()
     {
         await using var provider = CreateProvider();
         var recorder = NewRecorder();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        await Assert.ThrowsAsync<ExecutionAbortedException>(
-            async () => await mediator.SendAsync(NewCommand(), recorder.Commands()));
+        await mediator.SendAsync(NewCommand(), recorder.Commands());
 
         recorder.AssertStages("handler", "post:abort", "final");
     }
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_void_pipelines_final_interceptor_is_handed_the_completed_task_after_a_post_abort()
+    public async Task A_void_pipelines_final_interceptor_is_handed_the_unit_result_after_a_post_abort()
     {
         await using var provider = CreateProvider();
         var recorder = NewRecorder();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        await Assert.ThrowsAsync<ExecutionAbortedException>(
-            async () => await mediator.SendAsync(NewCommand(), recorder.Commands()));
+        await mediator.SendAsync(NewCommand(), recorder.Commands());
 
         // A pre-interceptor abort leaves this null; by the post stage the handler has run,
-        // so the completed-task sentinel is already in the result slot and survives.
-        Assert.Equal($"{nameof(ValueTask)}|none", recorder.DetailOf("final"));
+        // so the pipeline's one result value is already in the slot and survives.
+        Assert.Equal($"{nameof(Unit)}|none", recorder.DetailOf("final"));
     }
 
     // -----------------------------------------------------------------------
@@ -79,17 +78,20 @@ public abstract class PostAbortSemanticsContract
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task Aborting_from_a_result_pipelines_post_interceptor_delivers_no_value_to_the_caller()
+    public async Task Aborting_from_a_result_pipelines_post_interceptor_delivers_the_produced_result()
     {
         await using var provider = CreateProvider();
         var recorder = NewRecorder();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        await Assert.ThrowsAsync<ExecutionAbortedException>(
-            async () => await mediator.SendAsync(NewResultCommand(), recorder.Commands()));
+        var result = await mediator.SendAsync(NewResultCommand(), recorder.Commands());
 
         recorder.AssertStages("handler", "post:abort", "final");
         Assert.Equal(AbortVocabulary.HandlerResult, recorder.DetailOf("post:abort"));
+
+        // The handler's result, not the value the aborting interceptor was about to
+        // return: the abort unwinds before the post stage writes its result back.
+        Assert.Equal(AbortVocabulary.HandlerResult, result);
     }
 
     [Fact]
@@ -100,11 +102,9 @@ public abstract class PostAbortSemanticsContract
         var recorder = NewRecorder();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        await Assert.ThrowsAsync<ExecutionAbortedException>(
-            async () => await mediator.SendAsync(NewResultCommand(), recorder.Commands()));
+        await mediator.SendAsync(NewResultCommand(), recorder.Commands());
 
-        // The handler's result, not the value the aborting interceptor was about to return:
-        // the abort unwinds before the post stage writes its result back.
+        // The same value the caller gets, and no exception: an abort is not a failure.
         Assert.Equal($"{AbortVocabulary.HandlerResult}|none", recorder.DetailOf("final"));
     }
 
@@ -114,16 +114,19 @@ public abstract class PostAbortSemanticsContract
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task Aborting_from_a_value_typed_querys_post_interceptor_surfaces_ExecutionAbortedException()
+    public async Task Aborting_from_a_value_typed_querys_post_interceptor_delivers_the_produced_value()
     {
         await using var provider = CreateProvider();
         var recorder = NewRecorder();
         var mediator = provider.GetRequiredService<IQueryMediator>();
 
-        await Assert.ThrowsAsync<ExecutionAbortedException>(
-            async () => await mediator.QueryAsync(NewValueQuery(), recorder.Queries()));
+        var result = await mediator.QueryAsync(NewValueQuery(), recorder.Queries());
 
         recorder.AssertStages("handler", "post:abort", "final");
+
+        // A value-typed result is produced just as much as a reference-typed one, so the
+        // caller gets the handler's number rather than the type's default.
+        Assert.Equal(AbortVocabulary.HandlerValue, result);
     }
 
     [Fact]
@@ -134,8 +137,7 @@ public abstract class PostAbortSemanticsContract
         var recorder = NewRecorder();
         var mediator = provider.GetRequiredService<IQueryMediator>();
 
-        await Assert.ThrowsAsync<ExecutionAbortedException>(
-            async () => await mediator.QueryAsync(NewValueQuery(), recorder.Queries()));
+        await mediator.QueryAsync(NewValueQuery(), recorder.Queries());
 
         Assert.Equal($"{AbortVocabulary.HandlerValue}|none", recorder.DetailOf("final"));
     }
@@ -152,8 +154,7 @@ public abstract class PostAbortSemanticsContract
         var recorder = NewRecorder();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        await Assert.ThrowsAsync<ExecutionAbortedException>(
-            async () => await mediator.SendAsync(NewResultCommand(), recorder.Commands()));
+        await mediator.SendAsync(NewResultCommand(), recorder.Commands());
 
         // An abort is not a failure: the exception stage never sees it, and the lighter
         // post slot never runs.

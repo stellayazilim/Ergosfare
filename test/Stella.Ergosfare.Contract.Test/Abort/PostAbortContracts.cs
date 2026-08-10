@@ -25,11 +25,12 @@ public static class AbortVocabulary
     /// <summary>What the aborting post-interceptor would have returned had it returned.</summary>
     public const string NeverPosted = "+never";
 
-    /// <summary>Renders a stage's result argument for the recorder.</summary>
+    /// <inheritdoc cref="Pipeline.PipelineVocabulary.Describe(object?)"/>
     public static string Describe(object? result) => result switch
     {
         null => "null",
         string text => text,
+        Unit unit => ReferenceEquals(unit, Unit.Value) ? nameof(Unit) : "unit:other",
         ValueTask => nameof(ValueTask),
         _ => result.ToString() ?? result.GetType().Name,
     };
@@ -104,7 +105,7 @@ public abstract class AbortVoidExceptionBase<TCommand> : ICommandExceptionInterc
     public ValueTask<object> HandleAsync(TCommand command, object? result, Exception exception, IExecutionContext context)
     {
         context.Mark("exception", AbortVocabulary.Describe(exception));
-        return ValueTask.FromResult<object>(ValueTask.CompletedTask);
+        return ValueTask.FromResult<object>(Unit.Value);
     }
 }
 

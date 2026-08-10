@@ -62,6 +62,14 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     private const string EventBuilderMetadataName = "Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.EventModuleBuilder";
 
     private const string ValueTaskExpression = "global::System.Threading.Tasks.ValueTask";
+
+    /// <summary>
+    ///     The result representation of a pipeline that produces none — what the void
+    ///     plans' interceptor arms match against. <see cref="ValueTaskExpression"/> stays
+    ///     the completion signal (a void handler's return carrier), which is what the
+    ///     handler-descriptor gates below keep checking.
+    /// </summary>
+    private const string UnitExpression = "global::Stella.Ergosfare.Core.Abstractions.Unit";
     private const string DescriptorCatalogMetadataName = "Stella.Ergosfare.Core.Abstractions.GeneratedDescriptorCatalog";
 
     private const string StagedVoidPlanMetadataName = "Stella.Ergosfare.Core.Abstractions.StagedPlans.StagedVoidPlan";
@@ -1259,6 +1267,11 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 continue;
             }
 
+            if (HasCovariantMainHandler(type, handlerCounts))
+            {
+                continue;
+            }
+
             var (handler, handlerDescriptor) = soleHandlers[type.TypeofExpression];
 
             if (!handler.IsAccessible || !handler.DiscoveryKeys.IsEmpty || handler.GroupsExpression is not null)
@@ -1333,10 +1346,10 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         preCalls = postCalls = exceptionCalls = finalCalls = ImmutableArray<StagedCallModel>.Empty;
 
         // The pipeline result the arms match against: the declared result for result
-        // pipelines, the ValueTask carrier for void ones (a struct either way unless the
-        // declared result is a reference type).
-        var pipelineResultExpression = resultTypeExpression ?? ValueTaskExpression;
-        var pipelineResultIsValueType = resultTypeExpression is null || resultIsValueType;
+        // pipelines, Unit for void ones — a reference type, so a void pipeline is on the
+        // variance-bearing side of the checks below just like a class-typed result.
+        var pipelineResultExpression = resultTypeExpression ?? UnitExpression;
+        var pipelineResultIsValueType = resultTypeExpression is not null && resultIsValueType;
 
         var stages = new List<(RegistrableTypeModel Type, StagedCallArm Arm, bool Direct)>?[4];
 
@@ -1738,6 +1751,11 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             return false;
         }
 
+        if (HasCovariantMainHandler(type, handlerCounts))
+        {
+            return false;
+        }
+
         if (interceptedMessages.Contains(type.TypeofExpression))
         {
             return false;
@@ -1748,6 +1766,34 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         return handler.IsAccessible
                && handler.DiscoveryKeys.IsEmpty
                && handler.GroupsExpression is null;
+    }
+
+    /// <summary>
+    ///     Whether any main handler is registered against a base type or interface of the
+    ///     message. Single-handler mediation treats those as candidates alongside the
+    ///     direct ones, so a message that has both is contested and must fail its dispatch
+    ///     — something a plan, which bakes one handler in, cannot express. Disqualifying
+    ///     here keeps the compiled lane and the reflective one telling the same story.
+    /// </summary>
+    /// <remarks>
+    ///     Deliberately blunt: a message whose only handler is covariantly matched is
+    ///     dispatchable and could in principle be planned (<c>IAsyncHandler</c>'s
+    ///     <c>in TMessage</c> variance admits the base-typed handler), but the model has no
+    ///     way to prove the supertype registration is the only one the runtime will see.
+    ///     Those dispatches take the reflective path, as they did before covariance reached
+    ///     main handlers at all.
+    /// </remarks>
+    private static bool HasCovariantMainHandler(RegistrableTypeModel type, Dictionary<string, int> handlerCounts)
+    {
+        foreach (var assignableKey in type.AssignableKeys)
+        {
+            if (handlerCounts.ContainsKey(assignableKey))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void AddModels(

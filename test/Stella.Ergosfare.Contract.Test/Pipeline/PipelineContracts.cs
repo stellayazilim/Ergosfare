@@ -44,11 +44,17 @@ public static class PipelineVocabulary
     /// <summary>The number a value query's handler produces.</summary>
     public const int HandlerValue = 7;
 
-    /// <summary>Renders a stage's result argument for the recorder.</summary>
+    /// <summary>
+    /// Renders a stage's result argument for the recorder. The <see cref="Unit"/> arm
+    /// compares by reference on purpose: a resultless pipeline must hand every stage the
+    /// one shared instance, and <c>"unit:other"</c> is what a scenario would print if it
+    /// ever stopped doing so.
+    /// </summary>
     public static string Describe(object? result) => result switch
     {
         null => "null",
         string text => text,
+        Unit unit => ReferenceEquals(unit, Unit.Value) ? nameof(Unit) : "unit:other",
         ValueTask => nameof(ValueTask),
         _ => result.ToString() ?? result.GetType().Name,
     };
@@ -89,7 +95,11 @@ public interface IPayloadValueQuery : IQuery<int>
 // void command pipeline
 // ---------------------------------------------------------------------------
 
-/// <summary>Marks its stage, then throws when the payload asks it to.</summary>
+/// <summary>
+/// Marks its stage, then throws or aborts when the payload asks it to. The abort branch is
+/// only reachable on the bare messages: where a pre-interceptor exists it aborts first, so
+/// the handler never sees that payload.
+/// </summary>
 [ExcludeFromDiscovery]
 public abstract class PayloadHandlerBase<TCommand> : ICommandHandler<TCommand>
     where TCommand : class, IPayloadCommand
@@ -102,6 +112,11 @@ public abstract class PayloadHandlerBase<TCommand> : ICommandHandler<TCommand>
         if (command.Payload.Contains(PipelineVocabulary.Throw, StringComparison.Ordinal))
         {
             throw new PipelineFailure("void handler failed");
+        }
+
+        if (command.Payload.Contains(PipelineVocabulary.Abort, StringComparison.Ordinal))
+        {
+            context.Abort();
         }
 
         return ValueTask.CompletedTask;
@@ -151,7 +166,7 @@ public abstract class PayloadExceptionBase<TCommand> : ICommandExceptionIntercep
         context.Mark("exception",
             $"{command.Payload}|{PipelineVocabulary.Describe(result)}|{PipelineVocabulary.Describe(exception)}");
 
-        return ValueTask.FromResult<object>(ValueTask.CompletedTask);
+        return ValueTask.FromResult<object>(Unit.Value);
     }
 }
 
@@ -189,18 +204,20 @@ public abstract class PayloadResultHandlerBase<TCommand> : ICommandHandler<TComm
             throw new PipelineFailure("result handler failed");
         }
 
+        if (command.Payload.Contains(PipelineVocabulary.Abort, StringComparison.Ordinal))
+        {
+            context.Abort();
+        }
+
         return ValueTask.FromResult(command.Payload);
     }
 }
 
-/// <summary>Aborts when asked — with a result value, to pin whether the value survives.</summary>
+/// <summary>Aborts when asked, before the handler has produced anything.</summary>
 [ExcludeFromDiscovery]
 public abstract class PayloadResultPreBase<TCommand> : ICommandPreInterceptor<TCommand>
     where TCommand : class, IPayloadResultCommand, new()
 {
-    /// <summary>The value handed to <see cref="IExecutionContext.Abort"/> on the abort path.</summary>
-    public const string AbortValue = "aborted-with-value";
-
     /// <inheritdoc />
     public ValueTask<TCommand> HandleAsync(TCommand command, IExecutionContext context)
     {
@@ -208,7 +225,7 @@ public abstract class PayloadResultPreBase<TCommand> : ICommandPreInterceptor<TC
 
         if (command.Payload.Contains(PipelineVocabulary.Abort, StringComparison.Ordinal))
         {
-            context.Abort(AbortValue);
+            context.Abort();
         }
 
         return ValueTask.FromResult(new TCommand { Payload = command.Payload + PipelineVocabulary.Rewritten });
@@ -286,9 +303,6 @@ public abstract class PayloadValueHandlerBase<TQuery> : IQueryHandler<TQuery, in
 public abstract class PayloadValuePreBase<TQuery> : IQueryPreInterceptor<TQuery>
     where TQuery : class, IPayloadValueQuery, new()
 {
-    /// <summary>The value handed to <see cref="IExecutionContext.Abort"/> on the abort path.</summary>
-    public const int AbortValue = 41;
-
     /// <inheritdoc />
     public ValueTask<TQuery> HandleAsync(TQuery query, IExecutionContext context)
     {
@@ -296,7 +310,7 @@ public abstract class PayloadValuePreBase<TQuery> : IQueryPreInterceptor<TQuery>
 
         if (query.Payload.Contains(PipelineVocabulary.Abort, StringComparison.Ordinal))
         {
-            context.Abort(AbortValue);
+            context.Abort();
         }
 
         return ValueTask.FromResult(new TQuery { Payload = query.Payload + PipelineVocabulary.Rewritten });
