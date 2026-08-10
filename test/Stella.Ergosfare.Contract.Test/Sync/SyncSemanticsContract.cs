@@ -110,10 +110,9 @@ public abstract class SyncSemanticsContract
         var recorder = NewRecorder();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        // Same empty slot, reached through the abort path — the final stage sees it as
-        // null and ExecutionAbortedException reaches the caller unreplaced.
-        await Assert.ThrowsAsync<ExecutionAbortedException>(
-            async () => await mediator.SendAsync(NewCommand("abort"), recorder.Commands()));
+        // Same empty slot, reached through the abort path: the final stage sees it as null,
+        // and the abort short-circuits without reaching the caller.
+        await mediator.SendAsync(NewCommand("abort"), recorder.Commands());
 
         recorder.AssertStages("pre", "final");
         Assert.Equal("abort|null|none", recorder.DetailOf("final"));
@@ -191,9 +190,9 @@ public abstract class SyncSemanticsContract
         var recorder = NewRecorder();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        await Assert.ThrowsAsync<ExecutionAbortedException>(
-            async () => await mediator.SendAsync(NewResultCommand("abort"), recorder.Commands()));
+        var result = await mediator.SendAsync(NewResultCommand("abort"), recorder.Commands());
 
+        Assert.Null(result);
         recorder.AssertStages("pre", "final");
         Assert.Equal("abort|null|none", recorder.DetailOf("final"));
     }

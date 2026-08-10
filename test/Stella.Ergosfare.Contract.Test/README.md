@@ -218,11 +218,30 @@ not comparable to this file.
 Pinned as-is. Each is a candidate for the modernization to decide on deliberately rather
 than change by accident.
 
-1. **`IExecutionContext.Abort(object? messageResult)` ignores its argument.** The
-   implementation throws `ExecutionAbortedException` unconditionally; the documented
-   "result to abort with" never reaches the caller, and the final interceptor is handed
-   `null` (or the result type's default). Pinned by
-   `Aborting_with_a_result_value_still_throws_and_does_not_deliver_the_value`.
+1. ~~**`IExecutionContext.Abort(object? messageResult)` ignores its argument.**~~ *Fixed.*
+   The implementation threw `ExecutionAbortedException` unconditionally and never read the
+   argument, so the documented "result to abort with" reached nobody — and the exception
+   itself surfaced to the caller, which the XML doc did not mention either.
+
+   Aborting is a short circuit now. The parameter is gone from the signature (it never
+   worked, and no shim pretends otherwise), and the caller receives **what the pipeline had
+   already produced**: the handler's result when the abort came after it, the result type's
+   default when it came before. No exception reaches the caller on any path, the
+   exception-interceptor stage never sees the abort, and final interceptors run as they
+   always do — handed the same value the caller gets, with no exception.
+
+   `ExecutionAbortedException` still exists and is still what travels: it unwinds the
+   participant up to the mediation strategy or the baked plan, which catches it. It is an
+   implementation detail of the unwind, not a signal to catch — a `catch` for it in
+   participant code defeats the abort rather than observing it.
+
+   Pinned across the areas that reach each arm: `Abort/` for "already produced" on all three
+   result shapes, the `Aborting_*` and `A_*_abort_*` scenarios in `Pipeline/` and `Sync/`
+   for "nothing produced yet",
+   `A_handler_aborting_a_pipeline_with_no_interceptors_completes_the_dispatch` and its
+   result twin for the interceptor-free lane the executors serve without ever entering a
+   strategy, `Aborting_a_publish_completes_it_without_an_exception` for the fan-out, and
+   `A_nested_dispatchs_abort_stops_at_its_own_dispatch` for the scoped-child case.
 
 2. ~~**Two different exceptions mean "nothing will handle this."**~~ *Fixed.* A message
    type absent from the registry used to produce `NoHandlerFoundException` while a

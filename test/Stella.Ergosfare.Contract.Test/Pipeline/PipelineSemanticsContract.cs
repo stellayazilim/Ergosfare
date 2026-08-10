@@ -248,9 +248,10 @@ public abstract class PipelineSemanticsContract
         var recorder = NewRecorder();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        await Assert.ThrowsAsync<ExecutionAbortedException>(
-            async () => await mediator.SendAsync(NewCommand("abort"), recorder.Commands()));
+        await mediator.SendAsync(NewCommand("abort"), recorder.Commands());
 
+        // Aborted before the handler ran, so there is nothing in the slot — and an abort is
+        // not a failure, so there is no exception either.
         Assert.Equal("abort|null|none", recorder.DetailOf("final"));
     }
 
@@ -260,30 +261,31 @@ public abstract class PipelineSemanticsContract
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task Aborting_from_a_pre_interceptor_skips_the_handler_and_surfaces_ExecutionAbortedException()
+    public async Task Aborting_from_a_pre_interceptor_skips_the_handler_and_completes_the_dispatch()
     {
         await using var provider = CreateProvider();
         var recorder = NewRecorder();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        await Assert.ThrowsAsync<ExecutionAbortedException>(
-            async () => await mediator.SendAsync(NewCommand("abort"), recorder.Commands()));
+        await mediator.SendAsync(NewCommand("abort"), recorder.Commands());
 
+        // The handler and the post stage are skipped; the final stage always runs.
         recorder.AssertStages("pre", "final");
     }
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task Aborting_with_a_result_value_still_throws_and_does_not_deliver_the_value()
+    public async Task Aborting_before_the_handler_delivers_no_result_to_the_caller()
     {
         await using var provider = CreateProvider();
         var recorder = NewRecorder();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        // The pre-interceptor calls Abort(AbortValue); the caller never sees that value.
-        await Assert.ThrowsAsync<ExecutionAbortedException>(
-            async () => await mediator.SendAsync(NewResultCommand("abort"), recorder.Commands()));
+        // Nothing had been produced when the pre-interceptor aborted, so there is nothing
+        // to hand back — the caller gets the result type's default, not an exception.
+        var result = await mediator.SendAsync(NewResultCommand("abort"), recorder.Commands());
 
+        Assert.Null(result);
         recorder.AssertStages("pre", "final");
         Assert.Equal("abort|null|none", recorder.DetailOf("final"));
     }
@@ -338,15 +340,15 @@ public abstract class PipelineSemanticsContract
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_value_typed_query_abort_throws_and_leaves_final_with_the_result_types_default()
+    public async Task A_value_typed_query_abort_delivers_the_result_types_default()
     {
         await using var provider = CreateProvider();
         var recorder = NewRecorder();
         var mediator = provider.GetRequiredService<IQueryMediator>();
 
-        await Assert.ThrowsAsync<ExecutionAbortedException>(
-            async () => await mediator.QueryAsync(NewValueQuery("abort"), recorder.Queries()));
+        var result = await mediator.QueryAsync(NewValueQuery("abort"), recorder.Queries());
 
+        Assert.Equal(0, result);
         recorder.AssertStages("pre", "final");
         Assert.Equal("abort|0|none", recorder.DetailOf("final"));
     }
@@ -401,5 +403,42 @@ public abstract class PipelineSemanticsContract
         // failed inside the handler reaches its exception stage with an empty slot. Being a
         // reference type is what lets that slot stay empty instead of unboxing into a crash.
         Assert.Equal($"throw+rewritten|null|{nameof(PipelineFailure)}", recorder.DetailOf("exception"));
+    }
+
+    // -----------------------------------------------------------------------
+    // aborting a pipeline that has no interceptor stages
+    //
+    // Appended for the same reason as the block above.
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    [Trait("Category", "Contract")]
+    public async Task A_handler_aborting_a_pipeline_with_no_interceptors_completes_the_dispatch()
+    {
+        await using var provider = CreateProvider();
+        var recorder = NewRecorder();
+
+        // With nothing to intercept, the executor invokes the handler and never enters the
+        // mediation strategy, so the strategy's abort handling is not the one that runs
+        // here. The contract is the same one either way: the caller sees no exception.
+        await provider.GetRequiredService<ICommandMediator>()
+            .SendAsync(NewBareCommand("abort"), recorder.Commands());
+
+        recorder.AssertStages("handler");
+    }
+
+    [Fact]
+    [Trait("Category", "Contract")]
+    public async Task A_result_handler_aborting_a_pipeline_with_no_interceptors_delivers_the_default()
+    {
+        await using var provider = CreateProvider();
+        var recorder = NewRecorder();
+
+        var result = await provider.GetRequiredService<ICommandMediator>()
+            .SendAsync(NewBareResultCommand("abort"), recorder.Commands());
+
+        // The handler abandoned its own result, so there is nothing to deliver.
+        Assert.Null(result);
+        recorder.AssertStages("handler");
     }
 }

@@ -83,7 +83,16 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             // for a ValueTask slot). Interface-erased dispatches fall back to the DIM bridge.
             var fastHandler = soleHandler.Resolve(serviceProvider);
 
-            await InvokeHandler(fastHandler, message, context);
+            try
+            {
+                await InvokeHandler(fastHandler, message, context);
+            }
+            catch (ExecutionAbortedException)
+            {
+                // The handler short-circuited its own dispatch. There is nothing to return
+                // and no stage left to tell, so the dispatch simply completes.
+                return;
+            }
 
             var fastEx = resultAdapterService?.LookupException(Unit.Value);
 
@@ -127,7 +136,13 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
                 result = invokedPostResult ?? result;
             }
         }
-        catch (Exception e) when (e is not ExecutionAbortedException)
+        catch (ExecutionAbortedException)
+        {
+            // A short circuit, not a failure: the exception stage is skipped, the caller
+            // sees no exception, and the final stage below still runs with whatever the
+            // pipeline had produced.
+        }
+        catch (Exception e)
         {
             exception = e;
 

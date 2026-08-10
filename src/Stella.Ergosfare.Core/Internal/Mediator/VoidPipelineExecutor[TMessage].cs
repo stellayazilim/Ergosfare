@@ -1,4 +1,5 @@
-﻿using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
@@ -37,15 +38,25 @@ internal sealed class VoidPipelineExecutor<TMessage>(
         {
             var handler = handlerReference.Resolve(serviceProvider);
 
-            switch (handler)
+            // The strategy is skipped here, so its abort handling has to be too; see
+            // AbortShortCircuit. The try covers a handler that aborts synchronously, the
+            // guard the one that captured the abort into its task.
+            try
             {
-                case IAsyncHandler<TMessage> asyncHandler:
-                    return asyncHandler.HandleAsync((TMessage)message, context);
-                case IHandler<TMessage, ValueTask> valueTaskShaped:
-                    return valueTaskShaped.Handle((TMessage)message, context);
-                case IHandler<TMessage, object> syncHandler:
-                    syncHandler.Handle((TMessage)message, context);
-                    return ValueTask.CompletedTask;
+                switch (handler)
+                {
+                    case IAsyncHandler<TMessage> asyncHandler:
+                        return AbortShortCircuit.Guard(asyncHandler.HandleAsync((TMessage)message, context));
+                    case IHandler<TMessage, ValueTask> valueTaskShaped:
+                        return AbortShortCircuit.Guard(valueTaskShaped.Handle((TMessage)message, context));
+                    case IHandler<TMessage, object> syncHandler:
+                        syncHandler.Handle((TMessage)message, context);
+                        return ValueTask.CompletedTask;
+                }
+            }
+            catch (ExecutionAbortedException)
+            {
+                return ValueTask.CompletedTask;
             }
         }
 
