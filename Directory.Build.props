@@ -1,12 +1,16 @@
 <Project>
     <PropertyGroup>
-        <!-- net11.0 rides the preview line ahead of its November 2026 GA. It buys no
+        <!-- net11.0 ships ahead of its 2026-11-10 GA, stable line included. It buys no
              compatibility on its own — roll-forward already lets a net11.0 consumer bind
-             lib/net10.0/ — so it is here to prove the sources compile and the suite passes
-             on .NET 11, and to hold the slot for the one TFM-gated win worth having later:
-             Runtime Async, which needs the contract suite's lane map re-validated before it
-             can be trusted on the stable line. Consequence: building this repo now requires
-             the .NET 11 preview SDK. -->
+             lib/net10.0/ — so what it carries is proof: the sources compile under the C# 15
+             compiler and the contract suite's composition lanes hold on .NET 11, on every
+             run. It also holds the slot for the one TFM-gated win worth having later:
+             Runtime Async, not taken here because it rewrites async codegen and needs the
+             lane map re-validated against the abort semantics first.
+
+             Two consequences. Building this repo now requires the .NET 11 preview SDK.
+             And assets shipped for net11.0 before GA are compiled against preview ref
+             packs — see the re-pack obligation in .github/workflows/nuget_release.yml. -->
         <TargetFrameworks>net11.0;net10.0;net9.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
         

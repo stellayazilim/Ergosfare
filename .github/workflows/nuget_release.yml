@@ -41,9 +41,16 @@ jobs:
       # Separate step so `dotnet-quality: preview` does not pull pre-release patches of
       # the shipping TFMs. Merge into the list above once .NET 11 reaches GA.
       #
-      # Note this makes every package pushed from this line carry a lib/net11.0/ asset
-      # built against a preview ref pack — coherent on the preview line, which ships only
-      # -preview versions. It must not reach a stable tag before GA.
+      # Every package pushed from here — stable tags included — therefore carries a
+      # lib/net11.0/ asset compiled against a PREVIEW ref pack. That is a deliberate
+      # release decision, not an oversight: the contract suite passes on all three TFMs,
+      # and a net11.0 consumer that would otherwise roll forward onto lib/net10.0/ gets a
+      # matching asset instead.
+      #
+      # The obligation it creates: when .NET 11 reaches GA on 2026-11-10, any stable
+      # version already published carries a net11.0 asset built against preview bits. Re-
+      # pack and re-publish those against the GA ref pack rather than leaving consumers
+      # bound to preview-compiled assets.
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '11.0.x'
