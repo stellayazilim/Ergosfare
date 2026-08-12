@@ -1,3 +1,82 @@
+## v2.8.0-preview – '2026-08-12'
+
+Preview release. The theme: **the runtime registry retires.** Since v2.0 the source
+generator has known the whole pipeline at compile time, yet every dispatch still consulted
+a mutable runtime registry that could — in principle — disagree with it. This release
+removes the principle: the generator's **frozen composition table** is the single source
+of pipeline composition, DI registration records *selections* into it, and the registry
+family, its descriptor builders, its caches and its reflective scanning path
+(`RegisterFromAssembly`) are gone. The execution context sheds its interface for a sealed
+class the caller can finally construct. This is the breaking release of the v2 preview
+line; every removal is listed under Notes with its replacement.
+
+### The frozen composition table
+
+* `FrozenCompositionCatalog` replaces `IMessageRegistry` end to end: the generator emits
+  one composition per message — handler rows, the four interceptor stages, their covariant
+  (indirect) rows — and registration only *selects* which discovered constructs this
+  container runs. Selection is a union; repeated and overlapping registrations are safe.
+* Runtime mutation is gone with the registry: there is no way to add a row after
+  compilation, so "a registration after the first dispatch" is no longer a case — the
+  executors' dependency caches freeze on first dispatch and stay valid by construction.
+* `MediateOptions`, the message-resolve strategies and the low-level
+  `IMessageMediator.Mediate` surface leave with the registry. The module facades
+  (`ICommandMediator`, `IQueryMediator`, `IEventMediator`) and the engine's typed dispatch
+  overloads are the dispatch API.
+
+### `ErgosfareContext`
+
+* `IExecutionContext` is replaced by the **public sealed `ErgosfareContext`** — the
+  pipeline passes a concrete type, not an interface with exactly one implementation. Its
+  constructor is public with two optional parameters, so a caller can, for the first
+  time, build its own context for the engine-level dispatch overloads.
+* `ExecutionContextScope` becomes `ErgosfareContextScope`; its constructor is internal —
+  `CreateScope()` is the one producer — and disposing a `default` scope stays a no-op so
+  a failed `using` cannot mask the original failure. The context pool moves to
+  `Core.Abstractions` with the type.
+
+### The core module retires
+
+* `AddCoreModule`, `CoreModule`, `CoreModuleBuilder` and `IModuleBuilder` are removed.
+  The surface dated from the reflective world: with the registry gone, its plain-`IMessage`
+  path had no table to dispatch against.
+* Plain and POCO messages ride the **event module**, whose handler contract never
+  constrained its message type: `IEventHandler<TEvent>` with `PublishAsync<TEvent>` covers
+  them, broadcast semantics included.
+* Cross-cutting interceptors join modules **by carrying the module markers directly** —
+  the same idiom the module contracts themselves use
+  (`ICommandPreInterceptor : ICommand, IAsyncPreInterceptor<ICommand>`):
+
+  ```csharp
+  public sealed class LoggingInterceptor
+      : IAsyncPreInterceptor<IMessage>, ICommand, IQuery, IEvent { … }
+  ```
+
+  The markers put the class into each module's discovery partition; the covariant row
+  machinery lands it on every assignable message, and `[ExcludeFromPipeline]`'s blanket
+  form drops it from messages that opt out. Pinned by `CrossCuttingInterceptorTests`.
+
+### Warning hygiene
+
+* The generated registration file suppresses `CS0612`/`CS0618` for the constructs it
+  references: deprecating your own message no longer warns from code nobody wrote.
+* The solution builds with **zero warnings**; the test projects' probe types that are
+  invoked directly (never dispatched) now say so with `[ExcludeFromDiscovery]`, and the
+  engine-delivered probe handlers document their per-project `ERGOSG007` suppression.
+
+### Notes
+
+* **Removed (breaking):** `IMessageRegistry` and the descriptor surfaces,
+  `RegisterFromAssembly`, `RegisterDescriptors`, `MediateOptions`,
+  `ActualTypeOrFirstAssignableTypeMessageResolveStrategy`, `IMessageMediator.Mediate`,
+  `IExecutionContext`, `ExecutionContextScope`, `IPoolReturnable`, `AddCoreModule`,
+  `CoreModule`, `CoreModuleBuilder`, `IModuleBuilder`.
+* **Replacements:** the frozen composition table + `RegisterGenerated()` /
+  `Register<T>()` selection; `ErgosfareContext` / `ErgosfareContextScope`; the event
+  module for plain messages; marker-tagged interceptors for cross-cutting concerns.
+* The contract suite (194 scenarios ×2 TFM) and its lane-map baseline rode through the
+  change; the full solution suite is green on net9.0 and net10.0.
+
 ## v2.7.0-preview – '2026-08-11'
 
 Preview release. The theme: **the dispatch contract, pinned and then corrected.** Every
