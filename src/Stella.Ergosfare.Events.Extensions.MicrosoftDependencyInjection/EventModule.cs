@@ -24,7 +24,7 @@ internal class EventModule(Action<EventModuleBuilder> builder) : IModule
     /// <summary>
     /// Configures the event module using the specified module configuration.
     /// </summary>
-    /// <param name="configuration">The module configuration containing services and message registry.</param>
+    /// <param name="configuration">The module configuration containing services and this container's frozen composition selection.</param>
     public void Build(IModuleConfiguration configuration)
     {
         builder(new EventModuleBuilder(configuration.Compositions));

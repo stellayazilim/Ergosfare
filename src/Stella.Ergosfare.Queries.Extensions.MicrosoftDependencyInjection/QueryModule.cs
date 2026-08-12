@@ -5,8 +5,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
 
 /// <summary>
-/// Represents the query module which registers query types and the query mediator
-/// within the dependency injection container and message registry.
+/// Represents the query module, which selects query participants from the frozen
+/// composition table and registers the query mediator with dependency injection.
 /// </summary>
 internal class QueryModule(
     Action<QueryModuleBuilder> builder
@@ -17,7 +17,8 @@ internal class QueryModule(
     /// Builds and initializes the module by registering queries and the query mediator.
     /// </summary>
     /// <param name="configuration">
-    /// The module configuration providing access to the service collection and message registry.
+    /// The module configuration providing access to the service collection and this
+    /// container's frozen composition selection.
     /// </param>
     public void Build(IModuleConfiguration configuration)
     {
