@@ -115,12 +115,19 @@ missing handlers. The complete preview history is condensed here into the stable
   pipeline too.
 * Resultless commands and events carry the single `Unit.Value` instance after successful
   execution. `null` retains the distinct meaning “no result was produced.”
-* Direct and covariantly matched main handlers form one candidate set. A supertype handler
-  serves an assignable message; competing direct and covariant handlers raise
-  `MultipleHandlerFoundException` before either runs.
-* Typed `...ExceptionInterceptorFor<TException>` contracts follow catch semantics. An
-  exception is swallowed only when a matching interceptor actually runs; otherwise the
-  original exception and stack leave the pipeline unchanged.
+* Main-handler resolution is a priority ladder over the direct and covariantly matched rows.
+  A sole direct handler wins outright, however many covariant candidates exist; without one,
+  a supertype handler serves the assignable message. Two claimants *at the same level* are a
+  contest, counted before anything resolves, so the message runs neither and the caller gets
+  `MultipleHandlerFoundException`. The generator reports the same condition as `ERGOSG010` at
+  build time.
+* New typed `...ExceptionInterceptorFor<TException>` contracts declare the exception type they
+  accept and follow catch semantics, so the exception arrives typed and nothing has to
+  remember to rethrow. They sit **beside** the untyped contracts, which are unchanged and stay
+  the right shape for an interceptor handling several exception types or logging every
+  failure. With either family, an exception is swallowed only when an interceptor that
+  actually matched it returns a value; otherwise the original exception and stack leave the
+  pipeline unchanged.
 * Missing and filtered-out handlers consistently use `NoHandlerFoundException`, which now
   derives from `InvalidOperationException` and exposes `MessageType`. Event publication
   honors `ThrowIfNoHandlerFound` for every no-subscriber shape.
@@ -191,8 +198,9 @@ missing handlers. The complete preview history is condensed here into the stable
   interceptors with the command, query and event marker interfaces they should join.
 * **Audit abort callers:** abort now reaches the call site as `ExecutionAbortedException`
   and prevents all downstream stages, including final interceptors.
-* **Audit contested handlers:** a direct handler and an assignable supertype handler now
-  conflict instead of allowing the direct registration to win silently.
+* **Audit contested handlers:** two main handlers on the same level — two direct, or two
+  covariant with no direct one — now conflict instead of letting one win silently. A direct
+  handler still beats covariant ones; that pairing is not a contest.
 * The full solution, contract suite and NativeAOT smoke are green on the stable promotion
   commit with zero build warnings.
 
