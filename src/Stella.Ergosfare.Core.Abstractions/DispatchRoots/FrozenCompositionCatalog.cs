@@ -117,6 +117,12 @@ public sealed class FrozenCompositionCatalog
     /// <remarks>
     /// Setup-time only, and deliberately so: it reads the whole table once, while
     /// registration is still open and before any projection is cached.
+    /// <para>
+    /// Every type returned came through <see cref="FrozenParticipant.HandlerType"/>, so its
+    /// public constructors are preserved under trimming — the sequence itself cannot carry
+    /// the annotation, which is why the caller registering these as services suppresses the
+    /// dataflow warning rather than re-stating the requirement.
+    /// </para>
     /// </remarks>
     public IEnumerable<Type> SelectedParticipants()
     {

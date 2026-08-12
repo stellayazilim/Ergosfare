@@ -1,4 +1,6 @@
-﻿namespace Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+﻿using System.Diagnostics.CodeAnalysis;
+
+namespace Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 
 /// <summary>
 /// One participant row of a frozen composition: the handler type plus the group names it
@@ -8,15 +10,21 @@
 /// </summary>
 /// <param name="handlerType">
 /// The participant's type — a generic definition when the participant closes over the
-/// message's type arguments at dispatch time.
+/// message's type arguments at dispatch time. Public constructors are preserved under
+/// trimming: the generated table hands its <c>typeof</c> here, and this parameter is the
+/// only annotated slot on the path to the container's handler registrations, which
+/// activate the type reflectively.
 /// </param>
 /// <param name="groups">
 /// The participant's declared group names, or <c>null</c> for the default group alone —
 /// the overwhelmingly common case, carried without an allocation.
 /// </param>
-public sealed class FrozenParticipant(Type handlerType, string[]? groups = null)
+public sealed class FrozenParticipant(
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type handlerType,
+    string[]? groups = null)
 {
     /// <summary>The participant's (possibly open) type.</summary>
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
     public Type HandlerType { get; } = handlerType;
 
     /// <summary>The declared group names; <c>null</c> means the default group alone.</summary>
