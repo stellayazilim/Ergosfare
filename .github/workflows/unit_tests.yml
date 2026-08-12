@@ -14,8 +14,8 @@ on:
 
 jobs:
   unit-tests:
-    # Single job with both SDKs installed: the solution multi-targets net9.0 and
-    # net10.0, so a per-SDK matrix cannot restore/build it with only one SDK.
+    # Single job with every SDK installed: the solution multi-targets net9.0, net10.0
+    # and net11.0, so a per-SDK matrix cannot restore/build it with only one SDK.
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -28,12 +28,23 @@ jobs:
             9.0.x
             10.0.x
 
+      # Separate step for net11.0: `dotnet-quality: preview` applies to every version in
+      # its step's list, so folding 11.0.x into the list above would pull pre-release
+      # patches of the shipping TFMs too. Drop this step and merge the version in once
+      # .NET 11 reaches GA (November 2026).
+      - name: Setup .NET 11 Preview
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+          dotnet-quality: 'preview'
+
       - name: Restore Dependencies
         run: dotnet restore Stella.Ergosfare.slnx
 
       # Category=Contract is the core-modernization safety net
-      # (test/Stella.Ergosfare.Contract.Test): it runs both registration axes on both
-      # TFMs and is named here explicitly so it can never fall out of CI unnoticed.
+      # (test/Stella.Ergosfare.Contract.Test): it runs both registration axes on every
+      # TFM and is named here explicitly so it can never fall out of CI unnoticed.
+      # With net11.0 in the matrix this is also what proves .NET 11 keeps the lane map.
       - name: Run Unit Tests
         run: |
           dotnet test Stella.Ergosfare.slnx \

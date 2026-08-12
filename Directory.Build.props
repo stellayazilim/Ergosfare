@@ -1,9 +1,30 @@
 <Project>
     <PropertyGroup>
-        <TargetFrameworks>net10.0;net9.0</TargetFrameworks>
+        <!-- net11.0 ships ahead of its 2026-11-10 GA, stable line included. It buys no
+             compatibility on its own — roll-forward already lets a net11.0 consumer bind
+             lib/net10.0/ — so what it carries is proof: the sources compile under the C# 15
+             compiler and the contract suite's composition lanes hold on .NET 11, on every
+             run. It also holds the slot for the one TFM-gated win worth having later:
+             Runtime Async, not taken here because it rewrites async codegen and needs the
+             lane map re-validated against the abort semantics first.
+
+             Two consequences. Building this repo now requires the .NET 11 preview SDK.
+             And assets shipped for net11.0 before GA are compiled against preview ref
+             packs — see the re-pack obligation in .github/workflows/nuget_release.yml. -->
+        <TargetFrameworks>net11.0;net10.0;net9.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
         
         <Nullable>enable</Nullable>
+
+        <!-- Deliberately `latest`, not `latestMajor` or a pinned version: with the .NET 11
+             preview SDK now required by the TFM list above, this resolves to C# 15 — and it
+             does so for the net9.0 and net10.0 compilations too, since the language version
+             follows the compiler rather than the target framework. That is the intent: one
+             language version across all three TFMs, so a construct cannot compile on one and
+             fail on another. It also means a C# 15 feature used here silently applies to the
+             assets shipped for the older TFMs, which is fine for syntax but not for anything
+             requiring runtime support (union types, closed hierarchies) — those need the
+             runtime attributes and stay off the table until GA. -->
         <LangVersion>latest</LangVersion>
     </PropertyGroup>
 </Project>

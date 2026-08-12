@@ -19,8 +19,8 @@ on:
 
 jobs:
   Coverage:
-    # Single job with both SDKs installed: the solution multi-targets net9.0 and
-    # net10.0, so a per-SDK matrix cannot build it — and two parallel jobs racing
+    # Single job with every SDK installed: the solution multi-targets net9.0, net10.0
+    # and net11.0, so a per-SDK matrix cannot build it — and two parallel jobs racing
     # to push the badge branch caused non-fast-forward failures.
     runs-on: ubuntu-latest
     steps:
@@ -33,6 +33,15 @@ jobs:
           dotnet-version: |
             9.0.x
             10.0.x
+
+      # Separate step for net11.0: `dotnet-quality: preview` applies to every version in
+      # its step's list, so folding 11.0.x into the list above would pull pre-release
+      # patches of the shipping TFMs too. Merge it in once .NET 11 reaches GA.
+      - name: Setup .NET 11 Preview
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+          dotnet-quality: 'preview'
 
       - name: Install Coverlet global tool
         run: dotnet tool install --global coverlet.console
