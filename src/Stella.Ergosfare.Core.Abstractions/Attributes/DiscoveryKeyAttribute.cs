@@ -3,9 +3,9 @@ namespace Stella.Ergosfare.Core.Abstractions.Attributes;
 
 /// <summary>
 /// Gates a registrable construct behind one or more discovery keys: a keyed type is
-/// excluded from default discovery (<c>RegisterGenerated()</c>, <c>RegisterFromAssembly(assembly)</c>)
-/// and registers only when a registration call selects one of its keys, e.g.
-/// <c>RegisterGenerated("reporting")</c> or <c>RegisterGenerated("reporting.*")</c>.
+/// excluded from default discovery (<c>RegisterGenerated()</c>) and registers only when a
+/// registration call selects one of its keys, e.g. <c>RegisterGenerated("reporting")</c>
+/// or <c>RegisterGenerated("reporting.*")</c>.
 /// </summary>
 /// <remarks>
 /// <para>

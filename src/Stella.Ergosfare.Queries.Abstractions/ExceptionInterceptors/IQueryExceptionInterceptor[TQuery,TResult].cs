@@ -27,7 +27,7 @@ public interface IQueryExceptionInterceptor<in TQuery, TResult>
 {
     /// <inheritdoc />
     async ValueTask<object?> IAsyncExceptionInterceptor<TQuery, TResult>.HandleAsync(
-        TQuery query, TResult? result, Exception exception, IExecutionContext context)
+        TQuery query, TResult? result, Exception exception, ErgosfareContext context)
         => await HandleAsync(query, result, exception, context);
 
     /// <summary>
@@ -41,5 +41,5 @@ public interface IQueryExceptionInterceptor<in TQuery, TResult>
     /// A <see cref="ValueTask{TResult}"/> producing the (possibly modified) result that
     /// continues through the pipeline.
     /// </returns>
-    new ValueTask<TResult?> HandleAsync(TQuery query, TResult? result, Exception exception, IExecutionContext context);
+    new ValueTask<TResult?> HandleAsync(TQuery query, TResult? result, Exception exception, ErgosfareContext context);
 }

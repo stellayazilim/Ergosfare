@@ -27,13 +27,13 @@ public sealed class BasicDispatchTests
         public bool Handled;
 
         /// <summary>The context instance the handler was handed.</summary>
-        public IExecutionContext? SeenContext;
+        public ErgosfareContext? SeenContext;
     }
 
     [DiscoveryKey(Key)]
     public sealed class GreetHandler : ICommandHandler<Greet>
     {
-        public ValueTask HandleAsync(Greet command, IExecutionContext context)
+        public ValueTask HandleAsync(Greet command, ErgosfareContext context)
         {
             command.Handled = true;
             command.SeenContext = context;
@@ -54,7 +54,7 @@ public sealed class BasicDispatchTests
         /// <summary>The message instance the last dispatch handed this handler.</summary>
         public static Echo? LastSeen;
 
-        public ValueTask<string> HandleAsync(Echo command, IExecutionContext context)
+        public ValueTask<string> HandleAsync(Echo command, ErgosfareContext context)
         {
             LastSeen = command;
             return ValueTask.FromResult(command.Word + "!");
@@ -71,7 +71,7 @@ public sealed class BasicDispatchTests
     [DiscoveryKey(Key)]
     public sealed class SumHandler : IQueryHandler<Sum, int>
     {
-        public ValueTask<int> HandleAsync(Sum query, IExecutionContext context)
+        public ValueTask<int> HandleAsync(Sum query, ErgosfareContext context)
             => ValueTask.FromResult(query.Left + query.Right);
     }
 
@@ -157,6 +157,9 @@ public sealed class BasicDispatchTests
         await using var provider = CreateProvider();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
+        // Deliberate dead dispatch: this contract pins the runtime failure mode that
+        // ERGOSG005 exists to prove at compile time. The verdict is suppressed for this
+        // project via NoWarn in the csproj (errors cannot be pragma-suppressed).
         await Assert.ThrowsAsync<NoHandlerFoundException>(
             async () => await mediator.SendAsync(new NeverRegisteredCommand()));
     }
@@ -168,6 +171,7 @@ public sealed class BasicDispatchTests
         await using var provider = CreateProvider();
         var mediator = provider.GetRequiredService<IQueryMediator>();
 
+        // See above: the pinned behavior is the diagnostic's compile-time claim.
         await Assert.ThrowsAsync<NoHandlerFoundException>(
             async () => await mediator.QueryAsync(new NeverRegisteredQuery()));
     }

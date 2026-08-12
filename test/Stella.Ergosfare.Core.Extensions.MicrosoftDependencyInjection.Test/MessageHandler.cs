@@ -18,7 +18,7 @@ public sealed class MessageHandler: IAsyncHandler<Message>
     /// <param name="message">The message to handle.</param>
     /// <param name="context">The execution context providing services and metadata.</param>
     /// <returns>A <see cref="ValueTask"/> representing the asynchronous operation.</returns>
-    public ValueTask HandleAsync(Message message, IExecutionContext context)
+    public ValueTask HandleAsync(Message message, ErgosfareContext context)
     {
         Console.WriteLine("Message received");
         return ValueTask.CompletedTask;

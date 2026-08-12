@@ -30,7 +30,7 @@ public interface IEventPreInterceptor : IEvent, IAsyncPreInterceptor<IEvent>
     /// the pipeline continues with — this void-flavored convenience contract passes the
     /// event through unchanged.
     /// </remarks>
-    async ValueTask<object> IAsyncPreInterceptor<IEvent>.HandleAsync(IEvent @event, IExecutionContext executionContext)
+    async ValueTask<object> IAsyncPreInterceptor<IEvent>.HandleAsync(IEvent @event, ErgosfareContext executionContext)
     {
         await HandleAsync(@event, executionContext);
         return @event;
@@ -42,5 +42,5 @@ public interface IEventPreInterceptor : IEvent, IAsyncPreInterceptor<IEvent>
     /// <param name="event">The event to be processed.</param>
     /// <param name="executionContext">The execution context for the current mediation pipeline.</param>
     /// <returns>A <see cref="ValueTask"/> representing the asynchronous pre-processing operation.</returns>
-    new ValueTask HandleAsync(IEvent @event, IExecutionContext executionContext);
+    new ValueTask HandleAsync(IEvent @event, ErgosfareContext executionContext);
 }

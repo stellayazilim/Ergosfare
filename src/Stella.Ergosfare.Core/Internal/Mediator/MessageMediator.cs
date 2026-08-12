@@ -1,9 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
-using Stella.Ergosfare.Core.Abstractions.Registry;
-using Stella.Ergosfare.Core.Internal.Contexts;
 
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
@@ -13,13 +10,11 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// and managing the execution context and dependencies for each message.
 /// </summary>
 /// <remarks>
-/// The <see cref="MessageMediator"/> uses the provided <see cref="IMessageRegistry"/> to track message types,
-/// to lazily resolve handler dependencies. It ensures that the message mediation occurs
-/// within a controlled execution context scope.
+/// The <see cref="MessageMediator"/> dispatches through the engine's cached pipeline
+/// executors; the compiled composition decides what serves each message type.
 /// </remarks>
 
 internal sealed class MessageMediator(
-    IMessageRegistry messageRegistry,
     IMessageDependenciesFactory messageDependenciesFactory,
     IServiceProvider serviceProvider,
     PipelineExecutorCache? executorCache = null,
@@ -43,7 +38,7 @@ internal sealed class MessageMediator(
     }
 
     /// <inheritdoc />
-    public ValueTask DispatchAsync(object message, IExecutionContext context, IEnumerable<string>? groups = null)
+    public ValueTask DispatchAsync(object message, ErgosfareContext context, IEnumerable<string>? groups = null)
     {
         ArgumentNullException.ThrowIfNull(message);
         ArgumentNullException.ThrowIfNull(context);
@@ -52,7 +47,7 @@ internal sealed class MessageMediator(
     }
 
     /// <inheritdoc />
-    public ValueTask<TResult> DispatchAsync<TResult>(object message, IExecutionContext context, IEnumerable<string>? groups = null)
+    public ValueTask<TResult> DispatchAsync<TResult>(object message, ErgosfareContext context, IEnumerable<string>? groups = null)
     {
         ArgumentNullException.ThrowIfNull(message);
         ArgumentNullException.ThrowIfNull(context);
@@ -73,13 +68,7 @@ internal sealed class MessageMediator(
 
     private MessageDispatchEngine RequireEngine()
         => _engine ?? throw new InvalidOperationException(
-            "Executor dispatch requires the PipelineExecutorCache; register Ergosfare through AddErgosfare or use Mediate with explicit options.");
-
-
-    /// <summary>
-    /// Registry used to keep track of registered message types.
-    /// </summary>
-    private readonly IMessageRegistry _messageRegistry = messageRegistry ?? throw new ArgumentNullException(nameof(messageRegistry));
+            "Executor dispatch requires the PipelineExecutorCache; register Ergosfare through AddErgosfare.");
 
 
     /// <summary>
@@ -102,75 +91,4 @@ internal sealed class MessageMediator(
     /// </summary>
     private readonly MessageDispatchEngine? _engine =
         engine ?? (executorCache is null ? null : new MessageDispatchEngine(executorCache, messageDependenciesFactory));
-
-    
-    /// <summary>
-    /// Dispatches a message of type <typeparamref name="TMessage"/> to its corresponding handler(s)
-    /// and returns the result of type <typeparamref name="TResult"/>.
-    /// </summary>
-    /// <typeparam name="TMessage">The type of the message to mediate. Must be non-nullable.</typeparam>
-    /// <typeparam name="TResult">The expected result type returned from the handler.</typeparam>
-    /// <param name="message">The message instance to dispatch.</param>
-    /// <param name="options">Options that control how the message is resolved, dependencies are created, and mediation strategy applied.</param>
-    /// <returns>The result produced by the handler after processing the message.</returns>
-    /// <exception cref="ArgumentNullException">Thrown if <paramref name="options"/> is null.</exception>
-    /// <exception cref="NoHandlerFoundException">Thrown if no handler descriptor is found for the message type and <c>RegisterPlainMessagesOnSpot</c> is false.</exception>
-    /// <exception cref="InvalidOperationException">Thrown if the message descriptor cannot be resolved with the specified resolve strategy.</exception>
-    /// <remarks>
-    /// The mediation process involves the following steps:
-    /// <list type="number">
-    /// <item>Create a new <see cref="ErgosfareExecutionContext"/> for the current message and options.</item>
-    /// <item>Resolve the message type and find the corresponding handler descriptor using the <see cref="MediateOptions{TMessage, TResult}.MessageResolveStrategy"/>.</item>
-    /// <item>If no descriptor exists and <c>RegisterPlainMessagesOnSpot</c> is true, register the message type on-the-fly.</item>
-    /// <item>Use the <see cref="IMessageDependenciesFactory"/> to create handler dependencies.</item>
-    /// <item>Mediate the message via the <see cref="MediateOptions{TMessage, TResult}.MessageMediationStrategy"/> using the resolved dependencies and current execution context.</item>
-    /// </list>
-    /// </remarks>
-    [UnconditionalSuppressMessage("Trimming", "IL2072",
-        Justification = "RegisterPlainMessagesOnSpot registers the runtime type of a live message instance; " +
-                        "the instance roots its type, and this opt-in dynamic path is not supported on trimmed apps — " +
-                        "pre-register plain messages explicitly there.")]
-    public TResult Mediate<TMessage, TResult>(TMessage message, MediateOptions<TMessage, TResult> options) where TMessage : notnull
-    {
-
-
-        ArgumentNullException.ThrowIfNull(options);
-
-        // An externally owned context (nested dispatch through a scope) is used as-is;
-        // otherwise a fresh, unpooled context is created — this path's completion isn't
-        // observable here (streams enumerate after the call returns), so it cannot pool.
-        var context = options.ExternalContext
-                      ?? new ErgosfareExecutionContext(options.Items, options.CancellationToken);
-
-        // Get the actual type of the message
-        var messageType = message.GetType();
-
-        var descriptor = options.MessageResolveStrategy.Find(messageType);
-
-
-        if (descriptor is null)
-        {
-            if (!options.RegisterPlainMessagesOnSpot)
-            {
-                throw new NoHandlerFoundException(messageType);
-            }
-
-            _messageRegistry.Register(messageType);
-
-            descriptor = options.MessageResolveStrategy.Find(messageType);
-        }
-
-        if (descriptor is null)
-        {
-            throw new InvalidOperationException($"No descriptor found for message type {messageType} with specified resolve strategy.");
-        }
-
-        // Resolve the dependencies in lazy mode
-        var messageDependencies = _messageDependenciesFactory.Create(messageType, descriptor, options.Groups);
-
-        // Mediate the message using the specified strategy. The scope's provider is
-        // handed to the strategy explicitly — handler resolution belongs to the
-        // dispatch pipeline, never to the execution context.
-        return options.MessageMediationStrategy.Mediate(message, messageDependencies, context, _serviceProvider);
-    }
 }

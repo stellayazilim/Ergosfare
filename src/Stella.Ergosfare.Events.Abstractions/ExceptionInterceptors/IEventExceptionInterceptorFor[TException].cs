@@ -25,7 +25,7 @@ public interface IEventExceptionInterceptorFor<TException> :
 {
     /// <inheritdoc />
     async ValueTask<object?> IAsyncExceptionInterceptor<IEvent, Unit>.HandleAsync(
-        IEvent @event, Unit? result, Exception exception, IExecutionContext context)
+        IEvent @event, Unit? result, Exception exception, ErgosfareContext context)
     {
         // The cast cannot fail: the exception stage runs this interceptor only after its
         // filter accepted the exception.
@@ -40,5 +40,5 @@ public interface IEventExceptionInterceptorFor<TException> :
     /// <param name="exception">The exception thrown during pipeline execution.</param>
     /// <param name="context">The execution context for the current mediation pipeline.</param>
     /// <returns>A <see cref="ValueTask"/> representing the asynchronous exception handling operation.</returns>
-    ValueTask HandleAsync(IEvent @event, TException exception, IExecutionContext context);
+    ValueTask HandleAsync(IEvent @event, TException exception, ErgosfareContext context);
 }

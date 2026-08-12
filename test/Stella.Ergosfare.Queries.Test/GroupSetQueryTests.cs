@@ -25,7 +25,7 @@ public class GroupSetQueryTests
     [Group("gsq.east")]
     public sealed class EastRoutedHandler : IQueryHandler<RoutedQuery, string>
     {
-        public ValueTask<string> HandleAsync(RoutedQuery query, IExecutionContext context)
+        public ValueTask<string> HandleAsync(RoutedQuery query, ErgosfareContext context)
             => ValueTask.FromResult("east");
     }
 
@@ -33,7 +33,7 @@ public class GroupSetQueryTests
     [Group("gsq.west")]
     public sealed class WestRoutedHandler : IQueryHandler<RoutedQuery, string>
     {
-        public ValueTask<string> HandleAsync(RoutedQuery query, IExecutionContext context)
+        public ValueTask<string> HandleAsync(RoutedQuery query, ErgosfareContext context)
             => ValueTask.FromResult("west");
     }
 
@@ -43,7 +43,7 @@ public class GroupSetQueryTests
     [ExcludeFromDiscovery]
     public sealed class DefaultQueryHandler : IQueryHandler<DefaultQuery, string>
     {
-        public ValueTask<string> HandleAsync(DefaultQuery query, IExecutionContext context)
+        public ValueTask<string> HandleAsync(DefaultQuery query, ErgosfareContext context)
             => ValueTask.FromResult("default");
     }
 
@@ -54,7 +54,7 @@ public class GroupSetQueryTests
     [Group("gsq.east")]
     public sealed class EastRoutedStreamHandler : IStreamQueryHandler<RoutedStreamQuery, string>
     {
-        public async IAsyncEnumerable<string> StreamAsync(RoutedStreamQuery query, IExecutionContext context)
+        public async IAsyncEnumerable<string> StreamAsync(RoutedStreamQuery query, ErgosfareContext context)
         {
             await Task.Yield();
             yield return "east";
@@ -65,7 +65,7 @@ public class GroupSetQueryTests
     [Group("gsq.west")]
     public sealed class WestRoutedStreamHandler : IStreamQueryHandler<RoutedStreamQuery, string>
     {
-        public async IAsyncEnumerable<string> StreamAsync(RoutedStreamQuery query, IExecutionContext context)
+        public async IAsyncEnumerable<string> StreamAsync(RoutedStreamQuery query, ErgosfareContext context)
         {
             await Task.Yield();
             yield return "west";

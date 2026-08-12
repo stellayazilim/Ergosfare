@@ -20,7 +20,7 @@ public class StubStringHandler : IHandler<StubMessage, string>
     /// <param name="message">The message to handle.</param>
     /// <param name="context">The execution context.</param>
     /// <returns>The fixed <see cref="Result"/> string.</returns>
-    public string Handle(StubMessage message, IExecutionContext context)
+    public string Handle(StubMessage message, ErgosfareContext context)
     {
         return Result;
     }

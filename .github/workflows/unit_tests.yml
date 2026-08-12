@@ -39,3 +39,14 @@ jobs:
           dotnet test Stella.Ergosfare.slnx \
             --logger "trx;LogFileName=unit-tests.trx" \
             --filter "Category=Unit|Category=Contract"
+
+      # Category=E2E drives a real `dotnet build` of a fixture that is meant not to
+      # compile — the analyzer travelling as an analyzer, the package's props, and K5's
+      # composition-root gate. The filter above leaves it out, so it gets its own step
+      # rather than going unrun; the fixture lives outside the solution precisely so a
+      # solution build never picks it up.
+      - name: Run End-to-End Tests
+        run: |
+          dotnet test test/Stella.Ergosfare.SourceGenerator.Test \
+            --logger "trx;LogFileName=e2e-tests.trx" \
+            --filter "Category=E2E"

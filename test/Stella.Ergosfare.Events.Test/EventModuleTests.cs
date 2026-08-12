@@ -22,7 +22,7 @@ public class EventModuleTests
         /// <summary>
         /// Handles a message but performs no operation.
         /// </summary>
-        public ValueTask Handle(IMessage message, IExecutionContext context)
+        public ValueTask Handle(IMessage message, ErgosfareContext context)
         {
             return ValueTask.CompletedTask;
         }
@@ -40,7 +40,6 @@ public class EventModuleTests
         var serviceCollection = new ServiceCollection()
             .AddErgosfare(x => x.AddEventModule(c =>
                 c.Register<StubNonGenericEventHandler1>()
-                    .RegisterFromAssembly(Assembly.GetExecutingAssembly())
             )).BuildServiceProvider();
         var mediator = serviceCollection.GetRequiredService<IEventMediator>();
 

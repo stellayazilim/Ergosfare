@@ -21,7 +21,7 @@ public class StubStringAsyncHandler : IAsyncHandler<StubMessage, string>
     /// <param name="message">The message to handle.</param>
     /// <param name="context">The execution context.</param>
     /// <returns>A <see cref="ValueTask{TResult}"/> with the result string.</returns>
-    public async ValueTask<string> HandleAsync(StubMessage message, IExecutionContext context)
+    public async ValueTask<string> HandleAsync(StubMessage message, ErgosfareContext context)
     {
         await ValueTask.CompletedTask;
         return Result;
@@ -48,7 +48,7 @@ public class StubStringAsyncFinalInterceptor : IAsyncFinalInterceptor<StubMessag
     /// <param name="exception">Any exception thrown during handling, if any.</param>
     /// <param name="context">The current execution context.</param>
     /// <returns>A completed task.</returns>
-    public ValueTask HandleAsync(StubMessage message, string? result, Exception? exception, IExecutionContext context)
+    public ValueTask HandleAsync(StubMessage message, string? result, Exception? exception, ErgosfareContext context)
     {
         return ValueTask.CompletedTask;
     }
@@ -69,7 +69,7 @@ public class StubStringAsyncExceptionInterceptorModifiesResult : IAsyncException
     /// <param name="exception">The exception that occurred during handling.</param>
     /// <param name="context">The current execution context.</param>
     /// <returns>A task that completes with the modified result.</returns>
-    public ValueTask<object?> HandleAsync(StubMessage message, string? result, Exception exception, IExecutionContext context)
+    public ValueTask<object?> HandleAsync(StubMessage message, string? result, Exception exception, ErgosfareContext context)
     {
         return ValueTask.FromResult<object?>("modified result");
     }

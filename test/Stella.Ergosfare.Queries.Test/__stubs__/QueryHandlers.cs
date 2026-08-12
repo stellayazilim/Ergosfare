@@ -21,7 +21,7 @@ public class StubNonGenericStringResultQueryHandler: IQueryHandler<StubNonGeneri
     /// <param name="message">The query message.</param>
     /// <param name="context">The execution context.</param>
     /// <returns>A task representing the asynchronous operation, with an empty string result.</returns>
-    public ValueTask<string> HandleAsync(StubNonGenericStringResultQuery message, IExecutionContext context)
+    public ValueTask<string> HandleAsync(StubNonGenericStringResultQuery message, ErgosfareContext context)
     {
         IsCalled = true;
         return ValueTask.FromResult(string.Empty);
@@ -47,7 +47,7 @@ public class StubNonGenericStreamStringResultQueryHandler: IStreamQueryHandler<S
     /// <param name="message">The query message.</param>
     /// <param name="context">The execution context.</param>
     /// <returns>An asynchronous stream of strings.</returns>
-    public async IAsyncEnumerable<string> StreamAsync(StubNonGenericStreamStringResultQuery message, IExecutionContext context)
+    public async IAsyncEnumerable<string> StreamAsync(StubNonGenericStreamStringResultQuery message, ErgosfareContext context)
     {
         IsCalled = true;
         await Task.Delay(1, context.CancellationToken);

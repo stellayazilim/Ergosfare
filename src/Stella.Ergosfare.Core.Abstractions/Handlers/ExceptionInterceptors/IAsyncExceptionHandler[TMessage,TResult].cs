@@ -29,5 +29,5 @@ public interface IAsyncExceptionInterceptor<in TMessage, in TResult> :
     /// A <see cref="ValueTask{Object}"/> whose result is the (possibly replaced) result that
     /// continues through the pipeline, or <c>null</c> to keep the current result.
     /// </returns>
-    ValueTask<object?> HandleAsync(TMessage message, TResult? result, Exception exception, IExecutionContext context);
+    ValueTask<object?> HandleAsync(TMessage message, TResult? result, Exception exception, ErgosfareContext context);
 }

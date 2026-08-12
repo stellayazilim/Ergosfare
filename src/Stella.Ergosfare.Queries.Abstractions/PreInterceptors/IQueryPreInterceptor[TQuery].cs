@@ -20,8 +20,8 @@ namespace Stella.Ergosfare.Queries.Abstractions;
 public interface IQueryPreInterceptor<TQuery> : IQuery, IAsyncPreInterceptor<TQuery>
     where TQuery : IQuery
 {
-    /// <inheritdoc cref="IAsyncPreInterceptor{TMessage}.HandleAsync(TMessage,IExecutionContext)"/>
-    async ValueTask<object> IAsyncPreInterceptor<TQuery>.HandleAsync(TQuery query, IExecutionContext context)
+    /// <inheritdoc cref="IAsyncPreInterceptor{TMessage}.HandleAsync(TMessage,ErgosfareContext)"/>
+    async ValueTask<object> IAsyncPreInterceptor<TQuery>.HandleAsync(TQuery query, ErgosfareContext context)
         => await HandleAsync(query, context);
 
     /// <summary>
@@ -30,5 +30,5 @@ public interface IQueryPreInterceptor<TQuery> : IQuery, IAsyncPreInterceptor<TQu
     /// </summary>
     /// <param name="query">The query to intercept.</param>
     /// <param name="context">The current execution context.</param>
-    new ValueTask<TQuery> HandleAsync(TQuery query, IExecutionContext context);
+    new ValueTask<TQuery> HandleAsync(TQuery query, ErgosfareContext context);
 }

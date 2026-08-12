@@ -1,8 +1,8 @@
 using Stella.Ergosfare.Command.Test.__stubs__;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
-using Stella.Ergosfare.Core.Internal.Contexts;
 #pragma warning disable CS0618 // Type or member is obsolete
 
 namespace Stella.Ergosfare.Command.Test;
@@ -19,6 +19,8 @@ public class CommandPreInterceptorTResultTResultTests
     /// A test implementation of <see cref="ICommandPreInterceptor{TCommand, TResult}"/>
     /// for <see cref="StubNonGenericCommand"/> commands that returns the same command instance it receives.
     /// </summary>
+    // Invoked directly below, never dispatched — deliberately outside the compiled closure.
+    [ExcludeFromDiscovery]
     private class TestCommandTResultTResultPreInterceptor: ICommandPreInterceptor<StubNonGenericCommand, StubNonGenericCommand>
     {
         
@@ -30,7 +32,7 @@ public class CommandPreInterceptorTResultTResultTests
         /// <returns>
         /// A <see cref="Task{TResult}"/> containing the same <paramref name="command"/> instance.
         /// </returns>
-        public ValueTask<StubNonGenericCommand> HandleAsync(StubNonGenericCommand command, IExecutionContext context)
+        public ValueTask<StubNonGenericCommand> HandleAsync(StubNonGenericCommand command, ErgosfareContext context)
         {
             return ValueTask.FromResult(command);
         }
@@ -50,7 +52,7 @@ public class CommandPreInterceptorTResultTResultTests
         IAsyncPreInterceptor<StubNonGenericCommand> interceptor = new TestCommandTResultTResultPreInterceptor();
         
         // act
-        var result = await interceptor.HandleAsync(new StubNonGenericCommand(), new ErgosfareExecutionContext(null, default));
+        var result = await interceptor.HandleAsync(new StubNonGenericCommand(), new ErgosfareContext(null, default));
         
         // asssert
         Assert.IsType<StubNonGenericCommand>(result);

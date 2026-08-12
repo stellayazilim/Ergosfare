@@ -1,6 +1,5 @@
 ﻿using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Abstractions.StagedPlans;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Internal.Factories;
@@ -12,25 +11,36 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// the same advisory contract and gates apply.
 /// </summary>
 internal sealed class StagedResultPipelineExecutor<TMessage, TResult>(
-    IMessageDescriptor descriptor,
     IMessageDependenciesFactory dependenciesFactory,
-    IResultAdapterService? resultAdapterService,
     string[] groups,
     StagedResultPlan<TMessage, TResult> plan) : IPipelineExecutor<TResult>
     where TMessage : IMessage
 {
-    private readonly SingleAsyncHandlerMediationStrategy<TMessage, TResult> _strategy = new(resultAdapterService);
+    private readonly SingleAsyncHandlerMediationStrategy<TMessage, TResult> _strategy = new();
 
-    private readonly ResultAdapterService? _concreteAdapters = resultAdapterService as ResultAdapterService;
-    private readonly bool _foreignAdapters = resultAdapterService is not null and not ResultAdapterService;
+    // The identity of the result slot's effective adapter — the attribute tiers plus the
+    // container's default, resolved once on the first dispatch (the default tier needs
+    // the provider; the container is sealed after build, so the resolution never
+    // changes). Part of the plan gate below: the plan is only trusted while its baked
+    // adapter is exactly the one the runtime binds (both null in the overwhelmingly
+    // common case), so a plan emitted without the slot's value-path branches never
+    // serves an adapted pipeline.
+    private Type? _effectiveResultAdapterType;
+    private volatile bool _resultAdapterResolved;
 
     private IMessageDependencies? _cachedDependencies;
-    private int _cachedVersion = int.MinValue;
     private bool _useStagedPlan;
     private bool _useDirectConstruction;
 
-    public ValueTask<TResult> Execute(object message, IExecutionContext context, IServiceProvider serviceProvider)
+    public ValueTask<TResult> Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider)
     {
+        if (!_resultAdapterResolved)
+        {
+            _effectiveResultAdapterType = global::Stella.Ergosfare.Core.Abstractions.Results
+                .ResultAdapterBinding.For<TMessage, TResult>(serviceProvider)?.GetType();
+            _resultAdapterResolved = true;
+        }
+
         var dependencies = GetDependencies();
 
         if (_useStagedPlan)
@@ -47,31 +57,24 @@ internal sealed class StagedResultPipelineExecutor<TMessage, TResult>(
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
-            // Read before the build: a registration completing mid-build must land as a
-            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
-            var registryVersion = typedFactory.CurrentRegistryVersion;
-            var cached = _cachedDependencies;
-
-            if (cached is not null && _cachedVersion == registryVersion)
+            if (_cachedDependencies is { } cached)
             {
                 return cached;
             }
 
-            var dependencies = typedFactory.Create(typeof(TMessage), descriptor, groups);
+            var dependencies = typedFactory.Create(typeof(TMessage), groups);
             _cachedDependencies = dependencies;
-            _useStagedPlan = !_foreignAdapters
-                && (_concreteAdapters is null || _concreteAdapters.IsEmpty)
+            _useStagedPlan = plan.Composition.ResultAdapterType == _effectiveResultAdapterType
                 && dependencies is MessageDependencies { MemoizedInstances: false } fastDependencies
                 && StagedPlanGate.Matches(fastDependencies, plan.Composition);
             _useDirectConstruction = _useStagedPlan
                 && plan.SupportsDirectConstruction
                 && StagedPlanGate.AllPlainTransient(typedFactory, plan.Composition);
-            _cachedVersion = registryVersion;
             return dependencies;
         }
 
         _useStagedPlan = false;
         _useDirectConstruction = false;
-        return dependenciesFactory.Create(typeof(TMessage), descriptor, groups);
+        return dependenciesFactory.Create(typeof(TMessage), groups);
     }
 }

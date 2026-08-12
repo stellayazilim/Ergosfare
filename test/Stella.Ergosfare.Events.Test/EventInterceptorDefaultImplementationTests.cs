@@ -1,6 +1,6 @@
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
-using Stella.Ergosfare.Core.Internal.Contexts;
 using Stella.Ergosfare.Events.Abstractions;
 
 namespace Stella.Ergosfare.Events.Test;
@@ -13,13 +13,17 @@ namespace Stella.Ergosfare.Events.Test;
 /// </summary>
 public class EventInterceptorDefaultImplementationTests
 {
+    // These probes are invoked directly by the tests below, never dispatched — deliberately
+    // outside the compiled closure, which is what silences ERGOSG001 for the private types.
+    [ExcludeFromDiscovery]
     private record TestEvent : IEvent;
 
+    [ExcludeFromDiscovery]
     private class TestPreInterceptor : IEventPreInterceptor
     {
         public bool Called;
 
-        public ValueTask HandleAsync(IEvent @event, IExecutionContext executionContext)
+        public ValueTask HandleAsync(IEvent @event, ErgosfareContext executionContext)
         {
             Called = true;
             return ValueTask.CompletedTask;
@@ -30,35 +34,37 @@ public class EventInterceptorDefaultImplementationTests
     {
         public static readonly TestEvent Replacement = new();
 
-        public ValueTask<TestEvent> HandleAsync(TestEvent @event, IExecutionContext context)
+        public ValueTask<TestEvent> HandleAsync(TestEvent @event, ErgosfareContext context)
         {
             return ValueTask.FromResult(Replacement);
         }
     }
 
+    [ExcludeFromDiscovery]
     private class TestPostInterceptor : IEventPostInterceptor
     {
         public bool Called;
 
-        public ValueTask HandleAsync(IEvent @event, ValueTask result, IExecutionContext executionContext)
+        public ValueTask HandleAsync(IEvent @event, ValueTask result, ErgosfareContext executionContext)
         {
             Called = true;
             return ValueTask.CompletedTask;
         }
     }
 
+    [ExcludeFromDiscovery]
     private class TestTypedPostInterceptor : IEventPostInterceptor<TestEvent>
     {
         public bool Called;
 
-        public ValueTask HandleAsync(TestEvent @event, ValueTask result, IExecutionContext executionContext)
+        public ValueTask HandleAsync(TestEvent @event, ValueTask result, ErgosfareContext executionContext)
         {
             Called = true;
             return ValueTask.CompletedTask;
         }
     }
 
-    private static ErgosfareExecutionContext CreateContext() => new(null, default);
+    private static ErgosfareContext CreateContext() => new(null, default);
 
     [Fact]
     [Trait("Category", "Unit")]

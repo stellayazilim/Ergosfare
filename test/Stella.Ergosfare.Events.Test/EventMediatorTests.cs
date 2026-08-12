@@ -24,7 +24,7 @@ public class EventMediatorTests
         var services = new ServiceCollection()
             .AddErgosfare(
                 x => x.AddEventModule(
-                    e => e.RegisterFromAssembly(Assembly.GetExecutingAssembly())
+                    e => e.Register<StubNonGenericEventHandler1>()
                     ))
             .BuildServiceProvider();
         var mediator = services.GetRequiredService<IEventMediator>();

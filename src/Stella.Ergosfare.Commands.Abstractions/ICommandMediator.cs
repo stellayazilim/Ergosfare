@@ -40,18 +40,18 @@ public interface ICommandMediator
     /// <param name="command">The command to send.</param>
     /// <param name="context">The externally owned execution context to dispatch under.</param>
     /// <param name="commandMediationSettings">Optional mediation settings (groups etc.).</param>
-    ValueTask SendAsync(ICommand command, Core.Abstractions.IExecutionContext context,
+    ValueTask SendAsync(ICommand command, Core.Abstractions.ErgosfareContext context,
         CommandMediationSettings? commandMediationSettings = null);
 
     /// <summary>
     /// Result-producing counterpart of
-    /// <see cref="SendAsync(ICommand, Core.Abstractions.IExecutionContext, CommandMediationSettings?)"/>.
+    /// <see cref="SendAsync(ICommand, Core.Abstractions.ErgosfareContext, CommandMediationSettings?)"/>.
     /// </summary>
     /// <typeparam name="TResult">The expected result type of the command.</typeparam>
     /// <param name="command">The command to send.</param>
     /// <param name="context">The externally owned execution context to dispatch under.</param>
     /// <param name="commandMediationSettings">Optional mediation settings (groups etc.).</param>
-    ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, Core.Abstractions.IExecutionContext context,
+    ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, Core.Abstractions.ErgosfareContext context,
         CommandMediationSettings? commandMediationSettings = null);
 
     /// <summary>

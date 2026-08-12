@@ -41,7 +41,7 @@ public class GeneratedPlanProviderConstructionTests
 
         public bool ViaPlanFactory { get; init; }
 
-        public ValueTask HandleAsync(InjectedCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(InjectedCommand command, ErgosfareContext context)
         {
             context.Set("handlerId", _id);
             context.Set("dependencyId", dependency.Id);
@@ -89,7 +89,7 @@ public class GeneratedPlanProviderConstructionTests
     [ExcludeFromDiscovery]
     public sealed class ScopedInjectedCommandHandler(IProbeDependency dependency) : ICommandHandler<ScopedInjectedCommand>
     {
-        public ValueTask HandleAsync(ScopedInjectedCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(ScopedInjectedCommand command, ErgosfareContext context)
         {
             context.Set("dependencyId", dependency.Id);
             return ValueTask.CompletedTask;
@@ -140,7 +140,7 @@ public class GeneratedPlanProviderConstructionTests
     {
         private readonly Guid _id = Guid.NewGuid();
 
-        public ValueTask HandleAsync(OverriddenInjectedCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(OverriddenInjectedCommand command, ErgosfareContext context)
         {
             _ = dependency;
             context.Set("handlerId", _id);

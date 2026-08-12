@@ -21,7 +21,7 @@ public interface IStreamHandler<in TMessage, out TResult>
     /// <inheritdoc cref="IHandler{TMessage, TResult}.Handle"/>
     IAsyncEnumerable<TResult> IHandler<TMessage, IAsyncEnumerable<TResult>>.Handle(
         TMessage message, 
-        IExecutionContext context)
+        ErgosfareContext context)
     {
         return StreamAsync(message, context);
     }
@@ -35,5 +35,5 @@ public interface IStreamHandler<in TMessage, out TResult>
     /// <returns>
     /// An <see cref="IAsyncEnumerable{TResult}"/> representing the streamed asynchronous results of the message handling.
     /// </returns>
-    IAsyncEnumerable<TResult> StreamAsync(TMessage message,IExecutionContext context);
+    IAsyncEnumerable<TResult> StreamAsync(TMessage message,ErgosfareContext context);
 }

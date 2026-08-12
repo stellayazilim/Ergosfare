@@ -31,4 +31,17 @@ internal readonly record struct LocationInfo(string FilePath, TextSpan TextSpan,
 
         return null;
     }
+
+    /// <summary>
+    ///     Captures the location of a syntax node, or <c>null</c> when the node carries no
+    ///     source location.
+    /// </summary>
+    public static LocationInfo? From(SyntaxNode node)
+    {
+        var location = node.GetLocation();
+
+        return location.SourceTree is null
+            ? null
+            : new LocationInfo(location.SourceTree.FilePath, location.SourceSpan, location.GetLineSpan().Span);
+    }
 }

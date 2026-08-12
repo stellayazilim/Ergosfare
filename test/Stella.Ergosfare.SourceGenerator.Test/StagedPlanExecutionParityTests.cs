@@ -47,7 +47,7 @@ public class StagedPlanExecutionParityTests
 
             public sealed class GenHappyCommandHandler : ICommandHandler<GenHappyCommand>
             {
-                public ValueTask HandleAsync(GenHappyCommand command, IExecutionContext context)
+                public ValueTask HandleAsync(GenHappyCommand command, ErgosfareContext context)
                 {
                     Sink.Entries.Add("handler:" + command.Tag);
                     return default;
@@ -56,7 +56,7 @@ public class StagedPlanExecutionParityTests
 
             public sealed class GenHappyCommandPre : ICommandPreInterceptor<GenHappyCommand>
             {
-                public ValueTask<GenHappyCommand> HandleAsync(GenHappyCommand command, IExecutionContext context)
+                public ValueTask<GenHappyCommand> HandleAsync(GenHappyCommand command, ErgosfareContext context)
                 {
                     Sink.Entries.Add("pre:" + command.Tag);
                     return ValueTask.FromResult(new GenHappyCommand { Tag = "rewritten" });
@@ -65,7 +65,7 @@ public class StagedPlanExecutionParityTests
 
             public sealed class GenHappyCommandPost : ICommandPostInterceptor<GenHappyCommand>
             {
-                public ValueTask<object> HandleAsync(GenHappyCommand command, object messageResult, IExecutionContext context)
+                public ValueTask<object> HandleAsync(GenHappyCommand command, object messageResult, ErgosfareContext context)
                 {
                     Sink.Entries.Add("post:" + command.Tag);
                     return ValueTask.FromResult(messageResult);
@@ -74,7 +74,7 @@ public class StagedPlanExecutionParityTests
 
             public sealed class GenHappyCommandFinal : ICommandFinalInterceptor<GenHappyCommand>
             {
-                public ValueTask HandleAsync(GenHappyCommand command, object? messageResult, Exception? exception, IExecutionContext context)
+                public ValueTask HandleAsync(GenHappyCommand command, object? messageResult, Exception? exception, ErgosfareContext context)
                 {
                     Sink.Entries.Add("final:" + (exception == null ? "clean" : exception.Message));
                     return default;
@@ -88,7 +88,7 @@ public class StagedPlanExecutionParityTests
 
             public sealed class GenVoidSwallowCommandHandler : ICommandHandler<GenVoidSwallowCommand>
             {
-                public ValueTask HandleAsync(GenVoidSwallowCommand command, IExecutionContext context)
+                public ValueTask HandleAsync(GenVoidSwallowCommand command, ErgosfareContext context)
                 {
                     Sink.Entries.Add("handler");
                     throw new InvalidOperationException("void-boom");
@@ -97,7 +97,7 @@ public class StagedPlanExecutionParityTests
 
             public sealed class GenVoidSwallowCommandExceptionInterceptor : ICommandExceptionInterceptor<GenVoidSwallowCommand>
             {
-                public ValueTask<object> HandleAsync(GenVoidSwallowCommand command, object? messageResult, Exception exception, IExecutionContext context)
+                public ValueTask<object> HandleAsync(GenVoidSwallowCommand command, object? messageResult, Exception exception, ErgosfareContext context)
                 {
                     Sink.Entries.Add("exception:" + exception.Message);
                     return ValueTask.FromResult<object>(messageResult!);
@@ -106,7 +106,7 @@ public class StagedPlanExecutionParityTests
 
             public sealed class GenVoidSwallowCommandFinal : ICommandFinalInterceptor<GenVoidSwallowCommand>
             {
-                public ValueTask HandleAsync(GenVoidSwallowCommand command, object? messageResult, Exception? exception, IExecutionContext context)
+                public ValueTask HandleAsync(GenVoidSwallowCommand command, object? messageResult, Exception? exception, ErgosfareContext context)
                 {
                     Sink.Entries.Add("final:" + (exception == null ? "clean" : exception.Message));
                     return default;
@@ -119,7 +119,7 @@ public class StagedPlanExecutionParityTests
 
             public sealed class GenSwallowCommandHandler : ICommandHandler<GenSwallowCommand, string>
             {
-                public ValueTask<string> HandleAsync(GenSwallowCommand command, IExecutionContext context)
+                public ValueTask<string> HandleAsync(GenSwallowCommand command, ErgosfareContext context)
                 {
                     Sink.Entries.Add("handler");
                     throw new InvalidOperationException("boom");
@@ -128,7 +128,7 @@ public class StagedPlanExecutionParityTests
 
             public sealed class GenSwallowCommandExceptionInterceptor : ICommandExceptionInterceptor<GenSwallowCommand>
             {
-                public ValueTask<object> HandleAsync(GenSwallowCommand command, object? messageResult, Exception exception, IExecutionContext context)
+                public ValueTask<object> HandleAsync(GenSwallowCommand command, object? messageResult, Exception exception, ErgosfareContext context)
                 {
                     Sink.Entries.Add("exception:" + exception.Message);
                     return ValueTask.FromResult<object>(messageResult!);
@@ -137,7 +137,7 @@ public class StagedPlanExecutionParityTests
 
             public sealed class GenSwallowCommandFinal : ICommandFinalInterceptor<GenSwallowCommand>
             {
-                public ValueTask HandleAsync(GenSwallowCommand command, object? messageResult, Exception? exception, IExecutionContext context)
+                public ValueTask HandleAsync(GenSwallowCommand command, object? messageResult, Exception? exception, ErgosfareContext context)
                 {
                     Sink.Entries.Add("final:" + (exception == null ? "clean" : exception.Message));
                     return default;
@@ -150,7 +150,7 @@ public class StagedPlanExecutionParityTests
 
             public sealed class GenPropagateCommandHandler : ICommandHandler<GenPropagateCommand>
             {
-                public ValueTask HandleAsync(GenPropagateCommand command, IExecutionContext context)
+                public ValueTask HandleAsync(GenPropagateCommand command, ErgosfareContext context)
                 {
                     throw new InvalidOperationException("unhandled");
                 }
@@ -158,7 +158,7 @@ public class StagedPlanExecutionParityTests
 
             public sealed class GenPropagateCommandFinal : ICommandFinalInterceptor<GenPropagateCommand>
             {
-                public ValueTask HandleAsync(GenPropagateCommand command, object? messageResult, Exception? exception, IExecutionContext context)
+                public ValueTask HandleAsync(GenPropagateCommand command, object? messageResult, Exception? exception, ErgosfareContext context)
                 {
                     Sink.Entries.Add("final:" + (exception == null ? "clean" : exception.Message));
                     return default;
@@ -171,7 +171,7 @@ public class StagedPlanExecutionParityTests
 
             public sealed class GenAbortCommandHandler : ICommandHandler<GenAbortCommand, string>
             {
-                public ValueTask<string> HandleAsync(GenAbortCommand command, IExecutionContext context)
+                public ValueTask<string> HandleAsync(GenAbortCommand command, ErgosfareContext context)
                 {
                     Sink.Entries.Add("handler");
                     return ValueTask.FromResult("done");
@@ -180,7 +180,7 @@ public class StagedPlanExecutionParityTests
 
             public sealed class GenAbortCommandPre : ICommandPreInterceptor<GenAbortCommand>
             {
-                public ValueTask<GenAbortCommand> HandleAsync(GenAbortCommand command, IExecutionContext context)
+                public ValueTask<GenAbortCommand> HandleAsync(GenAbortCommand command, ErgosfareContext context)
                 {
                     Sink.Entries.Add("pre");
                     context.Abort();
@@ -190,7 +190,7 @@ public class StagedPlanExecutionParityTests
 
             public sealed class GenAbortCommandExceptionInterceptor : ICommandExceptionInterceptor<GenAbortCommand>
             {
-                public ValueTask<object> HandleAsync(GenAbortCommand command, object? messageResult, Exception exception, IExecutionContext context)
+                public ValueTask<object> HandleAsync(GenAbortCommand command, object? messageResult, Exception exception, ErgosfareContext context)
                 {
                     Sink.Entries.Add("exception");
                     return ValueTask.FromResult<object>(messageResult!);
@@ -199,7 +199,7 @@ public class StagedPlanExecutionParityTests
 
             public sealed class GenAbortCommandFinal : ICommandFinalInterceptor<GenAbortCommand>
             {
-                public ValueTask HandleAsync(GenAbortCommand command, object? messageResult, Exception? exception, IExecutionContext context)
+                public ValueTask HandleAsync(GenAbortCommand command, object? messageResult, Exception? exception, ErgosfareContext context)
                 {
                     Sink.Entries.Add("final");
                     return default;
@@ -212,13 +212,13 @@ public class StagedPlanExecutionParityTests
 
             public sealed class GenRewriteQueryHandler : IQueryHandler<GenRewriteQuery, int>
             {
-                public ValueTask<int> HandleAsync(GenRewriteQuery query, IExecutionContext context)
+                public ValueTask<int> HandleAsync(GenRewriteQuery query, ErgosfareContext context)
                     => ValueTask.FromResult(7);
             }
 
             public sealed class GenRewriteQueryPost : IQueryPostInterceptor<GenRewriteQuery, int>
             {
-                public ValueTask<int> HandleAsync(GenRewriteQuery query, int queryResult, IExecutionContext context)
+                public ValueTask<int> HandleAsync(GenRewriteQuery query, int queryResult, ErgosfareContext context)
                     => ValueTask.FromResult(queryResult + 35);
             }
         }
@@ -353,6 +353,30 @@ public class StagedPlanExecutionParityTests
         // produced, so the caller gets the result type's default and no exception.
         Assert.Null(result);
         Assert.Equal(["pre", "final"], Entries);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public void FrozenComposition_MirrorsThePipelineTheDispatchActuallyRuns()
+    {
+        var (assembly, _) = Host.Value;
+        var commandType = assembly.GetType("TestApp.GenHappyCommand", throwOnError: true)!;
+
+        // The dual-run parity seam: the generator's frozen table derives, for the same
+        // message, exactly the stage sequence the registry-backed dispatch executes —
+        // which HappyPath_RewritesTheMessageAndRunsStagesInOrder pins observationally.
+        var frozen = GeneratedDispatchRoots.FindFrozenComposition(commandType);
+        Assert.NotNull(frozen);
+
+        var shape = frozen!.BuildShape(commandType, []);
+
+        Assert.Equal([assembly.GetType("TestApp.GenHappyCommandHandler")!], shape.Handlers);
+        Assert.Empty(shape.IndirectHandlers);
+        Assert.Equal([assembly.GetType("TestApp.GenHappyCommandPre")!], shape.PreInterceptors);
+        Assert.Equal([assembly.GetType("TestApp.GenHappyCommandPost")!], shape.PostInterceptors);
+        Assert.Empty(shape.ExceptionInterceptors);
+        Assert.Equal([assembly.GetType("TestApp.GenHappyCommandFinal")!], shape.FinalInterceptors);
     }
 
     [Fact]

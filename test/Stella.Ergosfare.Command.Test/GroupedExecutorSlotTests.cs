@@ -22,7 +22,7 @@ public class GroupedExecutorSlotTests
     [Group("east")]
     public sealed class EastHandler : ICommandHandler<RoutedCommand>
     {
-        public ValueTask HandleAsync(RoutedCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(RoutedCommand command, ErgosfareContext context)
         {
             context.Set("ran", "east");
             return ValueTask.CompletedTask;
@@ -33,7 +33,7 @@ public class GroupedExecutorSlotTests
     [Group("west")]
     public sealed class WestHandler : ICommandHandler<RoutedCommand>
     {
-        public ValueTask HandleAsync(RoutedCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(RoutedCommand command, ErgosfareContext context)
         {
             context.Set("ran", "west");
             return ValueTask.CompletedTask;
@@ -74,7 +74,7 @@ public class GroupedExecutorSlotTests
     [Group("east")]
     public sealed class EastEchoHandler : ICommandHandler<RoutedEcho, string>
     {
-        public ValueTask<string> HandleAsync(RoutedEcho command, IExecutionContext context)
+        public ValueTask<string> HandleAsync(RoutedEcho command, ErgosfareContext context)
             => ValueTask.FromResult("east");
     }
 
@@ -82,7 +82,7 @@ public class GroupedExecutorSlotTests
     [Group("west")]
     public sealed class WestEchoHandler : ICommandHandler<RoutedEcho, string>
     {
-        public ValueTask<string> HandleAsync(RoutedEcho command, IExecutionContext context)
+        public ValueTask<string> HandleAsync(RoutedEcho command, ErgosfareContext context)
             => ValueTask.FromResult("west");
     }
 

@@ -137,7 +137,7 @@ public class CommandMediator : ICommandMediator
     /// child here. The caller owns the context's lifetime; cancellation flows from the
     /// context.
     /// </summary>
-    public ValueTask SendAsync(ICommand commandConstruct, IExecutionContext context,
+    public ValueTask SendAsync(ICommand commandConstruct, ErgosfareContext context,
         CommandMediationSettings? commandMediationSettings = null)
     {
         return _engine is not null
@@ -154,9 +154,9 @@ public class CommandMediator : ICommandMediator
 
     /// <summary>
     /// Result-producing counterpart of
-    /// <see cref="SendAsync(ICommand, IExecutionContext, CommandMediationSettings?)"/>.
+    /// <see cref="SendAsync(ICommand, ErgosfareContext, CommandMediationSettings?)"/>.
     /// </summary>
-    public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct, IExecutionContext context,
+    public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct, ErgosfareContext context,
         CommandMediationSettings? commandMediationSettings = null)
     {
         return _engine is not null

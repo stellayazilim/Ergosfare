@@ -1,6 +1,6 @@
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
-using Stella.Ergosfare.Core.Internal.Contexts;
 using Stella.Ergosfare.Events.Abstractions;
 
 namespace Stella.Ergosfare.Events.Test;
@@ -17,35 +17,40 @@ namespace Stella.Ergosfare.Events.Test;
 /// </remarks>
 public class FilteredEventExceptionInterceptorTests
 {
+    // These probes are invoked directly by the tests below, never dispatched — deliberately
+    // outside the compiled closure, which is what silences ERGOSG001 for the private types.
+    [ExcludeFromDiscovery]
     private sealed record TestEvent : IEvent;
 
     private sealed class TestFault() : Exception("fault");
 
     private sealed class DerivedTestFault() : Exception("derived");
 
+    [ExcludeFromDiscovery]
     private sealed class TypedEventInterceptor : IEventExceptionInterceptorFor<TestEvent, TestFault>
     {
         public TestFault? Received;
 
-        public ValueTask HandleAsync(TestEvent @event, TestFault exception, IExecutionContext context)
+        public ValueTask HandleAsync(TestEvent @event, TestFault exception, ErgosfareContext context)
         {
             Received = exception;
             return ValueTask.CompletedTask;
         }
     }
 
+    [ExcludeFromDiscovery]
     private sealed class ModuleWideEventInterceptor : IEventExceptionInterceptorFor<TestFault>
     {
         public TestFault? Received;
 
-        public ValueTask HandleAsync(IEvent @event, TestFault exception, IExecutionContext context)
+        public ValueTask HandleAsync(IEvent @event, TestFault exception, ErgosfareContext context)
         {
             Received = exception;
             return ValueTask.CompletedTask;
         }
     }
 
-    private static ErgosfareExecutionContext CreateContext() => new(null, default);
+    private static ErgosfareContext CreateContext() => new(null, default);
 
     [Fact]
     [Trait("Category", "Unit")]

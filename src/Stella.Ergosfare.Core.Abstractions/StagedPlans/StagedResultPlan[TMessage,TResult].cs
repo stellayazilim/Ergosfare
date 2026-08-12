@@ -6,10 +6,10 @@ public abstract class StagedResultPlan<TMessage, TResult> : StagedResultPlan
     where TMessage : IMessage
 {
     /// <inheritdoc cref="StagedVoidPlan{TMessage}.Execute"/>
-    public abstract ValueTask<TResult> Execute(TMessage message, IExecutionContext context, IServiceProvider serviceProvider);
+    public abstract ValueTask<TResult> Execute(TMessage message, ErgosfareContext context, IServiceProvider serviceProvider);
 
     /// <inheritdoc cref="StagedVoidPlan{TMessage}.ExecuteDirect"/>
-    public virtual ValueTask<TResult> ExecuteDirect(TMessage message, IExecutionContext context, IServiceProvider serviceProvider)
+    public virtual ValueTask<TResult> ExecuteDirect(TMessage message, ErgosfareContext context, IServiceProvider serviceProvider)
         => Execute(message, context, serviceProvider);
 
     /// <inheritdoc />

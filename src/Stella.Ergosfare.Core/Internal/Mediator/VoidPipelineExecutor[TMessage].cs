@@ -1,7 +1,6 @@
-using Stella.Ergosfare.Core.Abstractions;
+﻿using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Internal.Factories;
@@ -13,28 +12,34 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// <see cref="ResultPipelineExecutor{TMessage, TResult}"/>.
 /// </summary>
 internal sealed class VoidPipelineExecutor<TMessage>(
-    IMessageDescriptor descriptor,
     IMessageDependenciesFactory dependenciesFactory,
-    IResultAdapterService? resultAdapterService,
     string[] groups) : IPipelineExecutor
     where TMessage : IMessage
 {
-    private readonly SingleAsyncHandlerMediationStrategy<TMessage> _strategy = new(resultAdapterService);
+    private readonly SingleAsyncHandlerMediationStrategy<TMessage> _strategy = new();
 
-    private readonly ResultAdapterService? _concreteAdapters = resultAdapterService as ResultAdapterService;
-    private readonly bool _foreignAdapters = resultAdapterService is not null and not ResultAdapterService;
+    // Whether the pipeline's Unit slot has an effective adapter — the attribute tiers
+    // plus the container's default, resolved once on the first dispatch, so the fast
+    // paths below pay nothing when (as almost always) there is none.
+    private bool _hasResultAdapter;
+    private volatile bool _resultAdapterResolved;
 
     private IMessageDependencies? _cachedDependencies;
     private MessageDependencies? _cachedFastDependencies;
-    private int _cachedVersion = int.MinValue;
 
-    public ValueTask Execute(object message, IExecutionContext context, IServiceProvider serviceProvider)
+    public ValueTask Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider)
     {
+        if (!_resultAdapterResolved)
+        {
+            _hasResultAdapter = global::Stella.Ergosfare.Core.Abstractions.Results
+                .ResultAdapterBinding.For<TMessage, Unit>(serviceProvider) is not null;
+            _resultAdapterResolved = true;
+        }
+
         var dependencies = GetDependencies();
 
         if (_cachedFastDependencies?.FastSingleHandler is { } handlerReference
-            && !_foreignAdapters
-            && (_concreteAdapters is null || _concreteAdapters.IsEmpty))
+            && !_hasResultAdapter)
         {
             var handler = handlerReference.Resolve(serviceProvider);
 
@@ -67,23 +72,17 @@ internal sealed class VoidPipelineExecutor<TMessage>(
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
-            // Read before the build: a registration completing mid-build must land as a
-            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
-            var registryVersion = typedFactory.CurrentRegistryVersion;
-            var cached = _cachedDependencies;
-
-            if (cached is not null && _cachedVersion == registryVersion)
+            if (_cachedDependencies is { } cached)
             {
                 return cached;
             }
 
-            var dependencies = typedFactory.Create(typeof(TMessage), descriptor, groups);
+            var dependencies = typedFactory.Create(typeof(TMessage), groups);
             _cachedFastDependencies = dependencies as MessageDependencies;
             _cachedDependencies = dependencies;
-            _cachedVersion = registryVersion;
             return dependencies;
         }
 
-        return dependenciesFactory.Create(typeof(TMessage), descriptor, groups);
+        return dependenciesFactory.Create(typeof(TMessage), groups);
     }
 }

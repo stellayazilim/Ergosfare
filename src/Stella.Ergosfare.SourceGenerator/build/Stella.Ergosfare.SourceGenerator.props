@@ -10,6 +10,30 @@
         <CompilerVisibleProperty Include="ErgosfareSourceGeneratorScanReferences" />
     </ItemGroup>
 
+    <!-- Marks (or unmarks) this project as an Ergosfare composition root — the compilation
+         whose closure is complete, where the generator judges whole-closure dispatch
+         reachability (ERGOSG005-008). Unset, executable output kinds are treated as roots
+         and libraries are not; set
+
+             <ErgosfareCompositionRoot>true</ErgosfareCompositionRoot>
+
+         to force judgment in a library that composes the final pipeline (or false to
+         silence it in an executable). -->
+    <ItemGroup>
+        <CompilerVisibleProperty Include="ErgosfareCompositionRoot" />
+    </ItemGroup>
+
+    <!-- Opt-in compile-time handler trim: in a composition root with complete dispatch
+         manifests, handlers no dispatch site can reach are excluded from generated
+         registration (reported as ERGOSG008) so the linker can drop them. Set
+
+             <ErgosfareTrimUnusedHandlers>true</ErgosfareTrimUnusedHandlers>
+
+         to enable. -->
+    <ItemGroup>
+        <CompilerVisibleProperty Include="ErgosfareTrimUnusedHandlers" />
+    </ItemGroup>
+
     <!-- Force-opts an assembly back into cross-assembly discovery even though its name
          matches Ergosfare's reserved "Stella.Ergosfare" prefix (which is otherwise skipped,
          because the library's own contract interfaces inherit the module markers). Set

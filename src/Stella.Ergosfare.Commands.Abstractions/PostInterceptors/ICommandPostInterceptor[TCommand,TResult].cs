@@ -28,7 +28,7 @@ public interface ICommandPostInterceptor<in TCommand, TResult> :
 {
     /// <inheritdoc />
     async ValueTask<object> IAsyncPostInterceptor<TCommand, TResult>.HandleAsync(
-        TCommand command, TResult messageResult, IExecutionContext context)
+        TCommand command, TResult messageResult, ErgosfareContext context)
         => (await HandleAsync(command, messageResult, context));
 
     /// <summary>
@@ -41,5 +41,5 @@ public interface ICommandPostInterceptor<in TCommand, TResult> :
     /// A <see cref="ValueTask{TResult}"/> producing the (possibly modified) result that
     /// continues through the pipeline.
     /// </returns>
-    new ValueTask<TResult> HandleAsync(TCommand command, TResult commandResult, IExecutionContext context);
+    new ValueTask<TResult> HandleAsync(TCommand command, TResult commandResult, ErgosfareContext context);
 }

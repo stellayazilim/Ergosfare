@@ -1,7 +1,6 @@
-using Stella.Ergosfare.Core.Abstractions;
+﻿using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Internal.Factories;
@@ -20,19 +19,20 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// preserving semantics exactly.
 /// </summary>
 internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
-    IMessageDescriptor descriptor,
     IMessageDependenciesFactory dependenciesFactory,
-    IResultAdapterService? resultAdapterService,
     string[] groups,
     Func<THandler>? directHandlerFactory = null,
     Func<IServiceProvider, THandler>? providerHandlerFactory = null) : IPipelineExecutor
     where TMessage : IMessage
     where THandler : class, IAsyncHandler<TMessage>
 {
-    private readonly SingleAsyncHandlerMediationStrategy<TMessage> _strategy = new(resultAdapterService);
+    private readonly SingleAsyncHandlerMediationStrategy<TMessage> _strategy = new();
 
-    private readonly ResultAdapterService? _concreteAdapters = resultAdapterService as ResultAdapterService;
-    private readonly bool _foreignAdapters = resultAdapterService is not null and not ResultAdapterService;
+    // Whether the pipeline's Unit slot has an effective adapter — the attribute tiers
+    // plus the container's default, resolved once on the first dispatch, so the fast
+    // paths below pay nothing when (as almost always) there is none.
+    private bool _hasResultAdapter;
+    private volatile bool _resultAdapterResolved;
 
     // Compile-time construction paths for the planned handler; discarded up front for
     // disposable handlers — the container tracks transient disposables in the resolving
@@ -47,7 +47,6 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
 
     private IMessageDependencies? _cachedDependencies;
     private MessageDependencies? _cachedFastDependencies;
-    private int _cachedVersion = int.MinValue;
 
     // Re-validated with the dependency cache: true only while the registry's sole handler
     // is the planned type, instances are not memoized, and the handler's effective DI
@@ -55,13 +54,19 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
     // which GetRequiredService is observably nothing but a constructor call.
     private bool _useDirectConstruction;
 
-    public ValueTask Execute(object message, IExecutionContext context, IServiceProvider serviceProvider)
+    public ValueTask Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider)
     {
+        if (!_resultAdapterResolved)
+        {
+            _hasResultAdapter = global::Stella.Ergosfare.Core.Abstractions.Results
+                .ResultAdapterBinding.For<TMessage, Unit>(serviceProvider) is not null;
+            _resultAdapterResolved = true;
+        }
+
         var dependencies = GetDependencies();
 
         if (_cachedFastDependencies?.FastSingleHandler is { } handlerReference
-            && !_foreignAdapters
-            && (_concreteAdapters is null || _concreteAdapters.IsEmpty))
+            && !_hasResultAdapter)
         {
             // The handler-type re-check pins the racy flag to the reference actually in
             // hand: a version transition observed halfway can only route back through the
@@ -107,17 +112,12 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
-            // Read before the build: a registration completing mid-build must land as a
-            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
-            var registryVersion = typedFactory.CurrentRegistryVersion;
-            var cached = _cachedDependencies;
-
-            if (cached is not null && _cachedVersion == registryVersion)
+            if (_cachedDependencies is { } cached)
             {
                 return cached;
             }
 
-            var dependencies = typedFactory.Create(typeof(TMessage), descriptor, groups);
+            var dependencies = typedFactory.Create(typeof(TMessage), groups);
             var fastDependencies = dependencies as MessageDependencies;
             _cachedFastDependencies = fastDependencies;
             _cachedDependencies = dependencies;
@@ -125,11 +125,10 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
                 && fastDependencies is { MemoizedInstances: false, FastSingleHandler.HandlerType: var plannedType }
                 && plannedType == typeof(THandler)
                 && typedFactory.IsPlainTransientRegistration(typeof(THandler));
-            _cachedVersion = registryVersion;
             return dependencies;
         }
 
         _useDirectConstruction = false;
-        return dependenciesFactory.Create(typeof(TMessage), descriptor, groups);
+        return dependenciesFactory.Create(typeof(TMessage), groups);
     }
 }

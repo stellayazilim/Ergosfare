@@ -29,5 +29,5 @@ public interface IExceptionInterceptor<in TMessage, in TResult> : IExceptionInte
     /// The (possibly replaced) result that continues through the pipeline, or <c>null</c>
     /// to keep the current result.
     /// </returns>
-    object? Handle(TMessage message, TResult? messageResult, Exception exception, IExecutionContext context);
+    object? Handle(TMessage message, TResult? messageResult, Exception exception, ErgosfareContext context);
 }

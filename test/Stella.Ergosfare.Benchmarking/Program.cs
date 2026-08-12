@@ -45,26 +45,26 @@ public sealed class VoidCommand : ICommand { }
 
 public sealed class VoidCommandHandler : ICommandHandler<VoidCommand>
 {
-    public ValueTask HandleAsync(VoidCommand command, IExecutionContext context) => ValueTask.CompletedTask;
+    public ValueTask HandleAsync(VoidCommand command, ErgosfareContext context) => ValueTask.CompletedTask;
 }
 
 public sealed class IntQuery : IQuery<int> { }
 
 public sealed class IntQueryHandler : IQueryHandler<IntQuery, int>
 {
-    public ValueTask<int> HandleAsync(IntQuery query, IExecutionContext context) => ValueTask.FromResult(7);
+    public ValueTask<int> HandleAsync(IntQuery query, ErgosfareContext context) => ValueTask.FromResult(7);
 }
 
 public sealed class PingEvent : IEvent { }
 
 public sealed class FirstPingEventHandler : IEventHandler<PingEvent>
 {
-    public ValueTask HandleAsync(PingEvent @event, IExecutionContext context) => ValueTask.CompletedTask;
+    public ValueTask HandleAsync(PingEvent @event, ErgosfareContext context) => ValueTask.CompletedTask;
 }
 
 public sealed class SecondPingEventHandler : IEventHandler<PingEvent>
 {
-    public ValueTask HandleAsync(PingEvent @event, IExecutionContext context) => ValueTask.CompletedTask;
+    public ValueTask HandleAsync(PingEvent @event, ErgosfareContext context) => ValueTask.CompletedTask;
 }
 
 // Grouped variants on their own message types, so the grouped rows measure the grouped
@@ -76,7 +76,7 @@ public sealed class GroupedCommand : ICommand { }
 [Group("bench")]
 public sealed class GroupedCommandHandler : ICommandHandler<GroupedCommand>
 {
-    public ValueTask HandleAsync(GroupedCommand command, IExecutionContext context) => ValueTask.CompletedTask;
+    public ValueTask HandleAsync(GroupedCommand command, ErgosfareContext context) => ValueTask.CompletedTask;
 }
 
 public sealed class GroupedPingEvent : IEvent { }
@@ -84,13 +84,13 @@ public sealed class GroupedPingEvent : IEvent { }
 [Group("bench")]
 public sealed class FirstGroupedPingEventHandler : IEventHandler<GroupedPingEvent>
 {
-    public ValueTask HandleAsync(GroupedPingEvent @event, IExecutionContext context) => ValueTask.CompletedTask;
+    public ValueTask HandleAsync(GroupedPingEvent @event, ErgosfareContext context) => ValueTask.CompletedTask;
 }
 
 [Group("bench")]
 public sealed class SecondGroupedPingEventHandler : IEventHandler<GroupedPingEvent>
 {
-    public ValueTask HandleAsync(GroupedPingEvent @event, IExecutionContext context) => ValueTask.CompletedTask;
+    public ValueTask HandleAsync(GroupedPingEvent @event, ErgosfareContext context) => ValueTask.CompletedTask;
 }
 
 // Intercepted variants on their own message types: one pass-through pre- and one
@@ -102,18 +102,18 @@ public sealed class InterceptedCommand : ICommand { }
 
 public sealed class InterceptedCommandHandler : ICommandHandler<InterceptedCommand>
 {
-    public ValueTask HandleAsync(InterceptedCommand command, IExecutionContext context) => ValueTask.CompletedTask;
+    public ValueTask HandleAsync(InterceptedCommand command, ErgosfareContext context) => ValueTask.CompletedTask;
 }
 
 public sealed class InterceptedCommandPreInterceptor : ICommandPreInterceptor<InterceptedCommand>
 {
-    public ValueTask<InterceptedCommand> HandleAsync(InterceptedCommand command, IExecutionContext context)
+    public ValueTask<InterceptedCommand> HandleAsync(InterceptedCommand command, ErgosfareContext context)
         => ValueTask.FromResult(command);
 }
 
 public sealed class InterceptedCommandPostInterceptor : ICommandPostInterceptor<InterceptedCommand>
 {
-    public ValueTask<object> HandleAsync(InterceptedCommand command, object messageResult, IExecutionContext context)
+    public ValueTask<object> HandleAsync(InterceptedCommand command, object messageResult, ErgosfareContext context)
         => ValueTask.FromResult(messageResult);
 }
 
@@ -121,18 +121,18 @@ public sealed class InterceptedIntQuery : IQuery<int> { }
 
 public sealed class InterceptedIntQueryHandler : IQueryHandler<InterceptedIntQuery, int>
 {
-    public ValueTask<int> HandleAsync(InterceptedIntQuery query, IExecutionContext context) => ValueTask.FromResult(7);
+    public ValueTask<int> HandleAsync(InterceptedIntQuery query, ErgosfareContext context) => ValueTask.FromResult(7);
 }
 
 public sealed class InterceptedIntQueryPreInterceptor : IQueryPreInterceptor<InterceptedIntQuery>
 {
-    public ValueTask<InterceptedIntQuery> HandleAsync(InterceptedIntQuery query, IExecutionContext context)
+    public ValueTask<InterceptedIntQuery> HandleAsync(InterceptedIntQuery query, ErgosfareContext context)
         => ValueTask.FromResult(query);
 }
 
 public sealed class InterceptedIntQueryPostInterceptor : IQueryPostInterceptor<InterceptedIntQuery, int>
 {
-    public ValueTask<int> HandleAsync(InterceptedIntQuery query, int queryResult, IExecutionContext context)
+    public ValueTask<int> HandleAsync(InterceptedIntQuery query, int queryResult, ErgosfareContext context)
         => ValueTask.FromResult(queryResult);
 }
 

@@ -24,7 +24,7 @@ public class StreamFastLaneTests
     [ExcludeFromDiscovery]
     public sealed class NumberStreamHandler : IStreamQueryHandler<NumberStream, int>
     {
-        public async IAsyncEnumerable<int> StreamAsync(NumberStream query, IExecutionContext context)
+        public async IAsyncEnumerable<int> StreamAsync(NumberStream query, ErgosfareContext context)
         {
             context.Set("streamRan", true);
             yield return 1;
@@ -69,7 +69,7 @@ public class StreamFastLaneTests
     [Group("east")]
     public sealed class EastStreamHandler : IStreamQueryHandler<RoutedStream, string>
     {
-        public async IAsyncEnumerable<string> StreamAsync(RoutedStream query, IExecutionContext context)
+        public async IAsyncEnumerable<string> StreamAsync(RoutedStream query, ErgosfareContext context)
         {
             await Task.Yield();
             yield return "east";
@@ -80,7 +80,7 @@ public class StreamFastLaneTests
     [Group("west")]
     public sealed class WestStreamHandler : IStreamQueryHandler<RoutedStream, string>
     {
-        public async IAsyncEnumerable<string> StreamAsync(RoutedStream query, IExecutionContext context)
+        public async IAsyncEnumerable<string> StreamAsync(RoutedStream query, ErgosfareContext context)
         {
             await Task.Yield();
             yield return "west";

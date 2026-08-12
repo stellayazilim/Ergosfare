@@ -1,15 +1,15 @@
-using Stella.Ergosfare.Core.Internal.Contexts;
+using Stella.Ergosfare.Core.Abstractions;
 
 namespace Stella.Ergosfare.Core.Test;
 
 /// <summary>
-/// Unit tests for the data-carrier API of <see cref="ErgosfareExecutionContext"/> —
+/// Unit tests for the data-carrier API of <see cref="ErgosfareContext"/> —
 /// the context is a raw data carrier between handlers, so <c>Items</c>, <c>Set</c>,
 /// <c>Has</c>, <c>Get</c> and <c>TryGet</c> are its primary contract.
 /// </summary>
 public class ExecutionContextDataTests
 {
-    private static ErgosfareExecutionContext CreateContext(IDictionary<object, object?>? items = null) =>
+    private static ErgosfareContext CreateContext(IDictionary<object, object?>? items = null) =>
         new(items, CancellationToken.None);
 
     [Fact]

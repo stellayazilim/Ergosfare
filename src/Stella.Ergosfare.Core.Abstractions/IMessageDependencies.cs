@@ -1,5 +1,4 @@
-using Stella.Ergosfare.Core.Abstractions.Handlers;
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
+﻿using Stella.Ergosfare.Core.Abstractions.Handlers;
 
 namespace Stella.Ergosfare.Core.Abstractions;
 
@@ -19,30 +18,30 @@ public interface IMessageDependencies
     /// <summary>
     /// Gets the direct main handlers for the message.
     /// </summary>
-    IReadOnlyList<IHandlerReference<IHandler, IMainHandlerDescriptor>> Handlers { get; }
+    IReadOnlyList<IHandlerReference<IHandler>> Handlers { get; }
 
     /// <summary>
     /// Gets the indirect main handlers for the message (registered for an assignable message type).
     /// </summary>
-    IReadOnlyList<IHandlerReference<IHandler, IMainHandlerDescriptor>> IndirectHandlers { get; }
+    IReadOnlyList<IHandlerReference<IHandler>> IndirectHandlers { get; }
 
     /// <summary>
     /// Gets the pre-interceptors for the message (direct first, then indirect).
     /// </summary>
-    IReadOnlyList<IHandlerReference<IPreInterceptor, IPreInterceptorDescriptor>> PreInterceptors { get; }
+    IReadOnlyList<IHandlerReference<IPreInterceptor>> PreInterceptors { get; }
 
     /// <summary>
     /// Gets the post-interceptors for the message (direct first, then indirect).
     /// </summary>
-    IReadOnlyList<IHandlerReference<IPostInterceptor, IPostInterceptorDescriptor>> PostInterceptors { get; }
+    IReadOnlyList<IHandlerReference<IPostInterceptor>> PostInterceptors { get; }
 
     /// <summary>
     /// Gets the exception interceptors for the message (direct first, then indirect).
     /// </summary>
-    IReadOnlyList<IHandlerReference<IExceptionInterceptor, IExceptionInterceptorDescriptor>> ExceptionInterceptors { get; }
+    IReadOnlyList<IHandlerReference<IExceptionInterceptor>> ExceptionInterceptors { get; }
 
     /// <summary>
     /// Gets the final interceptors for the message (direct first, then indirect).
     /// </summary>
-    IReadOnlyList<IHandlerReference<IFinalInterceptor, IFinalInterceptorDescriptor>> FinalInterceptors { get; }
+    IReadOnlyList<IHandlerReference<IFinalInterceptor>> FinalInterceptors { get; }
 }

@@ -1,4 +1,5 @@
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Queries.Abstractions;
 
@@ -11,12 +12,16 @@ namespace Stella.Ergosfare.Queries.Test;
 /// </summary>
 public class FilteredQueryExceptionInterceptorTests
 {
+    // These probes are invoked directly by the tests below, never dispatched — deliberately
+    // outside the compiled closure, which is what silences ERGOSG001 for the private types.
+    [ExcludeFromDiscovery]
     private sealed record TestQuery : IQuery<string>;
 
     private class TestFault() : Exception("fault");
 
     private sealed class DerivedTestFault : TestFault;
 
+    [ExcludeFromDiscovery]
     private sealed class ResultTypedQueryInterceptor : IQueryExceptionInterceptorFor<TestQuery, string, TestFault>
     {
         public const string Recovery = "recovered";
@@ -24,19 +29,20 @@ public class FilteredQueryExceptionInterceptorTests
         public TestFault? Received;
 
         public ValueTask<string?> HandleAsync(
-            TestQuery query, string? result, TestFault exception, IExecutionContext context)
+            TestQuery query, string? result, TestFault exception, ErgosfareContext context)
         {
             Received = exception;
             return ValueTask.FromResult<string?>(Recovery);
         }
     }
 
+    [ExcludeFromDiscovery]
     private sealed class ResultAgnosticQueryInterceptor : IQueryExceptionInterceptorFor<TestQuery, TestFault>
     {
         public TestFault? Received;
 
         public ValueTask<object> HandleAsync(
-            TestQuery query, object? messageResult, TestFault exception, IExecutionContext context)
+            TestQuery query, object? messageResult, TestFault exception, ErgosfareContext context)
         {
             Received = exception;
             return ValueTask.FromResult<object>(messageResult ?? Unit.Value);
@@ -45,7 +51,7 @@ public class FilteredQueryExceptionInterceptorTests
 
     // These facades hand the context straight through to the typed member without reading
     // it, and the concrete context is internal to the core assembly.
-    private static IExecutionContext CreateContext() => null!;
+    private static ErgosfareContext CreateContext() => null!;
 
     [Fact]
     [Trait("Category", "Unit")]

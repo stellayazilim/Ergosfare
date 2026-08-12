@@ -25,6 +25,6 @@ public static class Recording
         => new() { Items = { [PipelineRecorder.ItemsKey] = recorder } };
 
     /// <summary>Shorthand for a pipeline participant marking its own stage.</summary>
-    public static void Mark(this IExecutionContext context, string stage, string? detail = null)
+    public static void Mark(this ErgosfareContext context, string stage, string? detail = null)
         => PipelineRecorder.From(context).Mark(stage, detail);
 }

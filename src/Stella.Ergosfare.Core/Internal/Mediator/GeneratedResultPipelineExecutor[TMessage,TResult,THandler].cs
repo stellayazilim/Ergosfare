@@ -1,7 +1,6 @@
-using Stella.Ergosfare.Core.Abstractions;
+﻿using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Internal.Factories;
@@ -18,19 +17,20 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// </summary>
 #pragma warning disable CS8714 // TResult is used as a pattern type argument; handler contracts declare notnull results
 internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandler>(
-    IMessageDescriptor descriptor,
     IMessageDependenciesFactory dependenciesFactory,
-    IResultAdapterService? resultAdapterService,
     string[] groups,
     Func<THandler>? directHandlerFactory = null,
     Func<IServiceProvider, THandler>? providerHandlerFactory = null) : IPipelineExecutor<TResult>
     where TMessage : IMessage
     where THandler : class, IAsyncHandler<TMessage, TResult>
 {
-    private readonly SingleAsyncHandlerMediationStrategy<TMessage, TResult> _strategy = new(resultAdapterService);
+    private readonly SingleAsyncHandlerMediationStrategy<TMessage, TResult> _strategy = new();
 
-    private readonly ResultAdapterService? _concreteAdapters = resultAdapterService as ResultAdapterService;
-    private readonly bool _foreignAdapters = resultAdapterService is not null and not ResultAdapterService;
+    // Whether the pipeline's result slot has an effective adapter — the attribute tiers
+    // plus the container's default, resolved once on the first dispatch, so the fast
+    // paths below pay nothing when (as almost always) there is none.
+    private bool _hasResultAdapter;
+    private volatile bool _resultAdapterResolved;
 
     private static readonly bool HandlerIsDisposable =
         typeof(IDisposable).IsAssignableFrom(typeof(THandler)) || typeof(IAsyncDisposable).IsAssignableFrom(typeof(THandler));
@@ -40,16 +40,21 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
 
     private IMessageDependencies? _cachedDependencies;
     private MessageDependencies? _cachedFastDependencies;
-    private int _cachedVersion = int.MinValue;
     private bool _useDirectConstruction;
 
-    public ValueTask<TResult> Execute(object message, IExecutionContext context, IServiceProvider serviceProvider)
+    public ValueTask<TResult> Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider)
     {
+        if (!_resultAdapterResolved)
+        {
+            _hasResultAdapter = global::Stella.Ergosfare.Core.Abstractions.Results
+                .ResultAdapterBinding.For<TMessage, TResult>(serviceProvider) is not null;
+            _resultAdapterResolved = true;
+        }
+
         var dependencies = GetDependencies();
 
         if (_cachedFastDependencies?.FastSingleHandler is { } handlerReference
-            && !_foreignAdapters
-            && (_concreteAdapters is null || _concreteAdapters.IsEmpty))
+            && !_hasResultAdapter)
         {
             IHandler handler = _useDirectConstruction && handlerReference.HandlerType == typeof(THandler)
                 ? _directHandlerFactory is not null ? _directHandlerFactory() : _providerHandlerFactory!(serviceProvider)
@@ -87,17 +92,12 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
-            // Read before the build: a registration completing mid-build must land as a
-            // version mismatch on the next dispatch, never as a fresh stamp on stale deps.
-            var registryVersion = typedFactory.CurrentRegistryVersion;
-            var cached = _cachedDependencies;
-
-            if (cached is not null && _cachedVersion == registryVersion)
+            if (_cachedDependencies is { } cached)
             {
                 return cached;
             }
 
-            var dependencies = typedFactory.Create(typeof(TMessage), descriptor, groups);
+            var dependencies = typedFactory.Create(typeof(TMessage), groups);
             var fastDependencies = dependencies as MessageDependencies;
             _cachedFastDependencies = fastDependencies;
             _cachedDependencies = dependencies;
@@ -105,12 +105,11 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
                 && fastDependencies is { MemoizedInstances: false, FastSingleHandler.HandlerType: var plannedType }
                 && plannedType == typeof(THandler)
                 && typedFactory.IsPlainTransientRegistration(typeof(THandler));
-            _cachedVersion = registryVersion;
             return dependencies;
         }
 
         _useDirectConstruction = false;
-        return dependenciesFactory.Create(typeof(TMessage), descriptor, groups);
+        return dependenciesFactory.Create(typeof(TMessage), groups);
     }
 }
 #pragma warning restore CS8714

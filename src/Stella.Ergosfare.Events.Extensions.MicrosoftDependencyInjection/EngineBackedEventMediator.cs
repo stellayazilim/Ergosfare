@@ -1,6 +1,5 @@
-using Stella.Ergosfare.Core;
+﻿using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Strategies;
 
 namespace Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
 
@@ -14,7 +13,5 @@ namespace Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
 /// </summary>
 internal sealed class EngineBackedEventMediator(
     MessageDispatchEngine engine,
-    IServiceProvider serviceProvider,
-    ActualTypeOrFirstAssignableTypeMessageResolveStrategy messageResolveStrategy,
-    IResultAdapterService? resultAdapterService)
-    : EventMediator(engine, serviceProvider, messageResolveStrategy, resultAdapterService);
+    IServiceProvider serviceProvider)
+    : EventMediator(engine, serviceProvider);

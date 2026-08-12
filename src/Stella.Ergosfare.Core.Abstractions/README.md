@@ -2,7 +2,7 @@
 
 Core contracts of [Ergosfare](https://github.com/stellayazilim/Ergosfare): handler and
 interceptor interfaces (`IHandler<,>`, `IAsyncHandler<>`, pre/post/exception/final
-interceptors), the message registry and descriptor surfaces, `IExecutionContext` with
+interceptors), the frozen composition table, `ErgosfareContext` with
 scoped nested dispatch (`CreateScope()`), discovery attributes (`[Weight]`, `[Group]`,
 `[DiscoveryKey]`, `[ExcludeFromDiscovery]`, `[ExcludeFromPipeline]`) and the generated
 dispatch roots store.

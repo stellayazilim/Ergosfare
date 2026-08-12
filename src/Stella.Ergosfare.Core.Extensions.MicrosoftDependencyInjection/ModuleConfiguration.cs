@@ -1,14 +1,15 @@
-﻿using Stella.Ergosfare.Core.Abstractions.Registry;
+﻿using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
 /// <summary>
-/// Represents the configuration context for a module, providing access to the service collection and message registry.
+/// Represents the configuration context for a module, providing access to the service collection and the composition catalog.
 /// </summary>
 /// <param name="services">The service collection used for dependency injection.</param>
-/// <param name="messageRegistry">The message registry used for registering and resolving message types.</param>
-internal class ModuleConfiguration(IServiceCollection services, IMessageRegistry messageRegistry)
+/// <param name="compositions">This container's view of the frozen composition table.</param>
+internal class ModuleConfiguration(
+    IServiceCollection services, FrozenCompositionCatalog compositions)
     : IModuleConfiguration
 {
     /// <summary>
@@ -17,7 +18,7 @@ internal class ModuleConfiguration(IServiceCollection services, IMessageRegistry
     public IServiceCollection Services { get; } = services;
 
     /// <summary>
-    /// Gets the message registry for registering and resolving message types.
+    /// Gets this container's view of the frozen composition table.
     /// </summary>
-    public IMessageRegistry MessageRegistry { get; } = messageRegistry;
+    public FrozenCompositionCatalog Compositions { get; } = compositions;
 }

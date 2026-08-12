@@ -1,5 +1,4 @@
-using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
+﻿using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.StagedPlans;
 using Stella.Ergosfare.Core.Internal.Factories;
 
@@ -22,10 +21,9 @@ internal static class StagedPlanGate
            && StageMatches(dependencies.ExceptionInterceptors, composition.ExceptionInterceptorTypeArray)
            && StageMatches(dependencies.FinalInterceptors, composition.FinalInterceptorTypeArray);
 
-    private static bool StageMatches<THandler, TDescriptor>(
-        IReadOnlyList<IHandlerReference<THandler, TDescriptor>> stage,
+    private static bool StageMatches<THandler>(
+        IReadOnlyList<IHandlerReference<THandler>> stage,
         Type[] baked)
-        where TDescriptor : IHandlerDescriptor
     {
         if (stage.Count != baked.Length)
         {

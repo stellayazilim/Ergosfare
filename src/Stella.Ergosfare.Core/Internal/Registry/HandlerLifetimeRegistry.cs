@@ -1,6 +1,6 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 
 namespace Stella.Ergosfare.Core.Internal.Registry;
 
@@ -35,55 +35,35 @@ internal sealed class HandlerLifetimeRegistry(
     public bool IsPlainTransientRegistration(Type handlerType) => _plainTransients.Contains(handlerType);
 
     private readonly ConcurrentDictionary<Type, bool> _allSingletonByMessageType = new();
-    private int _version = -1;
 
     /// <summary>
-    /// Clears cached verdicts when the message registry version changes (runtime
-    /// registrations can add handlers whose lifetime is unknown).
+    /// Whether every participant of a message's pipeline is registered as a singleton —
+    /// the memoized fast path's eligibility. Computed once per message type: a
+    /// composition is settled before the container is built, so the verdict cannot change.
     /// </summary>
-    public void InvalidateIfRegistryChanged(int registryVersion)
-    {
-        if (Volatile.Read(ref _version) == registryVersion)
-        {
-            return;
-        }
-
-        _allSingletonByMessageType.Clear();
-        Volatile.Write(ref _version, registryVersion);
-    }
-
-    public bool AreAllHandlersSingleton(Type messageType, IMessageDescriptor descriptor)
+    public bool AreAllParticipantsSingleton(Type messageType, FrozenPipelineShape shape)
     {
         if (_allSingletonByMessageType.TryGetValue(messageType, out var cached))
         {
             return cached;
         }
 
-        var verdict = Compute(descriptor);
+        var verdict = AllSingleton(shape.Handlers)
+                      && AllSingleton(shape.IndirectHandlers)
+                      && AllSingleton(shape.PreInterceptors)
+                      && AllSingleton(shape.PostInterceptors)
+                      && AllSingleton(shape.ExceptionInterceptors)
+                      && AllSingleton(shape.FinalInterceptors);
+
         _allSingletonByMessageType[messageType] = verdict;
         return verdict;
     }
 
-    private bool Compute(IMessageDescriptor descriptor)
+    private bool AllSingleton(IReadOnlyList<Type> participants)
     {
-        return AllSingleton(descriptor.Handlers)
-               && AllSingleton(descriptor.IndirectHandlers)
-               && AllSingleton(descriptor.PreInterceptors)
-               && AllSingleton(descriptor.IndirectPreInterceptors)
-               && AllSingleton(descriptor.PostInterceptors)
-               && AllSingleton(descriptor.IndirectPostInterceptors)
-               && AllSingleton(descriptor.ExceptionInterceptors)
-               && AllSingleton(descriptor.IndirectExceptionInterceptors)
-               && AllSingleton(descriptor.FinalInterceptors)
-               && AllSingleton(descriptor.IndirectFinalInterceptors);
-    }
-
-    private bool AllSingleton<TDescriptor>(IReadOnlyCollection<TDescriptor> descriptors)
-        where TDescriptor : IHandlerDescriptor
-    {
-        foreach (var descriptor in descriptors)
+        for (var i = 0; i < participants.Count; i++)
         {
-            if (!lifetimes.TryGetValue(descriptor.HandlerType, out var lifetime) || lifetime != ServiceLifetime.Singleton)
+            if (!lifetimes.TryGetValue(participants[i], out var lifetime) || lifetime != ServiceLifetime.Singleton)
             {
                 return false;
             }

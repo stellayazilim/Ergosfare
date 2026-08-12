@@ -39,34 +39,15 @@ public interface IMessageMediator
     /// <param name="message">The message instance to dispatch.</param>
     /// <param name="context">The externally owned execution context to dispatch under.</param>
     /// <param name="groups">Pipeline groups to dispatch under; <c>null</c> selects the default group.</param>
-    ValueTask DispatchAsync(object message, IExecutionContext context, IEnumerable<string>? groups = null);
+    ValueTask DispatchAsync(object message, ErgosfareContext context, IEnumerable<string>? groups = null);
 
     /// <summary>
     /// Result-producing counterpart of
-    /// <see cref="DispatchAsync(object, IExecutionContext, IEnumerable{string})"/>.
+    /// <see cref="DispatchAsync(object, ErgosfareContext, IEnumerable{string})"/>.
     /// </summary>
     /// <typeparam name="TResult">The result type produced by the pipeline.</typeparam>
     /// <param name="message">The message instance to dispatch.</param>
     /// <param name="context">The externally owned execution context to dispatch under.</param>
     /// <param name="groups">Pipeline groups to dispatch under; <c>null</c> selects the default group.</param>
-    ValueTask<TResult> DispatchAsync<TResult>(object message, IExecutionContext context, IEnumerable<string>? groups = null);
-
-    
-    /// <summary>
-    /// Dispatches a message of type <typeparamref name="TMessage"/> to the appropriate handler(s)
-    /// and returns the result of type <typeparamref name="TMessageResult"/>.
-    /// </summary>
-    /// <typeparam name="TMessage">The type of the message being mediated. Must be non-nullable.</typeparam>
-    /// <typeparam name="TMessageResult">The type of the result returned from the handler.</typeparam>
-    /// <param name="message">The message instance to mediate.</param>
-    /// <param name="options">The options controlling message resolution, dependency creation, and mediation strategy.</param>
-    /// <returns>The result produced by the message handler(s).</returns>
-    /// <remarks>
-    /// Implementations are expected to handle the resolution of handlers for the specified message,
-    /// create necessary dependencies, and execute the mediation strategy defined in <paramref name="options"/>.
-    /// The mediation process may throw exceptions if no handlers are found or if there are issues
-    /// resolving dependencies.
-    /// </remarks>
-    TMessageResult Mediate<TMessage, TMessageResult>(TMessage message, MediateOptions<TMessage, TMessageResult> options)
-        where TMessage : notnull;
+    ValueTask<TResult> DispatchAsync<TResult>(object message, ErgosfareContext context, IEnumerable<string>? groups = null);
 }

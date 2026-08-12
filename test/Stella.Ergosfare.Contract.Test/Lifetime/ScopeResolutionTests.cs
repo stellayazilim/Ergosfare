@@ -33,7 +33,7 @@ public sealed class ScopeResolutionTests
     [DiscoveryKey(Key)]
     public sealed class NeedsScopeHandler(ScopedDependency dependency) : ICommandHandler<NeedsScope>
     {
-        public ValueTask HandleAsync(NeedsScope command, IExecutionContext context)
+        public ValueTask HandleAsync(NeedsScope command, ErgosfareContext context)
         {
             command.SeenId = dependency.Id;
             return ValueTask.CompletedTask;

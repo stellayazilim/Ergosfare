@@ -25,7 +25,7 @@ public interface ICommandExceptionInterceptorFor<TException> :
 {
     /// <inheritdoc />
     async ValueTask<object> IAsyncExceptionInterceptor<ICommand>.HandleAsync(
-        ICommand command, object? messageResult, Exception exception, IExecutionContext context)
+        ICommand command, object? messageResult, Exception exception, ErgosfareContext context)
         // The cast cannot fail: the exception stage runs this interceptor only after its
         // filter accepted the exception.
         => await HandleAsync(command, messageResult, (TException)exception, context);
@@ -40,5 +40,5 @@ public interface ICommandExceptionInterceptorFor<TException> :
     /// <returns>
     /// A <see cref="ValueTask{Object}"/> producing the result that continues through the pipeline.
     /// </returns>
-    ValueTask<object> HandleAsync(ICommand command, object? messageResult, TException exception, IExecutionContext context);
+    ValueTask<object> HandleAsync(ICommand command, object? messageResult, TException exception, ErgosfareContext context);
 }

@@ -26,7 +26,7 @@ public sealed class EventPublishTests
     [DiscoveryKey(Key)]
     public sealed class OrderPlacedInvoiceHandler : IEventHandler<OrderPlaced>
     {
-        public ValueTask HandleAsync(OrderPlaced @event, IExecutionContext context)
+        public ValueTask HandleAsync(OrderPlaced @event, ErgosfareContext context)
         {
             context.Mark("invoice");
             return ValueTask.CompletedTask;
@@ -36,7 +36,7 @@ public sealed class EventPublishTests
     [DiscoveryKey(Key)]
     public sealed class OrderPlacedWarehouseHandler : IEventHandler<OrderPlaced>
     {
-        public ValueTask HandleAsync(OrderPlaced @event, IExecutionContext context)
+        public ValueTask HandleAsync(OrderPlaced @event, ErgosfareContext context)
         {
             context.Mark("warehouse");
             return ValueTask.CompletedTask;
@@ -57,7 +57,7 @@ public sealed class EventPublishTests
     [DiscoveryKey(Key)]
     public sealed class StockChangedDefaultHandler : IEventHandler<StockChanged>
     {
-        public ValueTask HandleAsync(StockChanged @event, IExecutionContext context)
+        public ValueTask HandleAsync(StockChanged @event, ErgosfareContext context)
         {
             context.Mark("default");
             return ValueTask.CompletedTask;
@@ -68,7 +68,7 @@ public sealed class EventPublishTests
     [Group(Reporting)]
     public sealed class StockChangedReportingHandler : IEventHandler<StockChanged>
     {
-        public ValueTask HandleAsync(StockChanged @event, IExecutionContext context)
+        public ValueTask HandleAsync(StockChanged @event, ErgosfareContext context)
         {
             context.Mark("reporting");
             return ValueTask.CompletedTask;
@@ -193,7 +193,7 @@ public sealed class EventPublishTests
     [DiscoveryKey(Key)]
     public sealed class AnnouncedHandler : IEventHandler<Announced>
     {
-        public ValueTask HandleAsync(Announced @event, IExecutionContext context)
+        public ValueTask HandleAsync(Announced @event, ErgosfareContext context)
         {
             context.Mark("handler");
 
@@ -214,7 +214,7 @@ public sealed class EventPublishTests
     [DiscoveryKey(Key)]
     public sealed class AnnouncedPost : IEvent, IAsyncPostInterceptor<Announced>
     {
-        public ValueTask<object> HandleAsync(Announced @event, object result, IExecutionContext context)
+        public ValueTask<object> HandleAsync(Announced @event, object result, ErgosfareContext context)
         {
             context.Mark("post", Describe(result));
             return ValueTask.FromResult(result);
@@ -226,7 +226,7 @@ public sealed class EventPublishTests
     public sealed class AnnouncedException : IEvent, IAsyncExceptionInterceptor<Announced>
     {
         public ValueTask<object> HandleAsync(
-            Announced @event, object? result, Exception exception, IExecutionContext context)
+            Announced @event, object? result, Exception exception, ErgosfareContext context)
         {
             context.Mark("exception", Describe(result));
             return ValueTask.FromResult(result!);
@@ -238,7 +238,7 @@ public sealed class EventPublishTests
     public sealed class AnnouncedFinal : IEvent, IAsyncFinalInterceptor<Announced>
     {
         public ValueTask HandleAsync(
-            Announced @event, object? result, Exception? exception, IExecutionContext context)
+            Announced @event, object? result, Exception? exception, ErgosfareContext context)
         {
             context.Mark("final", Describe(result));
             return ValueTask.CompletedTask;
@@ -295,7 +295,7 @@ public sealed class EventPublishTests
     [DiscoveryKey(Key)]
     public sealed class RecalledHandler : IEventHandler<Recalled>
     {
-        public ValueTask HandleAsync(Recalled @event, IExecutionContext context)
+        public ValueTask HandleAsync(Recalled @event, ErgosfareContext context)
         {
             context.Mark("handler");
             return ValueTask.CompletedTask;
@@ -306,7 +306,7 @@ public sealed class EventPublishTests
     [DiscoveryKey(Key)]
     public sealed class RecalledAbortingPost : IEvent, IAsyncPostInterceptor<Recalled>
     {
-        public ValueTask<object> HandleAsync(Recalled @event, object result, IExecutionContext context)
+        public ValueTask<object> HandleAsync(Recalled @event, object result, ErgosfareContext context)
         {
             context.Mark("post:abort");
             context.Abort();
@@ -319,7 +319,7 @@ public sealed class EventPublishTests
     public sealed class RecalledFinal : IEvent, IAsyncFinalInterceptor<Recalled>
     {
         public ValueTask HandleAsync(
-            Recalled @event, object? result, Exception? exception, IExecutionContext context)
+            Recalled @event, object? result, Exception? exception, ErgosfareContext context)
         {
             context.Mark("final", $"{Describe(result)}|{(exception is null ? "none" : exception.GetType().Name)}");
             return ValueTask.CompletedTask;

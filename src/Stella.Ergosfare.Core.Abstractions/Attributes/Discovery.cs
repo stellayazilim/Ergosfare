@@ -3,11 +3,10 @@ using System.Reflection;
 namespace Stella.Ergosfare.Core.Abstractions.Attributes;
 
 /// <summary>
-/// Runtime evaluation of the discovery attributes — the single source of truth for how
+/// Runtime evaluation of the discovery attributes — the reference semantics for how
 /// <see cref="ExcludeFromDiscoveryAttribute"/>, <see cref="DiscoveryKeyAttribute"/> and key
-/// patterns compose. The reflection-based scanning paths (<c>RegisterFromAssembly</c>) call
-/// into this so their semantics stay identical to source-generated registration, which
-/// evaluates the same rules at compile time.
+/// patterns compose. Source-generated registration evaluates the same rules at compile
+/// time; this helper is the runtime mirror the contract suite pins them against.
 /// </summary>
 public static class Discovery
 {

@@ -35,6 +35,6 @@ public interface IAsyncHandler<in TMessage,  TResult>: IHandler
     ///     Implementers should define the handling logic within this method, providing asynchronous operations to process the
     ///     message effectively and produce a result that can be used in subsequent stages of the workflow.
     /// </remarks>
-    ValueTask<TResult> HandleAsync(TMessage message, IExecutionContext context);
+    ValueTask<TResult> HandleAsync(TMessage message, ErgosfareContext context);
 
 }

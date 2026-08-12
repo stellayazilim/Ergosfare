@@ -36,7 +36,7 @@ public abstract class SyncMainHandlerContract
         where TCommand : class, ICommand
     {
         /// <inheritdoc />
-        public object Handle(TCommand message, IExecutionContext context)
+        public object Handle(TCommand message, ErgosfareContext context)
         {
             context.Mark("handler", "IHandler<T,object>");
             return "ignored";
@@ -49,7 +49,7 @@ public abstract class SyncMainHandlerContract
         where TCommand : class, ICommand
     {
         /// <inheritdoc />
-        public ValueTask Handle(TCommand message, IExecutionContext context)
+        public ValueTask Handle(TCommand message, ErgosfareContext context)
         {
             context.Mark("handler", "IHandler<T,ValueTask>");
             return ValueTask.CompletedTask;
@@ -62,7 +62,7 @@ public abstract class SyncMainHandlerContract
         where TCommand : class, ICommand<string>
     {
         /// <inheritdoc />
-        public string Handle(TCommand message, IExecutionContext context)
+        public string Handle(TCommand message, ErgosfareContext context)
         {
             context.Mark("handler", "IHandler<T,string>");
             return "sync-value";
@@ -75,7 +75,7 @@ public abstract class SyncMainHandlerContract
         where TCommand : class, ICommand<string>
     {
         /// <inheritdoc />
-        public ValueTask<string> Handle(TCommand message, IExecutionContext context)
+        public ValueTask<string> Handle(TCommand message, ErgosfareContext context)
         {
             context.Mark("handler", "IHandler<T,ValueTask<string>>");
             return ValueTask.FromResult("sync-task-value");
@@ -88,7 +88,7 @@ public abstract class SyncMainHandlerContract
         where TCommand : class, ICommand
     {
         /// <inheritdoc />
-        public ValueTask<TCommand> HandleAsync(TCommand command, IExecutionContext context)
+        public ValueTask<TCommand> HandleAsync(TCommand command, ErgosfareContext context)
         {
             context.Mark("pre");
             return ValueTask.FromResult(command);

@@ -28,7 +28,7 @@ public class GeneratedResultPlanExecutionTests
     {
         public bool ViaPlanFactory { get; init; }
 
-        public ValueTask<string> HandleAsync(PlannedEcho command, IExecutionContext context)
+        public ValueTask<string> HandleAsync(PlannedEcho command, ErgosfareContext context)
         {
             context.Set("viaPlanFactory", ViaPlanFactory);
             return ValueTask.FromResult(command.Payload + "!");
@@ -64,7 +64,7 @@ public class GeneratedResultPlanExecutionTests
     [ExcludeFromDiscovery]
     public sealed class ActualMismatchedEchoHandler : ICommandHandler<MismatchedEcho, string>
     {
-        public ValueTask<string> HandleAsync(MismatchedEcho command, IExecutionContext context)
+        public ValueTask<string> HandleAsync(MismatchedEcho command, ErgosfareContext context)
             => ValueTask.FromResult("actual");
     }
 
@@ -72,7 +72,7 @@ public class GeneratedResultPlanExecutionTests
     [ExcludeFromDiscovery]
     public sealed class ClaimedMismatchedEchoHandler : ICommandHandler<MismatchedEcho, string>
     {
-        public ValueTask<string> HandleAsync(MismatchedEcho command, IExecutionContext context)
+        public ValueTask<string> HandleAsync(MismatchedEcho command, ErgosfareContext context)
             => ValueTask.FromResult("claimed");
     }
 

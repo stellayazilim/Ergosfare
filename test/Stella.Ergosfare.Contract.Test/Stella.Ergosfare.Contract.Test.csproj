@@ -2,6 +2,13 @@
 
     <PropertyGroup>
         <IsPackable>false</IsPackable>
+        <!-- BasicDispatchTests deliberately dispatches messages no registration path
+             collects, to pin the runtime NoHandlerFoundException contract - the exact
+             failure mode ERGOSG005 exists to prove at compile time. Error-severity
+             diagnostics ignore pragmas and (for generator-reported ones) editorconfig
+             severities, so the verdict is suppressed project-wide here; every other
+             project keeps it. -->
+        <NoWarn>$(NoWarn);ERGOSG005</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>

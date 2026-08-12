@@ -14,7 +14,6 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies;
 /// <typeparam name="TMessage">The type of the message being handled.</typeparam>
 /// <typeparam name="TResult">The type of the elements returned by the asynchronous stream.</typeparam>
 public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>( 
-    IResultAdapterService? resultAdapterService,
     CancellationToken cancellationToken) : IMessageMediationStrategy<TMessage, IAsyncEnumerable<TResult>>
     where TMessage : notnull
 {
@@ -43,20 +42,24 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
     /// <exception cref="MultipleHandlerFoundException">Thrown if more than one handler is registered for the message.</exception>
     /// <exception cref="NoHandlerFoundException">Thrown if no handler is registered for the message.</exception>
     public async IAsyncEnumerable<TResult> Mediate(TMessage message, IMessageDependencies messageDependencies,
-        IExecutionContext context, IServiceProvider serviceProvider)
+        ErgosfareContext context, IServiceProvider serviceProvider)
     {
-        // Direct and covariantly matched handlers are one candidate set; see
-        // SingleAsyncHandlerMediationStrategy{TMessage} for the reasoning.
+        // The main-handler priority ladder; see SingleAsyncHandlerMediationStrategy{TMessage}
+        // for the reasoning.
         var handlers = messageDependencies.Handlers;
         var indirectHandlers = messageDependencies.IndirectHandlers;
-        var handlerCount = handlers.Count + indirectHandlers.Count;
 
-        if (handlerCount > 1)
+        if (handlers.Count > 1)
         {
-            throw new MultipleHandlerFoundException(typeof(TMessage), handlerCount);
+            throw new MultipleHandlerFoundException(typeof(TMessage), handlers.Count);
         }
 
-        if (handlerCount == 0)
+        if (handlers.Count == 0 && indirectHandlers.Count > 1)
+        {
+            throw new MultipleHandlerFoundException(typeof(TMessage), indirectHandlers.Count);
+        }
+
+        if (handlers.Count == 0 && indirectHandlers.Count == 0)
         {
             throw new NoHandlerFoundException(typeof(TMessage), $"No handler is registered for {typeof(TMessage).Name}.");
         }
@@ -137,8 +140,12 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
             if (_unknownException is null)
             {
                 // we can't override result since its chunked
-                await PostInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>.Invoke(
-                    messageDependencies, resultAdapterService, serviceProvider, message, enumerator, context).ConfigureAwait(false);
+                var (_, postCarried) = await PostInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>.Invoke(
+                    messageDependencies, Results.ResultAdapterBinding.For<TMessage, IAsyncEnumerator<TResult>>(serviceProvider), serviceProvider, message, enumerator, context).ConfigureAwait(false);
+
+                // A failure carried inside a post result enters the exception stage below
+                // without a throw — the stream's value channel.
+                _unknownException = postCarried;
             }
         }
         catch (ExecutionAbortedException)
@@ -152,9 +159,16 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
             if (_unknownException is not null)
             {
                 // we can't override result since its chunked
-                await ExceptionInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>.Invoke(
+                var (matched, _) = await ExceptionInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>.Invoke(
                     messageDependencies, serviceProvider, message, enumerator,
-                    ExceptionDispatchInfo.Capture(_unknownException), context).ConfigureAwait(false);
+                    _unknownException, context).ConfigureAwait(false);
+
+                if (!matched)
+                {
+                    // Nobody accepted the failure: it surfaces with its original stack,
+                    // exactly as the stage's own rethrow used to.
+                    ExceptionDispatchInfo.Capture(_unknownException).Throw();
+                }
             }
         }
         catch (Exception e) when (e is not ExecutionAbortedException)

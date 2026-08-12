@@ -29,7 +29,7 @@ public sealed class GroupFilteringTests
     [DiscoveryKey(Key)]
     public sealed class MixedHandler : ICommandHandler<Mixed>
     {
-        public ValueTask HandleAsync(Mixed command, IExecutionContext context)
+        public ValueTask HandleAsync(Mixed command, ErgosfareContext context)
         {
             context.Mark("handler");
             return ValueTask.CompletedTask;
@@ -41,7 +41,7 @@ public sealed class GroupFilteringTests
     [Group(Reporting)]
     public sealed class MixedReportingPre : ICommandPreInterceptor<Mixed>
     {
-        public ValueTask<Mixed> HandleAsync(Mixed command, IExecutionContext context)
+        public ValueTask<Mixed> HandleAsync(Mixed command, ErgosfareContext context)
         {
             context.Mark("pre:reporting");
             return ValueTask.FromResult(command);
@@ -61,7 +61,7 @@ public sealed class GroupFilteringTests
     [Group(Reporting)]
     public sealed class ReportingOnlyHandler : ICommandHandler<ReportingOnly>
     {
-        public ValueTask HandleAsync(ReportingOnly command, IExecutionContext context)
+        public ValueTask HandleAsync(ReportingOnly command, ErgosfareContext context)
         {
             command.Handled = true;
             context.Mark("handler:reporting");

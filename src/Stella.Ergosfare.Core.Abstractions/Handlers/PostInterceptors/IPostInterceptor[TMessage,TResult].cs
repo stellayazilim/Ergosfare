@@ -29,5 +29,5 @@ public interface IPostInterceptor<in TMessage, in TResult>
     /// <returns>
     /// The (possibly replaced) result that continues through the pipeline.
     /// </returns>
-    object Handle(TMessage message, TResult messageResult, IExecutionContext context);
+    object Handle(TMessage message, TResult messageResult, ErgosfareContext context);
 }

@@ -30,5 +30,5 @@ public interface IAsyncExceptionInterceptor<in TMessage> : IExceptionInterceptor
         TMessage message,
         object? messageResult,
         Exception exception,
-        IExecutionContext context);
+        ErgosfareContext context);
 }

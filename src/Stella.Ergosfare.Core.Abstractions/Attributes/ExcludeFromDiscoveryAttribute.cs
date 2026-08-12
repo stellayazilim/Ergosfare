@@ -2,10 +2,9 @@
 namespace Stella.Ergosfare.Core.Abstractions.Attributes;
 
 /// <summary>
-/// Excludes a registrable construct from automatic discovery entirely: both
-/// source-generated registration and reflection-based assembly scanning
-/// (<c>RegisterFromAssembly</c>) skip the type, regardless of discovery keys or patterns.
-/// Explicit registration (<c>Register&lt;T&gt;()</c>, <c>Register(Type)</c>) still works.
+/// Excludes a registrable construct from automatic discovery entirely: source-generated
+/// registration skips the type, regardless of discovery keys or patterns. Explicit
+/// registration (<c>Register&lt;T&gt;()</c>, <c>Register(Type)</c>) still works.
 /// </summary>
 /// <remarks>
 /// Applied to an assembly, the attribute removes every type in that assembly from

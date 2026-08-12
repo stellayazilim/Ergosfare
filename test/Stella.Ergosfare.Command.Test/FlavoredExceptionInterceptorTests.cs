@@ -24,14 +24,14 @@ public class FlavoredExceptionInterceptorTests
     [ExcludeFromDiscovery]
     public sealed class VoidFailingCommandHandler : ICommandHandler<VoidFailingCommand>
     {
-        public ValueTask HandleAsync(VoidFailingCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(VoidFailingCommand command, ErgosfareContext context)
             => throw new InvalidOperationException("boom");
     }
 
     [ExcludeFromDiscovery]
     public sealed class VoidFailingCommandExceptionInterceptor : ICommandExceptionInterceptor<VoidFailingCommand>
     {
-        public ValueTask<object> HandleAsync(VoidFailingCommand command, object? messageResult, Exception exception, IExecutionContext context)
+        public ValueTask<object> HandleAsync(VoidFailingCommand command, object? messageResult, Exception exception, ErgosfareContext context)
         {
             context.Set("observed", exception.Message);
             return ValueTask.FromResult(messageResult!);

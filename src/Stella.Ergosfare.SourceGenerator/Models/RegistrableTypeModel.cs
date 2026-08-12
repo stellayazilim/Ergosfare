@@ -1,4 +1,4 @@
-
+﻿
 using System.Collections.Immutable;
 
 namespace Stella.Ergosfare.SourceGenerator.Models;
@@ -8,8 +8,7 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 ///     any user-declared type assignable to one of the module marker interfaces
 ///     (<c>ICommand</c>, <c>IQuery</c>, <c>IEvent</c>). Handlers and interceptors inherit
 ///     the marker through their contract interfaces, so a single marker check covers
-///     messages, handlers and interceptors alike — mirroring what the reflection-based
-///     <c>RegisterFromAssembly</c> discovers at runtime.
+///     messages, handlers and interceptors alike.
 /// </summary>
 /// <remarks>
 ///     Equality is implemented manually because <see cref="Descriptors"/> is a sequence;
@@ -56,6 +55,14 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     public required string? GroupsExpression { get; init; }
 
     /// <summary>
+    ///     The declared <c>[Group]</c> names behind <see cref="GroupsExpression"/>, empty
+    ///     when the type declares none. Frozen compositions apply a message's
+    ///     group-scoped <c>[ExcludeFromPipeline]</c> at emission, which needs the names
+    ///     themselves rather than their emitted array expression.
+    /// </summary>
+    public required ImmutableArray<string> GroupNames { get; init; }
+
+    /// <summary>
     ///     The pre-computed descriptors for the type's handler contracts. Empty for plain
     ///     messages and for open generic types (whose contract type arguments cannot be
     ///     expressed in <c>typeof</c>) — those fall back to runtime
@@ -84,6 +91,14 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     ///     <c>GeneratedDispatchRoots</c>.
     /// </summary>
     public required bool IsDispatchableMessage { get; init; }
+
+    /// <summary>
+    ///     Whether the type is a message shape a frozen composition is computed for —
+    ///     wider than <see cref="IsDispatchableMessage"/>: abstract bases and message
+    ///     interfaces get entries too, because they are what the table's ancestor ladder
+    ///     lands on for a message the generator never saw.
+    /// </summary>
+    public required bool IsMessageShape { get; init; }
 
     /// <summary>
     ///     The result roots to emit for a dispatchable message: one entry per closed
@@ -122,6 +137,16 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
 
     /// <summary>Whether the type carries <c>[ExcludeFromPipeline]</c>; such messages stay off staged plans.</summary>
     public required bool HasPipelineExclusion { get; init; }
+
+    /// <summary>
+    ///     The interceptor group names the type's <c>[ExcludeFromPipeline]</c> names, or
+    ///     empty when the attribute is absent or parameterless. Empty with
+    ///     <see cref="HasPipelineExclusion"/> set is the blanket exclusion: every
+    ///     covariantly matched interceptor drops out. Frozen compositions bake the
+    ///     resulting stages, which is why the group list — not just the attribute's
+    ///     presence — has to travel in the model.
+    /// </summary>
+    public required ImmutableArray<string> ExcludedInterceptorGroups { get; init; }
 
     /// <summary>Whether the type is a value type — variance never applies to it at runtime.</summary>
     public required bool IsValueType { get; init; }
@@ -178,10 +203,47 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     public required bool HasFromServicesConstructorParameter { get; init; }
 
     /// <summary>
-    ///     Declaration location for the informational diagnostics above; captured only
-    ///     when one of them applies (source-declared types only).
+    ///     Declaration location for the informational diagnostics above and the
+    ///     unreachable-handler diagnostics (ERGOSG007/008); captured for source-declared
+    ///     types when one of the constructor infos applies or the type carries handler
+    ///     contracts.
     /// </summary>
     public required LocationInfo? InfoLocation { get; init; }
+
+    /// <summary>
+    ///     Whether the type opted out of discovery via <c>[ExcludeFromDiscovery]</c> (its
+    ///     own or its assembly's). Excluded types produce no registration and no emission
+    ///     — they exist in the model only as the reachability judgment's exclusion zone:
+    ///     their runtime participation is manual and unknowable, so every verdict touching
+    ///     them abstains. Shadow models carry only the fields the zone needs
+    ///     (assignable keys, main-handler descriptor messages).
+    /// </summary>
+    public required bool IsExcludedFromDiscovery { get; init; }
+
+    /// <summary>
+    ///     The type's CLR <c>FullName</c>-shaped identity (namespace-qualified, nested
+    ///     with <c>+</c>, generic arity with backticks) — the string the runtime stage
+    ///     comparator orders by, captured so frozen compositions can bake the exact
+    ///     runtime order for nested and generic participants too.
+    /// </summary>
+    public required string MetadataSortKey { get; init; }
+
+    /// <summary>
+    ///     The message's <c>[ResultAdapter]</c> annotation (its own or an inherited one),
+    ///     projected for the staged plans' baked binding and the ERGOSG011 judgment.
+    ///     <c>null</c> for unannotated types and for non-dispatchable ones — captured only
+    ///     where the runtime binding would consult it.
+    /// </summary>
+    public required ResultAdapterModel? ResultAdapter { get; init; }
+
+    /// <summary>
+    ///     Whether the message carries <c>[IgnoreResultAdapter]</c> (its own or an
+    ///     inherited one): every adapter tier — annotation, native, configured default —
+    ///     is suppressed and the pipelines keep the classic try/catch semantics.
+    ///     Combined with an effective <see cref="ResultAdapter"/> annotation, the
+    ///     contradiction is ERGOSG012.
+    /// </summary>
+    public required bool HasIgnoredResultAdapter { get; init; }
 
     public bool Equals(RegistrableTypeModel other)
     {
@@ -196,6 +258,7 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
             || GroupsExpression != other.GroupsExpression
             || ReferencedAssemblyName != other.ReferencedAssemblyName
             || IsDispatchableMessage != other.IsDispatchableMessage
+            || IsMessageShape != other.IsMessageShape
             || IsDirectlyConstructible != other.IsDirectlyConstructible
             || ProviderConstructionExpression != other.ProviderConstructionExpression
             || ProviderConstructionUsesKeyedServices != other.ProviderConstructionUsesKeyedServices
@@ -206,9 +269,15 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
             || StagedConstructionUsesKeyedServices != other.StagedConstructionUsesKeyedServices
             || HasMultiplePublicConstructors != other.HasMultiplePublicConstructors
             || HasFromServicesConstructorParameter != other.HasFromServicesConstructorParameter
+            || IsExcludedFromDiscovery != other.IsExcludedFromDiscovery
+            || MetadataSortKey != other.MetadataSortKey
+            || !Equals(ResultAdapter, other.ResultAdapter)
+            || HasIgnoredResultAdapter != other.HasIgnoredResultAdapter
             || !Nullable.Equals(InfoLocation, other.InfoLocation)
             || Descriptors.Length != other.Descriptors.Length
             || DiscoveryKeys.Length != other.DiscoveryKeys.Length
+            || ExcludedInterceptorGroups.Length != other.ExcludedInterceptorGroups.Length
+            || GroupNames.Length != other.GroupNames.Length
             || DispatchResults.Length != other.DispatchResults.Length
             || AssignableKeys.Length != other.AssignableKeys.Length
             || ContractShapes.Length != other.ContractShapes.Length)
@@ -243,6 +312,22 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
         for (var i = 0; i < DiscoveryKeys.Length; i++)
         {
             if (!string.Equals(DiscoveryKeys[i], other.DiscoveryKeys[i], StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        for (var i = 0; i < ExcludedInterceptorGroups.Length; i++)
+        {
+            if (!string.Equals(ExcludedInterceptorGroups[i], other.ExcludedInterceptorGroups[i], StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        for (var i = 0; i < GroupNames.Length; i++)
+        {
+            if (!string.Equals(GroupNames[i], other.GroupNames[i], StringComparison.Ordinal))
             {
                 return false;
             }
