@@ -23,13 +23,24 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup .NET
-        # Both SDKs: the referenced library projects multi-target net9.0 and net10.0, so
-        # restore needs to evaluate both even though the smoke app publishes net9.0.
+        # Every SDK: the referenced library projects multi-target net9.0, net10.0 and
+        # net11.0, so restore needs to evaluate all three even though the smoke app
+        # publishes net9.0.
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
             9.0.x
             10.0.x
+
+      # The smoke app stays on net9.0: ILC compiles the framework in, so there is no
+      # roll-forward equivalent and probing .NET 11 AOT means retargeting the app to a
+      # preview TFM. Revisit at GA — NativeAOT's faster interface dispatch lands squarely
+      # on this library's interface-heavy hot path and deserves its own smoke then.
+      - name: Setup .NET 11 Preview
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+          dotnet-quality: 'preview'
 
       - name: Publish NativeAOT Smoke App
         run: dotnet publish examples/AotSmoke/AotSmoke.csproj -c Release -r linux-x64
