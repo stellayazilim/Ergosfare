@@ -1,68 +1,7 @@
-## v2.9.0-preview – '2026-08-12'
-
-Preview release. The theme: **the target framework list opens to .NET 11.** Packages now
-carry `net11.0` beside `net10.0` and `net9.0`. No public API changes, no behavioural
-changes — this release is about where the library is proven to run.
-
-The honest accounting: the new target framework buys **no compatibility on its own.** Roll-
-forward already let a `net11.0` project bind `lib/net10.0/`, so that window was never
-closed. What the target framework carries is proof — the sources compile under the C# 15
-compiler, and the contract suite's composition lanes hold on the .NET 11 runtime, on every
-run rather than once.
-
-### Nothing from .NET 11 is adopted
-
-A survey of the .NET 11 and C# 15 feature set found nothing in this codebase to take up,
-and the reasons are worth recording so the question does not get re-opened from scratch:
-
-* The runtime-side gains — JIT bounds-check elimination and switch folding, GC work,
-  NativeAOT's faster interface dispatch — **need no target framework at all.** A `net10.0`
-  assembly already collects them when it runs on the .NET 11 runtime. The NativeAOT one
-  lands squarely on this library's interface-heavy hot path and arrives for free.
-* The library additions have no call sites here: `EqualityComparer<T>.Create`, LINQ
-  `FullJoin`, the four new `Stream` types, Zstandard, the cross-lane vector APIs.
-* **C# 15 union types** store their payload in an `object?` field and box value types —
-  precisely the object-typed bridge the dispatch hot path was built to avoid. The `closed`
-  modifier applies to classes, while the handler contracts are interfaces. Collection
-  expression arguments find no capacity- or comparer-carrying literal in the tree.
-
-That leaves **Runtime Async** as the only target-framework-gated win worth having, and it
-is deliberately not taken here. It rewrites async codegen wholesale, so it needs the
-contract suite's lane-map baseline re-validated against the abort semantics before either
-line can trust it. The target framework holds the slot; the feature waits.
-
-### What now runs on three frameworks
-
-* The contract suite runs its **194 scenarios on net9.0, net10.0 and net11.0** — the
-  lane-map baseline, which records the dispatch path and not just the result, is pinned on
-  all three. Every other suite multiplies out the same way; the C# 15 compiler broke
-  nothing.
-* `LangVersion` stays `latest`, which now resolves to **C# 15 for the net9.0 and net10.0
-  compilations too**, since the language version follows the compiler rather than the
-  target framework. Deliberate: one language version across all three, so a construct
-  cannot compile on one target and fail on another.
-* The NativeAOT smoke stays on `net9.0`. ILC compiles the framework in, so there is no
-  roll-forward equivalent and probing .NET 11 there would mean retargeting the smoke app to
-  a preview framework. It is worth revisiting at GA.
-
-### Notes
-
-* **Building this repository now requires the .NET 11 preview SDK** (`NETSDK1045` without
-  it). This affects contributors, not only CI. Consumers are unaffected — they need the
-  .NET 11 SDK only if they themselves target `net11.0`.
-* .NET 11 reaches GA on **2026-11-10**, the same day .NET 9 leaves support. Assets shipped
-  for `net11.0` before that date are compiled against **preview reference packs** and want
-  a re-pack against the GA reference pack once .NET 11 ships; the obligation is recorded in
-  `.github/workflows/nuget_release.yml` rather than left to memory.
-* Removed the dead `test/Ergosfare.Logging.Test` project. It had not built since the v2.0.0
-  squash — every project it referenced went away with the `Stella.` rename, it was absent
-  from the solution, and its one test covered the logging module that retired alongside
-  `AddCoreModule`. A test project that neither compiles nor runs still reads as coverage.
-
 ## v2.3.0 – '2026-08-12'
 
 Stable release. The theme: **the pipeline becomes a compiled artifact.** The preview cycle
-from v2.2.0-preview through v2.8.0-preview moved Ergosfare from a source-assisted runtime
+from v2.2.0-preview through v2.9.0-preview moved Ergosfare from a source-assisted runtime
 registry to a closed, source-generated dispatch model. The generator's frozen composition
 table is now the authority for handler and interceptor relationships; module registration
 selects which discovered constructs a container runs, and dispatch executes that selection
@@ -107,8 +46,8 @@ missing handlers. The complete preview history is condensed here into the stable
 ### A pinned pipeline contract
 
 * A public-surface contract suite now runs the dispatch scenarios across the supported
-  composition lanes on .NET 9 and .NET 10. Its lane-map baseline records not only the
-  result, but the dispatch path that produced it.
+  composition lanes on .NET 9, .NET 10 and .NET 11 — 194 scenarios on each. Its lane-map
+  baseline records not only the result, but the dispatch path that produced it.
 * `Abort()`, `Abort(reason)` and `Abort(reason, value)` stop the pipeline immediately and
   surface `ExecutionAbortedException` to the caller. Exception and final interceptors do
   not run after an abort; nested callers decide whether an inner abort ends the outer
@@ -174,6 +113,33 @@ missing handlers. The complete preview history is condensed here into the stable
   command measured 19.9 ns / 24 B, a result query 24.0 ns / 24 B, a five-participant query
   120.2 ns / 96 B and a two-subscriber event 50.5 ns / 48 B. Request-shaped rows that
   create a DI scope and resolve a mediator remained ahead of the equivalent MediatR rows.
+
+### Target frameworks
+
+* Packages carry **`net11.0` beside `net10.0` and `net9.0`**. The addition buys no
+  compatibility on its own — roll-forward already let a `net11.0` project bind
+  `lib/net10.0/` — so what it carries is proof: the sources compile under the C# 15
+  compiler, and the contract suite holds its lane map on .NET 11 on every run.
+* **Nothing from .NET 11 or C# 15 is adopted**, and the reasons are worth recording. The
+  runtime-side gains — JIT bounds-check elimination, GC work, NativeAOT's faster interface
+  dispatch — need no target framework at all; a `net10.0` assembly already collects them
+  running on .NET 11. The library additions have no call sites here. C# 15 union types
+  store their payload in an `object?` field and box value types, which is the object-typed
+  bridge the dispatch hot path was built to avoid, and the `closed` modifier applies to
+  classes while the handler contracts are interfaces.
+* **Runtime Async** is the one target-framework-gated win, deliberately deferred: it
+  rewrites async codegen wholesale and needs the lane-map baseline re-validated against the
+  abort semantics first. The target framework holds the slot; the feature waits.
+* `LangVersion` stays `latest`, which now resolves to **C# 15 for the `net9.0` and
+  `net10.0` compilations too**, since the language version follows the compiler rather than
+  the target framework. Deliberate: one language version across all three, so a construct
+  cannot compile on one target and fail on another.
+* .NET 11 reaches GA on **2026-11-10**, the same day .NET 9 leaves support. Assets shipped
+  for `net11.0` before that date are compiled against **preview reference packs** and want
+  a re-pack against the GA reference pack once .NET 11 ships; the obligation is recorded in
+  `.github/workflows/nuget_release.yml` rather than left to memory. Building the repository
+  now requires the .NET 11 preview SDK — this affects contributors, not consumers, who need
+  it only if they themselves target `net11.0`.
 
 ### Breaking changes and migration
 
