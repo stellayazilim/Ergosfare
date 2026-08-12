@@ -57,7 +57,11 @@ internal sealed class StagedResultPipelineExecutor<TMessage, TResult>(
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
-            if (_cachedDependencies is { } cached)
+            // Frozen registry: dependencies resolve once per executor and are never
+            // re-validated — a registration after the first dispatch is not observed.
+            var cached = _cachedDependencies;
+
+            if (cached is not null)
             {
                 return cached;
             }

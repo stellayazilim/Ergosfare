@@ -66,7 +66,8 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage> : IMessageMedi
     ///     Pre-interceptors, the main handler and post-interceptors run in sequence; with no
     ///     interceptors registered the handler is invoked directly on a fast path. If an
     ///     exception occurs, the exception interceptors run; final interceptors always run.
-    ///     An <see cref="ExecutionAbortedException" /> aborts the mediation without error.
+    ///     An <see cref="ExecutionAbortedException" /> stops the pipeline outright — no
+    ///     remaining stage runs, finals included — and travels to the caller.
     /// </remarks>
     public async ValueTask Mediate(TMessage message, IMessageDependencies messageDependencies, ErgosfareContext context, IServiceProvider serviceProvider)
     {
@@ -120,15 +121,11 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage> : IMessageMedi
 
             try
             {
+                // No abort arm here: a handler that stops its own dispatch has nothing left
+                // to tell and no stage left to skip, so the signal travels to the caller.
                 await InvokeHandler(fastHandler, message, context);
             }
-            catch (ExecutionAbortedException)
-            {
-                // The handler short-circuited its own dispatch. There is nothing to return
-                // and no stage left to tell, so the dispatch simply completes.
-                return;
-            }
-            catch (Exception e) when (_resultMaterializer is not null)
+            catch (Exception e) when (_resultMaterializer is not null && e is not ExecutionAbortedException)
             {
                 // Catch-materialization; a void pipeline has nothing to hand back, so the
                 // materialized carrier is the absorption itself.
@@ -152,6 +149,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage> : IMessageMedi
         Unit? result = null;
         Exception? exception = null;
         ExceptionDispatchInfo? unhandledException = null;
+        var aborted = false;
         try
         {
             try
@@ -188,13 +186,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage> : IMessageMedi
                     }
                 }
             }
-            catch (ExecutionAbortedException)
-            {
-                // A short circuit, not a failure: the exception stage is skipped, the caller
-                // sees no exception, and the final stage below still runs with whatever the
-                // pipeline had produced.
-            }
-            catch (Exception e)
+            catch (Exception e) when (e is not ExecutionAbortedException)
             {
                 // The classic zero-interceptor, no-adapter rethrow keeps its exact shape.
                 if (exceptionInterceptorCount == 0 && _resultAdapter is null)
@@ -242,9 +234,16 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage> : IMessageMedi
                 }
             }
         }
+        catch (ExecutionAbortedException)
+        {
+            // A participant stopped the pipeline. Nothing else runs — not the exception
+            // stage, not the final stage below — and the signal continues to the caller.
+            aborted = true;
+            throw;
+        }
         finally
         {
-            if (finalInterceptorCount > 0)
+            if (finalInterceptorCount > 0 && !aborted)
             {
                 await FinalInterceptorInvocationStrategy<TMessage, Unit>.Invoke(
                     messageDependencies, serviceProvider, message, result, exception, context);

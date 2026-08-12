@@ -45,10 +45,10 @@ task e2e
 That builds and boots the app, waits for `/health`, runs [`http/todos.http`](http/todos.http)
 with the [JetBrains HTTP Client CLI](https://www.jetbrains.com/help/idea/http-client-cli.html),
 and tears the app down — failing the run on any failed assertion. The JUnit report is written
-to `e2e/reports/`.
+to `examples/e2e/reports/`.
 
 The CLI itself is self-provisioned: the first run downloads it from `https://jb.gg/ijhttp/latest`
-into `e2e/tools/` (gitignored). `ijhttp` is a Java app, so a JDK 17+ must be installed
+into `examples/e2e/tools/` (gitignored). `ijhttp` is a Java app, so a JDK 17+ must be installed
 (`winget install Microsoft.OpenJDK.21` works); the runner finds it via `JAVA_HOME`, PATH,
 or the standard install locations.
 
@@ -56,5 +56,5 @@ To iterate on the `.http` file by hand, run the app yourself and point your edit
 client at it:
 
 ```bash
-dotnet run --project e2e/Stella.Ergosfare.E2E.Api
+dotnet run --project examples/e2e/Stella.Ergosfare.E2E.Api
 ```

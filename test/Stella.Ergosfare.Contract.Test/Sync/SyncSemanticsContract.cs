@@ -104,18 +104,18 @@ public abstract class SyncSemanticsContract
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_void_pipelines_synchronous_final_interceptor_runs_on_abort_with_no_result()
+    public async Task A_void_pipelines_synchronous_final_interceptor_does_not_run_on_abort()
     {
         await using var provider = CreateProvider();
         var recorder = NewRecorder();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        // Same empty slot, reached through the abort path: the final stage sees it as null,
-        // and the abort short-circuits without reaching the caller.
-        await mediator.SendAsync(NewCommand("abort"), recorder.Commands());
+        // The synchronous contracts are cut by an abort exactly like the asynchronous ones:
+        // the pipeline stops at the pre-interceptor and the signal reaches the caller.
+        await Assert.ThrowsAsync<ExecutionAbortedException>(
+            async () => await mediator.SendAsync(NewCommand("abort"), recorder.Commands()));
 
-        recorder.AssertStages("pre", "final");
-        Assert.Equal("abort|null|none", recorder.DetailOf("final"));
+        recorder.AssertStages("pre");
     }
 
     // -----------------------------------------------------------------------
@@ -184,17 +184,16 @@ public abstract class SyncSemanticsContract
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_result_pipelines_synchronous_final_interceptor_runs_on_abort_with_no_result()
+    public async Task A_result_pipelines_synchronous_final_interceptor_does_not_run_on_abort()
     {
         await using var provider = CreateProvider();
         var recorder = NewRecorder();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        var result = await mediator.SendAsync(NewResultCommand("abort"), recorder.Commands());
+        await Assert.ThrowsAsync<ExecutionAbortedException>(
+            async () => await mediator.SendAsync(NewResultCommand("abort"), recorder.Commands()));
 
-        Assert.Null(result);
-        recorder.AssertStages("pre", "final");
-        Assert.Equal("abort|null|none", recorder.DetailOf("final"));
+        recorder.AssertStages("pre");
     }
 
     // -----------------------------------------------------------------------

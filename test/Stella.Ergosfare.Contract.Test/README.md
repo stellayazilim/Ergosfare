@@ -121,8 +121,9 @@ the test process, and it never forgets. Everything below follows from that.
    `PolymorphicDispatchTests` does. If a scenario ever genuinely needs a marker-wide
    registration, it belongs in its own collection with `DisableParallelization = true`.
 5. **Mutating the registry after a container is live goes in
-   `RegistryMutationCollection`** (`DisableParallelization = true`). The version bump
-   invalidates every container's cached pipeline.
+   `RegistryMutationCollection`** (`DisableParallelization = true`). The types it
+   registers land in the process-wide registry for good, and the freeze-order semantics
+   it pins would blur beside parallel neighbors.
 6. **Do not pin internals.** Instance identity is contract only where lifetime says so
    (transient = new per dispatch, memoized = reused). No assertions on pooling, caching,
    plan or strategy selection, or timing.
@@ -237,25 +238,36 @@ than change by accident.
    argument, so the documented "result to abort with" reached nobody — and the exception
    itself surfaced to the caller, which the XML doc did not mention either.
 
-   Aborting is a short circuit now. The parameter is gone from the signature (it never
-   worked, and no shim pretends otherwise), and the caller receives **what the pipeline had
-   already produced**: the handler's result when the abort came after it, the result type's
-   default when it came before. No exception reaches the caller on any path, the
-   exception-interceptor stage never sees the abort, and final interceptors run as they
-   always do — handed the same value the caller gets, with no exception.
+   **Abort is a signal now, and it stops the pipeline.** Nothing downstream of the aborting
+   participant runs: not the rest of its own stage, not the exception stage (an abort is not
+   a failure), not the final stage. There is no result to deliver either — a stopped
+   pipeline did not produce one — so the caller is told rather than handed a default it
+   would have to interpret. `ExecutionAbortedException` is that signal, and it is part of
+   the contract: a dispatch whose participants can abort is one the caller wraps in a
+   `try`. Applications that would rather carry outcomes as values have the result-adapter
+   surface for that.
 
-   `ExecutionAbortedException` still exists and is still what travels: it unwinds the
-   participant up to the mediation strategy or the baked plan, which catches it. It is an
-   implementation detail of the unwind, not a signal to catch — a `catch` for it in
-   participant code defeats the abort rather than observing it.
+   The overloads say what the participant wants said: `Abort()`, `Abort(reason)` and
+   `Abort(reason, value)`, arriving on the exception as `Reason` and `Value`. The old
+   parameter's mistake was claiming to set the pipeline's *result*; a stopped pipeline has
+   none, and what a caller actually needs is why.
 
-   Pinned across the areas that reach each arm: `Abort/` for "already produced" on all three
-   result shapes, the `Aborting_*` and `A_*_abort_*` scenarios in `Pipeline/` and `Sync/`
-   for "nothing produced yet",
-   `A_handler_aborting_a_pipeline_with_no_interceptors_completes_the_dispatch` and its
-   result twin for the interceptor-free lane the executors serve without ever entering a
-   strategy, `Aborting_a_publish_completes_it_without_an_exception` for the fan-out, and
-   `A_nested_dispatchs_abort_stops_at_its_own_dispatch` for the scoped-child case.
+   The mechanism no longer varies by pipeline shape, which is the other half of the fix:
+   with interceptors or without, the signal travels straight out. The strategies and the
+   emitted plans only mark themselves aborted so their own final stage is skipped; the
+   executors and the engine have no abort code at all, and the `AbortShortCircuit` helper
+   that carried the old semantics is gone.
+
+   Pinned across the areas that reach each arm: `Abort/` for aborting after a result was
+   produced, on all three result shapes; the `Aborting_*` and `A_*_abort_*` scenarios in
+   `Pipeline/` and `Sync/` for aborting before the handler;
+   `A_handler_aborting_a_pipeline_with_no_interceptors_reaches_the_caller` and its result
+   twin for the interceptor-free lane the executors serve without ever entering a strategy;
+   `Aborting_a_publish_reaches_the_publisher` for the fan-out; and, for the scoped-child
+   case, `A_nested_dispatchs_abort_surfaces_to_the_handler_that_nested_it` with
+   `A_handler_that_catches_a_nested_abort_carries_on` beside it — the outer handler is the
+   inner dispatch's call site, so it is who hears it, and catching is how it says the inner
+   step was optional.
 
 2. ~~**Two different exceptions mean "nothing will handle this."**~~ *Fixed.* A message
    type absent from the registry used to produce `NoHandlerFoundException` while a
@@ -316,7 +328,8 @@ than change by accident.
      reflective path, and the lane map is what says so.
 
 5. ~~**Runtime registry mutation is half-supported.**~~ *Partly fixed — the diagnosis, not
-   the constraint.* Registering an interceptor type after the container is built changes
+   the constraint; since the dependency freeze, resolved by contract — see the closing
+   paragraph.* Registering an interceptor type after the container is built changes
    the next dispatch only if that type is also in DI. It used to fail with an opaque
    `InvalidOperationException: No service for type ...`, raised part-way through the
    dispatch by whichever stage first asked for the participant. Pipeline construction now
@@ -328,11 +341,21 @@ than change by accident.
    process-wide, has no removal, and a container is per-application, so a participant
    resolvable in one container may be absent from another. That is also why the check
    cannot live in `Register` — only a pipeline being built in a container's context can
-   answer the question. What the fix does guarantee is that the failure is not sticky:
-   nothing is cached for a failed build, so a container that does register the participant
-   builds the pipeline the broken one could not. Pinned by
-   `A_late_registered_interceptor_the_container_cannot_resolve_fails_the_next_dispatch`
-   and `A_container_that_can_resolve_the_late_participant_builds_the_pipeline_the_broken_one_could_not`.
+   answer the question. The check runs when the pipeline first materializes: a participant
+   the container cannot resolve fails the message's first dispatch, named and explained,
+   before any stage runs. Pinned by
+   `A_participant_the_container_cannot_resolve_fails_the_first_dispatch`.
+
+   **The observability half of this entry is retired.** Since the dependency freeze, a
+   registration made after a message's first dispatch is not observed at all: the version
+   guard that made "the next dispatch picks it up" true was the fast path's one recurring
+   cost, and the contract it bought — registration-after-use — was exercised by nothing
+   but these scenarios. Registration up to the first dispatch keeps its full meaning,
+   pinned by `A_registration_before_the_first_dispatch_joins_the_pipeline`. The two
+   `..._picks_up_an_interceptor_registered_after_it_ran` scenarios invert into
+   `..._first_dispatch_is_not_observed` successors on both axes, and the cross-container
+   recovery pin is deferred to the per-container snapshot rework, where that contract gets
+   a non-shared executor to stand on.
 
    The check covers indirect main handlers too, which was the one corner where it could
    have broken a dispatch that always worked: single-handler mediation never read that slot,
@@ -396,9 +419,9 @@ than change by accident.
    `Unit` is a reference type, so the same cast on an empty slot yields `null` and the
    stage simply observes that nothing was produced. **No cast expression changed** — the
    crash was a property of the type in the slot, not of the code reading it. Pinned by
-   `A_void_pipelines_synchronous_stages_run_with_an_empty_result_when_the_handler_throws`
-   and `A_void_pipelines_synchronous_final_interceptor_runs_on_abort_with_no_result`, the
-   two scenarios that used to assert the crash. Result-typed pipelines were never affected:
+   `A_void_pipelines_synchronous_stages_run_with_an_empty_result_when_the_handler_throws`,
+   the scenario that used to assert the crash; its abort twin now pins that the synchronous
+   final stage does not run at all when the pipeline is cut (entry 1). Result-typed pipelines were never affected:
    `null` casts to `string?` and `default` boxes for value types.
 
 9. **A synchronous participant cannot be registered without a module marker.** The module
@@ -425,8 +448,9 @@ than change by accident.
     `VoidPipelineExecutor` and the mediation strategies both have a working arm for these
     handlers, and the keyed axis exercises it.
 
-11. **A memoized handler instance survives only until the next registration anywhere in the
-    process.** `ForceMemoizedHandlers` caches the instance inside the handler reference held
+11. ~~**A memoized handler instance survives only until the next registration anywhere in the
+    process.**~~ *Closed by the dependency freeze — see the closing paragraph.*
+    `ForceMemoizedHandlers` caches the instance inside the handler reference held
     by a `MessageDependencies` object, and that object is cached against the registry
     version (`MessageDependenciesFactory.Create` →
     `MessageDescriptorCache.InvalidateIfRegistryChanged`). Registering a *new* type — in any
@@ -439,9 +463,12 @@ than change by accident.
     fail roughly one run in ten. It is not a test defect and not a race in the registry: a
     registration between two dispatches genuinely resets memoization. The scenario is now in
     `RegistryMutationCollection` so nothing registers beside it — the only change this phase
-    made to an existing test file, and the reason is this entry. Whether memoized instances
-    should survive a refresh is a live question for the plan lifecycle
-    (freeze → refresh → re-freeze), not something to paper over here.
+    made to an existing test file, and the reason is this entry.
+    <br />The dependency freeze closed this entry from the other side: executors stop
+    consulting the registry version after their first dispatch, so a later registration no
+    longer resets memoization — the memoized instance survives any registration, and the
+    flake mechanism above is structurally gone. The scenario stays in the collection for
+    the registrations it performs, not the ones it fears.
 
 ## Where it runs
 

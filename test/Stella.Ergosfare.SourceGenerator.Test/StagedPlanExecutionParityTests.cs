@@ -335,7 +335,7 @@ public class StagedPlanExecutionParityTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task Abort_SkipsTheExceptionStageAndStillRunsFinals()
+    public async Task Abort_CutsThePlanAndReachesTheCaller()
     {
         var (assembly, provider) = Host.Value;
 
@@ -345,14 +345,14 @@ public class StagedPlanExecutionParityTests
         Entries.Clear();
 
         var command = (ICommand<string>)Activator.CreateInstance(commandType)!;
+        var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        var result = await provider.GetRequiredService<ICommandMediator>().SendAsync(command);
+        // The emitted plan stops where the strategy would: the handler never runs, the
+        // exception stage never sees the abort, the final stage does not run either, and
+        // the signal reaches the caller — the strategy's exact contract, baked.
+        await Assert.ThrowsAsync<ExecutionAbortedException>(async () => await mediator.SendAsync(command));
 
-        // The abort never reaches the handler, is invisible to the exception stage, and
-        // the final stage still runs — the strategy's exact contract. Nothing had been
-        // produced, so the caller gets the result type's default and no exception.
-        Assert.Null(result);
-        Assert.Equal(["pre", "final"], Entries);
+        Assert.Equal(["pre"], Entries);
     }
 
     [Fact]

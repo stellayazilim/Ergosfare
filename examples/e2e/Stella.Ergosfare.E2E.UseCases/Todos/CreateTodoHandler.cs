@@ -6,9 +6,9 @@ using Stella.Ergosfare.E2E.Infrastructure;
 
 namespace Stella.Ergosfare.E2E.UseCases.Todos;
 
-public sealed class CreateTodoHandler(TodoDbContext db) : ICommandHandler<CreateTodoCommand, Guid>
+public sealed class CreateTodoHandler(TodoStore store) : ICommandHandler<CreateTodoCommand, Guid>
 {
-    public async ValueTask<Guid> HandleAsync(CreateTodoCommand command, IExecutionContext context)
+    public async ValueTask<Guid> HandleAsync(CreateTodoCommand command, ErgosfareContext context)
     {
         var todo = new Todo
         {
@@ -18,8 +18,7 @@ public sealed class CreateTodoHandler(TodoDbContext db) : ICommandHandler<Create
             CreatedAt = DateTimeOffset.UtcNow,
         };
 
-        db.Todos.Add(todo);
-        await db.SaveChangesAsync(context.CancellationToken);
+        await store.AddAsync(todo, context.CancellationToken);
 
         return todo.Id;
     }

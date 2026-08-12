@@ -134,15 +134,11 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult> : IMe
 
             try
             {
+                // No abort arm here: a handler that stops its own dispatch has nothing left
+                // to tell and no stage left to skip, so the signal travels to the caller.
                 fastResult = await InvokeHandler(fastHandler, message, context);
             }
-            catch (ExecutionAbortedException)
-            {
-                // The handler short-circuited before producing anything, so there is
-                // nothing to hand back but the result type's default.
-                return default!;
-            }
-            catch (Exception e) when (_resultMaterializer is not null)
+            catch (Exception e) when (_resultMaterializer is not null && e is not ExecutionAbortedException)
             {
                 // Catch-materialization: a materializable carrier type never lets a real
                 // throw reach the caller — the failure comes back inside the carrier.
@@ -165,6 +161,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult> : IMe
         TResult result = default!;
         Exception? exception = null;
         ExceptionDispatchInfo? unhandledException = null;
+        var aborted = false;
         try
         {
             try
@@ -205,13 +202,7 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult> : IMe
                     }
                 }
             }
-            catch (ExecutionAbortedException)
-            {
-                // A short circuit, not a failure: the exception stage is skipped, the caller
-                // sees no exception, and `result` — whatever the pipeline had produced by the
-                // time the abort unwound — is what the final stage and the caller both get.
-            }
-            catch (Exception e)
+            catch (Exception e) when (e is not ExecutionAbortedException)
             {
                 // The classic zero-interceptor, no-adapter rethrow keeps its exact shape.
                 if (exceptionInterceptorCount == 0 && _resultAdapter is null)
@@ -265,9 +256,17 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage, TResult> : IMe
                 }
             }
         }
+        catch (ExecutionAbortedException)
+        {
+            // A participant stopped the pipeline. Nothing else runs — not the exception
+            // stage, not the final stage below — and the signal continues to the caller,
+            // which is why nothing is returned from here either.
+            aborted = true;
+            throw;
+        }
         finally
         {
-            if (finalInterceptorCount > 0)
+            if (finalInterceptorCount > 0 && !aborted)
             {
                 await FinalInterceptorInvocationStrategy<TMessage, TResult>.Invoke(
                     messageDependencies, serviceProvider, message, result, exception, context);

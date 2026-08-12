@@ -31,6 +31,10 @@ public sealed class RuntimeRegistrationPipelineTests : PipelineSemanticsContract
                     .Register<PipelineCommandException>()
                     .Register<PipelineCommandFinal>()
                     .Register<BarePipelineCommandHandler>()
+                    .Register<AsyncTypedPipelineCommandHandler>()
+                    .Register<AsyncTypedPipelineCommandPost>()
+                    .Register<AsyncTypedPipelineCommandException>()
+                    .Register<AsyncTypedPipelineCommandFinal>()
                     .Register<PipelineResultCommandHandler>()
                     .Register<PipelineResultCommandPre>()
                     .Register<PipelineResultCommandPost>()
@@ -77,4 +81,8 @@ public sealed class RuntimeRegistrationPipelineTests : PipelineSemanticsContract
 
     /// <inheritdoc />
     protected override ICommand NewOrderedCommand() => new OrderedCommand();
+
+    /// <inheritdoc />
+    protected override IPayloadCommand NewAsyncTypedCommand(string payload)
+        => new AsyncTypedPipelineCommand { Payload = payload };
 }

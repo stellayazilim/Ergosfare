@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Internal.Mediator;
 

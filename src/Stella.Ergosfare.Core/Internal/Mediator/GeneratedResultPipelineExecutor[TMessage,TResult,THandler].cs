@@ -12,8 +12,9 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// <see cref="GeneratedVoidPipelineExecutor{TMessage, THandler}"/>: closed over the
 /// message, its result and its compile-time-known sole async handler, so the handler call
 /// devirtualizes instead of walking the contract pattern match. The same advisory-plan
-/// contract applies — the registry-version-guarded dependency cache re-validates the
-/// pipeline and any mismatch falls back to the runtime dispatch shape.
+/// contract applies — the dependency cache validates the pipeline on the first dispatch
+/// and any mismatch falls back to the runtime dispatch shape; the validated shape is
+/// frozen thereafter.
 /// </summary>
 #pragma warning disable CS8714 // TResult is used as a pattern type argument; handler contracts declare notnull results
 internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandler>(
@@ -42,8 +43,19 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
     private MessageDependencies? _cachedFastDependencies;
     private bool _useDirectConstruction;
 
+    // True once the first dispatch has validated the entire fast lane — planned handler
+    // type, direct construction, no adapters. From then on the planned handler is
+    // constructed and invoked without touching dependencies at all.
+    private bool _fastDirect;
+
     public ValueTask<TResult> Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider)
     {
+        if (_fastDirect)
+        {
+            var direct = _directHandlerFactory is not null ? _directHandlerFactory() : _providerHandlerFactory!(serviceProvider);
+            return direct.HandleAsync((TMessage)message, context);
+        }
+
         if (!_resultAdapterResolved)
         {
             _hasResultAdapter = global::Stella.Ergosfare.Core.Abstractions.Results
@@ -60,28 +72,22 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
                 ? _directHandlerFactory is not null ? _directHandlerFactory() : _providerHandlerFactory!(serviceProvider)
                 : handlerReference.Resolve(serviceProvider);
 
-            // The strategy is skipped here, so its abort handling has to be too; see
-            // AbortShortCircuit.
-            try
+            // The strategy is skipped here, and with it its abort handling. That arm lives
+            // in the engine's dispatch frame — an exception-handling region here would keep
+            // Execute out of its caller on every dispatch; see MessageDispatchEngine.
+            if (handler is THandler planned)
             {
-                if (handler is THandler planned)
-                {
-                    return AbortShortCircuit.Guard(planned.HandleAsync((TMessage)message, context));
-                }
-
-                switch (handler)
-                {
-                    case IAsyncHandler<TMessage, TResult> asyncHandler:
-                        return AbortShortCircuit.Guard(asyncHandler.HandleAsync((TMessage)message, context));
-                    case IHandler<TMessage, ValueTask<TResult>> valueTaskShaped:
-                        return AbortShortCircuit.Guard(valueTaskShaped.Handle((TMessage)message, context));
-                    case IHandler<TMessage, TResult> syncHandler:
-                        return ValueTask.FromResult(syncHandler.Handle((TMessage)message, context));
-                }
+                return planned.HandleAsync((TMessage)message, context);
             }
-            catch (ExecutionAbortedException)
+
+            switch (handler)
             {
-                return ValueTask.FromResult<TResult>(default!);
+                case IAsyncHandler<TMessage, TResult> asyncHandler:
+                    return asyncHandler.HandleAsync((TMessage)message, context);
+                case IHandler<TMessage, ValueTask<TResult>> valueTaskShaped:
+                    return valueTaskShaped.Handle((TMessage)message, context);
+                case IHandler<TMessage, TResult> syncHandler:
+                    return ValueTask.FromResult(syncHandler.Handle((TMessage)message, context));
             }
         }
 
@@ -92,7 +98,11 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
-            if (_cachedDependencies is { } cached)
+            // Frozen registry: dependencies resolve once per executor and are never
+            // re-validated — a registration after the first dispatch is not observed.
+            var cached = _cachedDependencies;
+
+            if (cached is not null)
             {
                 return cached;
             }
@@ -105,6 +115,9 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
                 && fastDependencies is { MemoizedInstances: false, FastSingleHandler.HandlerType: var plannedType }
                 && plannedType == typeof(THandler)
                 && typedFactory.IsPlainTransientRegistration(typeof(THandler));
+            // Execute resolves the adapter slot before the first GetDependencies call, so
+            // the answer is already in hand here.
+            _fastDirect = _useDirectConstruction && !_hasResultAdapter;
             return dependencies;
         }
 

@@ -190,32 +190,56 @@ public sealed class ErgosfareContext(
 
 
     /// <summary>
-    /// Short-circuits the current mediation: nothing after the calling participant runs,
-    /// and the caller gets whatever the pipeline had produced by then.
+    /// Ends the current mediation: nothing after the calling participant runs, and the
+    /// caller is told, by <see cref="ExecutionAbortedException"/>.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Aborting is not a failure. The caller sees no exception, the exception-interceptor
-    /// stage does not run, and the remaining stages of the aborting participant's own stage
-    /// are skipped. Final interceptors still run — they always do — and are handed the same
-    /// result the caller receives, with no exception.
+    /// The dispatch was asked for by the call site, so the call site is who hears that it
+    /// did not happen — a pipeline whose participants can abort is one the caller wraps in
+    /// a <c>try</c>. The alternative, returning the result type's default, is
+    /// indistinguishable from a handler that legitimately produced nothing.
     /// </para>
     /// <para>
-    /// What the caller receives is what the pipeline had already produced. Abort after the
-    /// handler has run and its result is delivered; abort before it and there is nothing to
-    /// deliver, so the caller gets <c>null</c> or the result type's default. A resultless
-    /// dispatch simply completes.
+    /// Stopping means stopping: nothing downstream runs. Not the rest of the current stage,
+    /// not the exception stage — an abort is not a failure and exception interceptors exist
+    /// to handle failures — and not the final stage either. There is no result to expect
+    /// from a pipeline that was cut, which is why the signal carries none.
     /// </para>
     /// <para>
-    /// <see cref="ExecutionAbortedException"/> is how the short circuit travels: it unwinds
-    /// the participant and everything between it and the mediation strategy (or the baked
-    /// plan), which catches it, skips the exception stage and returns the result produced so
-    /// far. It is an implementation detail of the unwind and never reaches the caller — a
-    /// <c>catch</c> for it in participant code would defeat the abort, not observe it.
+    /// Nothing catches this on the way out. The stages that do have exception handling —
+    /// the strategies and the emitted plans — filter it through untouched and skip their
+    /// own remaining work, so what the caller receives is the participant's own signal with
+    /// its stack intact.
     /// </para>
     /// </remarks>
-    public void Abort()
-    {
-        throw new ExecutionAbortedException();
-    }
+    /// <exception cref="ExecutionAbortedException">Always — this is how the abort travels.</exception>
+    public void Abort() => throw new ExecutionAbortedException();
+
+    /// <summary>
+    /// Stops the pipeline, saying why. See <see cref="Abort()"/>.
+    /// </summary>
+    /// <param name="reason">
+    /// Why the pipeline is being stopped; arrives on
+    /// <see cref="ExecutionAbortedException.Reason"/>.
+    /// </param>
+    /// <remarks><inheritdoc cref="Abort()" path="/remarks"/></remarks>
+    /// <exception cref="ExecutionAbortedException">Always — this is how the abort travels.</exception>
+    public void Abort(string? reason) => throw new ExecutionAbortedException(reason);
+
+    /// <summary>
+    /// Stops the pipeline, saying why and handing the caller something to act on. See
+    /// <see cref="Abort()"/>.
+    /// </summary>
+    /// <param name="reason">
+    /// Why the pipeline is being stopped; arrives on
+    /// <see cref="ExecutionAbortedException.Reason"/>.
+    /// </param>
+    /// <param name="value">
+    /// What the caller should act on; arrives on
+    /// <see cref="ExecutionAbortedException.Value"/>.
+    /// </param>
+    /// <remarks><inheritdoc cref="Abort()" path="/remarks"/></remarks>
+    /// <exception cref="ExecutionAbortedException">Always — this is how the abort travels.</exception>
+    public void Abort(string? reason, object? value) => throw new ExecutionAbortedException(reason, value);
 }

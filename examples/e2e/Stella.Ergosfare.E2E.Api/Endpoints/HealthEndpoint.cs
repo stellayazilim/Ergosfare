@@ -1,3 +1,4 @@
+using Stella.Ergosfare.E2E.Api.Contracts;
 using Stella.MinimalApi;
 
 namespace Stella.Ergosfare.E2E.Api.Endpoints;
@@ -6,5 +7,5 @@ namespace Stella.Ergosfare.E2E.Api.Endpoints;
 public sealed class HealthEndpoint : IEndpoint
 {
     public void MapEndpoint(IEndpointRouteBuilder app) =>
-        app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+        app.MapGet("/health", () => Results.Ok(new HealthResponse("ok")));
 }

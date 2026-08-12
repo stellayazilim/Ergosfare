@@ -8,14 +8,14 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 /// <summary>
 /// Void pipeline hosting a staged plan: bespoke straight-line code for the message's whole
-/// interceptor-bearing pipeline. The plan is advisory — the registry-version-guarded
-/// dependency cache re-validates the plan's composition against the live pipeline
+/// interceptor-bearing pipeline. The plan is advisory — the dependency cache validates the
+/// plan's composition against the live pipeline on the first dispatch
 /// (<see cref="StagedPlanGate"/>) plus the memoization and adapter gates, and any mismatch
 /// falls back to the runtime strategy, preserving semantics exactly. The plan resolves its
 /// participants from the dispatching scope's provider — outside memoized mode that is
 /// literally what the runtime handler references do, so container semantics are preserved.
-/// Like every version-guarded executor, a dispatch racing a registration may run the
-/// previous shape once; it never runs a shape the registry has not published.
+/// The validated composition is frozen; a registration after the first dispatch is not
+/// observed.
 /// </summary>
 internal sealed class StagedVoidPipelineExecutor<TMessage>(
     IMessageDependenciesFactory dependenciesFactory,
@@ -61,7 +61,11 @@ internal sealed class StagedVoidPipelineExecutor<TMessage>(
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
-            if (_cachedDependencies is { } cached)
+            // Frozen registry: dependencies resolve once per executor and are never
+            // re-validated — a registration after the first dispatch is not observed.
+            var cached = _cachedDependencies;
+
+            if (cached is not null)
             {
                 return cached;
             }

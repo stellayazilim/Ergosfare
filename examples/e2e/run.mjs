@@ -2,9 +2,10 @@
 // ijhttp .http suite against it, then tears the app down and propagates ijhttp's exit code.
 //
 // Dependency-free (Node stdlib only). Cross-platform. Invoked by `task e2e`, or directly:
-//   node e2e/run.mjs
+//   node examples/e2e/run.mjs
 //
-// ijhttp (the JetBrains HTTP Client CLI) is self-provisioned into e2e/tools on first run.
+// ijhttp (the JetBrains HTTP Client CLI) is self-provisioned into examples/e2e/tools on
+// first run.
 // It is a Java app, so a JDK 17+ must be present (JAVA_HOME, PATH, or a standard install
 // location — e.g. `winget install Microsoft.OpenJDK.21`).
 

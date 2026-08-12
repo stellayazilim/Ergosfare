@@ -48,8 +48,8 @@ xrefmap.yml
 examples/Playground/
 
 # e2e run artifacts: the SQLite database is recreated on every boot, ijhttp writes its
-# JUnit report under e2e/reports/, and e2e/run.mjs self-provisions the ijhttp CLI into
-# e2e/tools/ on first run.
-e2e/**/*.db
-e2e/reports/
-e2e/tools/
+# JUnit report under examples/e2e/reports/, and examples/e2e/run.mjs self-provisions the
+# ijhttp CLI into examples/e2e/tools/ on first run.
+examples/e2e/**/*.db
+examples/e2e/reports/
+examples/e2e/tools/

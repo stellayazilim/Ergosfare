@@ -1,4 +1,5 @@
 using Stella.Ergosfare.Commands.Abstractions;
+using Stella.Ergosfare.E2E.Api.Contracts;
 using Stella.Ergosfare.E2E.Contracts.Commands;
 using Stella.Ergosfare.E2E.Contracts.Events;
 using Stella.Ergosfare.Events.Abstractions;
@@ -14,6 +15,7 @@ public sealed class CreateTodoEndpoint : IEndpoint
         {
             var id = await commands.SendAsync<Guid>(command);
             await events.PublishAsync(new TodoCreatedEvent(id, command.Title));
-            return Results.Created($"/todos/{id}", new { id });
+
+            return Results.Created($"/todos/{id}", new CreatedTodoResponse(id));
         });
 }

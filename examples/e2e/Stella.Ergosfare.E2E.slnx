@@ -1,4 +1,4 @@
-<Solution>
+﻿<Solution>
   <Folder Name="/app/">
     <Project Path="Stella.Ergosfare.E2E.Domain\Stella.Ergosfare.E2E.Domain.csproj" />
     <Project Path="Stella.Ergosfare.E2E.Contracts\Stella.Ergosfare.E2E.Contracts.csproj" />
@@ -8,7 +8,7 @@
   </Folder>
   <Folder Name="/src/">
     <!-- The library under test, referenced from local src so e2e runs this branch's code. -->
-    <Project Path="..\src\Stella.Ergosfare\Stella.Ergosfare.csproj" />
-    <Project Path="..\src\Stella.Ergosfare.SourceGenerator\Stella.Ergosfare.SourceGenerator.csproj" />
+    <Project Path="..\..\src\Stella.Ergosfare\Stella.Ergosfare.csproj" />
+    <Project Path="..\..\src\Stella.Ergosfare.SourceGenerator\Stella.Ergosfare.SourceGenerator.csproj" />
   </Folder>
 </Solution>

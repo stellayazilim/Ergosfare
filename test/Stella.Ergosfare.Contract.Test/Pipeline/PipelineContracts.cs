@@ -2,6 +2,7 @@ using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Contract.Test.Harness;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Queries.Abstractions;
 
 namespace Stella.Ergosfare.Contract.Test.Pipeline;
@@ -398,5 +399,58 @@ public abstract class OrderedPostBase<TCommand>(string slot) : ICommandPostInter
     {
         context.Mark(slot);
         return ValueTask.FromResult(result);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// async typed interceptors over the Unit slot
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// The async typed post contract closed over <see cref="Unit"/> — the one call arm no
+/// other void scenario reaches: the result-agnostic and sync typed shapes are pinned
+/// elsewhere, this family pins <c>IAsyncXInterceptor&lt;TMessage, Unit&gt;</c>. The
+/// <see cref="ICommand"/> marker is the same seam the flavored facades use to make an
+/// interceptor a command construct.
+/// </summary>
+[ExcludeFromDiscovery]
+public abstract class AsyncTypedPostBase<TCommand> : ICommand, IAsyncPostInterceptor<TCommand, Unit>
+    where TCommand : class, IPayloadCommand
+{
+    /// <inheritdoc />
+    public ValueTask<object> HandleAsync(TCommand message, Unit messageResult, ErgosfareContext context)
+    {
+        context.Mark("post", $"{message.Payload}|{PipelineVocabulary.Describe(messageResult)}");
+        return ValueTask.FromResult<object>(messageResult);
+    }
+}
+
+/// <inheritdoc cref="AsyncTypedPostBase{TCommand}"/>
+[ExcludeFromDiscovery]
+public abstract class AsyncTypedExceptionBase<TCommand> : ICommand, IAsyncExceptionInterceptor<TCommand, Unit>
+    where TCommand : class, IPayloadCommand
+{
+    /// <inheritdoc />
+    public ValueTask<object?> HandleAsync(TCommand message, Unit? result, Exception exception, ErgosfareContext context)
+    {
+        context.Mark("exception",
+            $"{message.Payload}|{PipelineVocabulary.Describe(result)}|{PipelineVocabulary.Describe(exception)}");
+
+        return ValueTask.FromResult<object?>(Unit.Value);
+    }
+}
+
+/// <inheritdoc cref="AsyncTypedPostBase{TCommand}"/>
+[ExcludeFromDiscovery]
+public abstract class AsyncTypedFinalBase<TCommand> : ICommand, IAsyncFinalInterceptor<TCommand, Unit>
+    where TCommand : class, IPayloadCommand
+{
+    /// <inheritdoc />
+    public ValueTask HandleAsync(TCommand message, Unit? result, Exception? exception, ErgosfareContext context)
+    {
+        context.Mark("final",
+            $"{message.Payload}|{PipelineVocabulary.Describe(result)}|{PipelineVocabulary.Describe(exception)}");
+
+        return ValueTask.CompletedTask;
     }
 }

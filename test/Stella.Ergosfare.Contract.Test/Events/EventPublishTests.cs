@@ -328,16 +328,17 @@ public sealed class EventPublishTests
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task Aborting_a_publish_completes_it_without_an_exception()
+    public async Task Aborting_a_publish_reaches_the_publisher()
     {
         await using var provider = CreateProvider();
         var recorder = new PipelineRecorder();
 
-        // A publish short-circuits like any other dispatch: the exception stage never sees
-        // the abort, the final stage still runs, and the publisher gets no exception.
-        await provider.GetRequiredService<IEventMediator>().PublishAsync(new Recalled(), recorder.Events());
+        // A publish is stopped like any other dispatch: the exception stage never sees the
+        // abort, the final stage does not run either, and the publisher is told.
+        await Assert.ThrowsAsync<ExecutionAbortedException>(
+            async () => await provider.GetRequiredService<IEventMediator>()
+                .PublishAsync(new Recalled(), recorder.Events()));
 
-        recorder.AssertStages("handler", "post:abort", "final");
-        Assert.Equal($"{nameof(Unit)}|none", recorder.DetailOf("final"));
+        recorder.AssertStages("handler", "post:abort");
     }
 }
