@@ -18,7 +18,7 @@ public sealed record Greet(string Name) : ICommand<string>;
 
 public sealed class GreetHandler : ICommandHandler<Greet, string>
 {
-    public ValueTask<string> HandleAsync(Greet message, IExecutionContext context)
+    public ValueTask<string> HandleAsync(Greet message, ErgosfareContext context)
         => new($"hello, {message.Name}");
 }
 

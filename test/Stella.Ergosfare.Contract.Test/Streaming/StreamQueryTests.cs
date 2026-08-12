@@ -31,7 +31,7 @@ public sealed class StreamQueryTests
     [DiscoveryKey(Key)]
     public sealed class TicksHandler : IStreamQueryHandler<Ticks, int>
     {
-        public async IAsyncEnumerable<int> StreamAsync(Ticks query, IExecutionContext context)
+        public async IAsyncEnumerable<int> StreamAsync(Ticks query, ErgosfareContext context)
         {
             yield return 1;
 

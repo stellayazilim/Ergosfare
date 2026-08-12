@@ -21,7 +21,7 @@ public class QueryModuleTests
     /// </summary>
     private class NonQueryHandler: IHandler<IMessage, ValueTask>
     {
-        public ValueTask Handle(IMessage message, IExecutionContext context)
+        public ValueTask Handle(IMessage message, ErgosfareContext context)
         {
             return ValueTask.CompletedTask;
         }
@@ -39,8 +39,7 @@ public class QueryModuleTests
         var serviceCollection = new ServiceCollection()
             .AddErgosfare(
                 x => x.AddQueryModule(
-                    c => c.Register<StubNonGenericStringResultQueryHandler>()
-                        .RegisterFromAssembly(Assembly.GetExecutingAssembly()))
+                    c => c.Register<StubNonGenericStringResultQueryHandler>())
                 ).BuildServiceProvider();
         var mediator = serviceCollection.GetRequiredService<IQueryMediator>();
         var result = mediator.QueryAsync(new StubNonGenericStringResultQuery());

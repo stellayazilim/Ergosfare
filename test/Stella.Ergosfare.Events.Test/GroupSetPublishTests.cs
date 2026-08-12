@@ -28,7 +28,7 @@ public class GroupSetPublishTests
     [Group("gsp.audit")]
     public sealed class AuditSlottedHandler : IEventHandler<SlottedEvent>
     {
-        public ValueTask HandleAsync(SlottedEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(SlottedEvent @event, ErgosfareContext context)
         {
             _lastRan = "audit";
             return ValueTask.CompletedTask;
@@ -39,7 +39,7 @@ public class GroupSetPublishTests
     [Group("gsp.billing")]
     public sealed class BillingSlottedHandler : IEventHandler<SlottedEvent>
     {
-        public ValueTask HandleAsync(SlottedEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(SlottedEvent @event, ErgosfareContext context)
         {
             _lastRan = "billing";
             return ValueTask.CompletedTask;
@@ -52,7 +52,7 @@ public class GroupSetPublishTests
     [ExcludeFromDiscovery]
     public sealed class DefaultEventHandler : IEventHandler<DefaultEvent>
     {
-        public ValueTask HandleAsync(DefaultEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(DefaultEvent @event, ErgosfareContext context)
         {
             _lastRan = "default";
             return ValueTask.CompletedTask;

@@ -18,7 +18,8 @@ public sealed class StagedPlanComposition(
     Type[] preInterceptorTypes,
     Type[] postInterceptorTypes,
     Type[] exceptionInterceptorTypes,
-    Type[] finalInterceptorTypes)
+    Type[] finalInterceptorTypes,
+    Type? resultAdapterType = null)
 {
     internal readonly Type[] PreInterceptorTypeArray = preInterceptorTypes;
     internal readonly Type[] PostInterceptorTypeArray = postInterceptorTypes;
@@ -27,6 +28,16 @@ public sealed class StagedPlanComposition(
 
     /// <summary>The concrete type of the pipeline's sole main handler.</summary>
     public Type HandlerType { get; } = handlerType;
+
+    /// <summary>
+    /// The result-adapter type the plan's value-path branches were baked against, or
+    /// <c>null</c> when the plan models no adapter. Part of the comparison key: the
+    /// hosting executor only trusts the plan while the runtime-bound adapter of the
+    /// (message, result) slot is exactly this type — a plan emitted before an annotation
+    /// was added (or by an older generator) then falls back to the runtime strategy
+    /// instead of silently skipping the value path.
+    /// </summary>
+    public Type? ResultAdapterType { get; } = resultAdapterType;
 
     /// <summary>The pre-interceptor types, in execution order.</summary>
     public IReadOnlyList<Type> PreInterceptorTypes => PreInterceptorTypeArray;

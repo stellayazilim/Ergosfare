@@ -19,8 +19,8 @@ namespace Stella.Ergosfare.Events.Abstractions;
 public interface IEventPreInterceptor<TEvent> : IEvent, IAsyncPreInterceptor<TEvent>
     where TEvent : notnull
 {
-    /// <inheritdoc cref="IAsyncPreInterceptor{TMessage}.HandleAsync(TMessage,IExecutionContext)"/>
-    async ValueTask<object> IAsyncPreInterceptor<TEvent>.HandleAsync(TEvent @event, IExecutionContext context)
+    /// <inheritdoc cref="IAsyncPreInterceptor{TMessage}.HandleAsync(TMessage,ErgosfareContext)"/>
+    async ValueTask<object> IAsyncPreInterceptor<TEvent>.HandleAsync(TEvent @event, ErgosfareContext context)
         => await HandleAsync(@event, context);
 
     /// <summary>
@@ -29,5 +29,5 @@ public interface IEventPreInterceptor<TEvent> : IEvent, IAsyncPreInterceptor<TEv
     /// </summary>
     /// <param name="event">The event to intercept.</param>
     /// <param name="context">The current execution context.</param>
-    new ValueTask<TEvent> HandleAsync(TEvent @event, IExecutionContext context);
+    new ValueTask<TEvent> HandleAsync(TEvent @event, ErgosfareContext context);
 }

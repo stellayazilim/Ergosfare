@@ -39,7 +39,7 @@ public sealed class ExecutionContextDataFlowTests
     [DiscoveryKey(Key)]
     public sealed class CarrierPre : ICommandPreInterceptor<Carrier>
     {
-        public ValueTask<Carrier> HandleAsync(Carrier command, IExecutionContext context)
+        public ValueTask<Carrier> HandleAsync(Carrier command, ErgosfareContext context)
         {
             context.Set(WrittenByPre, "yes");
             return ValueTask.FromResult(command);
@@ -49,7 +49,7 @@ public sealed class ExecutionContextDataFlowTests
     [DiscoveryKey(Key)]
     public sealed class CarrierHandler : ICommandHandler<Carrier>
     {
-        public ValueTask HandleAsync(Carrier command, IExecutionContext context)
+        public ValueTask HandleAsync(Carrier command, ErgosfareContext context)
         {
             command.HandlerSawPreValue = context.Has(WrittenByPre);
             command.HandlerSawStaleValue = context.Has(WrittenByHandler);
@@ -62,7 +62,7 @@ public sealed class ExecutionContextDataFlowTests
     [DiscoveryKey(Key)]
     public sealed class CarrierFinal : ICommandFinalInterceptor<Carrier>
     {
-        public ValueTask HandleAsync(Carrier command, object? result, Exception? exception, IExecutionContext context)
+        public ValueTask HandleAsync(Carrier command, object? result, Exception? exception, ErgosfareContext context)
         {
             command.FinalSawPreValue = context.Has(WrittenByPre);
             return ValueTask.CompletedTask;
@@ -163,7 +163,7 @@ public sealed class ExecutionContextDataFlowTests
     [DiscoveryKey(Key)]
     public sealed class InnerHandler : ICommandHandler<Inner>
     {
-        public ValueTask HandleAsync(Inner command, IExecutionContext context)
+        public ValueTask HandleAsync(Inner command, ErgosfareContext context)
         {
             context.Abort();
             return ValueTask.CompletedTask;
@@ -188,7 +188,7 @@ public sealed class ExecutionContextDataFlowTests
     [DiscoveryKey(Key)]
     public sealed class OuterHandler(ICommandMediator mediator) : ICommandHandler<Outer>
     {
-        public async ValueTask HandleAsync(Outer command, IExecutionContext context)
+        public async ValueTask HandleAsync(Outer command, ErgosfareContext context)
         {
             using var scope = context.CreateScope();
 

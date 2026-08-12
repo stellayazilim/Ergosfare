@@ -62,7 +62,7 @@ public abstract class AbortVoidHandlerBase<TCommand> : ICommandHandler<TCommand>
     where TCommand : class, IAbortCommand
 {
     /// <inheritdoc />
-    public ValueTask HandleAsync(TCommand command, IExecutionContext context)
+    public ValueTask HandleAsync(TCommand command, ErgosfareContext context)
     {
         context.Mark("handler");
         return ValueTask.CompletedTask;
@@ -75,7 +75,7 @@ public abstract class AbortingVoidPostBase<TCommand> : ICommandPostInterceptor<T
     where TCommand : class, IAbortCommand
 {
     /// <inheritdoc />
-    public ValueTask<object> HandleAsync(TCommand command, object result, IExecutionContext context)
+    public ValueTask<object> HandleAsync(TCommand command, object result, ErgosfareContext context)
     {
         context.Mark("post:abort", AbortVocabulary.Describe(result));
         context.Abort();
@@ -89,7 +89,7 @@ public abstract class LateVoidPostBase<TCommand> : ICommandPostInterceptor<TComm
     where TCommand : class, IAbortCommand
 {
     /// <inheritdoc />
-    public ValueTask<object> HandleAsync(TCommand command, object result, IExecutionContext context)
+    public ValueTask<object> HandleAsync(TCommand command, object result, ErgosfareContext context)
     {
         context.Mark("post:after");
         return ValueTask.FromResult(result);
@@ -102,7 +102,7 @@ public abstract class AbortVoidExceptionBase<TCommand> : ICommandExceptionInterc
     where TCommand : class, IAbortCommand
 {
     /// <inheritdoc />
-    public ValueTask<object> HandleAsync(TCommand command, object? result, Exception exception, IExecutionContext context)
+    public ValueTask<object> HandleAsync(TCommand command, object? result, Exception exception, ErgosfareContext context)
     {
         context.Mark("exception", AbortVocabulary.Describe(exception));
         return ValueTask.FromResult<object>(Unit.Value);
@@ -115,7 +115,7 @@ public abstract class AbortVoidFinalBase<TCommand> : ICommandFinalInterceptor<TC
     where TCommand : class, IAbortCommand
 {
     /// <inheritdoc />
-    public ValueTask HandleAsync(TCommand command, object? result, Exception? exception, IExecutionContext context)
+    public ValueTask HandleAsync(TCommand command, object? result, Exception? exception, ErgosfareContext context)
     {
         context.Mark("final", $"{AbortVocabulary.Describe(result)}|{AbortVocabulary.Describe(exception)}");
         return ValueTask.CompletedTask;
@@ -132,7 +132,7 @@ public abstract class AbortResultHandlerBase<TCommand> : ICommandHandler<TComman
     where TCommand : class, IAbortResultCommand
 {
     /// <inheritdoc />
-    public ValueTask<string> HandleAsync(TCommand command, IExecutionContext context)
+    public ValueTask<string> HandleAsync(TCommand command, ErgosfareContext context)
     {
         context.Mark("handler");
         return ValueTask.FromResult(AbortVocabulary.HandlerResult);
@@ -145,7 +145,7 @@ public abstract class AbortingResultPostBase<TCommand> : ICommandPostInterceptor
     where TCommand : class, IAbortResultCommand
 {
     /// <inheritdoc />
-    public ValueTask<string> HandleAsync(TCommand command, string commandResult, IExecutionContext context)
+    public ValueTask<string> HandleAsync(TCommand command, string commandResult, ErgosfareContext context)
     {
         context.Mark("post:abort", commandResult);
         context.Abort();
@@ -159,7 +159,7 @@ public abstract class LateResultPostBase<TCommand> : ICommandPostInterceptor<TCo
     where TCommand : class, IAbortResultCommand
 {
     /// <inheritdoc />
-    public ValueTask<string> HandleAsync(TCommand command, string commandResult, IExecutionContext context)
+    public ValueTask<string> HandleAsync(TCommand command, string commandResult, ErgosfareContext context)
     {
         context.Mark("post:after");
         return ValueTask.FromResult(commandResult);
@@ -172,7 +172,7 @@ public abstract class AbortResultExceptionBase<TCommand> : ICommandExceptionInte
     where TCommand : class, IAbortResultCommand
 {
     /// <inheritdoc />
-    public ValueTask<string?> HandleAsync(TCommand command, string? result, Exception exception, IExecutionContext context)
+    public ValueTask<string?> HandleAsync(TCommand command, string? result, Exception exception, ErgosfareContext context)
     {
         context.Mark("exception", AbortVocabulary.Describe(exception));
         return ValueTask.FromResult<string?>(result);
@@ -185,7 +185,7 @@ public abstract class AbortResultFinalBase<TCommand> : ICommandFinalInterceptor<
     where TCommand : class, IAbortResultCommand
 {
     /// <inheritdoc />
-    public ValueTask HandleAsync(TCommand command, string? result, Exception? exception, IExecutionContext context)
+    public ValueTask HandleAsync(TCommand command, string? result, Exception? exception, ErgosfareContext context)
     {
         context.Mark("final", $"{AbortVocabulary.Describe(result)}|{AbortVocabulary.Describe(exception)}");
         return ValueTask.CompletedTask;
@@ -202,7 +202,7 @@ public abstract class AbortQueryHandlerBase<TQuery> : IQueryHandler<TQuery, int>
     where TQuery : class, IAbortValueQuery
 {
     /// <inheritdoc />
-    public ValueTask<int> HandleAsync(TQuery query, IExecutionContext context)
+    public ValueTask<int> HandleAsync(TQuery query, ErgosfareContext context)
     {
         context.Mark("handler");
         return ValueTask.FromResult(AbortVocabulary.HandlerValue);
@@ -215,7 +215,7 @@ public abstract class AbortingQueryPostBase<TQuery> : IQueryPostInterceptor<TQue
     where TQuery : class, IAbortValueQuery
 {
     /// <inheritdoc />
-    public ValueTask<int> HandleAsync(TQuery query, int queryResult, IExecutionContext context)
+    public ValueTask<int> HandleAsync(TQuery query, int queryResult, ErgosfareContext context)
     {
         context.Mark("post:abort", queryResult.ToString());
         context.Abort();
@@ -229,7 +229,7 @@ public abstract class LateQueryPostBase<TQuery> : IQueryPostInterceptor<TQuery, 
     where TQuery : class, IAbortValueQuery
 {
     /// <inheritdoc />
-    public ValueTask<int> HandleAsync(TQuery query, int queryResult, IExecutionContext context)
+    public ValueTask<int> HandleAsync(TQuery query, int queryResult, ErgosfareContext context)
     {
         context.Mark("post:after");
         return ValueTask.FromResult(queryResult);
@@ -242,7 +242,7 @@ public abstract class AbortQueryExceptionBase<TQuery> : IQueryExceptionIntercept
     where TQuery : class, IAbortValueQuery
 {
     /// <inheritdoc />
-    public ValueTask<int> HandleAsync(TQuery query, int result, Exception exception, IExecutionContext context)
+    public ValueTask<int> HandleAsync(TQuery query, int result, Exception exception, ErgosfareContext context)
     {
         context.Mark("exception", AbortVocabulary.Describe(exception));
         return ValueTask.FromResult(result);
@@ -255,7 +255,7 @@ public abstract class AbortQueryFinalBase<TQuery> : IQueryFinalInterceptor<TQuer
     where TQuery : class, IAbortValueQuery
 {
     /// <inheritdoc />
-    public ValueTask HandleAsync(TQuery query, int result, Exception? exception, IExecutionContext context)
+    public ValueTask HandleAsync(TQuery query, int result, Exception? exception, ErgosfareContext context)
     {
         context.Mark("final", $"{result}|{AbortVocabulary.Describe(exception)}");
         return ValueTask.CompletedTask;

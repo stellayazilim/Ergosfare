@@ -18,7 +18,7 @@ public class TestCommandHandler: ICommandHandler<TestCommand>
     /// <param name="message">The command to handle.</param>
     /// <param name="context">The execution context of the command.</param>
     /// <returns>A completed <see cref="Task"/>.</returns>
-    public ValueTask HandleAsync(TestCommand message, IExecutionContext context)
+    public ValueTask HandleAsync(TestCommand message, ErgosfareContext context)
     {
         return ValueTask.CompletedTask;
     }
@@ -40,7 +40,7 @@ public class TestCommandStringResultHandler:ICommandHandler<TestCommandStringRes
     /// A <see cref="Task{TResult}"/> containing the result of the command. 
     /// In this stub implementation, it always returns an empty string.
     /// </returns>
-    public ValueTask<string> HandleAsync(TestCommandStringResult message, IExecutionContext context)
+    public ValueTask<string> HandleAsync(TestCommandStringResult message, ErgosfareContext context)
     {
         return ValueTask.FromResult(string.Empty);
     }

@@ -1,6 +1,5 @@
-
+﻿
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 using Stella.Ergosfare.Test.Fixtures;
 using Stella.Ergosfare.Test.Fixtures.Stubs.Basic;
@@ -12,18 +11,14 @@ namespace Stella.Ergosfare.Core.Test.Strategies.InvocationStrategies;
 /// </summary>
 public class FinalInterceptorInvocationStrategyTests:
     IClassFixture<MessageDependencyFixture>, 
-    IClassFixture<DescriptorFixture>,
     IClassFixture<ExecutionContextFixture>
 {
     private MessageDependencyFixture _messageDependencyFixture;
-    private readonly DescriptorFixture _descriptorFixture;
     // ReSharper disable once ConvertToPrimaryConstructor
     public FinalInterceptorInvocationStrategyTests(
-        MessageDependencyFixture messageDependencyFixture,
-        DescriptorFixture descriptorFixture)
+        MessageDependencyFixture messageDependencyFixture)
     {
         _messageDependencyFixture = messageDependencyFixture;
-        _descriptorFixture = descriptorFixture;
     }
 
     
@@ -36,8 +31,8 @@ public class FinalInterceptorInvocationStrategyTests:
     /// <list type="bullet">
     /// <item>Direct final interceptors are executed for the message.</item>
     /// <item>Indirect final interceptors (registered for parent or assignable messages) are also executed.</item>
-    /// <item>The <see cref="MessageDependencyFixture"/> and <see cref="DescriptorFixture"/> integration
-    /// correctly resolves the <see cref="IMessageDescriptor"/> and <see cref="IMessageDependencies"/>.</item>
+    /// <item>The <see cref="MessageDependencyFixture"/> composes the registered participants
+    /// into the message's own <see cref="IMessageDependencies"/>.</item>
     /// </list>
     /// </remarks>
     [Fact]
@@ -46,26 +41,15 @@ public class FinalInterceptorInvocationStrategyTests:
     {
         _messageDependencyFixture = _messageDependencyFixture.New;
 
-        // RegisterHandler rather than MessageRegistry.Register: it registers with the
-        // container as well, and building a pipeline now verifies its participants are
-        // resolvable there. Registry-only setup described a pipeline that could never
-        // have dispatched.
+        // RegisterHandler registers with the container as well, and building a pipeline
+        // verifies its participants are resolvable there.
         _messageDependencyFixture.RegisterHandler(
             typeof(StubIndirectMessage), typeof(StubFinalInterceptor), typeof(StubIndirectFinalInterceptor));
 
-        
-        
-        
-        // Set fixture to descriptor and create descriptor
-        var descriptor = _descriptorFixture
-            .SetMessageRegistry(_messageDependencyFixture.MessageRegistry)
-            .GetDescriptorFromRegistry(typeof(StubIndirectMessage));
+        // StubIndirectFinalInterceptor is declared over the message itself (direct);
+        // StubFinalInterceptor is declared over its base and matches covariantly.
+        var messageDependencies = _messageDependencyFixture.CreateDependencies<StubIndirectMessage>();
 
-        Assert.NotNull(descriptor);
-        
-        // Create dependencies from descriptor
-        var messageDependencies = _messageDependencyFixture.CreateDependenciesFromDescriptor<StubMessage>(descriptor);
-        
         // Direct and indirect final interceptors are merged into one list, direct first.
         Assert.NotEmpty(messageDependencies.FinalInterceptors);
         Assert.Contains(messageDependencies.FinalInterceptors,
@@ -74,7 +58,6 @@ public class FinalInterceptorInvocationStrategyTests:
             r => r.HandlerType == typeof(StubIndirectFinalInterceptor));
         
         // cleanup
-        _descriptorFixture.Dispose();
         _messageDependencyFixture.Dispose();
 
     }

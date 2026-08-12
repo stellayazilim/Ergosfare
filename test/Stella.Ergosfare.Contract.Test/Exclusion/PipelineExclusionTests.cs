@@ -35,7 +35,7 @@ public abstract class PipelineExclusionContract
         where TCommand : class, ICommand
     {
         /// <inheritdoc />
-        public ValueTask HandleAsync(TCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(TCommand command, ErgosfareContext context)
         {
             context.Mark("handler");
             return ValueTask.CompletedTask;
@@ -48,7 +48,7 @@ public abstract class PipelineExclusionContract
         where TSupertype : class, ICommand
     {
         /// <inheritdoc />
-        public ValueTask<TSupertype> HandleAsync(TSupertype command, IExecutionContext context)
+        public ValueTask<TSupertype> HandleAsync(TSupertype command, ErgosfareContext context)
         {
             context.Mark("pre:covariant");
             return ValueTask.FromResult(command);
@@ -61,7 +61,7 @@ public abstract class PipelineExclusionContract
         where TCommand : class, ICommand
     {
         /// <inheritdoc />
-        public ValueTask<TCommand> HandleAsync(TCommand command, IExecutionContext context)
+        public ValueTask<TCommand> HandleAsync(TCommand command, ErgosfareContext context)
         {
             context.Mark("pre:direct");
             return ValueTask.FromResult(command);

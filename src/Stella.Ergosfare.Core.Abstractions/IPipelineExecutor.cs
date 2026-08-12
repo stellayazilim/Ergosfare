@@ -21,5 +21,5 @@ public interface IPipelineExecutor
     /// <param name="message">The message instance; its runtime type is the executor's closed message type (or derived).</param>
     /// <param name="context">The execution context for this dispatch.</param>
     /// <param name="serviceProvider">The provider of the scope the dispatch runs in.</param>
-    ValueTask Execute(object message, IExecutionContext context, IServiceProvider serviceProvider);
+    ValueTask Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider);
 }

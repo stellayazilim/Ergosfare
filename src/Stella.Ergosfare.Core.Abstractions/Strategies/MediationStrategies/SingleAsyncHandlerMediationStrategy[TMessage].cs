@@ -16,9 +16,36 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies;
 ///     3. Executes post-handlers.
 ///     In case of any exception during the process, it delegates the error handling to the registered error handlers.
 /// </remarks>
-public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
-    IResultAdapterService? resultAdapterService) : IMessageMediationStrategy<TMessage, ValueTask> where TMessage : IMessage
+public sealed class SingleAsyncHandlerMediationStrategy<TMessage> : IMessageMediationStrategy<TMessage, ValueTask> where TMessage : IMessage
 {
+    // The effective adapter of the void pipeline's Unit slot — resolved once on the
+    // first dispatch (the default tier needs the provider) and published through the
+    // volatile flag; null unless a Unit adapter is deliberately bound.
+    private IResultAdapter<Unit>? _resultAdapter;
+
+    // The adapter's materializer facet; see the result-producing strategy. A Unit
+    // materializer absorbs pipeline failures into the void pipeline's non-result.
+    private IResultMaterializer<Unit>? _resultMaterializer;
+
+    private volatile bool _resultAdapterResolved;
+
+    /// <summary>
+    /// Resolves the slot's effective adapter once; see the result-producing strategy for
+    /// the publication reasoning.
+    /// </summary>
+    private void EnsureResultAdapter(IServiceProvider serviceProvider)
+    {
+        if (_resultAdapterResolved)
+        {
+            return;
+        }
+
+        var adapter = Results.ResultAdapterBinding.For<TMessage, Unit>(serviceProvider);
+        _resultAdapter = adapter;
+        _resultMaterializer = adapter as IResultMaterializer<Unit>;
+        _resultAdapterResolved = true;
+    }
+
     /// <summary>
     ///     Mediates a message by executing the appropriate handler and orchestrating the handling pipeline.
     /// </summary>
@@ -39,29 +66,38 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
     ///     Pre-interceptors, the main handler and post-interceptors run in sequence; with no
     ///     interceptors registered the handler is invoked directly on a fast path. If an
     ///     exception occurs, the exception interceptors run; final interceptors always run.
-    ///     An <see cref="ExecutionAbortedException" /> aborts the mediation without error.
+    ///     An <see cref="ExecutionAbortedException" /> stops the pipeline outright — no
+    ///     remaining stage runs, finals included — and travels to the caller.
     /// </remarks>
-    public async ValueTask Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context, IServiceProvider serviceProvider)
+    public async ValueTask Mediate(TMessage message, IMessageDependencies messageDependencies, ErgosfareContext context, IServiceProvider serviceProvider)
     {
         if (messageDependencies is null)
         {
             throw new ArgumentNullException(nameof(messageDependencies));
         }
 
-        // Direct and covariantly matched handlers are one candidate set: a handler written
-        // against a supertype serves this message whether or not the message has a
-        // descriptor of its own. Counted before anything resolves, so a contested message
-        // runs neither handler.
+        EnsureResultAdapter(serviceProvider);
+
+        // The main-handler priority ladder: the direct level wins outright — a sole
+        // direct handler serves the message no matter how many covariant candidates
+        // exist (a covariant handler is a fallback, not a competitor); without a direct
+        // one the dispatch falls to the covariant level. More than one candidate AT THE
+        // SAME LEVEL is a contest, counted before anything resolves so a contested
+        // message runs neither claimant.
         var handlers = messageDependencies.Handlers;
         var indirectHandlers = messageDependencies.IndirectHandlers;
-        var handlerCount = handlers.Count + indirectHandlers.Count;
 
-        if (handlerCount > 1)
+        if (handlers.Count > 1)
         {
-            throw new MultipleHandlerFoundException(typeof(TMessage), handlerCount);
+            throw new MultipleHandlerFoundException(typeof(TMessage), handlers.Count);
         }
 
-        if (handlerCount == 0)
+        if (handlers.Count == 0 && indirectHandlers.Count > 1)
+        {
+            throw new MultipleHandlerFoundException(typeof(TMessage), indirectHandlers.Count);
+        }
+
+        if (handlers.Count == 0 && indirectHandlers.Count == 0)
         {
             throw new NoHandlerFoundException(typeof(TMessage), $"No handler is registered for {typeof(TMessage).Name}.");
         }
@@ -83,13 +119,23 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             // for a ValueTask slot). Interface-erased dispatches fall back to the DIM bridge.
             var fastHandler = soleHandler.Resolve(serviceProvider);
 
-            // No abort arm here: a handler that stops its own dispatch has nothing left to
-            // tell and no stage left to skip, so the signal simply travels to the caller.
-            await InvokeHandler(fastHandler, message, context);
+            try
+            {
+                // No abort arm here: a handler that stops its own dispatch has nothing left
+                // to tell and no stage left to skip, so the signal travels to the caller.
+                await InvokeHandler(fastHandler, message, context);
+            }
+            catch (Exception e) when (_resultMaterializer is not null && e is not ExecutionAbortedException)
+            {
+                // Catch-materialization; a void pipeline has nothing to hand back, so the
+                // materialized carrier is the absorption itself.
+                _resultMaterializer.Materialize(e);
+                return;
+            }
 
-            var fastEx = resultAdapterService?.LookupException(Unit.Value);
-
-            if (fastEx != null)
+            if (_resultMaterializer is null
+                && _resultAdapter is not null
+                && _resultAdapter.TryGetException(in Unit.Value, out var fastEx) && fastEx is not null)
             {
                 throw fastEx;
             }
@@ -102,32 +148,90 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
         // value for it — Unit.Value once the handler has run, null before that.
         Unit? result = null;
         Exception? exception = null;
+        ExceptionDispatchInfo? unhandledException = null;
         var aborted = false;
         try
         {
-            if (preInterceptorCount > 0)
+            try
             {
-                message = (TMessage) await PreInterceptorInvocationStrategy<TMessage>.Invoke(
-                    messageDependencies, serviceProvider, message, context);
+                if (preInterceptorCount > 0)
+                {
+                    message = (TMessage) await PreInterceptorInvocationStrategy<TMessage>.Invoke(
+                        messageDependencies, serviceProvider, message, context);
+                }
+
+                var handler = soleHandler.Resolve(serviceProvider);
+
+                await InvokeHandler(handler, message, context);
+                result = Unit.Value;
+
+                // The value channel; see the result-producing strategy.
+                if (_resultAdapter is not null && _resultAdapter.TryGetException(in Unit.Value, out var carried) && carried is not null)
+                {
+                    exception = carried;
+                }
+
+                if (exception is null && postInterceptorCount > 0)
+                {
+                    var (postResult, postCarried) = await PostInterceptorInvocationStrategy<TMessage, Unit>.Invoke(
+                        messageDependencies, _resultAdapter, serviceProvider, message, result, context);
+
+                    if (postCarried is not null)
+                    {
+                        exception = postCarried;
+                    }
+                    else
+                    {
+                        result = (Unit?)postResult ?? result;
+                    }
+                }
+            }
+            catch (Exception e) when (e is not ExecutionAbortedException)
+            {
+                // The classic zero-interceptor, no-adapter rethrow keeps its exact shape.
+                if (exceptionInterceptorCount == 0 && _resultAdapter is null)
+                {
+                    exception = e;
+                    throw;
+                }
+
+                exception = e;
+
+                if (_resultMaterializer is not null)
+                {
+                    result = _resultMaterializer.Materialize(e);
+                }
+                else
+                {
+                    unhandledException = ExceptionDispatchInfo.Capture(e);
+                }
             }
 
-            var handler = soleHandler.Resolve(serviceProvider);
-
-            await InvokeHandler(handler, message, context);
-            result = Unit.Value;
-
-            var ex = resultAdapterService?.LookupException(Unit.Value);
-
-            if (ex != null)
+            if (exception is not null)
             {
-                throw ex;
-            }
+                var matched = false;
 
-            if (postInterceptorCount > 0)
-            {
-                var invokedPostResult = (Unit?) await PostInterceptorInvocationStrategy<TMessage, Unit>.Invoke(
-                    messageDependencies, resultAdapterService, serviceProvider, message, result, context);
-                result = invokedPostResult ?? result;
+                if (exceptionInterceptorCount > 0)
+                {
+                    (matched, var stageResult) = await ExceptionInterceptorInvocationStrategy<TMessage, Unit>.Invoke(
+                        messageDependencies, serviceProvider, message, result, exception, context);
+
+                    if (matched)
+                    {
+                        result = (Unit?)stageResult ?? result;
+                    }
+                }
+
+                if (matched)
+                {
+                    unhandledException = null;
+                }
+                else if (_resultMaterializer is null)
+                {
+                    // Nobody accepted the failure and nothing absorbs it: it surfaces as a
+                    // throw after the final stage, like every unhandled failure.
+                    unhandledException ??= ExceptionDispatchInfo.Capture(exception);
+                }
             }
         }
         catch (ExecutionAbortedException)
@@ -136,20 +240,6 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             // stage, not the final stage below — and the signal continues to the caller.
             aborted = true;
             throw;
-        }
-        catch (Exception e)
-        {
-            exception = e;
-
-            if (exceptionInterceptorCount == 0)
-            {
-                throw;
-            }
-
-            var invokedResult = (Unit?) await ExceptionInterceptorInvocationStrategy<TMessage, Unit>.Invoke(
-                messageDependencies, serviceProvider, message, result, ExceptionDispatchInfo.Capture(e), context);
-            result = invokedResult ?? result;
-
         }
         finally
         {
@@ -160,13 +250,14 @@ public sealed class SingleAsyncHandlerMediationStrategy<TMessage>(
             }
         }
 
+        unhandledException?.Throw();
     }
 
     /// <summary>
     /// Invokes the handler through its typed contract — no object-typed bridge; see the
     /// result-producing strategy for the dispatch rules.
     /// </summary>
-    private static ValueTask InvokeHandler(object handler, TMessage message, IExecutionContext context)
+    private static ValueTask InvokeHandler(object handler, TMessage message, ErgosfareContext context)
     {
         switch (handler)
         {

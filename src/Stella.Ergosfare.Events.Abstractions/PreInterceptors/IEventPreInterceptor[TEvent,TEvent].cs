@@ -29,7 +29,7 @@ public interface IEventPreInterceptor<in TEvent,  TModifiedEvent>: IAsyncPreInte
     where TModifiedEvent : TEvent
 {
     /// <inheritdoc cref="IAsyncPreInterceptor{TEvent}.HandleAsync"/>
-    async ValueTask<object> IAsyncPreInterceptor<TEvent>.HandleAsync(TEvent @event, IExecutionContext executionContext)
+    async ValueTask<object> IAsyncPreInterceptor<TEvent>.HandleAsync(TEvent @event, ErgosfareContext executionContext)
     {
         return await HandleAsync(@event, executionContext);
     }
@@ -48,5 +48,5 @@ public interface IEventPreInterceptor<in TEvent,  TModifiedEvent>: IAsyncPreInte
     /// asynchronous pre-processing in the event mediation pipeline.
     /// </para>
     /// </remarks>
-    new ValueTask<TModifiedEvent> HandleAsync(TEvent @event, IExecutionContext context);
+    new ValueTask<TModifiedEvent> HandleAsync(TEvent @event, ErgosfareContext context);
 }

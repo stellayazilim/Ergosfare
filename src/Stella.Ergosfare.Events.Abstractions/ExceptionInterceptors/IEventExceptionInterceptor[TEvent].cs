@@ -35,7 +35,7 @@ public interface IEventExceptionInterceptor<in TEvent> : IEvent, IAsyncException
     /// only ever received the completed task — and gets it directly.
     /// </remarks>
     async ValueTask<object?> IAsyncExceptionInterceptor<TEvent, Unit>.HandleAsync(TEvent @event, Unit? result,
-        Exception exception, IExecutionContext context)
+        Exception exception, ErgosfareContext context)
     {
         await HandleAsync(@event, ValueTask.CompletedTask, exception, context);
         return Unit.Value;
@@ -52,7 +52,7 @@ public interface IEventExceptionInterceptor<in TEvent> : IEvent, IAsyncException
     /// <param name="exception">The exception thrown during event handling.</param>
     /// <param name="context">The execution context for the current mediation pipeline.</param>
     /// <returns>A <see cref="ValueTask"/> representing the asynchronous exception handling operation.</returns>
-    ValueTask HandleAsync(TEvent @event, ValueTask result, Exception exception, IExecutionContext context);
+    ValueTask HandleAsync(TEvent @event, ValueTask result, Exception exception, ErgosfareContext context);
 }
 
 

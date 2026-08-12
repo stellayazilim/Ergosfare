@@ -34,7 +34,7 @@ public abstract class MultipleMainHandlerContract
         where TCommand : class, ICommand
     {
         /// <inheritdoc />
-        public ValueTask HandleAsync(TCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(TCommand command, ErgosfareContext context)
         {
             context.Mark(slot);
             return ValueTask.CompletedTask;
@@ -47,7 +47,7 @@ public abstract class MultipleMainHandlerContract
         where TCommand : class, ICommand<string>
     {
         /// <inheritdoc />
-        public ValueTask<string> HandleAsync(TCommand command, IExecutionContext context)
+        public ValueTask<string> HandleAsync(TCommand command, ErgosfareContext context)
         {
             context.Mark(slot);
             return ValueTask.FromResult(slot);

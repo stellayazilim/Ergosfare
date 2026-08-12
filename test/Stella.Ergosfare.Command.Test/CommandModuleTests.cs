@@ -28,7 +28,7 @@ public class CommandModuleTests
         /// <param name="message">The message to handle.</param>
         /// <param name="context">The execution context.</param>
         /// <returns>A completed <see cref="Task"/>.</returns>
-        public ValueTask Handle(IMessage message, IExecutionContext context)
+        public ValueTask Handle(IMessage message, ErgosfareContext context)
         {
             return ValueTask.CompletedTask;
         }
@@ -47,8 +47,7 @@ public class CommandModuleTests
 
             .AddErgosfare(x => x.AddCommandModule(c =>
                 c.Register<TestCommandHandler>()
-                    .RegisterFromAssembly(Assembly.GetExecutingAssembly()
-                    )
+                    .Register<TestCommandStringResultHandler>()
             )).BuildServiceProvider();
         var mediator = serviceCollection.GetRequiredService<ICommandMediator>();
         await mediator.SendAsync(new TestCommand());

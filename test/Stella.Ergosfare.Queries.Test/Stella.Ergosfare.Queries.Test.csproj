@@ -1,6 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
+        <!-- Fixtures dispatch messages nothing registers; the dead-dispatch judgment is
+             about applications, not about a suite exercising the runtime. -->
+        <NoWarn>$(NoWarn)</NoWarn>
         <IsPackable>false</IsPackable>
     </PropertyGroup>
 
@@ -26,6 +29,11 @@
     <ItemGroup>
       <ProjectReference Include="..\..\src\Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.csproj" />
       <ProjectReference Include="..\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test.csproj" />
-    </ItemGroup>
+          <!-- The source generator as an analyzer: the frozen composition table is compiled,
+           so a project whose messages must dispatch has to be generated over. -->
+      <ProjectReference Include="..\..\src\Stella.Ergosfare.SourceGenerator\Stella.Ergosfare.SourceGenerator.csproj"
+                        OutputItemType="Analyzer"
+                        ReferenceOutputAssembly="false" />
+</ItemGroup>
 
 </Project>

@@ -1,3 +1,4 @@
+﻿using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -25,10 +26,8 @@ public class QueryMediatorTests
         var services = new ServiceCollection()
             .AddErgosfare(x => x.AddQueryModule(q => q.Register<StubNonGenericStringResultQueryHandler>()
             )).BuildServiceProvider();
-        var messageMediator = services.GetService<IMessageMediator>();
         var mediator = new QueryMediator(
-            services.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
-            messageMediator!);
+            services.GetRequiredService<MessageDispatchEngine>(), services);
         var result = mediator.QueryAsync(new StubNonGenericStringResultQuery(), queryMediationSettings: null);
         Assert.Equal(string.Empty, await result);
     }
@@ -44,10 +43,8 @@ public class QueryMediatorTests
         var serviceCollection = new ServiceCollection()
             .AddErgosfare(x => x.AddQueryModule(q => q.Register<StubNonGenericStreamStringResultQueryHandler>()
             )).BuildServiceProvider();
-        var messageMediator = serviceCollection.GetService<IMessageMediator>();
         var mediator = new QueryMediator(
-            serviceCollection.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>(),
-            messageMediator!);
+            serviceCollection.GetRequiredService<MessageDispatchEngine>(), serviceCollection);
         var expected = new []  {"Foo", "Bar", "Baz"};
         var result = new List<string>();
         // act

@@ -26,7 +26,7 @@ internal class CommandModule : IModule
     /// <param name="configuration">The module configuration containing services and message registry.</param>
     public void Build(IModuleConfiguration configuration)
     {
-        _builder(new CommandModuleBuilder(configuration.MessageRegistry));
+        _builder(new CommandModuleBuilder(configuration.Compositions));
 
         // Transient: the mediator is a stateless facade whose only per-instance state is the
         // provider that resolved it — a transient still receives the calling scope's provider,

@@ -93,7 +93,7 @@ public sealed class PipelineRecorder
     /// The recorder carried by the dispatch, or a shared silent one when the caller passed
     /// no settings — so a participant can mark unconditionally.
     /// </summary>
-    public static PipelineRecorder From(IExecutionContext context)
+    public static PipelineRecorder From(ErgosfareContext context)
         => context.TryGet<PipelineRecorder>(ItemsKey, out var recorder) && recorder is not null
             ? recorder
             : Silent;

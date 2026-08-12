@@ -28,7 +28,7 @@ public interface ICommandExceptionInterceptor<in TCommand, TResult> : ICommand, 
 {
     /// <inheritdoc />
     async ValueTask<object?> IAsyncExceptionInterceptor<TCommand, TResult>.HandleAsync(
-        TCommand command, TResult? result, Exception exception, IExecutionContext context)
+        TCommand command, TResult? result, Exception exception, ErgosfareContext context)
         => await HandleAsync(command, result, exception, context);
 
     /// <summary>
@@ -42,5 +42,5 @@ public interface ICommandExceptionInterceptor<in TCommand, TResult> : ICommand, 
     /// A <see cref="ValueTask{TResult}"/> producing the (possibly modified) result that
     /// continues through the pipeline.
     /// </returns>
-    new ValueTask<TResult?> HandleAsync(TCommand command, TResult? result, Exception exception, IExecutionContext context);
+    new ValueTask<TResult?> HandleAsync(TCommand command, TResult? result, Exception exception, ErgosfareContext context);
 }

@@ -24,5 +24,5 @@ public interface IAsyncFinalInterceptor<in TMessage, in TResult> : IFinalInterce
     /// <param name="exception">The exception that terminated the pipeline, if any.</param>
     /// <param name="context">The current execution context.</param>
     /// <returns>A <see cref="ValueTask"/> representing the asynchronous operation.</returns>
-    ValueTask HandleAsync(TMessage message, TResult? result, Exception? exception, IExecutionContext context);
+    ValueTask HandleAsync(TMessage message, TResult? result, Exception? exception, ErgosfareContext context);
 }

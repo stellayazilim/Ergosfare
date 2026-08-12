@@ -30,7 +30,7 @@ public class GroupSetDispatchTests
     [Group("gs.east")]
     public sealed class EastSlottedHandler : ICommandHandler<SlottedCommand>
     {
-        public ValueTask HandleAsync(SlottedCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(SlottedCommand command, ErgosfareContext context)
         {
             _lastRan = "east";
             return ValueTask.CompletedTask;
@@ -41,7 +41,7 @@ public class GroupSetDispatchTests
     [Group("gs.west")]
     public sealed class WestSlottedHandler : ICommandHandler<SlottedCommand>
     {
-        public ValueTask HandleAsync(SlottedCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(SlottedCommand command, ErgosfareContext context)
         {
             _lastRan = "west";
             return ValueTask.CompletedTask;
@@ -54,7 +54,7 @@ public class GroupSetDispatchTests
     [ExcludeFromDiscovery]
     public sealed class DefaultCommandHandler : ICommandHandler<DefaultCommand>
     {
-        public ValueTask HandleAsync(DefaultCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(DefaultCommand command, ErgosfareContext context)
         {
             _lastRan = "default";
             return ValueTask.CompletedTask;
@@ -68,7 +68,7 @@ public class GroupSetDispatchTests
     [Group("gs.east")]
     public sealed class EastEchoSlottedHandler : ICommandHandler<SlottedEcho, string>
     {
-        public ValueTask<string> HandleAsync(SlottedEcho command, IExecutionContext context)
+        public ValueTask<string> HandleAsync(SlottedEcho command, ErgosfareContext context)
             => ValueTask.FromResult("east");
     }
 
@@ -76,7 +76,7 @@ public class GroupSetDispatchTests
     [Group("gs.west")]
     public sealed class WestEchoSlottedHandler : ICommandHandler<SlottedEcho, string>
     {
-        public ValueTask<string> HandleAsync(SlottedEcho command, IExecutionContext context)
+        public ValueTask<string> HandleAsync(SlottedEcho command, ErgosfareContext context)
             => ValueTask.FromResult("west");
     }
 

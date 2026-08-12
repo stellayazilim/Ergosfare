@@ -25,5 +25,5 @@ public interface IAsyncHandler<in TMessage>: IHandler
     /// <param name="message">The message to handle.</param>
     /// <param name="context">The current execution context.</param>
     /// <returns>A <see cref="ValueTask"/> representing the asynchronous handling operation.</returns>
-    ValueTask HandleAsync(TMessage message, IExecutionContext context);
+    ValueTask HandleAsync(TMessage message, ErgosfareContext context);
 }

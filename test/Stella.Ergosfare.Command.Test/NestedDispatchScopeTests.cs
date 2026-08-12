@@ -32,7 +32,7 @@ public class NestedDispatchScopeTests
     [ExcludeFromDiscovery]
     public sealed class OuterHandler(ICommandMediator commands, Recorder recorder) : ICommandHandler<OuterCommand>
     {
-        public async ValueTask HandleAsync(OuterCommand message, IExecutionContext context)
+        public async ValueTask HandleAsync(OuterCommand message, ErgosfareContext context)
         {
             context.Set("outer", "state");
 
@@ -45,7 +45,7 @@ public class NestedDispatchScopeTests
     [ExcludeFromDiscovery]
     public sealed class InnerHandler(Recorder recorder) : ICommandHandler<InnerCommand, string>
     {
-        public ValueTask<string> HandleAsync(InnerCommand message, IExecutionContext context)
+        public ValueTask<string> HandleAsync(InnerCommand message, ErgosfareContext context)
         {
             // Clean child: the outer context's items must not leak in; the outer token must.
             recorder.InnerSawOuterItem = context.Has("outer");

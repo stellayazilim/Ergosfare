@@ -1,6 +1,5 @@
-using System.Reflection;
-using Stella.Ergosfare.Core.Abstractions.Registry;
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
+﻿using System.Reflection;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 
 namespace Stella.Ergosfare.SourceGenerator.Test;
 
@@ -8,39 +7,10 @@ namespace Stella.Ergosfare.SourceGenerator.Test;
 ///     Discovery attributes in generated registration: <c>[DiscoveryKey]</c> gates types
 ///     behind key patterns, <c>[ExcludeFromDiscovery]</c> removes them from discovery
 ///     entirely. Semantics are asserted by executing the emitted <c>RegisterAll</c>
-///     overloads against a recording registry.
+///     overloads against a real composition catalog and reading back its selection.
 /// </summary>
 public class DiscoveryKeyTests
 {
-    private const string RecordingRegistrySource = """
-
-        namespace TestApp
-        {
-            public sealed class RecordingRegistry : Stella.Ergosfare.Core.Abstractions.Registry.IMessageRegistry
-            {
-                public System.Collections.Generic.List<System.Type> Registered { get; } = new();
-
-                public System.Collections.Generic.List<Stella.Ergosfare.Core.Abstractions.Registry.Descriptors.IHandlerDescriptor> Descriptors { get; } = new();
-
-                public int Count => 0;
-
-                public System.Collections.Generic.IEnumerator<Stella.Ergosfare.Core.Abstractions.Registry.Descriptors.IMessageDescriptor> GetEnumerator()
-                {
-                    yield break;
-                }
-
-                System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
-
-                public void Register(System.Type type) => Registered.Add(type);
-
-                public void RegisterDescriptors(System.Collections.Generic.IEnumerable<Stella.Ergosfare.Core.Abstractions.Registry.Descriptors.IHandlerDescriptor> descriptors)
-                {
-                    Descriptors.AddRange(descriptors);
-                }
-            }
-        }
-        """;
-
     /// <summary>
     ///     Emits and loads a generator run's output once, then executes the generated
     ///     <c>RegisterAll</c> overloads against fresh recording registries.
@@ -50,7 +20,6 @@ public class DiscoveryKeyTests
         // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
         private readonly Assembly _assembly;
         private readonly Type _registrations;
-        private readonly Type _recordingRegistry;
 
         public DiscoveryHarness(GeneratorTestHost.GeneratorRunResult result)
         {
@@ -58,7 +27,7 @@ public class DiscoveryKeyTests
 
             // Make sure the real abstractions assembly is loaded so the emitted assembly's
             // references bind to it by name.
-            _ = typeof(IMessageRegistry);
+            _ = typeof(FrozenCompositionCatalog);
 
             using var stream = new MemoryStream();
             var emitResult = result.OutputCompilation.Emit(stream);
@@ -66,37 +35,29 @@ public class DiscoveryKeyTests
 
             _assembly = Assembly.Load(stream.ToArray());
             _registrations = _assembly.GetType("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
-            _recordingRegistry = _assembly.GetType("TestApp.RecordingRegistry", throwOnError: true)!;
         }
 
         /// <summary>
-        ///     Runs <c>RegisterAll(registry)</c> (<paramref name="pattern"/> <c>null</c>) or
-        ///     <c>RegisterAll(registry, pattern)</c> and returns the simple names of the
-        ///     fallback-registered types and the descriptor handler types, combined.
+        ///     Runs <c>RegisterAll(compositions)</c> (<paramref name="pattern"/> <c>null</c>)
+        ///     or <c>RegisterAll(compositions, pattern)</c> and returns the simple names of
+        ///     everything the run selected.
         /// </summary>
         public IReadOnlyList<string> Run(string? pattern = null)
         {
-            var registry = Activator.CreateInstance(_recordingRegistry)!;
+            var catalog = new FrozenCompositionCatalog();
 
             if (pattern is null)
             {
-                _registrations.GetMethod("RegisterAll", [typeof(IMessageRegistry)])!
-                    .Invoke(null, [registry]);
+                _registrations.GetMethod("RegisterAll", [typeof(FrozenCompositionCatalog)])!
+                    .Invoke(null, [catalog]);
             }
             else
             {
-                _registrations.GetMethod("RegisterAll", [typeof(IMessageRegistry), typeof(string)])!
-                    .Invoke(null, [registry, pattern]);
+                _registrations.GetMethod("RegisterAll", [typeof(FrozenCompositionCatalog), typeof(string)])!
+                    .Invoke(null, [catalog, pattern]);
             }
 
-            var names = ((List<Type>)_recordingRegistry.GetProperty("Registered")!.GetValue(registry)!)
-                .Select(type => type.Name)
-                .ToList();
-
-            names.AddRange(((List<IHandlerDescriptor>)_recordingRegistry.GetProperty("Descriptors")!.GetValue(registry)!)
-                .Select(descriptor => descriptor.HandlerType.Name));
-
-            return names;
+            return [.. catalog.Selections.Select(type => type.Name)];
         }
     }
 
@@ -114,7 +75,7 @@ public class DiscoveryKeyTests
                 [DiscoveryKey("reporting")]
                 public sealed record ReportCommand : ICommand;
             }
-            """ + RecordingRegistrySource,
+            """,
             referenceModuleBuilders: false);
 
         Assert.Empty(result.GeneratorDiagnostics);
@@ -144,7 +105,7 @@ public class DiscoveryKeyTests
                 [DiscoveryKey("billing")]
                 public sealed record BillingRun : ICommand;
             }
-            """ + RecordingRegistrySource,
+            """,
             referenceModuleBuilders: false);
 
         var harness = new DiscoveryHarness(result);
@@ -165,7 +126,7 @@ public class DiscoveryKeyTests
                 [DiscoveryKey("", "debug")]
                 public sealed record DebugCommand : ICommand;
             }
-            """ + RecordingRegistrySource,
+            """,
             referenceModuleBuilders: false);
 
         var harness = new DiscoveryHarness(result);
@@ -189,11 +150,11 @@ public class DiscoveryKeyTests
                 [DiscoveryKey("reporting")]
                 public sealed class ReportingPingHandler : ICommandHandler<Ping>
                 {
-                    public ValueTask HandleAsync(Ping message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(Ping message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
             }
-            """ + RecordingRegistrySource,
+            """,
             referenceModuleBuilders: false);
 
         var harness = new DiscoveryHarness(result);
@@ -218,7 +179,7 @@ public class DiscoveryKeyTests
                 [ExcludeFromDiscovery]
                 public sealed record ManuallyWired : ICommand;
             }
-            """ + RecordingRegistrySource,
+            """,
             referenceModuleBuilders: false);
 
         Assert.Empty(result.GeneratorDiagnostics);
@@ -238,7 +199,7 @@ public class DiscoveryKeyTests
             {
                 public sealed record AppCommand : ICommand;
             }
-            """ + RecordingRegistrySource,
+            """,
             libraries:
             [
                 ("Ergosfare.TestLibrary.AssemblyKeyed", """
@@ -277,7 +238,7 @@ public class DiscoveryKeyTests
             {
                 public sealed record AppCommand : ICommand;
             }
-            """ + RecordingRegistrySource,
+            """,
             libraries:
             [
                 ("Ergosfare.TestLibrary.Excluded", """

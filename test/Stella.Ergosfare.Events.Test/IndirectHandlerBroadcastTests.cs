@@ -35,7 +35,7 @@ public class IndirectHandlerBroadcastTests
     [ExcludeFromDiscovery]
     public sealed class OrderPlacedHandler : IEventHandler<OrderPlaced>
     {
-        public ValueTask HandleAsync(OrderPlaced message, IExecutionContext context)
+        public ValueTask HandleAsync(OrderPlaced message, ErgosfareContext context)
         {
             message.Trace.Add("direct");
             return default;
@@ -45,7 +45,7 @@ public class IndirectHandlerBroadcastTests
     [ExcludeFromDiscovery]
     public sealed class TracedEventHandler : IEventHandler<ITracedEvent>
     {
-        public ValueTask HandleAsync(ITracedEvent message, IExecutionContext context)
+        public ValueTask HandleAsync(ITracedEvent message, ErgosfareContext context)
         {
             message.Trace.Add("indirect");
             return default;
@@ -56,7 +56,7 @@ public class IndirectHandlerBroadcastTests
     [Group("audit")]
     public sealed class AuditTracedEventHandler : IEventHandler<ITracedEvent>
     {
-        public ValueTask HandleAsync(ITracedEvent message, IExecutionContext context)
+        public ValueTask HandleAsync(ITracedEvent message, ErgosfareContext context)
         {
             message.Trace.Add("audit");
             return default;

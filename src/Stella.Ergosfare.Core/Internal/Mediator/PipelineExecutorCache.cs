@@ -1,11 +1,10 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.StagedPlans;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
@@ -18,10 +17,7 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// type — one <see cref="Type.MakeGenericType"/> per message type, consistent with the
 /// pipeline plan premise that all dispatch-shape work happens once per message type.
 /// </summary>
-internal sealed class PipelineExecutorCache(
-    IMessageDependenciesFactory dependenciesFactory,
-    ActualTypeOrFirstAssignableTypeMessageResolveStrategy messageResolveStrategy,
-    IResultAdapterService? resultAdapterService = null)
+internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependenciesFactory)
 {
     internal static readonly string[] EmptyGroups = [];
 
@@ -342,8 +338,6 @@ internal sealed class PipelineExecutorCache(
     [UnconditionalSuppressMessage("Trimming", "IL2077", Justification = "Executor types are constructed from typeof expressions below; their constructors are rooted.")]
     private IPipelineExecutor CreateVoidExecutor(Type messageType, string[] groups)
     {
-        var descriptor = FindDescriptor(messageType);
-
         // Staged plan: bespoke code for the whole interceptor-bearing pipeline. Checked
         // before the single-handler plan — generation emits at most one plan kind per
         // message, and the staged one is the more specific claim. Group-less pipelines
@@ -352,7 +346,7 @@ internal sealed class PipelineExecutorCache(
         {
             return stagedPlan.Accept(
                 StagedVoidExecutorVisitor.Instance,
-                new ExecutorState(descriptor, dependenciesFactory, resultAdapterService, groups,
+                new ExecutorState(dependenciesFactory, groups,
                     StagedPlan: stagedPlan));
         }
 
@@ -364,7 +358,7 @@ internal sealed class PipelineExecutorCache(
         {
             return plan.Accept(
                 GeneratedVoidExecutorVisitor.Instance,
-                new ExecutorState(descriptor, dependenciesFactory, resultAdapterService, groups,
+                new ExecutorState(dependenciesFactory, groups,
                     plan.DirectHandlerFactory));
         }
 
@@ -374,12 +368,12 @@ internal sealed class PipelineExecutorCache(
         {
             return root.Accept(
                 VoidExecutorVisitor.Instance,
-                new ExecutorState(descriptor, dependenciesFactory, resultAdapterService, groups));
+                new ExecutorState(dependenciesFactory, groups));
         }
 
         var executorType = typeof(VoidPipelineExecutor<>).MakeGenericType(messageType);
 
-        return (IPipelineExecutor)Activator.CreateInstance(executorType, descriptor, dependenciesFactory, resultAdapterService, groups)!;
+        return (IPipelineExecutor)Activator.CreateInstance(executorType, dependenciesFactory, groups)!;
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2055",
@@ -390,14 +384,12 @@ internal sealed class PipelineExecutorCache(
     [UnconditionalSuppressMessage("Trimming", "IL2077", Justification = "Executor types are constructed from typeof expressions below; their constructors are rooted.")]
     private object CreateResultExecutor(Type messageType, Type resultType, string[] groups)
     {
-        var descriptor = FindDescriptor(messageType);
-
         // Staged plan first, mirroring the void side.
         if (groups.Length == 0 && GeneratedDispatchRoots.FindStagedResultPlan(messageType, resultType) is { } stagedPlan)
         {
             return stagedPlan.Accept(
                 StagedResultExecutorVisitor.Instance,
-                new ExecutorState(descriptor, dependenciesFactory, resultAdapterService, groups,
+                new ExecutorState(dependenciesFactory, groups,
                     StagedPlan: stagedPlan));
         }
 
@@ -408,7 +400,7 @@ internal sealed class PipelineExecutorCache(
         {
             return plan.Accept(
                 GeneratedResultExecutorVisitor.Instance,
-                new ExecutorState(descriptor, dependenciesFactory, resultAdapterService, groups,
+                new ExecutorState(dependenciesFactory, groups,
                     plan.DirectHandlerFactory));
         }
 
@@ -416,12 +408,12 @@ internal sealed class PipelineExecutorCache(
         {
             return root.Accept(
                 ResultExecutorVisitor.Instance,
-                new ExecutorState(descriptor, dependenciesFactory, resultAdapterService, groups));
+                new ExecutorState(dependenciesFactory, groups));
         }
 
         var executorType = typeof(ResultPipelineExecutor<,>).MakeGenericType(messageType, resultType);
 
-        return Activator.CreateInstance(executorType, descriptor, dependenciesFactory, resultAdapterService, groups)!;
+        return Activator.CreateInstance(executorType, dependenciesFactory, groups)!;
     }
 
     /// <summary>
@@ -433,9 +425,7 @@ internal sealed class PipelineExecutorCache(
     /// typed base inside the closed generic), or <c>null</c> for every other root.
     /// </summary>
     private readonly record struct ExecutorState(
-        IMessageDescriptor Descriptor,
         IMessageDependenciesFactory DependenciesFactory,
-        IResultAdapterService? ResultAdapterService,
         string[] Groups,
         object? DirectHandlerFactory = null,
         object? StagedPlan = null);
@@ -450,7 +440,7 @@ internal sealed class PipelineExecutorCache(
 
         public IPipelineExecutor Visit<TMessage>(ExecutorState state) where TMessage : IMessage
             => new VoidPipelineExecutor<TMessage>(
-                state.Descriptor, state.DependenciesFactory, state.ResultAdapterService, state.Groups);
+                state.DependenciesFactory, state.Groups);
     }
 
     /// <summary>Result-executor counterpart of <see cref="VoidExecutorVisitor"/>.</summary>
@@ -460,7 +450,7 @@ internal sealed class PipelineExecutorCache(
 
         public object Visit<TMessage, TResult>(ExecutorState state) where TMessage : IMessage
             => new ResultPipelineExecutor<TMessage, TResult>(
-                state.Descriptor, state.DependenciesFactory, state.ResultAdapterService, state.Groups);
+                state.DependenciesFactory, state.Groups);
     }
 
     /// <summary>
@@ -476,7 +466,7 @@ internal sealed class PipelineExecutorCache(
             where TMessage : IMessage
             where THandler : class, IAsyncHandler<TMessage>
             => new GeneratedVoidPipelineExecutor<TMessage, THandler>(
-                state.Descriptor, state.DependenciesFactory, state.ResultAdapterService, state.Groups,
+                state.DependenciesFactory, state.Groups,
                 state.DirectHandlerFactory as Func<THandler>,
                 state.DirectHandlerFactory as Func<IServiceProvider, THandler>);
     }
@@ -494,7 +484,7 @@ internal sealed class PipelineExecutorCache(
             where TMessage : IMessage
             where THandler : class, IAsyncHandler<TMessage, TResult>
             => new GeneratedResultPipelineExecutor<TMessage, TResult, THandler>(
-                state.Descriptor, state.DependenciesFactory, state.ResultAdapterService, state.Groups,
+                state.DependenciesFactory, state.Groups,
                 state.DirectHandlerFactory as Func<THandler>,
                 state.DirectHandlerFactory as Func<IServiceProvider, THandler>);
     }
@@ -510,7 +500,7 @@ internal sealed class PipelineExecutorCache(
         public IPipelineExecutor Visit<TMessage>(ExecutorState state)
             where TMessage : IMessage
             => new StagedVoidPipelineExecutor<TMessage>(
-                state.Descriptor, state.DependenciesFactory, state.ResultAdapterService, state.Groups,
+                state.DependenciesFactory, state.Groups,
                 (StagedVoidPlan<TMessage>)state.StagedPlan!);
     }
 
@@ -522,13 +512,8 @@ internal sealed class PipelineExecutorCache(
         public object Visit<TMessage, TResult>(ExecutorState state)
             where TMessage : IMessage
             => new StagedResultPipelineExecutor<TMessage, TResult>(
-                state.Descriptor, state.DependenciesFactory, state.ResultAdapterService, state.Groups,
+                state.DependenciesFactory, state.Groups,
                 (StagedResultPlan<TMessage, TResult>)state.StagedPlan!);
     }
 
-    private IMessageDescriptor FindDescriptor(Type messageType)
-    {
-        return messageResolveStrategy.Find(messageType)
-               ?? throw new NoHandlerFoundException(messageType);
-    }
 }

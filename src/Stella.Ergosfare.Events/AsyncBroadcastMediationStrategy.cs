@@ -1,8 +1,7 @@
-using System.Runtime.ExceptionServices;
+﻿using System.Runtime.ExceptionServices;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 using Stella.Ergosfare.Events.Abstractions;
@@ -53,7 +52,7 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
     ///     carrying a non-default <c>[Group]</c> only runs when a publish selects its group —
     ///     the group filter is applied while the pipeline shape is built.
     /// </remarks>
-    public async ValueTask Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext context, IServiceProvider serviceProvider)
+    public async ValueTask Mediate(TMessage message, IMessageDependencies messageDependencies, ErgosfareContext context, IServiceProvider serviceProvider)
     {
 
         var handlers = FilterHandlers(messageDependencies.Handlers);
@@ -98,7 +97,9 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
                 // A publish produces nothing, so the result slot carries the one value a
                 // resultless pipeline has — the same Unit the single-handler void strategy
                 // and the emitted void plans hand their stages.
-                await PostInterceptorInvocationStrategy<TMessage, Unit>.Invoke(
+                // No adapter on a broadcast, so the carried-failure half of the tuple can
+                // never be set; only the stage's side effects matter here.
+                _ = await PostInterceptorInvocationStrategy<TMessage, Unit>.Invoke(
                     messageDependencies, null, serviceProvider, message, Unit.Value, context);
             }
         }
@@ -121,10 +122,16 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
                 throw;
             }
 
-            await ExceptionInterceptorInvocationStrategy<TMessage, Unit>.Invoke(
-                messageDependencies, serviceProvider, message, Unit.Value,
-                ExceptionDispatchInfo.Capture(e), context);
+            var (matched, _) = await ExceptionInterceptorInvocationStrategy<TMessage, Unit>.Invoke(
+                messageDependencies, serviceProvider, message, Unit.Value, e, context);
 
+            // Every registered interceptor filtered the exception out — nothing handled
+            // it, so it propagates with its original stack, exactly as the stage's own
+            // rethrow used to.
+            if (!matched)
+            {
+                throw;
+            }
         }
 
         finally
@@ -142,8 +149,8 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
     /// that accepts every handler — returns the original list with zero allocation; a
     /// filtering predicate materializes a list only from the first rejection onward.
     /// </summary>
-    private IReadOnlyList<IHandlerReference<IHandler, IMainHandlerDescriptor>> FilterHandlers(
-        IReadOnlyList<IHandlerReference<IHandler, IMainHandlerDescriptor>> handlers)
+    private IReadOnlyList<IHandlerReference<IHandler>> FilterHandlers(
+        IReadOnlyList<IHandlerReference<IHandler>> handlers)
     {
         var predicate = settings.Filters.HandlerPredicate;
 
@@ -154,20 +161,22 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
             return handlers;
         }
 
-        List<IHandlerReference<IHandler, IMainHandlerDescriptor>>? filtered = null;
+        List<IHandlerReference<IHandler>>? filtered = null;
 
         for (var i = 0; i < handlers.Count; i++)
         {
             var handler = handlers[i];
 
-            if (predicate(handler.Descriptor.HandlerType))
+            // The reference's type is the one the container will actually resolve —
+            // already closed over the message's arguments for a generic subscriber.
+            if (predicate(handler.HandlerType))
             {
                 filtered?.Add(handler);
             }
             else if (filtered is null)
             {
                 // First rejection: materialize the accepted prefix and filter from here on.
-                filtered = new List<IHandlerReference<IHandler, IMainHandlerDescriptor>>(handlers.Count - 1);
+                filtered = new List<IHandlerReference<IHandler>>(handlers.Count - 1);
                 for (var j = 0; j < i; j++)
                 {
                     filtered.Add(handlers[j]);
@@ -185,7 +194,7 @@ public sealed class AsyncBroadcastMediationStrategy<TMessage>(
     /// <param name="handlers">The collection of handlers resolved for this message.</param>
     /// <param name="context">The execution context for this mediation pipeline.</param>
     /// <param name="serviceProvider">The provider of the scope this dispatch runs in.</param>
-    private async ValueTask PublishSequentially(TMessage message, IReadOnlyList<IHandlerReference<IHandler, IMainHandlerDescriptor>> handlers, IExecutionContext context, IServiceProvider serviceProvider)
+    private async ValueTask PublishSequentially(TMessage message, IReadOnlyList<IHandlerReference<IHandler>> handlers, ErgosfareContext context, IServiceProvider serviceProvider)
     {
         for (var i = 0; i < handlers.Count; i++)
         {

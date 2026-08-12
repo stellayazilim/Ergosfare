@@ -1,9 +1,5 @@
-﻿using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Registry;
-using Stella.Ergosfare.Core.Internal.Factories;
-using Stella.Ergosfare.Core.Internal.Registry;
+﻿using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
@@ -32,9 +28,9 @@ public static class ServiceCollectionExtensions
     /// <para>
     /// This method registers:
     /// <list type="bullet">
-    ///   <item><description>A singleton <see cref="IResultAdapterService"/> for result adaptation.</description></item>
-    ///   <item><description>Transient factories and descriptor builders for message handling.</description></item>
-    ///   <item><description>A singleton <see cref="IMessageRegistry"/> for message type discovery.</description></item>
+    ///   <item><description>The dispatch machinery: the dependencies factory, executor cache and mediator.</description></item>
+    ///   <item><description>A singleton <see cref="FrozenCompositionCatalog"/> — this container's view of the compiled composition table.</description></item>
+    ///   <item><description>The configured default result adapter, when <see cref="IModuleRegistry.UseDefaultResultAdapter"/> was called.</description></item>
     ///   <item><description>All module-defined handlers, interceptors, and services discovered at initialization.</description></item>
     /// </list>
     /// </para>
@@ -47,15 +43,11 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddErgosfare(this IServiceCollection services,
         Action<IModuleRegistry> ergosfareBuilderAction)
     {
-        var resultAdapterService = new ResultAdapterService();
-        services.TryAddSingleton<IResultAdapterService>(resultAdapterService);
-        services.TryAddTransient<HandlerDescriptorBuilderFactory>();
-        // The process-wide registry singleton, also registered into DI for direct resolution.
-        var messageRegistry = MessageRegistryAccessor.Instance;
-        services.TryAddSingleton(messageRegistry);
+        // The composition catalog is per container: the frozen table it reads is
+        // process-wide, but which of its rows this application registered is not.
+        var compositions = new FrozenCompositionCatalog();
 
-        // Create module registry with the shared message registry
-        var ergosfareBuilder = new ModuleRegistry(services, messageRegistry, resultAdapterService);
+        var ergosfareBuilder = new ModuleRegistry(services, compositions);
         ergosfareBuilderAction(ergosfareBuilder);
         ergosfareBuilder.Initialize();
 

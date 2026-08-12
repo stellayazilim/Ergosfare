@@ -17,7 +17,7 @@ public class StubVoidAsyncHandler: IAsyncHandler<StubMessage>
     /// <param name="message">The message to handle.</param>
     /// <param name="context">The execution context.</param>
     /// <returns>A completed <see cref="ValueTask"/>.</returns>
-    public ValueTask HandleAsync(StubMessage message, IExecutionContext context)
+    public ValueTask HandleAsync(StubMessage message, ErgosfareContext context)
     {
         return ValueTask.CompletedTask;
     }
@@ -30,7 +30,7 @@ public class StubVoidAsyncHandler: IAsyncHandler<StubMessage>
 public class StubVoidAsyncPreInterceptor: IAsyncPreInterceptor<StubMessage>
 {
     /// <inheritdoc />
-    public ValueTask<object> HandleAsync(StubMessage message, IExecutionContext context)
+    public ValueTask<object> HandleAsync(StubMessage message, ErgosfareContext context)
     {
         return ValueTask.FromResult<object>(message);
     }
@@ -43,7 +43,7 @@ public class StubVoidAsyncPreInterceptor: IAsyncPreInterceptor<StubMessage>
 public class StubVoidAsyncPostInterceptor: IAsyncPostInterceptor<StubMessage>
 {
     /// <inheritdoc />
-    public ValueTask<object> HandleAsync(StubMessage message, object? result, IExecutionContext context)
+    public ValueTask<object> HandleAsync(StubMessage message, object? result, ErgosfareContext context)
     {
         return ValueTask.FromResult(result!);
     }
@@ -56,7 +56,7 @@ public class StubVoidAsyncPostInterceptor: IAsyncPostInterceptor<StubMessage>
 public class StubVoidAsyncExceptionInterceptor: IAsyncExceptionInterceptor<StubMessage>
 {
     /// <inheritdoc />
-    public ValueTask<object> HandleAsync(StubMessage message, object? messageResult, Exception exception, IExecutionContext context)
+    public ValueTask<object> HandleAsync(StubMessage message, object? messageResult, Exception exception, ErgosfareContext context)
     {
         return ValueTask.FromResult(messageResult!);
     }
@@ -69,7 +69,7 @@ public class StubVoidAsyncExceptionInterceptor: IAsyncExceptionInterceptor<StubM
 public class StubVoidAsyncFinalInterceptor: IAsyncFinalInterceptor<StubMessage>
 {
     /// <inheritdoc />
-    public ValueTask HandleAsync(StubMessage message, object? result, Exception? exception, IExecutionContext context)
+    public ValueTask HandleAsync(StubMessage message, object? result, Exception? exception, ErgosfareContext context)
     {
         return ValueTask.CompletedTask;
     }
@@ -82,7 +82,7 @@ public class StubVoidAsyncFinalInterceptor: IAsyncFinalInterceptor<StubMessage>
 public class StubVoidIndirectAsyncFinalInterceptor: IAsyncFinalInterceptor<StubIndirectMessage>
 {
     /// <inheritdoc />
-    public ValueTask HandleAsync(StubIndirectMessage message, object? result, Exception? exception, IExecutionContext context)
+    public ValueTask HandleAsync(StubIndirectMessage message, object? result, Exception? exception, ErgosfareContext context)
     {
         return ValueTask.CompletedTask;
     }

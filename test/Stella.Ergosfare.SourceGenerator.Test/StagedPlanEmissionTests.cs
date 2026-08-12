@@ -21,13 +21,13 @@ public class StagedPlanEmissionTests
 
                 public sealed class StagedPingHandler : ICommandHandler<StagedPing>
                 {
-                    public ValueTask HandleAsync(StagedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(StagedPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
 
                 public sealed class StagedPingInterceptor : ICommandPreInterceptor<StagedPing>
                 {
-                    public ValueTask<StagedPing> HandleAsync(StagedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<StagedPing> HandleAsync(StagedPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => ValueTask.FromResult(message);
                 }
             }
@@ -61,21 +61,21 @@ public class StagedPlanEmissionTests
 
                 public sealed class OrderedPingHandler : ICommandHandler<OrderedPing>
                 {
-                    public ValueTask HandleAsync(OrderedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(OrderedPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
 
                 // Direct segment: weight descending, then ordinal type name.
                 public sealed class LightInterceptor : ICommandPreInterceptor<OrderedPing>
                 {
-                    public ValueTask<OrderedPing> HandleAsync(OrderedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<OrderedPing> HandleAsync(OrderedPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => ValueTask.FromResult(message);
                 }
 
                 [Weight(5)]
                 public sealed class HeavyInterceptor : ICommandPreInterceptor<OrderedPing>
                 {
-                    public ValueTask<OrderedPing> HandleAsync(OrderedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<OrderedPing> HandleAsync(OrderedPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => ValueTask.FromResult(message);
                 }
 
@@ -84,7 +84,7 @@ public class StagedPlanEmissionTests
                 [Weight(9)]
                 public sealed class BroadInterceptor : ICommandPreInterceptor
                 {
-                    public ValueTask<object> HandleAsync(ICommand message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<object> HandleAsync(ICommand message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => ValueTask.FromResult<object>(message);
                 }
             }
@@ -110,14 +110,14 @@ public class StagedPlanEmissionTests
 
                 public sealed class GroupedStagedPingHandler : ICommandHandler<GroupedStagedPing>
                 {
-                    public ValueTask HandleAsync(GroupedStagedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(GroupedStagedPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
 
                 [Group("reporting")]
                 public sealed class GroupedStagedPingInterceptor : ICommandPreInterceptor<GroupedStagedPing>
                 {
-                    public ValueTask<GroupedStagedPing> HandleAsync(GroupedStagedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<GroupedStagedPing> HandleAsync(GroupedStagedPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => ValueTask.FromResult(message);
                 }
             }
@@ -144,13 +144,13 @@ public class StagedPlanEmissionTests
 
                 public sealed class StagedNumberQueryHandler : IQueryHandler<StagedNumberQuery, int>
                 {
-                    public ValueTask<int> HandleAsync(StagedNumberQuery message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<int> HandleAsync(StagedNumberQuery message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => ValueTask.FromResult(7);
                 }
 
                 public sealed class StagedNumberQueryPostInterceptor : IQueryPostInterceptor<StagedNumberQuery, int>
                 {
-                    public ValueTask<int> HandleAsync(StagedNumberQuery query, int queryResult, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<int> HandleAsync(StagedNumberQuery query, int queryResult, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => ValueTask.FromResult(queryResult);
                 }
             }
@@ -183,25 +183,25 @@ public class StagedPlanEmissionTests
 
                 public sealed class StagedTextQueryHandler : IQueryHandler<StagedTextQuery, string>
                 {
-                    public ValueTask<string> HandleAsync(StagedTextQuery message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<string> HandleAsync(StagedTextQuery message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => ValueTask.FromResult("ok");
                 }
 
                 public sealed class StagedTextQueryPost : IQueryPostInterceptor<StagedTextQuery, string>
                 {
-                    public ValueTask<string> HandleAsync(StagedTextQuery query, string queryResult, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<string> HandleAsync(StagedTextQuery query, string queryResult, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => ValueTask.FromResult(queryResult);
                 }
 
                 public sealed class StagedTextQueryException : IQueryExceptionInterceptor<StagedTextQuery, string>
                 {
-                    public ValueTask<string?> HandleAsync(StagedTextQuery query, string? result, Exception exception, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<string?> HandleAsync(StagedTextQuery query, string? result, Exception exception, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => ValueTask.FromResult(result);
                 }
 
                 public sealed class StagedTextQueryFinal : IQueryFinalInterceptor<StagedTextQuery, string>
                 {
-                    public ValueTask HandleAsync(StagedTextQuery query, string? result, Exception? exception, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(StagedTextQuery query, string? result, Exception? exception, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
             }
@@ -240,13 +240,13 @@ public class StagedPlanEmissionTests
                 {
                     public DirectPingHandler(IGreeter greeter) { }
 
-                    public ValueTask HandleAsync(DirectPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(DirectPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
 
                 public sealed class DirectPingInterceptor : ICommandPreInterceptor<DirectPing>
                 {
-                    public ValueTask<DirectPing> HandleAsync(DirectPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<DirectPing> HandleAsync(DirectPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => ValueTask.FromResult(message);
                 }
             }
@@ -282,13 +282,13 @@ public class StagedPlanEmissionTests
 
                     public PickyDirectPingHandler(string dependency) { }
 
-                    public ValueTask HandleAsync(PickyDirectPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(PickyDirectPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
 
                 public sealed class PickyDirectPingInterceptor : ICommandPreInterceptor<PickyDirectPing>
                 {
-                    public ValueTask<PickyDirectPing> HandleAsync(PickyDirectPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<PickyDirectPing> HandleAsync(PickyDirectPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => ValueTask.FromResult(message);
                 }
             }
@@ -324,7 +324,7 @@ public class StagedPlanEmissionTests
                 {
                     public AnnotatedPingHandler([FromServices] IGreeter greeter) { }
 
-                    public ValueTask HandleAsync(AnnotatedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(AnnotatedPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
             }
@@ -349,13 +349,13 @@ public class StagedPlanEmissionTests
 
                 public sealed class ShieldedPingHandler : ICommandHandler<ShieldedPing>
                 {
-                    public ValueTask HandleAsync(ShieldedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(ShieldedPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
 
                 public sealed class ShieldedPingInterceptor : ICommandPreInterceptor<ShieldedPing>
                 {
-                    public ValueTask<ShieldedPing> HandleAsync(ShieldedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<ShieldedPing> HandleAsync(ShieldedPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => ValueTask.FromResult(message);
                 }
             }

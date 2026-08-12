@@ -31,7 +31,7 @@ public interface IEventPostInterceptor<in TEvent> : IEvent, IAsyncPostIntercepto
     /// only ever received the completed task — and gets it directly, so nothing is cast
     /// out of the slot and nothing is boxed back into it.
     /// </remarks>
-    async ValueTask<object> IAsyncPostInterceptor<TEvent>.HandleAsync(TEvent @event, object result, IExecutionContext context)
+    async ValueTask<object> IAsyncPostInterceptor<TEvent>.HandleAsync(TEvent @event, object result, ErgosfareContext context)
     {
         // The ValueTask argument is what binds this call to the typed member below: an
         // object-typed one resolves back to the inherited interface member — this very
@@ -50,5 +50,5 @@ public interface IEventPostInterceptor<in TEvent> : IEvent, IAsyncPostIntercepto
     /// </param>
     /// <param name="executionContext">The execution context for the current mediation pipeline.</param>
     /// <returns>A <see cref="ValueTask"/> representing the asynchronous post-processing operation.</returns>
-    ValueTask HandleAsync(TEvent @event, ValueTask result, IExecutionContext executionContext);
+    ValueTask HandleAsync(TEvent @event, ValueTask result, ErgosfareContext executionContext);
 }

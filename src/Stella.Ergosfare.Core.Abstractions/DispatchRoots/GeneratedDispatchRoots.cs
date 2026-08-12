@@ -163,4 +163,65 @@ public static class GeneratedDispatchRoots
     /// <summary>The staged result plan of the (message, result) pair, or <c>null</c> when none was generated.</summary>
     public static StagedResultPlan? FindStagedResultPlan(Type messageType, Type resultType)
         => StagedResultPlans.TryGetValue((messageType, resultType), out var plan) ? plan : null;
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, FrozenComposition> FrozenCompositions = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, FrozenComposition?> FrozenCompositionLadder = new();
+
+    /// <summary>
+    /// Roots a message's frozen pipeline composition — the compile-time image of the
+    /// registry-derived pipeline shape. Appended at load time by generated module
+    /// initializers (a plugin assembly loading later appends its own entries the same
+    /// way) and immutable afterwards. Idempotent.
+    /// </summary>
+    public static void AddFrozenComposition(FrozenComposition composition)
+        => FrozenCompositions.TryAdd(composition.MessageType, composition);
+
+    /// <summary>
+    /// Every compiled table entry. The one enumeration the table offers, and only for
+    /// setup-time questions a per-message lookup cannot answer — chiefly "which
+    /// participant types exist at all", which container registration intersects with its
+    /// own selection to decide what to register for resolution.
+    /// </summary>
+    public static IEnumerable<FrozenComposition> FrozenCompositionEntries => FrozenCompositions.Values;
+
+    /// <summary>
+    /// The frozen composition serving a runtime message type. An exact entry wins; on a
+    /// miss the type's ancestor chain is walked and the nearest frozen entry serves it —
+    /// how runtime-generated subtypes (EF/Castle proxies, mocks) are served without any
+    /// registry — with the outcome cached per runtime type, misses included. A type whose
+    /// whole ancestor chain is foreign resolves to <c>null</c>: the caller's
+    /// no-handler guard, the one deliberately remaining corner.
+    /// </summary>
+    /// <remarks>
+    /// Generic runtime types normalize to their definitions, mirroring the runtime
+    /// message-resolve strategy. The ladder cache assumes the load-time-append contract:
+    /// entries appended after a type's first miss resolution are not re-consulted for it.
+    /// </remarks>
+    public static FrozenComposition? FindFrozenComposition(Type messageType)
+    {
+        if (messageType.IsGenericType)
+        {
+            messageType = messageType.GetGenericTypeDefinition();
+        }
+
+        if (FrozenCompositions.TryGetValue(messageType, out var exact))
+        {
+            return exact;
+        }
+
+        return FrozenCompositionLadder.GetOrAdd(messageType, static runtimeType =>
+        {
+            for (var current = runtimeType.BaseType; current is not null; current = current.BaseType)
+            {
+                var key = current.IsGenericType ? current.GetGenericTypeDefinition() : current;
+
+                if (FrozenCompositions.TryGetValue(key, out var entry))
+                {
+                    return entry;
+                }
+            }
+
+            return null;
+        });
+    }
 }

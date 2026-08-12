@@ -39,7 +39,7 @@ public sealed class HandlerLifetimeTests
 
         public CountedHandler() => Interlocked.Increment(ref Constructions);
 
-        public ValueTask HandleAsync(Counted command, IExecutionContext context) => ValueTask.CompletedTask;
+        public ValueTask HandleAsync(Counted command, ErgosfareContext context) => ValueTask.CompletedTask;
     }
 
     [DiscoveryKey(Key)]
@@ -50,7 +50,7 @@ public sealed class HandlerLifetimeTests
 
         public CountedPre() => Interlocked.Increment(ref Constructions);
 
-        public ValueTask<Counted> HandleAsync(Counted command, IExecutionContext context)
+        public ValueTask<Counted> HandleAsync(Counted command, ErgosfareContext context)
             => ValueTask.FromResult(command);
     }
 
@@ -67,7 +67,7 @@ public sealed class HandlerLifetimeTests
 
         public MemoizedHandler() => Interlocked.Increment(ref Constructions);
 
-        public ValueTask HandleAsync(Memoized command, IExecutionContext context) => ValueTask.CompletedTask;
+        public ValueTask HandleAsync(Memoized command, ErgosfareContext context) => ValueTask.CompletedTask;
     }
 
     // --- user-owned registration ---------------------------------------------
@@ -85,7 +85,7 @@ public sealed class HandlerLifetimeTests
         /// <summary>Distinguishes the user's instance from a container-built one.</summary>
         public string Tag { get; init; } = "module-built";
 
-        public ValueTask HandleAsync(Owned command, IExecutionContext context)
+        public ValueTask HandleAsync(Owned command, ErgosfareContext context)
         {
             command.Tag = Tag;
             return ValueTask.CompletedTask;

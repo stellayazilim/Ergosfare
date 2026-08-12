@@ -1,8 +1,7 @@
-using Stella.Ergosfare.Commands.Abstractions;
+﻿using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
-using Stella.Ergosfare.Core.Abstractions.Registry;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -20,7 +19,7 @@ public class DispatchItemsAndInvalidationTests
 
     public sealed class ItemsCommandHandler : ICommandHandler<ItemsCommand>
     {
-        public ValueTask HandleAsync(ItemsCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(ItemsCommand command, ErgosfareContext context)
         {
             context.Set("writtenByHandler", "yes");
             return ValueTask.CompletedTask;
@@ -74,9 +73,11 @@ public class DispatchItemsAndInvalidationTests
 
     public sealed class LateInterceptedCommand : ICommand { }
 
+    // ERGOSG007 (suppressed in the csproj): dispatched after a runtime registration below,
+    // a site the closed-world dispatch-site analysis cannot see.
     public sealed class LateInterceptedCommandHandler : ICommandHandler<LateInterceptedCommand>
     {
-        public ValueTask HandleAsync(LateInterceptedCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(LateInterceptedCommand command, ErgosfareContext context)
             => ValueTask.CompletedTask;
     }
 
@@ -88,48 +89,18 @@ public class DispatchItemsAndInvalidationTests
     [ExcludeFromDiscovery]
     public sealed class LateRegisteredInterceptor : ICommandPreInterceptor<LateInterceptedCommand>
     {
-        public ValueTask<LateInterceptedCommand> HandleAsync(LateInterceptedCommand command, IExecutionContext context)
+        public ValueTask<LateInterceptedCommand> HandleAsync(LateInterceptedCommand command, ErgosfareContext context)
         {
             context.Set("lateInterceptorRan", true);
             return ValueTask.FromResult(command);
         }
     }
 
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
-    public async Task Send_ShouldNotObserveRegistrations_AfterWarmingTheExecutorCache()
-    {
-        var provider = new ServiceCollection()
-            .AddTransient<LateRegisteredInterceptor>()
-            .AddErgosfare(x => x.AddCommandModule(c => c.Register<LateInterceptedCommandHandler>()))
-            .BuildServiceProvider();
-        await using var _ = provider;
-
-        var mediator = provider.GetRequiredService<ICommandMediator>();
-        var registry = provider.GetRequiredService<IMessageRegistry>();
-
-        // Warm the executor's cached plan on the zero-interceptor fast path.
-        var warm = new CommandMediationSettings();
-        await mediator.SendAsync(new LateInterceptedCommand(), warm);
-        await mediator.SendAsync(new LateInterceptedCommand(), warm);
-        Assert.False(warm.Items.ContainsKey("lateInterceptorRan"));
-
-        // A registration after the first dispatch is not observed: the executor's frozen
-        // pipeline keeps the zero-interceptor fast path.
-        registry.Register(typeof(LateRegisteredInterceptor));
-
-        var probe = new CommandMediationSettings();
-        await mediator.SendAsync(new LateInterceptedCommand(), probe);
-
-        Assert.False(probe.Items.ContainsKey("lateInterceptorRan"));
-    }
-
     public sealed class ResultCommand : ICommand<int> { }
 
     public sealed class ResultCommandHandler : ICommandHandler<ResultCommand, int>
     {
-        public ValueTask<int> HandleAsync(ResultCommand command, IExecutionContext context)
+        public ValueTask<int> HandleAsync(ResultCommand command, ErgosfareContext context)
             => ValueTask.FromResult(42);
     }
 

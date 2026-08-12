@@ -90,7 +90,7 @@ public abstract class SyncVoidHandlerBase<TCommand> : ICommandHandler<TCommand>
     where TCommand : class, ISyncPayloadCommand
 {
     /// <inheritdoc />
-    public ValueTask HandleAsync(TCommand command, IExecutionContext context)
+    public ValueTask HandleAsync(TCommand command, ErgosfareContext context)
     {
         context.Mark("handler", command.Payload);
 
@@ -109,7 +109,7 @@ public abstract class SyncVoidPreBase<TCommand> : ICommand, IPreInterceptor<TCom
     where TCommand : class, ISyncPayloadCommand, new()
 {
     /// <inheritdoc />
-    public object Handle(TCommand message, IExecutionContext context)
+    public object Handle(TCommand message, ErgosfareContext context)
     {
         context.Mark("pre", message.Payload);
 
@@ -128,7 +128,7 @@ public abstract class SyncVoidPostBase<TCommand> : ICommand, IPostInterceptor<TC
     where TCommand : class, ISyncPayloadCommand
 {
     /// <inheritdoc />
-    public object Handle(TCommand message, Unit messageResult, IExecutionContext context)
+    public object Handle(TCommand message, Unit messageResult, ErgosfareContext context)
     {
         context.Mark("post", $"{message.Payload}|{SyncVocabulary.Describe(messageResult)}");
         return messageResult;
@@ -146,7 +146,7 @@ public abstract class SyncVoidExceptionBase<TCommand> : ICommand, IExceptionInte
     where TCommand : class, ISyncPayloadCommand
 {
     /// <inheritdoc />
-    public object? Handle(TCommand message, Unit? messageResult, Exception exception, IExecutionContext context)
+    public object? Handle(TCommand message, Unit? messageResult, Exception exception, ErgosfareContext context)
     {
         context.Mark("exception",
             $"{message.Payload}|{SyncVocabulary.Describe(messageResult)}|{SyncVocabulary.Describe(exception)}");
@@ -161,7 +161,7 @@ public abstract class SyncVoidFinalBase<TCommand> : ICommand, IFinalInterceptor<
     where TCommand : class, ISyncPayloadCommand
 {
     /// <inheritdoc />
-    public void Handle(TCommand message, Unit? result, Exception? exception, IExecutionContext executionContext)
+    public void Handle(TCommand message, Unit? result, Exception? exception, ErgosfareContext executionContext)
         => executionContext.Mark("final",
             $"{message.Payload}|{SyncVocabulary.Describe(result)}|{SyncVocabulary.Describe(exception)}");
 }
@@ -176,7 +176,7 @@ public abstract class SyncResultHandlerBase<TCommand> : ICommandHandler<TCommand
     where TCommand : class, ISyncPayloadResultCommand
 {
     /// <inheritdoc />
-    public ValueTask<string> HandleAsync(TCommand command, IExecutionContext context)
+    public ValueTask<string> HandleAsync(TCommand command, ErgosfareContext context)
     {
         context.Mark("handler", command.Payload);
 
@@ -195,7 +195,7 @@ public abstract class SyncResultPreBase<TCommand> : ICommand, IPreInterceptor<TC
     where TCommand : class, ISyncPayloadResultCommand, new()
 {
     /// <inheritdoc />
-    public object Handle(TCommand message, IExecutionContext context)
+    public object Handle(TCommand message, ErgosfareContext context)
     {
         context.Mark("pre", message.Payload);
 
@@ -214,7 +214,7 @@ public abstract class SyncResultPostBase<TCommand> : ICommand, IPostInterceptor<
     where TCommand : class, ISyncPayloadResultCommand
 {
     /// <inheritdoc />
-    public object Handle(TCommand message, string messageResult, IExecutionContext context)
+    public object Handle(TCommand message, string messageResult, ErgosfareContext context)
     {
         context.Mark("post", $"{message.Payload}|{messageResult}");
         return messageResult + SyncVocabulary.Posted;
@@ -227,7 +227,7 @@ public abstract class SyncResultExceptionBase<TCommand> : ICommand, IExceptionIn
     where TCommand : class, ISyncPayloadResultCommand
 {
     /// <inheritdoc />
-    public object? Handle(TCommand message, string? messageResult, Exception exception, IExecutionContext context)
+    public object? Handle(TCommand message, string? messageResult, Exception exception, ErgosfareContext context)
     {
         context.Mark("exception",
             $"{message.Payload}|{SyncVocabulary.Describe(messageResult)}|{SyncVocabulary.Describe(exception)}");
@@ -242,7 +242,7 @@ public abstract class SyncResultFinalBase<TCommand> : ICommand, IFinalIntercepto
     where TCommand : class, ISyncPayloadResultCommand
 {
     /// <inheritdoc />
-    public void Handle(TCommand message, string? result, Exception? exception, IExecutionContext executionContext)
+    public void Handle(TCommand message, string? result, Exception? exception, ErgosfareContext executionContext)
         => executionContext.Mark("final",
             $"{message.Payload}|{SyncVocabulary.Describe(result)}|{SyncVocabulary.Describe(exception)}");
 }
@@ -257,7 +257,7 @@ public abstract class SyncOrderedPreBase<TCommand>(string slot) : ICommand, IPre
     where TCommand : class, ISyncPayloadCommand
 {
     /// <inheritdoc />
-    public object Handle(TCommand message, IExecutionContext context)
+    public object Handle(TCommand message, ErgosfareContext context)
     {
         context.Mark(slot);
         return message;
@@ -270,7 +270,7 @@ public abstract class AsyncOrderedPreBase<TCommand>(string slot) : ICommandPreIn
     where TCommand : class, ISyncPayloadCommand
 {
     /// <inheritdoc />
-    public ValueTask<TCommand> HandleAsync(TCommand command, IExecutionContext context)
+    public ValueTask<TCommand> HandleAsync(TCommand command, ErgosfareContext context)
     {
         context.Mark(slot);
         return ValueTask.FromResult(command);
@@ -283,7 +283,7 @@ public abstract class SyncOrderedPostBase<TCommand>(string slot) : ICommand, IPo
     where TCommand : class, ISyncPayloadCommand
 {
     /// <inheritdoc />
-    public object Handle(TCommand message, Unit messageResult, IExecutionContext context)
+    public object Handle(TCommand message, Unit messageResult, ErgosfareContext context)
     {
         context.Mark(slot);
         return messageResult;
@@ -296,7 +296,7 @@ public abstract class AsyncOrderedPostBase<TCommand>(string slot) : ICommandPost
     where TCommand : class, ISyncPayloadCommand
 {
     /// <inheritdoc />
-    public ValueTask<object> HandleAsync(TCommand command, object result, IExecutionContext context)
+    public ValueTask<object> HandleAsync(TCommand command, object result, ErgosfareContext context)
     {
         context.Mark(slot);
         return ValueTask.FromResult(result);
@@ -320,7 +320,7 @@ public abstract class StaleKeyVoidPostBase<TCommand> : ICommand, IPostIntercepto
     where TCommand : class, ISyncPayloadCommand
 {
     /// <inheritdoc />
-    public object Handle(TCommand message, ValueTask messageResult, IExecutionContext context)
+    public object Handle(TCommand message, ValueTask messageResult, ErgosfareContext context)
     {
         context.Mark("post:stale");
         return messageResult;

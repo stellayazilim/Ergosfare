@@ -1,4 +1,5 @@
 ﻿using Stella.Ergosfare.Commands;
+using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,7 +31,7 @@ public class CommandMediatorTests
         var serviceCollection = new ServiceCollection()
             .AddErgosfare(options =>
             {
-                options.AddCoreModule(x =>
+                options.AddCommandModule(x =>
                 {
                     x.Register<StubNonGenericCommandHandler>();
                 });
@@ -58,7 +59,7 @@ public class CommandMediatorTests
         var serviceCollection = new ServiceCollection()
             .AddErgosfare(options =>
             {
-                options.AddCoreModule(x =>
+                options.AddCommandModule(x =>
                 {
                     x.Register<StubNonGenericCommandStringResultHandler>();
                 });

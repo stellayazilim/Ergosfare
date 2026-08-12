@@ -8,7 +8,7 @@ namespace Stella.Ergosfare.E2E.UseCases.Todos;
 
 public sealed class CompleteTodoHandler(TodoStore store) : ICommandHandler<CompleteTodoCommand>
 {
-    public async ValueTask HandleAsync(CompleteTodoCommand command, IExecutionContext context)
+    public async ValueTask HandleAsync(CompleteTodoCommand command, ErgosfareContext context)
     {
         var todo = await store.FindAsync(command.Id, context.CancellationToken)
                    ?? throw new TodoNotFoundException(command.Id);

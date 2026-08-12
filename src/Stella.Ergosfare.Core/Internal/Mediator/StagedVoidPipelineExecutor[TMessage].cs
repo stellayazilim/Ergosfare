@@ -1,6 +1,5 @@
 ﻿using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Abstractions.StagedPlans;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Internal.Factories;
@@ -19,24 +18,33 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// observed.
 /// </summary>
 internal sealed class StagedVoidPipelineExecutor<TMessage>(
-    IMessageDescriptor descriptor,
     IMessageDependenciesFactory dependenciesFactory,
-    IResultAdapterService? resultAdapterService,
     string[] groups,
     StagedVoidPlan<TMessage> plan) : IPipelineExecutor
     where TMessage : IMessage
 {
-    private readonly SingleAsyncHandlerMediationStrategy<TMessage> _strategy = new(resultAdapterService);
+    private readonly SingleAsyncHandlerMediationStrategy<TMessage> _strategy = new();
 
-    private readonly ResultAdapterService? _concreteAdapters = resultAdapterService as ResultAdapterService;
-    private readonly bool _foreignAdapters = resultAdapterService is not null and not ResultAdapterService;
+    // Whether the pipeline's Unit slot has an effective adapter — the attribute tiers
+    // plus the container's default, resolved once on the first dispatch. Void plans
+    // never model an adapter (a Unit carrier is a deliberate oddity), so any bound
+    // adapter keeps the dispatch on the runtime strategy, which probes it.
+    private bool _hasResultAdapter;
+    private volatile bool _resultAdapterResolved;
 
     private IMessageDependencies? _cachedDependencies;
     private bool _useStagedPlan;
     private bool _useDirectConstruction;
 
-    public ValueTask Execute(object message, IExecutionContext context, IServiceProvider serviceProvider)
+    public ValueTask Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider)
     {
+        if (!_resultAdapterResolved)
+        {
+            _hasResultAdapter = global::Stella.Ergosfare.Core.Abstractions.Results
+                .ResultAdapterBinding.For<TMessage, Unit>(serviceProvider) is not null;
+            _resultAdapterResolved = true;
+        }
+
         var dependencies = GetDependencies();
 
         if (_useStagedPlan)
@@ -62,10 +70,9 @@ internal sealed class StagedVoidPipelineExecutor<TMessage>(
                 return cached;
             }
 
-            var dependencies = typedFactory.Create(typeof(TMessage), descriptor, groups);
+            var dependencies = typedFactory.Create(typeof(TMessage), groups);
             _cachedDependencies = dependencies;
-            _useStagedPlan = !_foreignAdapters
-                && (_concreteAdapters is null || _concreteAdapters.IsEmpty)
+            _useStagedPlan = !_hasResultAdapter
                 && dependencies is MessageDependencies { MemoizedInstances: false } fastDependencies
                 && StagedPlanGate.Matches(fastDependencies, plan.Composition);
             _useDirectConstruction = _useStagedPlan
@@ -76,6 +83,6 @@ internal sealed class StagedVoidPipelineExecutor<TMessage>(
 
         _useStagedPlan = false;
         _useDirectConstruction = false;
-        return dependenciesFactory.Create(typeof(TMessage), descriptor, groups);
+        return dependenciesFactory.Create(typeof(TMessage), groups);
     }
 }

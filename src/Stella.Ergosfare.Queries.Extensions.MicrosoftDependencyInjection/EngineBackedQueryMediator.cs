@@ -1,5 +1,4 @@
 using Stella.Ergosfare.Core;
-using Stella.Ergosfare.Core.Abstractions.Strategies;
 
 namespace Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
 
@@ -12,6 +11,5 @@ namespace Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
 /// </summary>
 internal sealed class EngineBackedQueryMediator(
     MessageDispatchEngine engine,
-    IServiceProvider serviceProvider,
-    ActualTypeOrFirstAssignableTypeMessageResolveStrategy messageResolveStrategy)
-    : QueryMediator(engine, serviceProvider, messageResolveStrategy);
+    IServiceProvider serviceProvider)
+    : QueryMediator(engine, serviceProvider);

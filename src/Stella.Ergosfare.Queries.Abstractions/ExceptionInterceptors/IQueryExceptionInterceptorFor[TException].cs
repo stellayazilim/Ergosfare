@@ -25,7 +25,7 @@ public interface IQueryExceptionInterceptorFor<TException> :
 {
     /// <inheritdoc />
     async ValueTask<object> IAsyncExceptionInterceptor<IQuery>.HandleAsync(
-        IQuery query, object? messageResult, Exception exception, IExecutionContext context)
+        IQuery query, object? messageResult, Exception exception, ErgosfareContext context)
         // The cast cannot fail: the exception stage runs this interceptor only after its
         // filter accepted the exception.
         => await HandleAsync(query, messageResult, (TException)exception, context);
@@ -40,5 +40,5 @@ public interface IQueryExceptionInterceptorFor<TException> :
     /// <returns>
     /// A <see cref="ValueTask{Object}"/> producing the result that continues through the pipeline.
     /// </returns>
-    ValueTask<object> HandleAsync(IQuery query, object? messageResult, TException exception, IExecutionContext context);
+    ValueTask<object> HandleAsync(IQuery query, object? messageResult, TException exception, ErgosfareContext context);
 }

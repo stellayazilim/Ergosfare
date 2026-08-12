@@ -20,7 +20,10 @@ internal sealed record StagedPlanModel(
     ImmutableArray<StagedCallModel> PreCalls,
     ImmutableArray<StagedCallModel> PostCalls,
     ImmutableArray<StagedCallModel> ExceptionCalls,
-    ImmutableArray<StagedCallModel> FinalCalls)
+    ImmutableArray<StagedCallModel> FinalCalls,
+    StagedResultAdapterKind AdapterKind,
+    string? ResultAdapterTypeExpression,
+    bool ResultAdapterMaterializes)
 {
     /// <summary>
     ///     Whether every participant — the handler and each interceptor — carries a

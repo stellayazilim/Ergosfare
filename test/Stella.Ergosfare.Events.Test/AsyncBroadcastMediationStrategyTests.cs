@@ -1,15 +1,11 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Stella.Ergosfare.Core;
-using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Internal.Factories;
 using Stella.Ergosfare.Core.Internal.Mediator;
-using Stella.Ergosfare.Core.Internal.Registry;
 using Stella.Ergosfare.Events.Abstractions;
 using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
-using Stella.Ergosfare.Core.Abstractions.Caching;
-using Stella.Ergosfare.Core.Internal.Caching;
 using Xunit.Abstractions;
 
 namespace Stella.Ergosfare.Events.Test;
@@ -22,6 +18,17 @@ public class AsyncBroadcastMediationStrategyTests
 (ITestOutputHelper  testOutputHelper)
 {
     /// <summary>
+    /// A dispatch engine over a bare provider — the directly-constructed counterpart of
+    /// what <c>AddErgosfare</c> registers.
+    /// </summary>
+    private static MessageDispatchEngine Engine(IServiceProvider services)
+    {
+        var factory = new MessageDependenciesFactory(services);
+
+        return new MessageDispatchEngine(new PipelineExecutorCache(factory), factory);
+    }
+
+    /// <summary>
     /// Tests that <see cref="EventMediator.PublishAsync(IEvent, EventMediationSettings?, CancellationToken)"/> throws an exception
     /// when <c>ThrowIfNoHandlerFound</c> is set to true and no handler is found.
     /// </summary>
@@ -30,18 +37,10 @@ public class AsyncBroadcastMediationStrategyTests
     [Trait("Category", "Coverage")]
     public async Task ShouldThrowWhenNoHandlerFound()
     {
+        // A container that composed nothing: the event has no pipeline at all, which is
+        // exactly the "nothing will handle this" the flag under test decides about.
         var services = new ServiceCollection().BuildServiceProvider();
-        var messageRegistry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
-        messageRegistry.Register(typeof(StubNonGenericEvent));
-        var messageMediator = new MessageMediator(
-                messageRegistry,
-                new MessageDependenciesFactory(services),
-                services);
-        var mediator = new EventMediator(
-            new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(messageRegistry),
-            new ResultAdapterService(),
-            messageMediator
-            );
+        var mediator = new EventMediator(Engine(services), services);
         Exception? exception = null;
         try
         {
@@ -55,7 +54,7 @@ public class AsyncBroadcastMediationStrategyTests
         {
             exception = ex;
         }
-        testOutputHelper.WriteLine(messageRegistry.First().MessageType.FullName);
+        testOutputHelper.WriteLine(typeof(StubNonGenericEvent).FullName);
         Assert.NotNull(exception);
          
     }
@@ -69,21 +68,8 @@ public class AsyncBroadcastMediationStrategyTests
     [Trait("Category", "Coverage")]
     public async Task ShouldNotThrowWhenNoHandlerFound()
     {
-        var services = new ServiceCollection()
-            .AddSingleton<IDescriptorCacheStrategy, LruCacheStrategy>()
-            .AddSingleton<MessageDescriptorCache>()
-            .BuildServiceProvider();
-        var messageRegistry = new MessageRegistry(new HandlerDescriptorBuilderFactory());
-        messageRegistry.Register(typeof(StubNonGenericEvent));
-        var messageMediator = new MessageMediator(
-            messageRegistry,
-            new MessageDependenciesFactory(services),
-            services);
-        var mediator = new EventMediator(
-            new ActualTypeOrFirstAssignableTypeMessageResolveStrategy(messageRegistry),
-            new ResultAdapterService(),
-            messageMediator
-        );
+        var services = new ServiceCollection().BuildServiceProvider();
+        var mediator = new EventMediator(Engine(services), services);
         Exception? exception = null;
         try
         {
@@ -111,7 +97,7 @@ public class AsyncBroadcastMediationStrategyTests
         var services = new ServiceCollection()
             .AddErgosfare(builder =>
             {
-                builder.AddEventModule(x => { x.RegisterFromAssembly(Assembly.GetExecutingAssembly()); });
+                builder.AddEventModule(x => { x.Register<StubNonGenericEventHandler1>(); });
             })
             .BuildServiceProvider();
         var mediator = services.GetRequiredService<IPublisher>();
@@ -131,7 +117,8 @@ public class AsyncBroadcastMediationStrategyTests
             {
                 builder.AddEventModule(x =>
                 {
-                    x.RegisterFromAssembly(Assembly.GetExecutingAssembly());
+                    x.Register<StubNonGenericEventHandlerThrows>();
+                    x.Register<StubNonGenericEventExceptionInterceptor>();
                 });
             })
             .BuildServiceProvider();

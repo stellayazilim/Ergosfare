@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      A negative-compilation fixture: this project is MEANT to fail to build, so it is
+      deliberately absent from Stella.Ergosfare.slnx. NegativeCompilationTests builds it on
+      demand and asserts the verdict. An executable, because the dead-dispatch judgment only
+      runs at a composition root (K5).
+    -->
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <IsPackable>false</IsPackable>
+        <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\..\src\Stella.Ergosfare\Stella.Ergosfare.csproj" />
+        <ProjectReference Include="..\..\..\src\Stella.Ergosfare.SourceGenerator\Stella.Ergosfare.SourceGenerator.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+</Project>

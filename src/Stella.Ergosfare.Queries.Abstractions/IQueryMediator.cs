@@ -37,7 +37,7 @@ public interface IQueryMediator: IMessage
     /// <param name="context">The externally owned execution context to dispatch under.</param>
     /// <param name="queryMediationSettings">Optional mediation settings (groups etc.).</param>
     ValueTask<TQueryResult> QueryAsync<TQueryResult>(IQuery<TQueryResult> query,
-                                                IExecutionContext context,
+                                                ErgosfareContext context,
                                                 QueryMediationSettings? queryMediationSettings = null);
 
     /// <summary>

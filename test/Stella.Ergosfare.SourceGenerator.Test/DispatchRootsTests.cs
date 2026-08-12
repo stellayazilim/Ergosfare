@@ -1,6 +1,5 @@
 ﻿using System.Reflection;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
-using Stella.Ergosfare.Core.Abstractions.Registry;
 
 namespace Stella.Ergosfare.SourceGenerator.Test;
 
@@ -39,7 +38,7 @@ public class DispatchRootsTests
 
             public sealed class VoidPingHandler : ICommandHandler<VoidPing>
             {
-                public ValueTask HandleAsync(VoidPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                public ValueTask HandleAsync(VoidPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                     => default;
             }
         }
@@ -78,16 +77,16 @@ public class DispatchRootsTests
 
         // The test process shares the real abstractions assembly with the emitted one, so
         // executing the generated registration lands the roots in the same static store.
-        _ = typeof(IMessageRegistry);
+        _ = typeof(FrozenCompositionCatalog);
 
         using var stream = new MemoryStream();
         Assert.True(result.OutputCompilation.Emit(stream).Success);
 
         var assembly = Assembly.Load(stream.ToArray());
         var registrations = assembly.GetType("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
-        var registry = new RecordingRegistry();
+        var catalog = new FrozenCompositionCatalog();
 
-        registrations.GetMethod("RegisterAll", [typeof(IMessageRegistry)])!.Invoke(null, [registry]);
+        registrations.GetMethod("RegisterAll", [typeof(FrozenCompositionCatalog)])!.Invoke(null, [catalog]);
 
         var voidPing = assembly.GetType("TestApp.VoidPing", throwOnError: true)!;
         var typedPing = assembly.GetType("TestApp.TypedPing", throwOnError: true)!;
@@ -97,25 +96,5 @@ public class DispatchRootsTests
         Assert.NotNull(GeneratedDispatchRoots.FindResult(typedPing, typeof(string)));
         Assert.NotNull(GeneratedDispatchRoots.FindStream(numberStream, typeof(int)));
         Assert.Null(GeneratedDispatchRoots.FindMessage(assembly.GetType("TestApp.VoidPingHandler", throwOnError: true)!));
-    }
-
-    private sealed class RecordingRegistry : IMessageRegistry
-    {
-        public int Count => 0;
-
-        public IEnumerator<Core.Abstractions.Registry.Descriptors.IMessageDescriptor> GetEnumerator()
-        {
-            yield break;
-        }
-
-        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
-
-        public void Register(Type type)
-        {
-        }
-
-        public void RegisterDescriptors(IEnumerable<Core.Abstractions.Registry.Descriptors.IHandlerDescriptor> descriptors)
-        {
-        }
     }
 }

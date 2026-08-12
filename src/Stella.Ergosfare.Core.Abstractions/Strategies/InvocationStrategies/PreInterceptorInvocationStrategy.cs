@@ -31,7 +31,7 @@ internal static class PreInterceptorInvocationStrategy<TMessage>
         IMessageDependencies messageDependencies,
         IServiceProvider serviceProvider,
         TMessage message,
-        IExecutionContext executionContext)
+        ErgosfareContext executionContext)
     {
         var interceptors = messageDependencies.PreInterceptors;
         object current = message;

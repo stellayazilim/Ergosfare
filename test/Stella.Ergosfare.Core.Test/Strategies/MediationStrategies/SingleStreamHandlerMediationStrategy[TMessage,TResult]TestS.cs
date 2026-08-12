@@ -37,7 +37,7 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests :
         _messageDependencyFixture = _messageDependencyFixture.New;
         _messageDependencyFixture.RegisterHandler(typeof(StubStreamHandler));
         var dependencies = _messageDependencyFixture.CreateDependencies<StubStreamMessage>();
-        var strategy = new SingleStreamHandlerMediationStrategy<StubStreamMessage, string>(null, CancellationToken.None);
+        var strategy = new SingleStreamHandlerMediationStrategy<StubStreamMessage, string>(CancellationToken.None);
 
         // act
         var results = new List<string>();
@@ -69,7 +69,7 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests :
             typeof(StubStreamHandler),
             typeof(DuplicateStubStreamHandler));
         var dependencies = _messageDependencyFixture.CreateDependencies<StubStreamMessage>();
-        var strategy = new SingleStreamHandlerMediationStrategy<StubStreamMessage, string>(null, CancellationToken.None);
+        var strategy = new SingleStreamHandlerMediationStrategy<StubStreamMessage, string>(CancellationToken.None);
 
         // act
         var exception = await Record.ExceptionAsync(async () =>
@@ -98,9 +98,9 @@ public class SingleStreamHandlerMediationStrategyTMessageTResultTests :
     {
         // arrange
         _messageDependencyFixture = _messageDependencyFixture.New;
-        _messageDependencyFixture.MessageRegistry.Register(typeof(StubStreamMessage));
+        _messageDependencyFixture.RegisterHandler(typeof(StubStreamMessage));
         var dependencies = _messageDependencyFixture.CreateDependencies<StubStreamMessage>();
-        var strategy = new SingleStreamHandlerMediationStrategy<StubStreamMessage, string>(null, CancellationToken.None);
+        var strategy = new SingleStreamHandlerMediationStrategy<StubStreamMessage, string>(CancellationToken.None);
 
         // act
         var exception = await Record.ExceptionAsync(async () =>

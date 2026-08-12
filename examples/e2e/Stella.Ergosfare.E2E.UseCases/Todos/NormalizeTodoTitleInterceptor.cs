@@ -14,7 +14,7 @@ namespace Stella.Ergosfare.E2E.UseCases.Todos;
 [Weight(100)]
 public sealed class NormalizeTodoTitleInterceptor : ICommandPreInterceptor<CreateTodoCommand>
 {
-    public ValueTask<CreateTodoCommand> HandleAsync(CreateTodoCommand command, IExecutionContext context)
+    public ValueTask<CreateTodoCommand> HandleAsync(CreateTodoCommand command, ErgosfareContext context)
     {
         var title = command.Title?.Trim() ?? string.Empty;
 

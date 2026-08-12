@@ -10,7 +10,7 @@ public abstract class StagedVoidPlan<TMessage> : StagedVoidPlan
     /// matches <see cref="StagedVoidPlan.Composition"/>; participants resolve from
     /// <paramref name="serviceProvider"/> — the dispatching scope's provider.
     /// </summary>
-    public abstract ValueTask Execute(TMessage message, IExecutionContext context, IServiceProvider serviceProvider);
+    public abstract ValueTask Execute(TMessage message, ErgosfareContext context, IServiceProvider serviceProvider);
 
     /// <summary>
     /// The direct-construction variant of <see cref="Execute"/>: participants are
@@ -20,7 +20,7 @@ public abstract class StagedVoidPlan<TMessage> : StagedVoidPlan
     /// hosting executor verified every participant's plain transient registration; the
     /// default forwards to <see cref="Execute"/>.
     /// </summary>
-    public virtual ValueTask ExecuteDirect(TMessage message, IExecutionContext context, IServiceProvider serviceProvider)
+    public virtual ValueTask ExecuteDirect(TMessage message, ErgosfareContext context, IServiceProvider serviceProvider)
         => Execute(message, context, serviceProvider);
 
     /// <inheritdoc />

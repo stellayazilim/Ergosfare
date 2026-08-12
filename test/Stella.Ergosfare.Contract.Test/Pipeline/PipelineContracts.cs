@@ -106,7 +106,7 @@ public abstract class PayloadHandlerBase<TCommand> : ICommandHandler<TCommand>
     where TCommand : class, IPayloadCommand
 {
     /// <inheritdoc />
-    public ValueTask HandleAsync(TCommand command, IExecutionContext context)
+    public ValueTask HandleAsync(TCommand command, ErgosfareContext context)
     {
         context.Mark("handler", command.Payload);
 
@@ -130,7 +130,7 @@ public abstract class PayloadPreBase<TCommand> : ICommandPreInterceptor<TCommand
     where TCommand : class, IPayloadCommand, new()
 {
     /// <inheritdoc />
-    public ValueTask<TCommand> HandleAsync(TCommand command, IExecutionContext context)
+    public ValueTask<TCommand> HandleAsync(TCommand command, ErgosfareContext context)
     {
         context.Mark("pre", command.Payload);
 
@@ -149,7 +149,7 @@ public abstract class PayloadPostBase<TCommand> : ICommandPostInterceptor<TComma
     where TCommand : class, IPayloadCommand
 {
     /// <inheritdoc />
-    public ValueTask<object> HandleAsync(TCommand command, object result, IExecutionContext context)
+    public ValueTask<object> HandleAsync(TCommand command, object result, ErgosfareContext context)
     {
         context.Mark("post", $"{command.Payload}|{PipelineVocabulary.Describe(result)}");
         return ValueTask.FromResult(result);
@@ -162,7 +162,7 @@ public abstract class PayloadExceptionBase<TCommand> : ICommandExceptionIntercep
     where TCommand : class, IPayloadCommand
 {
     /// <inheritdoc />
-    public ValueTask<object> HandleAsync(TCommand command, object? result, Exception exception, IExecutionContext context)
+    public ValueTask<object> HandleAsync(TCommand command, object? result, Exception exception, ErgosfareContext context)
     {
         context.Mark("exception",
             $"{command.Payload}|{PipelineVocabulary.Describe(result)}|{PipelineVocabulary.Describe(exception)}");
@@ -177,7 +177,7 @@ public abstract class PayloadFinalBase<TCommand> : ICommandFinalInterceptor<TCom
     where TCommand : class, IPayloadCommand
 {
     /// <inheritdoc />
-    public ValueTask HandleAsync(TCommand command, object? result, Exception? exception, IExecutionContext context)
+    public ValueTask HandleAsync(TCommand command, object? result, Exception? exception, ErgosfareContext context)
     {
         context.Mark("final",
             $"{command.Payload}|{PipelineVocabulary.Describe(result)}|{PipelineVocabulary.Describe(exception)}");
@@ -196,7 +196,7 @@ public abstract class PayloadResultHandlerBase<TCommand> : ICommandHandler<TComm
     where TCommand : class, IPayloadResultCommand
 {
     /// <inheritdoc />
-    public ValueTask<string> HandleAsync(TCommand command, IExecutionContext context)
+    public ValueTask<string> HandleAsync(TCommand command, ErgosfareContext context)
     {
         context.Mark("handler", command.Payload);
 
@@ -220,7 +220,7 @@ public abstract class PayloadResultPreBase<TCommand> : ICommandPreInterceptor<TC
     where TCommand : class, IPayloadResultCommand, new()
 {
     /// <inheritdoc />
-    public ValueTask<TCommand> HandleAsync(TCommand command, IExecutionContext context)
+    public ValueTask<TCommand> HandleAsync(TCommand command, ErgosfareContext context)
     {
         context.Mark("pre", command.Payload);
 
@@ -239,7 +239,7 @@ public abstract class PayloadResultPostBase<TCommand> : ICommandPostInterceptor<
     where TCommand : class, IPayloadResultCommand
 {
     /// <inheritdoc />
-    public ValueTask<string> HandleAsync(TCommand command, string result, IExecutionContext context)
+    public ValueTask<string> HandleAsync(TCommand command, string result, ErgosfareContext context)
     {
         context.Mark("post", $"{command.Payload}|{result}");
         return ValueTask.FromResult(result + PipelineVocabulary.Posted);
@@ -252,7 +252,7 @@ public abstract class PayloadResultExceptionBase<TCommand> : ICommandExceptionIn
     where TCommand : class, IPayloadResultCommand
 {
     /// <inheritdoc />
-    public ValueTask<string?> HandleAsync(TCommand command, string? result, Exception exception, IExecutionContext context)
+    public ValueTask<string?> HandleAsync(TCommand command, string? result, Exception exception, ErgosfareContext context)
     {
         context.Mark("exception",
             $"{command.Payload}|{PipelineVocabulary.Describe(result)}|{PipelineVocabulary.Describe(exception)}");
@@ -267,7 +267,7 @@ public abstract class PayloadResultFinalBase<TCommand> : ICommandFinalIntercepto
     where TCommand : class, IPayloadResultCommand
 {
     /// <inheritdoc />
-    public ValueTask HandleAsync(TCommand command, string? result, Exception? exception, IExecutionContext context)
+    public ValueTask HandleAsync(TCommand command, string? result, Exception? exception, ErgosfareContext context)
     {
         context.Mark("final",
             $"{command.Payload}|{PipelineVocabulary.Describe(result)}|{PipelineVocabulary.Describe(exception)}");
@@ -286,7 +286,7 @@ public abstract class PayloadValueHandlerBase<TQuery> : IQueryHandler<TQuery, in
     where TQuery : class, IPayloadValueQuery
 {
     /// <inheritdoc />
-    public ValueTask<int> HandleAsync(TQuery query, IExecutionContext context)
+    public ValueTask<int> HandleAsync(TQuery query, ErgosfareContext context)
     {
         context.Mark("handler", query.Payload);
 
@@ -305,7 +305,7 @@ public abstract class PayloadValuePreBase<TQuery> : IQueryPreInterceptor<TQuery>
     where TQuery : class, IPayloadValueQuery, new()
 {
     /// <inheritdoc />
-    public ValueTask<TQuery> HandleAsync(TQuery query, IExecutionContext context)
+    public ValueTask<TQuery> HandleAsync(TQuery query, ErgosfareContext context)
     {
         context.Mark("pre", query.Payload);
 
@@ -324,7 +324,7 @@ public abstract class PayloadValuePostBase<TQuery> : IQueryPostInterceptor<TQuer
     where TQuery : class, IPayloadValueQuery
 {
     /// <inheritdoc />
-    public ValueTask<int> HandleAsync(TQuery query, int result, IExecutionContext context)
+    public ValueTask<int> HandleAsync(TQuery query, int result, ErgosfareContext context)
     {
         context.Mark("post", $"{query.Payload}|{result}");
         return ValueTask.FromResult(result + PipelineVocabulary.PostAddend);
@@ -337,7 +337,7 @@ public abstract class PayloadValueExceptionBase<TQuery> : IQueryExceptionInterce
     where TQuery : class, IPayloadValueQuery
 {
     /// <inheritdoc />
-    public ValueTask<int> HandleAsync(TQuery query, int result, Exception exception, IExecutionContext context)
+    public ValueTask<int> HandleAsync(TQuery query, int result, Exception exception, ErgosfareContext context)
     {
         context.Mark("exception",
             $"{query.Payload}|{result}|{PipelineVocabulary.Describe(exception)}");
@@ -352,7 +352,7 @@ public abstract class PayloadValueFinalBase<TQuery> : IQueryFinalInterceptor<TQu
     where TQuery : class, IPayloadValueQuery
 {
     /// <inheritdoc />
-    public ValueTask HandleAsync(TQuery query, int result, Exception? exception, IExecutionContext context)
+    public ValueTask HandleAsync(TQuery query, int result, Exception? exception, ErgosfareContext context)
     {
         context.Mark("final", $"{query.Payload}|{result}|{PipelineVocabulary.Describe(exception)}");
         return ValueTask.CompletedTask;
@@ -369,7 +369,7 @@ public abstract class OrderedHandlerBase<TCommand> : ICommandHandler<TCommand>
     where TCommand : class, ICommand
 {
     /// <inheritdoc />
-    public ValueTask HandleAsync(TCommand command, IExecutionContext context)
+    public ValueTask HandleAsync(TCommand command, ErgosfareContext context)
     {
         context.Mark("handler");
         return ValueTask.CompletedTask;
@@ -382,7 +382,7 @@ public abstract class OrderedPreBase<TCommand>(string slot) : ICommandPreInterce
     where TCommand : class, ICommand
 {
     /// <inheritdoc />
-    public ValueTask<TCommand> HandleAsync(TCommand command, IExecutionContext context)
+    public ValueTask<TCommand> HandleAsync(TCommand command, ErgosfareContext context)
     {
         context.Mark(slot);
         return ValueTask.FromResult(command);
@@ -395,7 +395,7 @@ public abstract class OrderedPostBase<TCommand>(string slot) : ICommandPostInter
     where TCommand : class, ICommand
 {
     /// <inheritdoc />
-    public ValueTask<object> HandleAsync(TCommand command, object result, IExecutionContext context)
+    public ValueTask<object> HandleAsync(TCommand command, object result, ErgosfareContext context)
     {
         context.Mark(slot);
         return ValueTask.FromResult(result);
@@ -418,7 +418,7 @@ public abstract class AsyncTypedPostBase<TCommand> : ICommand, IAsyncPostInterce
     where TCommand : class, IPayloadCommand
 {
     /// <inheritdoc />
-    public ValueTask<object> HandleAsync(TCommand message, Unit messageResult, IExecutionContext context)
+    public ValueTask<object> HandleAsync(TCommand message, Unit messageResult, ErgosfareContext context)
     {
         context.Mark("post", $"{message.Payload}|{PipelineVocabulary.Describe(messageResult)}");
         return ValueTask.FromResult<object>(messageResult);
@@ -431,7 +431,7 @@ public abstract class AsyncTypedExceptionBase<TCommand> : ICommand, IAsyncExcept
     where TCommand : class, IPayloadCommand
 {
     /// <inheritdoc />
-    public ValueTask<object?> HandleAsync(TCommand message, Unit? result, Exception exception, IExecutionContext context)
+    public ValueTask<object?> HandleAsync(TCommand message, Unit? result, Exception exception, ErgosfareContext context)
     {
         context.Mark("exception",
             $"{message.Payload}|{PipelineVocabulary.Describe(result)}|{PipelineVocabulary.Describe(exception)}");
@@ -446,7 +446,7 @@ public abstract class AsyncTypedFinalBase<TCommand> : ICommand, IAsyncFinalInter
     where TCommand : class, IPayloadCommand
 {
     /// <inheritdoc />
-    public ValueTask HandleAsync(TCommand message, Unit? result, Exception? exception, IExecutionContext context)
+    public ValueTask HandleAsync(TCommand message, Unit? result, Exception? exception, ErgosfareContext context)
     {
         context.Mark("final",
             $"{message.Payload}|{PipelineVocabulary.Describe(result)}|{PipelineVocabulary.Describe(exception)}");

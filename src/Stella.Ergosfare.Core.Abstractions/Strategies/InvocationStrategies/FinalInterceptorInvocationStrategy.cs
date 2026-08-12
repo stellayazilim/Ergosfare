@@ -38,7 +38,7 @@ internal static class FinalInterceptorInvocationStrategy<TMessage, TResult>
         TMessage message,
         object? result,
         Exception? exception,
-        IExecutionContext executionContext)
+        ErgosfareContext executionContext)
     {
         var interceptors = messageDependencies.FinalInterceptors;
 

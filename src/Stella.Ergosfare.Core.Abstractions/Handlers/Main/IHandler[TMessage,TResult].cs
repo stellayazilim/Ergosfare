@@ -23,5 +23,5 @@ public interface IHandler<in TMessage, out TResult> : IHandler
     /// <param name="message">The message to handle.</param>
     /// <param name="context">The current execution context.</param>
     /// <returns>The result of type <typeparamref name="TResult"/> produced by handling the message.</returns>
-    TResult Handle(TMessage message, IExecutionContext context);
+    TResult Handle(TMessage message, ErgosfareContext context);
 }

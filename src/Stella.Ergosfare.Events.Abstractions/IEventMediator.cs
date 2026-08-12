@@ -43,7 +43,7 @@ public interface IEventMediator
     /// <param name="event">The event to publish.</param>
     /// <param name="context">The externally owned execution context to publish under.</param>
     /// <param name="eventMediationSettings">Optional settings for pipeline execution.</param>
-    ValueTask PublishAsync(IEvent @event, Core.Abstractions.IExecutionContext context, EventMediationSettings? eventMediationSettings = null);
+    ValueTask PublishAsync(IEvent @event, Core.Abstractions.ErgosfareContext context, EventMediationSettings? eventMediationSettings = null);
 
     /// <summary>
     ///     Asynchronously publishes an event with a specific type.

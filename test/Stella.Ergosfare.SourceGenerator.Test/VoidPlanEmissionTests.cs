@@ -21,7 +21,7 @@ public class VoidPlanEmissionTests
 
                 public sealed class SoloPingHandler : ICommandHandler<SoloPing>
                 {
-                    public ValueTask HandleAsync(SoloPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(SoloPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
             }
@@ -54,7 +54,7 @@ public class VoidPlanEmissionTests
                 {
                     public NeedyPingHandler(IGreeter greeter, string dependency) { }
 
-                    public ValueTask HandleAsync(NeedyPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(NeedyPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
             }
@@ -92,7 +92,7 @@ public class VoidPlanEmissionTests
                 {
                     public KeyedNeedyPingHandler([FromKeyedServices("primary")] IGreeter greeter) { }
 
-                    public ValueTask HandleAsync(KeyedNeedyPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(KeyedNeedyPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
             }
@@ -121,7 +121,7 @@ public class VoidPlanEmissionTests
                 {
                     public DefaultyPingHandler(string dependency = "fallback") { }
 
-                    public ValueTask HandleAsync(DefaultyPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(DefaultyPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
             }
@@ -153,7 +153,7 @@ public class VoidPlanEmissionTests
 
                     public PickyPingHandler(string dependency) { }
 
-                    public ValueTask HandleAsync(PickyPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(PickyPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
             }
@@ -183,7 +183,7 @@ public class VoidPlanEmissionTests
                 {
                     public required string Name { get; init; }
 
-                    public ValueTask HandleAsync(NamedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(NamedPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
             }
@@ -211,7 +211,7 @@ public class VoidPlanEmissionTests
 
                 public sealed class LeakyPingHandler : ICommandHandler<LeakyPing>, IDisposable
                 {
-                    public ValueTask HandleAsync(LeakyPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(LeakyPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
 
                     public void Dispose() { }
@@ -238,13 +238,13 @@ public class VoidPlanEmissionTests
 
                 public sealed class FirstDuoPingHandler : ICommandHandler<DuoPing>
                 {
-                    public ValueTask HandleAsync(DuoPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(DuoPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
 
                 public sealed class SecondDuoPingHandler : ICommandHandler<DuoPing>
                 {
-                    public ValueTask HandleAsync(DuoPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(DuoPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
             }
@@ -268,13 +268,13 @@ public class VoidPlanEmissionTests
 
                 public sealed class GuardedPingHandler : ICommandHandler<GuardedPing>
                 {
-                    public ValueTask HandleAsync(GuardedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(GuardedPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
 
                 public sealed class GuardedPingInterceptor : ICommandPreInterceptor<GuardedPing>
                 {
-                    public ValueTask<GuardedPing> HandleAsync(GuardedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<GuardedPing> HandleAsync(GuardedPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => ValueTask.FromResult(message);
                 }
             }
@@ -299,7 +299,7 @@ public class VoidPlanEmissionTests
                 [DiscoveryKey("plans.keyed")]
                 public sealed class KeyedPingHandler : ICommandHandler<KeyedPing>
                 {
-                    public ValueTask HandleAsync(KeyedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(KeyedPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
 
@@ -308,7 +308,7 @@ public class VoidPlanEmissionTests
                 [Group("reporting")]
                 public sealed class GroupedPingHandler : ICommandHandler<GroupedPing>
                 {
-                    public ValueTask HandleAsync(GroupedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask HandleAsync(GroupedPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => default;
                 }
             }
@@ -331,7 +331,7 @@ public class VoidPlanEmissionTests
 
                 public sealed class TypedPingHandler : ICommandHandler<TypedPing, string>
                 {
-                    public ValueTask<string> HandleAsync(TypedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<string> HandleAsync(TypedPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => ValueTask.FromResult(string.Empty);
                 }
             }
@@ -361,13 +361,13 @@ public class VoidPlanEmissionTests
 
                 public sealed class GuardedTypedPingHandler : ICommandHandler<GuardedTypedPing, string>
                 {
-                    public ValueTask<string> HandleAsync(GuardedTypedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<string> HandleAsync(GuardedTypedPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => ValueTask.FromResult(string.Empty);
                 }
 
                 public sealed class GuardedTypedPingInterceptor : ICommandPreInterceptor<GuardedTypedPing>
                 {
-                    public ValueTask<GuardedTypedPing> HandleAsync(GuardedTypedPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<GuardedTypedPing> HandleAsync(GuardedTypedPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => ValueTask.FromResult(message);
                 }
             }
@@ -390,7 +390,7 @@ public class VoidPlanEmissionTests
 
                 public sealed class NumberStreamHandler : IStreamQueryHandler<NumberStream, int>
                 {
-                    public IAsyncEnumerable<int> StreamAsync(NumberStream message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public IAsyncEnumerable<int> StreamAsync(NumberStream message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => throw new System.NotImplementedException();
                 }
             }

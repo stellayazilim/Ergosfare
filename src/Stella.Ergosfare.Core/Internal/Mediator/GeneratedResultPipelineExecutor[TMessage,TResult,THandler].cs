@@ -1,7 +1,6 @@
-using Stella.Ergosfare.Core.Abstractions;
+﻿using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Internal.Factories;
@@ -19,19 +18,20 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// </summary>
 #pragma warning disable CS8714 // TResult is used as a pattern type argument; handler contracts declare notnull results
 internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandler>(
-    IMessageDescriptor descriptor,
     IMessageDependenciesFactory dependenciesFactory,
-    IResultAdapterService? resultAdapterService,
     string[] groups,
     Func<THandler>? directHandlerFactory = null,
     Func<IServiceProvider, THandler>? providerHandlerFactory = null) : IPipelineExecutor<TResult>
     where TMessage : IMessage
     where THandler : class, IAsyncHandler<TMessage, TResult>
 {
-    private readonly SingleAsyncHandlerMediationStrategy<TMessage, TResult> _strategy = new(resultAdapterService);
+    private readonly SingleAsyncHandlerMediationStrategy<TMessage, TResult> _strategy = new();
 
-    private readonly ResultAdapterService? _concreteAdapters = resultAdapterService as ResultAdapterService;
-    private readonly bool _foreignAdapters = resultAdapterService is not null and not ResultAdapterService;
+    // Whether the pipeline's result slot has an effective adapter — the attribute tiers
+    // plus the container's default, resolved once on the first dispatch, so the fast
+    // paths below pay nothing when (as almost always) there is none.
+    private bool _hasResultAdapter;
+    private volatile bool _resultAdapterResolved;
 
     private static readonly bool HandlerIsDisposable =
         typeof(IDisposable).IsAssignableFrom(typeof(THandler)) || typeof(IAsyncDisposable).IsAssignableFrom(typeof(THandler));
@@ -48,7 +48,7 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
     // constructed and invoked without touching dependencies at all.
     private bool _fastDirect;
 
-    public ValueTask<TResult> Execute(object message, IExecutionContext context, IServiceProvider serviceProvider)
+    public ValueTask<TResult> Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider)
     {
         if (_fastDirect)
         {
@@ -56,11 +56,17 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
             return direct.HandleAsync((TMessage)message, context);
         }
 
+        if (!_resultAdapterResolved)
+        {
+            _hasResultAdapter = global::Stella.Ergosfare.Core.Abstractions.Results
+                .ResultAdapterBinding.For<TMessage, TResult>(serviceProvider) is not null;
+            _resultAdapterResolved = true;
+        }
+
         var dependencies = GetDependencies();
 
         if (_cachedFastDependencies?.FastSingleHandler is { } handlerReference
-            && !_foreignAdapters
-            && (_concreteAdapters is null || _concreteAdapters.IsEmpty))
+            && !_hasResultAdapter)
         {
             IHandler handler = _useDirectConstruction && handlerReference.HandlerType == typeof(THandler)
                 ? _directHandlerFactory is not null ? _directHandlerFactory() : _providerHandlerFactory!(serviceProvider)
@@ -101,7 +107,7 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
                 return cached;
             }
 
-            var dependencies = typedFactory.Create(typeof(TMessage), descriptor, groups);
+            var dependencies = typedFactory.Create(typeof(TMessage), groups);
             var fastDependencies = dependencies as MessageDependencies;
             _cachedFastDependencies = fastDependencies;
             _cachedDependencies = dependencies;
@@ -109,14 +115,14 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
                 && fastDependencies is { MemoizedInstances: false, FastSingleHandler.HandlerType: var plannedType }
                 && plannedType == typeof(THandler)
                 && typedFactory.IsPlainTransientRegistration(typeof(THandler));
-            _fastDirect = _useDirectConstruction
-                && !_foreignAdapters
-                && (_concreteAdapters is null || _concreteAdapters.IsEmpty);
+            // Execute resolves the adapter slot before the first GetDependencies call, so
+            // the answer is already in hand here.
+            _fastDirect = _useDirectConstruction && !_hasResultAdapter;
             return dependencies;
         }
 
         _useDirectConstruction = false;
-        return dependenciesFactory.Create(typeof(TMessage), descriptor, groups);
+        return dependenciesFactory.Create(typeof(TMessage), groups);
     }
 }
 #pragma warning restore CS8714

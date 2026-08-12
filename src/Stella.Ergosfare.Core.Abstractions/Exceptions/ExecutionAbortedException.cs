@@ -2,7 +2,7 @@
 namespace Stella.Ergosfare.Core.Abstractions.Exceptions;
 
 /// <summary>
-///     Raised by <see cref="IExecutionContext.Abort()" />: a participant stopped the pipeline.
+///     Raised by <see cref="ErgosfareContext.Abort()" />: a participant stopped the pipeline.
 /// </summary>
 /// <remarks>
 ///     <para>

@@ -1,9 +1,9 @@
-namespace Stella.Ergosfare.SourceGenerator.Test;
+﻿namespace Stella.Ergosfare.SourceGenerator.Test;
 
 /// <summary>
 ///     Reference scanning: the consuming compilation's generator discovers marker types in
 ///     referenced assemblies and registers them alongside the compilation's own — the
-///     compile-time replacement for cross-assembly <c>RegisterFromAssembly</c> calls.
+///     compile-time replacement for the removed cross-assembly runtime scanning.
 /// </summary>
 public class ReferenceScanningTests
 {
@@ -17,7 +17,7 @@ public class ReferenceScanningTests
 
             public sealed class LibPingHandler : ICommandHandler<LibPing>
             {
-                public ValueTask HandleAsync(LibPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                public ValueTask HandleAsync(LibPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                     => default;
             }
         }
@@ -44,19 +44,17 @@ public class ReferenceScanningTests
 
         var source = result.GeneratedSource;
 
-        // The library's plain message goes through the runtime fallback, its handler
-        // through a pre-computed descriptor — exactly like source-declared types.
-        Assert.Contains("registry.Register(typeof(global::TestLib.LibPing));", source);
-        Assert.Contains(
-            ".Handler(typeof(global::TestLib.LibPing), typeof(global::System.Threading.Tasks.ValueTask), typeof(global::TestLib.LibPingHandler))",
-            source);
+        // The library's message is named like a source-declared one, its handler batched
+        // as a participant — exactly like source-declared types.
+        Assert.Contains("compositions.Select(typeof(global::TestLib.LibPing));", source);
+        Assert.Contains("participants.Add(typeof(global::TestLib.LibPingHandler));", source);
 
         // The compilation's own types are unaffected.
-        Assert.Contains("registry.Register(typeof(global::TestApp.AppPing));", source);
+        Assert.Contains("compositions.Select(typeof(global::TestApp.AppPing));", source);
     }
 
     [Fact]
-    public void LibraryAttributes_FlowIntoDescriptorsFromMetadata()
+    public void LibraryParticipants_AreDiscoveredFromMetadata()
     {
         var result = GeneratorTestHost.Run(
             AppSource,
@@ -75,7 +73,7 @@ public class ReferenceScanningTests
                         [Group("lib")]
                         public sealed class LibAudit : ICommandPreInterceptor<LibPing>
                         {
-                            public ValueTask<LibPing> HandleAsync(LibPing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                            public ValueTask<LibPing> HandleAsync(LibPing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                                 => new(message);
                         }
                     }
@@ -84,8 +82,12 @@ public class ReferenceScanningTests
 
         Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
+
+        // The interceptor is registered as a participant, and its weight and group reach
+        // the composition table read from metadata alone.
+        Assert.Contains("participants.Add(typeof(global::TestLib.LibAudit));", result.GeneratedSource);
         Assert.Contains(
-            ".PreInterceptor(typeof(global::TestLib.LibPing), typeof(global::TestLib.LibAudit), 7u, new string[] { \"lib\" })",
+            "FrozenParticipant(typeof(global::TestLib.LibAudit), new string[] { \"lib\" })",
             result.GeneratedSource);
     }
 
@@ -136,7 +138,7 @@ public class ReferenceScanningTests
 
         Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
-        Assert.Contains("registry.Register(typeof(global::TestLib.SharedCommand));", result.GeneratedSource);
+        Assert.Contains("compositions.Select(typeof(global::TestLib.SharedCommand));", result.GeneratedSource);
     }
 
     [Fact]
@@ -150,7 +152,7 @@ public class ReferenceScanningTests
         Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
         Assert.DoesNotContain("TestLib", result.GeneratedSource);
-        Assert.Contains("registry.Register(typeof(global::TestApp.AppPing));", result.GeneratedSource);
+        Assert.Contains("compositions.Select(typeof(global::TestApp.AppPing));", result.GeneratedSource);
     }
 
     [Fact]
@@ -163,7 +165,7 @@ public class ReferenceScanningTests
 
         Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
-        Assert.Contains("registry.Register(typeof(global::TestLib.LibPing));", result.GeneratedSource);
+        Assert.Contains("compositions.Select(typeof(global::TestLib.LibPing));", result.GeneratedSource);
     }
 
     [Fact]
@@ -189,9 +191,10 @@ public class ReferenceScanningTests
 
         var source = result.GeneratedSource;
 
-        // Once in RegisterAll, once in the command builder extension — the library's
-        // types are indistinguishable from the compilation's own in the emitted surface.
+        // Once in the catalog surface, once in the command builder extension — the
+        // library's types are indistinguishable from the compilation's own in the emitted
+        // surface, participants included.
         Assert.Contains("builder.Register(typeof(global::TestLib.LibPing));", source);
-        Assert.DoesNotContain("Register(typeof(global::TestLib.LibPingHandler))", source);
+        Assert.DoesNotContain("builder.Register(typeof(global::TestLib.LibPingHandler))", source);
     }
 }

@@ -1,6 +1,5 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
@@ -10,20 +9,15 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// are honored per dispatch. In memoized mode the instance is resolved once from the
 /// pinned provider (the root) and cached for the lifetime of the process.
 /// </summary>
-internal sealed class HandlerReference<THandler, TDescriptor>(
-    TDescriptor descriptor,
+internal sealed class HandlerReference<THandler>(
     Type handlerType,
     IServiceProvider? memoizedProvider)
-    : IHandlerReference<THandler, TDescriptor>
-    where TDescriptor : IHandlerDescriptor
+    : IHandlerReference<THandler>
 {
     /// <summary>
     /// Cached instance; only ever set in memoized mode.
     /// </summary>
     private object? _instance;
-
-    /// <inheritdoc />
-    public TDescriptor Descriptor { get; } = descriptor;
 
     /// <inheritdoc />
     public Type HandlerType { get; } = handlerType;

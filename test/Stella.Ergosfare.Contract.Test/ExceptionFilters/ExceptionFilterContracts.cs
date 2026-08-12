@@ -98,7 +98,7 @@ public abstract class FilteredVoidHandlerBase<TCommand> : ICommandHandler<TComma
     where TCommand : class, IFilteredVoidCommand
 {
     /// <inheritdoc />
-    public ValueTask HandleAsync(TCommand command, IExecutionContext context)
+    public ValueTask HandleAsync(TCommand command, ErgosfareContext context)
     {
         context.Mark("handler");
         throw Faults.Create(command.Fault);
@@ -112,7 +112,7 @@ public abstract class FilteredVoidTaggedBase<TCommand> : ICommandExceptionInterc
 {
     /// <inheritdoc />
     public ValueTask<object> HandleAsync(
-        TCommand command, object? messageResult, TaggedFaultException exception, IExecutionContext context)
+        TCommand command, object? messageResult, TaggedFaultException exception, ErgosfareContext context)
     {
         context.Mark("exception:tagged", ExceptionFilterVocabulary.Describe(exception));
         return ValueTask.FromResult<object>(Unit.Value);
@@ -126,7 +126,7 @@ public abstract class FilteredVoidUnrelatedBase<TCommand> : ICommandExceptionInt
 {
     /// <inheritdoc />
     public ValueTask<object> HandleAsync(
-        TCommand command, object? messageResult, UnrelatedFaultException exception, IExecutionContext context)
+        TCommand command, object? messageResult, UnrelatedFaultException exception, ErgosfareContext context)
     {
         context.Mark("exception:unrelated", ExceptionFilterVocabulary.Describe(exception));
         return ValueTask.FromResult<object>(Unit.Value);
@@ -139,7 +139,7 @@ public abstract class FilteredVoidFinalBase<TCommand> : ICommandFinalInterceptor
     where TCommand : class, IFilteredVoidCommand
 {
     /// <inheritdoc />
-    public ValueTask HandleAsync(TCommand command, object? result, Exception? exception, IExecutionContext context)
+    public ValueTask HandleAsync(TCommand command, object? result, Exception? exception, ErgosfareContext context)
     {
         context.Mark("final", ExceptionFilterVocabulary.Describe(exception));
         return ValueTask.CompletedTask;
@@ -156,7 +156,7 @@ public abstract class FilteredResultHandlerBase<TCommand> : ICommandHandler<TCom
     where TCommand : class, IFilteredResultCommand
 {
     /// <inheritdoc />
-    public ValueTask<string> HandleAsync(TCommand command, IExecutionContext context)
+    public ValueTask<string> HandleAsync(TCommand command, ErgosfareContext context)
     {
         context.Mark("handler");
         throw Faults.Create(command.Fault);
@@ -171,7 +171,7 @@ public abstract class FilteredResultTaggedBase<TCommand>
 {
     /// <inheritdoc />
     public ValueTask<string?> HandleAsync(
-        TCommand command, string? result, TaggedFaultException exception, IExecutionContext context)
+        TCommand command, string? result, TaggedFaultException exception, ErgosfareContext context)
     {
         context.Mark("exception:tagged", ExceptionFilterVocabulary.Describe(exception));
         return ValueTask.FromResult<string?>(ExceptionFilterVocabulary.TaggedRecovery);
@@ -185,7 +185,7 @@ public abstract class FilteredResultUntypedBase<TCommand> : ICommandExceptionInt
 {
     /// <inheritdoc />
     public ValueTask<string?> HandleAsync(
-        TCommand command, string? result, Exception exception, IExecutionContext context)
+        TCommand command, string? result, Exception exception, ErgosfareContext context)
     {
         context.Mark("exception:untyped", ExceptionFilterVocabulary.Describe(exception));
         return ValueTask.FromResult<string?>((result ?? string.Empty) + ExceptionFilterVocabulary.UntypedSuffix);
@@ -198,7 +198,7 @@ public abstract class FilteredResultFinalBase<TCommand> : ICommandFinalIntercept
     where TCommand : class, IFilteredResultCommand
 {
     /// <inheritdoc />
-    public ValueTask HandleAsync(TCommand command, string? result, Exception? exception, IExecutionContext context)
+    public ValueTask HandleAsync(TCommand command, string? result, Exception? exception, ErgosfareContext context)
     {
         context.Mark("final", ExceptionFilterVocabulary.Describe(exception));
         return ValueTask.CompletedTask;

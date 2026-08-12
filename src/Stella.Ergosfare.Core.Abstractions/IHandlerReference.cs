@@ -1,10 +1,8 @@
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
-
 namespace Stella.Ergosfare.Core.Abstractions;
 
 /// <summary>
-/// A resolvable reference to a pipeline handler: the descriptor it was registered with,
-/// its pre-computed concrete type, and a way to obtain an instance for the current dispatch.
+/// A resolvable reference to a pipeline handler: its pre-computed concrete type and a way
+/// to obtain an instance for the current dispatch.
 /// </summary>
 /// <remarks>
 /// References are provider-independent and shared process-wide; the handler instance is
@@ -14,15 +12,8 @@ namespace Stella.Ergosfare.Core.Abstractions;
 /// memoized pipelines cache the resolved instance inside the reference instead.
 /// </remarks>
 /// <typeparam name="THandler">The type of the handler.</typeparam>
-/// <typeparam name="TDescriptor">The type of the handler descriptor.</typeparam>
-public interface IHandlerReference<out THandler, out TDescriptor>
-    where TDescriptor : IHandlerDescriptor
+public interface IHandlerReference<out THandler>
 {
-    /// <summary>
-    /// Gets the descriptor associated with the handler.
-    /// </summary>
-    TDescriptor Descriptor { get; }
-
     /// <summary>
     /// Gets the concrete handler type to instantiate — already closed over the message's
     /// generic arguments when the handler targets a generic message type.

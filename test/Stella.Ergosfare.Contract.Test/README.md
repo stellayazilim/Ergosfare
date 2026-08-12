@@ -17,7 +17,7 @@ dotnet test test/Stella.Ergosfare.Contract.Test
 
 Public types from the `Stella.Ergosfare.*` packages only: `AddErgosfare`, the module
 builders, `ICommandMediator` / `IQueryMediator` / `IEventMediator`, the mediation settings
-and `GroupSet`, `IExecutionContext`, `IMessageRegistry`, and the handler/interceptor
+and `GroupSet`, `ErgosfareContext`, and the handler/interceptor
 contract interfaces. No `InternalsVisibleTo`, no `*.Internal` namespaces, no reflection
 into non-public members. A behavior that cannot be observed through the public surface is
 out of scope by design — if the suite could see internals, the modernization could not keep

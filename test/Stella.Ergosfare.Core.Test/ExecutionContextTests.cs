@@ -1,5 +1,5 @@
+using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
-using Stella.Ergosfare.Core.Internal.Contexts;
 
 namespace Stella.Ergosfare.Core.Test;
 
@@ -11,7 +11,7 @@ public class ExecutionContextTests
 {
     
     /// <summary>
-    /// Ensures that <see cref="ErgosfareExecutionContext"/> can be constructed,
+    /// Ensures that <see cref="ErgosfareContext"/> can be constructed,
     /// shares the same items dictionary reference, respects the cancellation token,
     /// and correctly sets the message result when aborted.
     /// </summary>
@@ -24,7 +24,7 @@ public class ExecutionContextTests
         var items = new Dictionary<object, object?>();
         
         // arrange & act: create a new execution context
-        var ctx = new ErgosfareExecutionContext( items, token);
+        var ctx = new ErgosfareContext( items, token);
         
         // modify dictionary after construction (should still reference the same instance)
         items.Add("foo", "bar");

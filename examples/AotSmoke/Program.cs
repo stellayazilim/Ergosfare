@@ -87,7 +87,7 @@ namespace Ergosfare.AotSmoke
 
     public sealed class CreateNoteHandler : ICommandHandler<CreateNote>
     {
-        public ValueTask HandleAsync(CreateNote command, IExecutionContext context)
+        public ValueTask HandleAsync(CreateNote command, ErgosfareContext context)
         {
             context.Set("noteCreated", true);
             return ValueTask.CompletedTask;
@@ -101,7 +101,7 @@ namespace Ergosfare.AotSmoke
 
     public sealed class EchoNoteHandler : ICommandHandler<EchoNote, string>
     {
-        public ValueTask<string> HandleAsync(EchoNote command, IExecutionContext context)
+        public ValueTask<string> HandleAsync(EchoNote command, ErgosfareContext context)
             => ValueTask.FromResult(command.Text + "!");
     }
 
@@ -109,7 +109,7 @@ namespace Ergosfare.AotSmoke
 
     public sealed class TheAnswerHandler : IQueryHandler<TheAnswer, int>
     {
-        public ValueTask<int> HandleAsync(TheAnswer query, IExecutionContext context)
+        public ValueTask<int> HandleAsync(TheAnswer query, ErgosfareContext context)
             => ValueTask.FromResult(42);
     }
 
@@ -117,7 +117,7 @@ namespace Ergosfare.AotSmoke
 
     public sealed class FirstNoteSubscriber : IEventHandler<NotePublished>
     {
-        public ValueTask HandleAsync(NotePublished @event, IExecutionContext context)
+        public ValueTask HandleAsync(NotePublished @event, ErgosfareContext context)
         {
             context.Set("firstSubscriber", true);
             return ValueTask.CompletedTask;
@@ -126,7 +126,7 @@ namespace Ergosfare.AotSmoke
 
     public sealed class SecondNoteSubscriber : IEventHandler<NotePublished>
     {
-        public ValueTask HandleAsync(NotePublished @event, IExecutionContext context)
+        public ValueTask HandleAsync(NotePublished @event, ErgosfareContext context)
         {
             context.Set("secondSubscriber", true);
             return ValueTask.CompletedTask;
@@ -140,7 +140,7 @@ namespace Ergosfare.AotSmoke
 
     public sealed class StructPingHandler : IEventHandler<StructPing>
     {
-        public ValueTask HandleAsync(StructPing @event, IExecutionContext context)
+        public ValueTask HandleAsync(StructPing @event, ErgosfareContext context)
         {
             context.Set("structPayload", @event.Payload);
             return ValueTask.CompletedTask;

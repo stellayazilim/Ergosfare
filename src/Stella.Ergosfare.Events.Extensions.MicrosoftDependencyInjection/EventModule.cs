@@ -27,7 +27,7 @@ internal class EventModule(Action<EventModuleBuilder> builder) : IModule
     /// <param name="configuration">The module configuration containing services and message registry.</param>
     public void Build(IModuleConfiguration configuration)
     {
-        builder(new EventModuleBuilder(configuration.MessageRegistry));
+        builder(new EventModuleBuilder(configuration.Compositions));
 
         // Transient, not scoped: the mediator is stateless and a transient service is handed
         // the resolving scope's provider all the same, so per-dispatch handler resolution

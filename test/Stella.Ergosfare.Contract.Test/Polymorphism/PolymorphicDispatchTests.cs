@@ -37,7 +37,7 @@ public sealed class PolymorphicDispatchTests
     [DiscoveryKey(Key)]
     public sealed class WithdrawHandler : ICommandHandler<Withdraw>
     {
-        public ValueTask HandleAsync(Withdraw command, IExecutionContext context)
+        public ValueTask HandleAsync(Withdraw command, ErgosfareContext context)
         {
             context.Mark("handler");
             return ValueTask.CompletedTask;
@@ -48,7 +48,7 @@ public sealed class PolymorphicDispatchTests
     [DiscoveryKey(Key)]
     public sealed class AuditedPre : ICommandPreInterceptor<IAudited>
     {
-        public ValueTask<IAudited> HandleAsync(IAudited command, IExecutionContext context)
+        public ValueTask<IAudited> HandleAsync(IAudited command, ErgosfareContext context)
         {
             context.Mark("pre:audited");
             return ValueTask.FromResult(command);
@@ -76,7 +76,7 @@ public sealed class PolymorphicDispatchTests
     [DiscoveryKey(Key)]
     public sealed class LedgerEntryHandler : ICommandHandler<LedgerEntry>
     {
-        public ValueTask HandleAsync(LedgerEntry command, IExecutionContext context)
+        public ValueTask HandleAsync(LedgerEntry command, ErgosfareContext context)
         {
             command.SeenType = command.GetType().Name;
             context.Mark("handler:base");
@@ -97,7 +97,7 @@ public sealed class PolymorphicDispatchTests
     [DiscoveryKey(Key)]
     public sealed class ShipmentAuditHandler : IEventHandler<ShipmentDispatched>
     {
-        public ValueTask HandleAsync(ShipmentDispatched @event, IExecutionContext context)
+        public ValueTask HandleAsync(ShipmentDispatched @event, ErgosfareContext context)
         {
             context.Mark("direct:audit");
             return ValueTask.CompletedTask;
@@ -108,7 +108,7 @@ public sealed class PolymorphicDispatchTests
     [DiscoveryKey(Key)]
     public sealed class ShipmentNotifyHandler : IEventHandler<ShipmentDispatched>
     {
-        public ValueTask HandleAsync(ShipmentDispatched @event, IExecutionContext context)
+        public ValueTask HandleAsync(ShipmentDispatched @event, ErgosfareContext context)
         {
             context.Mark("direct:notify");
             return ValueTask.CompletedTask;
@@ -119,7 +119,7 @@ public sealed class PolymorphicDispatchTests
     [DiscoveryKey(Key)]
     public sealed class ShipmentInterfaceHandler : IEventHandler<IShipmentEvent>
     {
-        public ValueTask HandleAsync(IShipmentEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(IShipmentEvent @event, ErgosfareContext context)
         {
             context.Mark("indirect:interface");
             return ValueTask.CompletedTask;
@@ -202,7 +202,7 @@ public sealed class PolymorphicDispatchTests
     [DiscoveryKey(Key)]
     public sealed class WithdrawalEntryHandler : ICommandHandler<WithdrawalEntry>
     {
-        public ValueTask HandleAsync(WithdrawalEntry command, IExecutionContext context)
+        public ValueTask HandleAsync(WithdrawalEntry command, ErgosfareContext context)
         {
             command.SeenType = command.GetType().Name;
             context.Mark("handler:direct");
@@ -212,19 +212,57 @@ public sealed class PolymorphicDispatchTests
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_direct_and_a_base_typed_handler_claiming_one_message_fail_the_dispatch()
+    public async Task A_direct_handler_beats_a_base_typed_one_claiming_the_same_message()
+    {
+        await using var provider = CreateProvider();
+        var recorder = new PipelineRecorder();
+        var command = new WithdrawalEntry();
+
+        // The main-handler priority ladder: the direct level wins outright. A covariant
+        // handler is a fallback for messages nobody claims directly — not a competitor —
+        // so the message's own handler serves it and the base-typed one never runs.
+        await provider.GetRequiredService<ICommandMediator>().SendAsync(command, recorder.Commands());
+
+        recorder.AssertStages("handler:direct");
+        Assert.Equal(nameof(WithdrawalEntry), command.SeenType);
+    }
+
+    // --- two covariant claimants and no direct one ------------------------------
+
+    /// <summary>A second handled supertype, so a message can be claimed covariantly twice.</summary>
+    [ExcludeFromDiscovery]
+    public interface IArchivedEntry : ICommand;
+
+    /// <summary>Claimed through <see cref="LedgerEntry"/> AND <see cref="IArchivedEntry"/>; no direct handler.</summary>
+    [DiscoveryKey(Key)]
+    public sealed class ArchivedTransferEntry : LedgerEntry, IArchivedEntry;
+
+    /// <summary>The second covariant claimant.</summary>
+    [DiscoveryKey(Key)]
+    public sealed class ArchivedEntryHandler : ICommandHandler<IArchivedEntry>
+    {
+        public ValueTask HandleAsync(IArchivedEntry command, ErgosfareContext context)
+        {
+            context.Mark("handler:archived");
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Contract")]
+    public async Task Two_covariant_claimants_with_no_direct_handler_fail_the_dispatch()
     {
         await using var provider = CreateProvider();
         var recorder = new PipelineRecorder();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        // Covariance reaching main handlers means a derived message can be claimed twice:
-        // directly and through its base. That is the same contest two direct handlers
-        // create, and it fails the same way rather than picking a winner.
+        // Within one level the ladder has no tiebreaker: with no direct handler to win,
+        // two covariant claimants are a contest and the dispatch fails rather than
+        // picking one.
         var thrown = await Assert.ThrowsAsync<MultipleHandlerFoundException>(
-            async () => await mediator.SendAsync(new WithdrawalEntry(), recorder.Commands()));
+            async () => await mediator.SendAsync(new ArchivedTransferEntry(), recorder.Commands()));
 
-        Assert.Contains(nameof(WithdrawalEntry), thrown.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(ArchivedTransferEntry), thrown.Message, StringComparison.Ordinal);
         Assert.Contains("2", thrown.Message, StringComparison.Ordinal);
 
         // Counted before anything resolves: neither claimant runs.

@@ -11,7 +11,7 @@ namespace Stella.Ergosfare.E2E.UseCases.Todos;
 /// </summary>
 public sealed class TodoCompletedStatsHandler(TodoStats stats) : IEventHandler<TodoCompleted>
 {
-    public ValueTask HandleAsync(TodoCompleted @event, IExecutionContext context)
+    public ValueTask HandleAsync(TodoCompleted @event, ErgosfareContext context)
     {
         stats.IncrementCompleted();
         return ValueTask.CompletedTask;

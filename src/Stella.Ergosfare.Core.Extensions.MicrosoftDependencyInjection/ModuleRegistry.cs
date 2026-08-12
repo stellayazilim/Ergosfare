@@ -1,16 +1,17 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿// The registry is the experimental result-adapter surface's own plumbing: it stores and
+// registers the DefaultResultAdapter the marked API produces.
+#pragma warning disable ERGOEXP001
+
+using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
-using Stella.Ergosfare.Core.Abstractions.Registry;
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
-using Stella.Ergosfare.Core.Abstractions.Strategies;
+using Stella.Ergosfare.Core.Abstractions.Results;
 using Stella.Ergosfare.Core.Internal.Factories;
 using Stella.Ergosfare.Core.Internal.Mediator;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Stella.Ergosfare.Core.Abstractions.Caching;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Internal;
-using Stella.Ergosfare.Core.Internal.Caching;
 using Stella.Ergosfare.Core.Internal.Registry;
 
 namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -19,7 +20,8 @@ namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 /// Represents a central registry for application modules.
 /// Handles registration, initialization, and handler discovery for all modules.
 /// </summary>
-public class ModuleRegistry(IServiceCollection services, IMessageRegistry messageRegistry, IResultAdapterService resultAdapterService)
+public class ModuleRegistry(
+    IServiceCollection services, FrozenCompositionCatalog compositions)
     : IModuleRegistry
 {
     
@@ -35,7 +37,12 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
     /// </summary>
     internal bool MemoizeAllHandlers { get; set; }
 
-    
+    /// <summary>
+    /// The configured default result adapter, validated eagerly so a misconfigured type
+    /// fails inside <c>AddErgosfare</c> rather than on some first dispatch.
+    /// </summary>
+    private DefaultResultAdapter? _defaultResultAdapter;
+
     /// <summary>
     /// Registers a module with the registry.
     /// </summary>
@@ -46,14 +53,24 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
         _modules.Add(module);
         return this;
     }
-    
+
+    /// <inheritdoc />
+    [Experimental(ExperimentalIds.ResultAdapterSurface)]
+    public IModuleRegistry UseDefaultResultAdapter(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.Interfaces)]
+        Type adapterType)
+    {
+        _defaultResultAdapter = new DefaultResultAdapter(adapterType);
+        return this;
+    }
+
     /// <summary>
     /// Initializes all registered modules, sets up their configurations,
     /// and registers all required handlers and services with the DI container.
     /// </summary>
     public void Initialize()
     {
-        var moduleConfiguration = new ModuleConfiguration(services, messageRegistry);
+        var moduleConfiguration = new ModuleConfiguration(services, compositions);
 
         foreach (var module in _modules)
         {
@@ -74,20 +91,20 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
             sp.GetRequiredService<PipelineExecutorCache>(),
             sp.GetRequiredService<IMessageDependenciesFactory>()));
         services.TryAddTransient<IMessageMediator, MessageMediator>();
-        services.TryAddSingleton<IDescriptorCacheStrategy, LruCacheStrategy>();
-        services.TryAddSingleton<MessageDescriptorCache>();
         services.TryAddSingleton<RootServiceProviderAccessor>();
         services.TryAddSingleton(new ErgosfareRuntimeOptions { MemoizeAllHandlers = MemoizeAllHandlers });
 
-        services.TryAddSingleton(messageRegistry);
-        services.TryAddSingleton<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>();
+        services.TryAddSingleton(compositions);
 
-        var allHandlerTypes = new HashSet<Type>();
-        foreach (var descriptor in messageRegistry)
+        if (_defaultResultAdapter is not null)
         {
-            // Register all handler types from the registry
-            RegisterHandlersFromDescriptor(descriptor, allHandlerTypes);
+            // A normal singleton service: the binding's provider-taking overload consults
+            // it as the last resolution tier. Absent, every unannotated foreign slot keeps
+            // the classic try/catch semantics.
+            services.TryAddSingleton(_defaultResultAdapter);
         }
+
+        var allHandlerTypes = RegisterParticipants();
 
         // The lifetime registry is registered as a FACTORY so the capture runs at first
         // resolution — after BuildServiceProvider, when the collection is final. A snapshot
@@ -145,70 +162,37 @@ public class ModuleRegistry(IServiceCollection services, IMessageRegistry messag
     }
 
     /// <summary>
-    /// Collects and registers all handler types defined in the given message descriptor.
+    /// Registers every pipeline participant this container both selected and can run, so
+    /// the pipeline can resolve it, and returns the set for the lifetime capture.
     /// </summary>
-    /// <param name="descriptor">The message descriptor containing handler metadata.</param>
-    /// <param name="allHandlerTypes">Accumulates every registered handler type across descriptors.</param>
+    /// <remarks>
+    /// The participants come from the catalog — the container's own selection narrowed to
+    /// what the compiled table actually names as a participant. The message types
+    /// registration also names are constructs to dispatch, not services to resolve, and
+    /// never reach this. Interfaces and abstract classes are skipped for the reason they
+    /// always were: the container cannot instantiate them, while the composition still
+    /// carries them for polymorphic dispatch. Open generic definitions are registered as
+    /// they are — a row names the definition, and the pipeline closes it over the runtime
+    /// message's arguments before resolving it.
+    /// </remarks>
     [UnconditionalSuppressMessage("Trimming", "IL2072",
-        Justification = "Every element of the set originates from IHandlerDescriptor.HandlerType, which is annotated " +
-                        "to preserve public constructors; the HashSet only deduplicates and cannot carry the annotation.")]
-    private void RegisterHandlersFromDescriptor(IMessageDescriptor descriptor, HashSet<Type> allHandlerTypes)
+        Justification = "Every element originates from a frozen participant row, whose handler type the generated " +
+                        "table references through typeof — statically rooted, so the constructors survive trimming.")]
+    private HashSet<Type> RegisterParticipants()
     {
-        // Use a local HashSet to avoid redundant registrations within the same descriptor
-        var descriptorHandlerTypes = new HashSet<Type>();
+        var registered = new HashSet<Type>();
 
-        // Process all handlers first to avoid redundant service registrations
-        CollectHandlerTypes(descriptor.Handlers, descriptorHandlerTypes);
-        CollectHandlerTypes(descriptor.IndirectHandlers, descriptorHandlerTypes);
-        CollectHandlerTypes(descriptor.PreInterceptors, descriptorHandlerTypes);
-        CollectHandlerTypes(descriptor.IndirectPreInterceptors, descriptorHandlerTypes);
-        CollectHandlerTypes(descriptor.PostInterceptors, descriptorHandlerTypes);
-        CollectHandlerTypes(descriptor.IndirectPostInterceptors, descriptorHandlerTypes);
-        CollectHandlerTypes(descriptor.ExceptionInterceptors, descriptorHandlerTypes);
-        CollectHandlerTypes(descriptor.IndirectExceptionInterceptors, descriptorHandlerTypes);
-        CollectHandlerTypes(descriptor.FinalInterceptors, descriptorHandlerTypes);
-        CollectHandlerTypes(descriptor.IndirectFinalInterceptors, descriptorHandlerTypes);
-
-        // Register each type once
-        foreach (var handlerType in descriptorHandlerTypes)
+        foreach (var participantType in compositions.SelectedParticipants())
         {
-            // Only register concrete classes with DI container - interfaces and abstract classes are kept in
-            // the Ergosfare registry for polymorphic dispatch but cannot be instantiated by the DI container.
-            // Without this filter, DI would throw "Cannot instantiate implementation type" errors.
-            if (handlerType is { IsClass: true, IsAbstract: false })
+            if (participantType is not { IsClass: true, IsAbstract: false })
             {
-                services.TryAddTransient(handlerType);
-                allHandlerTypes.Add(handlerType);
+                continue;
             }
-        }
-    }
 
-    /// <summary>
-    /// Configures the result adapter pipeline using the provided builder action.
-    /// </summary>
-    /// <param name="builder">
-    /// An action that configures the <see cref="ResultAdapterBuilder"/> 
-    /// with custom adapters.
-    /// </param>
-    /// <returns>The current <see cref="IModuleRegistry"/> instance for fluent chaining.</returns>
-    public IModuleRegistry ConfigureResultAdapters(Action<ResultAdapterBuilder> builder)
-    {
-        builder(new ResultAdapterBuilder(resultAdapterService));
-        return this;
-    }
-
-    
-    /// <summary>
-    /// Adds all handler types from the specified descriptors into the given set.
-    /// </summary>
-    /// <param name="descriptors">A collection of handler descriptors.</param>
-    /// <param name="handlerTypes">The set into which handler types are added.</param>
-    private static void CollectHandlerTypes(IEnumerable<IHandlerDescriptor> descriptors, HashSet<Type> handlerTypes)
-    {
-        foreach (var descriptor in descriptors)
-        {
-            handlerTypes.Add(descriptor.HandlerType);
+            services.TryAddTransient(participantType);
+            registered.Add(participantType);
         }
-    
+
+        return registered;
     }
 }

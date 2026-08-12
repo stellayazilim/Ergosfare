@@ -9,6 +9,12 @@ internal readonly struct GroupedDependenciesKey(Type messageType, string[] group
     private readonly Type _messageType = messageType;
     private readonly string[] _groups = groups;
 
+    /// <summary>The message type the key was built for.</summary>
+    public Type MessageType => _messageType;
+
+    /// <summary>The requested group names, in order.</summary>
+    public string[] Groups => _groups;
+
     public bool Equals(GroupedDependenciesKey other)
     {
         if (_messageType != other._messageType || _groups.Length != other._groups.Length)

@@ -2,7 +2,7 @@
 
 Command module DI wiring for [Ergosfare](https://github.com/stellayazilim/Ergosfare):
 `AddCommandModule(...)` and the `CommandModuleBuilder` with explicit registration
-(`Register<T>()`), discovery-aware assembly scanning (`RegisterFromAssembly`), and
+(`Register<T>()`) and
 source-generated registration (`RegisterGenerated()` /
 `RegisterGenerated("discovery.key.*")`).
 

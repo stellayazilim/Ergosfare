@@ -42,7 +42,7 @@ public class StubStreamHandler : IStreamHandler<StubStreamMessage, string>
     /// <param name="message">The message to process.</param>
     /// <param name="context">The execution context provided by the test fixture.</param>
     /// <returns>An asynchronous stream of string results.</returns>
-    public async IAsyncEnumerable<string> StreamAsync(StubStreamMessage message, IExecutionContext context)
+    public async IAsyncEnumerable<string> StreamAsync(StubStreamMessage message, ErgosfareContext context)
     {
         // simulate async operation
         await ValueTask.CompletedTask;

@@ -26,7 +26,7 @@ public interface IQueryPostInterceptor<in TQuery, TResult> : IQuery, IAsyncPostI
 {
     /// <inheritdoc />
     async ValueTask<object> IAsyncPostInterceptor<TQuery, TResult>.HandleAsync(
-        TQuery query, TResult messageResult, IExecutionContext context)
+        TQuery query, TResult messageResult, ErgosfareContext context)
         => await HandleAsync(query, messageResult, context);
 
     /// <summary>
@@ -39,5 +39,5 @@ public interface IQueryPostInterceptor<in TQuery, TResult> : IQuery, IAsyncPostI
     /// A <see cref="ValueTask{TResult}"/> producing the (possibly modified) result that
     /// continues through the pipeline.
     /// </returns>
-    new ValueTask<TResult> HandleAsync(TQuery query, TResult queryResult, IExecutionContext context);
+    new ValueTask<TResult> HandleAsync(TQuery query, TResult queryResult, ErgosfareContext context);
 }

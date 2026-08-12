@@ -41,7 +41,7 @@ public abstract class SyncEventHandlerContract
         where TEvent : class, IEvent
     {
         /// <inheritdoc />
-        public ValueTask Handle(TEvent message, IExecutionContext context)
+        public ValueTask Handle(TEvent message, ErgosfareContext context)
         {
             context.Mark("sync:valuetask");
             return ValueTask.CompletedTask;
@@ -54,7 +54,7 @@ public abstract class SyncEventHandlerContract
         where TEvent : class, IEvent
     {
         /// <inheritdoc />
-        public object Handle(TEvent message, IExecutionContext context)
+        public object Handle(TEvent message, ErgosfareContext context)
         {
             context.Mark("sync:object");
             return "ignored";
@@ -67,7 +67,7 @@ public abstract class SyncEventHandlerContract
         where TEvent : class, IEvent
     {
         /// <inheritdoc />
-        public ValueTask HandleAsync(TEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(TEvent @event, ErgosfareContext context)
         {
             context.Mark("async");
             return ValueTask.CompletedTask;
@@ -80,7 +80,7 @@ public abstract class SyncEventHandlerContract
         where TEvent : class, IEvent
     {
         /// <inheritdoc />
-        public ValueTask<TEvent> HandleAsync(TEvent @event, IExecutionContext context)
+        public ValueTask<TEvent> HandleAsync(TEvent @event, ErgosfareContext context)
         {
             context.Mark("pre");
             return ValueTask.FromResult(@event);

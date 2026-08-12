@@ -8,7 +8,7 @@ namespace Stella.Ergosfare.E2E.UseCases.Todos;
 
 public sealed class ListTodosHandler(TodoStore store) : IQueryHandler<ListTodosQuery, IReadOnlyList<TodoDto>>
 {
-    public async ValueTask<IReadOnlyList<TodoDto>> HandleAsync(ListTodosQuery query, IExecutionContext context)
+    public async ValueTask<IReadOnlyList<TodoDto>> HandleAsync(ListTodosQuery query, ErgosfareContext context)
     {
         var todos = await store.ListAsync(context.CancellationToken);
 

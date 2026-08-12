@@ -25,14 +25,14 @@ public class FlavoredQueryInterceptorTests
     [ExcludeFromDiscovery]
     public sealed class FinalizedIntQueryHandler : IQueryHandler<FinalizedIntQuery, int>
     {
-        public ValueTask<int> HandleAsync(FinalizedIntQuery query, IExecutionContext context)
+        public ValueTask<int> HandleAsync(FinalizedIntQuery query, ErgosfareContext context)
             => ValueTask.FromResult(7);
     }
 
     [ExcludeFromDiscovery]
     public sealed class RecordingQueryFinalInterceptor : IQueryFinalInterceptor
     {
-        public ValueTask HandleAsync(IQuery query, object? messageResult, Exception? exception, IExecutionContext context)
+        public ValueTask HandleAsync(IQuery query, object? messageResult, Exception? exception, ErgosfareContext context)
         {
             context.Set("finalRan", true);
             return ValueTask.CompletedTask;
@@ -69,7 +69,7 @@ public class FlavoredQueryInterceptorTests
     [ExcludeFromDiscovery]
     public sealed class TargetedQueryHandler : IQueryHandler<TargetedQuery, int>
     {
-        public ValueTask<int> HandleAsync(TargetedQuery query, IExecutionContext context)
+        public ValueTask<int> HandleAsync(TargetedQuery query, ErgosfareContext context)
             => ValueTask.FromResult(1);
     }
 
@@ -79,14 +79,14 @@ public class FlavoredQueryInterceptorTests
     [ExcludeFromDiscovery]
     public sealed class UntargetedQueryHandler : IQueryHandler<UntargetedQuery, int>
     {
-        public ValueTask<int> HandleAsync(UntargetedQuery query, IExecutionContext context)
+        public ValueTask<int> HandleAsync(UntargetedQuery query, ErgosfareContext context)
             => ValueTask.FromResult(2);
     }
 
     [ExcludeFromDiscovery]
     public sealed class TargetedQueryPostInterceptor : IQueryPostInterceptor<TargetedQuery>
     {
-        public ValueTask<object> HandleAsync(TargetedQuery query, object messageResult, IExecutionContext context)
+        public ValueTask<object> HandleAsync(TargetedQuery query, object messageResult, ErgosfareContext context)
         {
             context.Set("postRan", true);
             return ValueTask.FromResult(messageResult);

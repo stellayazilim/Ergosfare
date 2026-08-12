@@ -30,8 +30,8 @@ public interface IQueryPreInterceptor<in TQuery, TModifiedQuery>
     where TModifiedQuery: TQuery 
 {
     
-    /// <inheritdoc cref="IAsyncPreInterceptor{TQuery}.HandleAsync(TQuery,IExecutionContext)"/>
-    async ValueTask<object> IAsyncPreInterceptor<TQuery>.HandleAsync(TQuery query, IExecutionContext executionContext)
+    /// <inheritdoc cref="IAsyncPreInterceptor{TQuery}.HandleAsync(TQuery,ErgosfareContext)"/>
+    async ValueTask<object> IAsyncPreInterceptor<TQuery>.HandleAsync(TQuery query, ErgosfareContext executionContext)
     {
         return (await HandleAsync(query, executionContext))!;
     }
@@ -45,5 +45,5 @@ public interface IQueryPreInterceptor<in TQuery, TModifiedQuery>
     /// A task returning a modified query of type <typeparamref name="TModifiedQuery"/>.
     /// May return <c>null</c> if no modification is made.
     /// </returns>
-    new ValueTask<TModifiedQuery?> HandleAsync(TQuery query, IExecutionContext executionContext);
+    new ValueTask<TModifiedQuery?> HandleAsync(TQuery query, ErgosfareContext executionContext);
 }
