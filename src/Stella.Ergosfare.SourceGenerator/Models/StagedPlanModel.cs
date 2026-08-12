@@ -23,8 +23,32 @@ internal sealed record StagedPlanModel(
     ImmutableArray<StagedCallModel> FinalCalls,
     StagedResultAdapterKind AdapterKind,
     string? ResultAdapterTypeExpression,
-    bool ResultAdapterMaterializes)
+    bool ResultAdapterMaterializes,
+    ImmutableArray<PluginInvocationModel> PluginCalls)
 {
+    /// <summary>Whether any plugin method is emitted at the given stage of this plan.</summary>
+    public bool HasPluginCalls(PluginStage stage)
+    {
+        foreach (var call in PluginCalls)
+        {
+            if (call.Stage == stage)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Whether a plugin declared a stage the plan has to grow a guard for: an exception
+    ///     observer needs the <c>catch</c>, a final observer the <c>finally</c>. Nobody
+    ///     declaring either leaves the body bare, which is what keeps an interceptorless
+    ///     pipeline the straight line it is today.
+    /// </summary>
+    public bool PluginNeedsGuards
+        => HasPluginCalls(PluginStage.OnException) || HasPluginCalls(PluginStage.OnFinal);
+
     /// <summary>
     ///     Whether every participant — the handler and each interceptor — carries a
     ///     construction expression, making the plan eligible for the emitted

@@ -458,7 +458,7 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
     /// and constructs the plan-closed executor there — no reflection, and the handler
     /// call devirtualizes inside the closed generic.
     /// </summary>
-    private sealed class GeneratedVoidExecutorVisitor : IVoidPlanRootVisitor<IPipelineExecutor, ExecutorState>
+    private sealed class GeneratedVoidExecutorVisitor : IVoidHandlerPlanVisitor<IPipelineExecutor, ExecutorState>
     {
         public static readonly GeneratedVoidExecutorVisitor Instance = new();
 
@@ -476,7 +476,7 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
     /// handler) triple and constructs the plan-closed executor there; the result-producing
     /// counterpart of <see cref="GeneratedVoidExecutorVisitor"/>.
     /// </summary>
-    private sealed class GeneratedResultExecutorVisitor : IResultPlanRootVisitor<object, ExecutorState>
+    private sealed class GeneratedResultExecutorVisitor : IResultHandlerPlanVisitor<object, ExecutorState>
     {
         public static readonly GeneratedResultExecutorVisitor Instance = new();
 

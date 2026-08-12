@@ -18,7 +18,7 @@ namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 public abstract class StagedVoidPlan
 {
     /// <summary>The pipeline composition the plan was baked against.</summary>
-    public abstract StagedPlanComposition Composition { get; }
+    public abstract StagedPlanKey Composition { get; }
 
     /// <summary>
     /// Whether the plan carries a direct-construction variant of its pipeline

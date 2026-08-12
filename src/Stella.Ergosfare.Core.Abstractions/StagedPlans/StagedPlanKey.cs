@@ -13,7 +13,7 @@ namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 /// dispatch back through the runtime strategy. The arrays are captured as given (no
 /// defensive copy); plans are compile-time singletons whose compositions never change.
 /// </remarks>
-public sealed class StagedPlanComposition(
+public sealed class StagedPlanKey(
     Type handlerType,
     Type[] preInterceptorTypes,
     Type[] postInterceptorTypes,

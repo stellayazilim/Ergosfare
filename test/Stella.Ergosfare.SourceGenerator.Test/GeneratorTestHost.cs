@@ -81,10 +81,11 @@ internal static class GeneratorTestHost
                 CompileLibrary(library.AssemblyName, library.Source, references)));
         }
 
-        // Test sources are deliberate consumers of the experimental result-adapter
-        // surface; the opt-in suppression every real consumer would carry is baked in.
+        // Test sources are deliberate consumers of the experimental result-adapter and
+        // plugin surfaces; the opt-in suppression every real consumer would carry is baked in.
         var effectiveDiagnosticOptions = ImmutableDictionary<string, ReportDiagnostic>.Empty
-            .Add("ERGOEXP001", ReportDiagnostic.Suppress);
+            .Add("ERGOEXP001", ReportDiagnostic.Suppress)
+            .Add("ERGOEXP002", ReportDiagnostic.Suppress);
 
         if (diagnosticOptions is not null)
         {
@@ -125,7 +126,8 @@ internal static class GeneratorTestHost
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
                 .WithSpecificDiagnosticOptions(ImmutableDictionary<string, ReportDiagnostic>.Empty
-                    .Add("ERGOEXP001", ReportDiagnostic.Suppress)));
+                    .Add("ERGOEXP001", ReportDiagnostic.Suppress)
+                    .Add("ERGOEXP002", ReportDiagnostic.Suppress)));
 
         using var stream = new MemoryStream();
         var emitResult = compilation.Emit(stream);

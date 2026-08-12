@@ -13,7 +13,7 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// </summary>
 internal static class StagedPlanGate
 {
-    internal static bool Matches(MessageDependencies dependencies, StagedPlanComposition composition)
+    internal static bool Matches(MessageDependencies dependencies, StagedPlanKey composition)
         => dependencies.Handlers.Count == 1
            && dependencies.Handlers[0].HandlerType == composition.HandlerType
            && StageMatches(dependencies.PreInterceptors, composition.PreInterceptorTypeArray)
@@ -48,7 +48,7 @@ internal static class StagedPlanGate
     /// identical to container resolution. Any override (user factory, lifetime change)
     /// routes the plan back to its provider-resolving variant.
     /// </summary>
-    internal static bool AllPlainTransient(MessageDependenciesFactory factory, StagedPlanComposition composition)
+    internal static bool AllPlainTransient(MessageDependenciesFactory factory, StagedPlanKey composition)
         => factory.IsPlainTransientRegistration(composition.HandlerType)
            && StagePlainTransient(factory, composition.PreInterceptorTypeArray)
            && StagePlainTransient(factory, composition.PostInterceptorTypeArray)
