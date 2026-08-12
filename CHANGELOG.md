@@ -1,446 +1,139 @@
-## v2.8.0-preview – '2026-08-12'
+## v2.3.0 – '2026-08-12'
 
-Preview release. The theme: **the runtime registry retires.** Since v2.0 the source
-generator has known the whole pipeline at compile time, yet every dispatch still consulted
-a mutable runtime registry that could — in principle — disagree with it. This release
-removes the principle: the generator's **frozen composition table** is the single source
-of pipeline composition, DI registration records *selections* into it, and the registry
-family, its descriptor builders, its caches and its reflective scanning path
-(`RegisterFromAssembly`) are gone. The execution context sheds its interface for a sealed
-class the caller can finally construct. This is the breaking release of the v2 preview
-line; every removal is listed under Notes with its replacement.
+Stable release. The theme: **the pipeline becomes a compiled artifact.** The preview cycle
+from v2.2.0-preview through v2.8.0-preview moved Ergosfare from a source-assisted runtime
+registry to a closed, source-generated dispatch model. The generator's frozen composition
+table is now the authority for handler and interceptor relationships; module registration
+selects which discovered constructs a container runs, and dispatch executes that selection
+without reflective scanning or runtime pipeline mutation.
 
-### The frozen composition table
+This release also finishes the public dispatch contract: concrete execution contexts,
+explicit nested scopes, typed exception interception, predictable abort semantics,
+covariant main-handler resolution, canonical resultless pipelines and one failure model for
+missing handlers. The complete preview history is condensed here into the stable contract.
 
-* `FrozenCompositionCatalog` replaces `IMessageRegistry` end to end: the generator emits
-  one composition per message — handler rows, the four interceptor stages, their covariant
-  (indirect) rows — and registration only *selects* which discovered constructs this
-  container runs. Selection is a union; repeated and overlapping registrations are safe.
-* Runtime mutation is gone with the registry: there is no way to add a row after
-  compilation, so "a registration after the first dispatch" is no longer a case — the
-  executors' dependency caches freeze on first dispatch and stay valid by construction.
-* `MediateOptions`, the message-resolve strategies and the low-level
-  `IMessageMediator.Mediate` surface leave with the registry. The module facades
-  (`ICommandMediator`, `IQueryMediator`, `IEventMediator`) and the engine's typed dispatch
-  overloads are the dispatch API.
+### Frozen composition replaces the runtime registry
 
-### `ErgosfareContext`
+* `FrozenCompositionCatalog` replaces `IMessageRegistry` end to end. The generator emits
+  one immutable composition per message: direct and covariant handler rows plus the pre,
+  post, exception and final interceptor stages in execution order.
+* Registration is selection, not discovery. `RegisterGenerated()` and `Register<T>()`
+  select constructs from the compiled table for one DI container; repeated and overlapping
+  selections are harmless unions.
+* Runtime mutation and reflective assembly scanning are gone. A dynamically loaded assembly
+  cannot append a new message shape after compilation, and there is no registration window
+  whose timing can change an already running application.
+* Generated participant types preserve the constructor metadata required by Microsoft DI
+  under trimming. The NativeAOT smoke covers command, query and event activation—including
+  multi-subscriber broadcast and value-type messages—in a published native binary.
 
-* `IExecutionContext` is replaced by the **public sealed `ErgosfareContext`** — the
-  pipeline passes a concrete type, not an interface with exactly one implementation. Its
-  constructor is public with two optional parameters, so a caller can, for the first
-  time, build its own context for the engine-level dispatch overloads.
-* `ExecutionContextScope` becomes `ErgosfareContextScope`; its constructor is internal —
-  `CreateScope()` is the one producer — and disposing a `default` scope stays a no-op so
-  a failed `using` cannot mask the original failure. The context pool moves to
-  `Core.Abstractions` with the type.
+### Source-generated dispatch and NativeAOT
 
-### The core module retires
+* Generated dispatch roots close executor and invoker generics over concrete message and
+  result types at compile time. The hot path avoids registry scans, reflection,
+  `MakeGenericType` and object-typed handler bridges.
+* Single-handler command and query pipelines receive generated plans. Eligible transient
+  handlers can also receive direct-construction factories, including provider-based
+  factories for constructor dependencies, while runtime gates preserve the configured DI
+  lifetime and user overrides.
+* Interceptor-bearing pipelines receive generated staged plans: straight-line typed calls
+  for pre, handler, post, exception and final stages. A composition mismatch gives up only
+  the optimization and falls back to the general executor.
+* The generator scans referenced assemblies, reports inaccessible constructs as diagnostics,
+  respects nullable annotations in consumer compilations and can trim provably unreachable
+  handlers at the composition root.
 
-* `AddCoreModule`, `CoreModule`, `CoreModuleBuilder` and `IModuleBuilder` are removed.
-  The surface dated from the reflective world: with the registry gone, its plain-`IMessage`
-  path had no table to dispatch against.
-* Plain and POCO messages ride the **event module**, whose handler contract never
-  constrained its message type: `IEventHandler<TEvent>` with `PublishAsync<TEvent>` covers
-  them, broadcast semantics included.
-* Cross-cutting interceptors join modules **by carrying the module markers directly** —
-  the same idiom the module contracts themselves use
-  (`ICommandPreInterceptor : ICommand, IAsyncPreInterceptor<ICommand>`):
+### A pinned pipeline contract
 
-  ```csharp
-  public sealed class LoggingInterceptor
-      : IAsyncPreInterceptor<IMessage>, ICommand, IQuery, IEvent { … }
-  ```
+* A public-surface contract suite now runs the dispatch scenarios across the supported
+  composition lanes on .NET 9 and .NET 10. Its lane-map baseline records not only the
+  result, but the dispatch path that produced it.
+* `Abort()`, `Abort(reason)` and `Abort(reason, value)` stop the pipeline immediately and
+  surface `ExecutionAbortedException` to the caller. Exception and final interceptors do
+  not run after an abort; nested callers decide whether an inner abort ends the outer
+  pipeline too.
+* Resultless commands and events carry the single `Unit.Value` instance after successful
+  execution. `null` retains the distinct meaning “no result was produced.”
+* Direct and covariantly matched main handlers form one candidate set. A supertype handler
+  serves an assignable message; competing direct and covariant handlers raise
+  `MultipleHandlerFoundException` before either runs.
+* Typed `...ExceptionInterceptorFor<TException>` contracts follow catch semantics. An
+  exception is swallowed only when a matching interceptor actually runs; otherwise the
+  original exception and stack leave the pipeline unchanged.
+* Missing and filtered-out handlers consistently use `NoHandlerFoundException`, which now
+  derives from `InvalidOperationException` and exposes `MessageType`. Event publication
+  honors `ThrowIfNoHandlerFound` for every no-subscriber shape.
+* A selected participant that the container cannot resolve fails before the first stage
+  with `UnresolvableParticipantException`, naming both the message and participant.
 
-  The markers put the class into each module's discovery partition; the covariant row
-  machinery lands it on every assignable message, and `[ExcludeFromPipeline]`'s blanket
-  form drops it from messages that opt out. Pinned by `CrossCuttingInterceptorTests`.
+### `ErgosfareContext` and nested dispatch
 
-### Warning hygiene
+* The public sealed `ErgosfareContext` replaces `IExecutionContext`. Handler and
+  interceptor contracts take the concrete type, eliminating an interface dispatch whose
+  only implementation was internal.
+* Its public constructor accepts optional items and cancellation, allowing callers to own
+  a context for engine-level dispatch. Facade dispatches continue to rent contexts from the
+  allocation-conscious pool.
+* `ErgosfareContextScope` replaces `ExecutionContextScope`. `CreateScope()` is its only
+  producer: a child starts with clean items, inherits cancellation and returns its pooled
+  context on disposal. Disposing a default scope remains a no-op.
+* Execution state stays explicit. There is no `AsyncLocal` context and no service provider
+  exposed through the context.
 
-* The generated registration file suppresses `CS0612`/`CS0618` for the constructs it
-  references: deprecating your own message no longer warns from code nobody wrote.
-* The solution builds with **zero warnings**; the test projects' probe types that are
-  invoked directly (never dispatched) now say so with `[ExcludeFromDiscovery]`, and the
-  engine-delivered probe handlers document their per-project `ERGOSG007` suppression.
+### Modules, events and cross-cutting policies
 
-### Notes
+* Commands, queries and events remain independent modules over the shared core. The event
+  module is also the open lane for POCO messages: `IEventHandler<TEvent>` and
+  `PublishAsync<TEvent>` accept any non-null event type and retain broadcast semantics.
+* `AddCoreModule`, `CoreModule`, `CoreModuleBuilder` and `IModuleBuilder` are removed. Plain
+  messages move to the event module; custom modules select from the frozen composition
+  table and register their facade and services with DI.
+* Cross-cutting interceptors join built-in module partitions by carrying their marker
+  interfaces directly—for example an `IAsyncPreInterceptor<IMessage>` that also implements
+  `ICommand`, `IQuery` and `IEvent`. Covariant rows apply it broadly and
+  `[ExcludeFromPipeline]` provides blanket or group-specific opt-out.
+* `GroupSet` provides a reusable canonical group filter, avoiding per-dispatch settings
+  allocation while preserving grouped handler and interceptor selection.
+* Discovery keys support exact and prefix-glob selection across the application and its
+  references. `[ExcludeFromDiscovery]` remains the explicit exclusion boundary.
 
-* **Removed (breaking):** `IMessageRegistry` and the descriptor surfaces,
-  `RegisterFromAssembly`, `RegisterDescriptors`, `MediateOptions`,
-  `ActualTypeOrFirstAssignableTypeMessageResolveStrategy`, `IMessageMediator.Mediate`,
-  `IExecutionContext`, `ExecutionContextScope`, `IPoolReturnable`, `AddCoreModule`,
-  `CoreModule`, `CoreModuleBuilder`, `IModuleBuilder`.
-* **Replacements:** the frozen composition table + `RegisterGenerated()` /
-  `Register<T>()` selection; `ErgosfareContext` / `ErgosfareContextScope`; the event
-  module for plain messages; marker-tagged interceptors for cross-cutting concerns.
-* The contract suite (194 scenarios ×2 TFM) and its lane-map baseline rode through the
-  change; the full solution suite is green on net9.0 and net10.0.
+### Performance and DI semantics
 
-## v2.7.0-preview – '2026-08-11'
+* Mediator facades are transient, stateless wrappers over a shared dispatch engine. They
+  capture the provider of the resolving scope without paying the scoped-service cache and
+  lock cost on every request-shaped dispatch.
+* Participant instances resolve from the dispatching scope, so singleton, scoped,
+  transient and keyed registrations retain Microsoft DI semantics. The module default is
+  transient; `ForceMemoizedHandlers()` remains available when process-wide reuse is the
+  intended contract.
+* Executors cache the frozen dependency shape, generated holders remove repeated composite
+  lookups and pooled contexts avoid a per-dispatch context allocation. The `ValueTask`-first
+  surface preserves synchronous completion through the public facades.
+* On the v2.7.0-preview benchmark tree (.NET 9.0.11, Ryzen 7 7800X3D), a generated no-result
+  command measured 19.9 ns / 24 B, a result query 24.0 ns / 24 B, a five-participant query
+  120.2 ns / 96 B and a two-subscriber event 50.5 ns / 48 B. Request-shaped rows that
+  create a DI scope and resolve a mediator remained ahead of the equivalent MediatR rows.
 
-Preview release. The theme: **the dispatch contract, pinned and then corrected.** Every
-release so far made the pipeline faster; this one asks what it actually promises. A
-contract suite — public surface only, both registration axes, one captured lane map —
-went in first, grew from 83 scenarios to 193, and turned four long-standing "that is just
-how it behaves" corners into decisions: an abort that surfaced as an exception, a
-resultless pipeline that carried three different values for "nothing", a supertype's
-handler that served a derived message only until that message was registered in its own
-right, and two failures that said "nothing will handle this" in two types. Exception
-interceptors gain a typed form, and the registration window is now stated rather than
-implied. Three changes are source-breaking and all three are listed under Notes.
+### Breaking changes and migration
 
-### The contract suite
-
-* A test project that exercises **only the public dispatch surface**, running every
-  scenario on **both registration axes** — source-generated and runtime-registered — from
-  shared bases, so a divergence between the two shows up as one subclass failing.
-* Its second output is a **lane map**: a captured stack dump per scenario, committed as a
-  baseline and re-captured every phase. Green tests say behavior held; the lane map says
-  behavior held *through the same path*, which is the only early warning a dispatch
-  redesign gets.
-* A **cache-pressure gate** joins it: the two elementary shapes pinned to one logical
-  core, with hardware counters when the console is elevated. Its 2026-08-11 capture
-  reports ~0 cache misses and ~0 branch mispredictions on every lane — on this host a
-  dispatch costs exactly its retired instruction count (345 for the generated void lane).
-* Both are wired into the solution and CI; pull requests into every base branch are gated.
-
-### Abort stops the pipeline, and says so
-
-* `IExecutionContext.Abort(messageResult)` **loses its parameter** (source-breaking) and
-  gains overloads that carry what a caller can actually use: `Abort()`, `Abort(reason)`,
-  `Abort(reason, value)`. The old argument claimed to set the pipeline's *result*, which a
-  stopped pipeline does not have; it reached nobody and the XML doc described a contract
-  the code never implemented.
-* **An abort stops the pipeline where it stands.** Nothing downstream runs: not the rest of
-  the aborting participant's own stage, not the exception stage — an abort is not a
-  failure and exception interceptors exist to handle failures — and not the final stage.
-* **It reaches the caller**, as `ExecutionAbortedException` carrying `Reason` and `Value`.
-  The work was asked for by the call site, so the call site is who hears that it did not
-  happen; a returned default would be indistinguishable from a handler that legitimately
-  produced nothing. A pipeline whose participants can abort is one the caller wraps in a
-  `try`. Applications that prefer outcomes as values still have the result-adapter surface.
-* **The mechanism no longer varies by pipeline shape.** With interceptors or without, the
-  signal travels straight out: the strategies and the emitted plans only mark themselves
-  aborted so their own final stage is skipped, and the executors and the dispatch engine
-  carry no abort code at all. Nested dispatch follows the same rule — an inner abort
-  surfaces to the outer handler, which is the inner dispatch's call site and decides
-  whether to catch it.
-
-### One value for a pipeline that produces none
-
-* Post, final and exception interceptors of a resultless pipeline were handed three
-  different things to mean "there is no result": a completed `ValueTask` after the handler
-  ran, `null` when it threw, `null` again on abort. A resultless pipeline now carries one
-  value — `Unit.Value`, the single instance of `Stella.Ergosfare.Core.Abstractions.Unit`.
-* `null` keeps its own meaning rather than becoming a synonym: it is the slot *before*
-  anything was produced, which is what a failed dispatch's exception stage and an aborted
-  pipeline's final stage see.
-* `Unit` is a **class**, and that is load-bearing. While the empty slot's type was
-  `ValueTask`, a synchronous void pipeline's failure path unboxed `null` into a struct and
-  died with a `NullReferenceException` thrown from a `finally` — replacing both the
-  handler's own exception and the abort. A reference type retires that without a single
-  cast expression changing.
-
-### A supertype's handler serves the derived message either way
-
-* Covariance reached interceptors but stopped short of main handlers: a handler registered
-  against a supertype served a derived message only while that message had no descriptor
-  of its own. Registering the derived type filed the base handler as indirect, and
-  single-handler mediation read only the direct list — so the dispatch failed with
-  `NoHandlerFoundException`, and the failure arrived by merely adding a type to the
-  assembly.
-* Direct and indirect handlers are **one candidate set** now. A message claimed twice —
-  once directly, once covariantly — fails the same way two direct claims already did
-  (`MultipleHandlerFoundException`, neither handler run), and the count still happens
-  before anything resolves.
-* The compiled lane gives such messages up deliberately: a plan bakes one handler in and
-  cannot express "this is contested", so a message with a main handler on any assignable
-  key takes the reflective path rather than letting the two axes disagree.
-
-### Exception interceptors that declare the exception type they accept
-
-* New `...ExceptionInterceptorFor<TException>` facades across all three modules (with
-  message- and result-typed arities): the exception arrives **typed**, so an interceptor
-  written for one fault no longer opens with `if (ex is X)`.
-* Matching follows catch semantics; ordering is untouched — the existing weight-then-name
-  rule decides who runs, the filter only decides who is eligible.
-* The rule "an exception interceptor is registered, so the exception is swallowed" is
-  refined to "a **matching** one ran". When nothing matches, the original exception leaves
-  the pipeline unwrapped with its stack intact — without this, one declining interceptor
-  would have silently eaten the failure.
-* Both dispatch paths learn it from the same source: the runtime stage probes each
-  instance through an erased filter, the generator reads `TException` off the typed probe
-  and bakes an `is` test into the emitted plan. A filter the generator cannot read as a
-  single compile-time type disqualifies the plan rather than guessing.
-
-### "Nothing will handle this" now says so once
-
-* A message absent from the registry raised `NoHandlerFoundException`; a registered
-  message whose handlers were all filtered out of the dispatch raised a plain
-  `InvalidOperationException`. Both are `NoHandlerFoundException` now — and it derives
-  from `InvalidOperationException`, so existing catches keep matching. It also gains a
-  `MessageType` property, and the two cases stay told apart by the message text.
-* `ThrowIfNoHandlerFound` governs **every** way a publish reaches nobody. Previously an
-  unregistered event type threw regardless of the flag while a registered-but-unhandled
-  one was silent — and which one you got depended on whether any participant anywhere in
-  the app was registered against the `IEvent` marker. Both obey the flag now; the default
-  for both is silence, which is what fire-and-forget means.
-* A pipeline that includes a participant the container cannot resolve fails with
-  `UnresolvableParticipantException` — naming the message, the participant and the remedy
-  — before any stage runs, instead of an opaque "No service for type" raised part-way
-  through by whichever stage asked first.
-
-### The pipeline freezes at its first dispatch
-
-* A message's pipeline is resolved once and frozen. Registration keeps its full meaning up
-  to that message's first dispatch; **a registration made after it is not observed**
-  (behavioral break — see Notes).
-* What this buys: the registry version guard was the fast path's one recurring per-dispatch
-  cost, and the contract it paid for — registration-after-use — was exercised by nothing
-  but its own tests. The generated executors go further and cache the whole fast-lane
-  verdict, so a planned dispatch constructs and invokes its handler without touching the
-  dependency graph at all.
-* A participant the container cannot resolve now fails that first dispatch rather than the
-  next one; the diagnosis is unchanged.
-
-### Generated code stays silent in your compilation
-
-* A handler whose result is a **nullable reference type** — `IQueryHandler<GetTodo, TodoDto?>`
-  — made the generator emit a dispatch root with the annotation dropped, and the constraint
-  mismatch raised **CS8631 in the consuming build**. Nothing was wrong at runtime, but a
-  project with `TreatWarningsAsErrors` simply failed to compile over a file it cannot edit.
-* The emitted file now opens the annotation context and closes the warning one
-  (`#nullable enable annotations` / `#nullable disable warnings`). Annotations stay legal
-  because the emitted code writes `T?` where a contract declares it; warnings go because
-  this file lands in someone else's compilation under their settings. The phase-2 emitter
-  fix (F7, CS8604) was the first instance of that family, this was the second — closing the
-  class beats patching each site as it appears.
-
-### Ahead-of-time, in a real application
-
-* The e2e sample — the multi-assembly Todo app the suite boots for its HTTP assertions —
-  now **publishes with `PublishAot`**, and its assertions run against the native binary.
-  The NativeAOT smoke already covered the dispatch shapes; what it could not cover is what
-  this app is: registration that discovers handlers in a *referenced* assembly, an
-  interceptor one assembly away from the API, and the emitted staged plans. Those are
-  compiled ahead of time now, and the CS8631 above is what that gate caught first.
-* Getting there meant replacing what could not survive AOT: persistence moved from EF Core
-  to raw `Microsoft.Data.Sqlite` (an ORM's runtime model building is precisely what AOT
-  cannot do), and endpoint discovery moved from the reflection strategy to
-  `Stella.MinimalApi`'s own source generator. Both are sample-side changes; the library
-  needed nothing.
-
-### Performance
-
-Measured on this tree (7800X3D, .NET 9.0.11, BenchmarkDotNet v0.15.8), against the same
-rows as v2.6.0-preview:
-
-* Planned dispatch: void **21.0 → 19.9 ns**, query **25.3 → 24.0 ns**; the staged plan
-  rows hold — intercepted void **49.2 → 46.9 ns**, intercepted query **83.5 → 83.4 ns**.
-  The freeze is most of it: an executor no longer re-reads the registry version per
-  dispatch, and a planned one skips the dependency graph entirely once its first dispatch
-  has validated the lane.
-* The **reflective** interceptor path gains from the `Unit` representation where it
-  counts: intercepted void allocates **104 B → 72 B**, the 32 bytes being the per-dispatch
-  boxed `ValueTask` that used to sit in the result slot. Its wall clock moves with it
-  (198.2 → ~168 ns), though that row's run-to-run spread is wide enough that the
-  allocation is the part to trust.
-* One design note for anyone profiling their own dispatch layer: the abort short circuit
-  first landed as a `try`/`catch` around each executor's fast-path invocation, which cost
-  9–24% on every interceptor-less row without ever being on a throwing path — a method
-  carrying an exception-handling region does not inline into its caller. The arm moved to
-  the engine's dispatch frame, which already had a region for returning the pooled
-  context, and the cost went to zero. Hoisting it into helper methods measured *worse*;
-  the helper carries the region too.
-
-
-### Notes
-
-* **Behavioral break worth auditing:** an abort now reaches the caller. Code that relied on
-  a dispatch completing quietly after a participant aborted — and on final interceptors
-  running afterwards — has to catch `ExecutionAbortedException` at the call site, or stop
-  aborting. This is the loud direction on purpose: the previous silence was
-  indistinguishable from a handler that produced nothing.
-* **Source-breaking (three):** `Abort()` lost its parameter; `IEventFinalInterceptor<T>`,
-  the non-generic `IEventFinalInterceptor` and the non-generic
-  `IEventExceptionInterceptor` are pure aliases whose inherited member now takes `Unit?`
-  where it took `ValueTask?` (CS0535, one-word fix); and code that registered participants
-  after a message's first dispatch no longer sees them join. `IEventPostInterceptor` and
-  `IEventExceptionInterceptor<TEvent>` are unaffected — they carry their own members.
-* **Worth auditing:** a message that has both a direct handler and a covariantly matched
-  one is now contested and fails the dispatch; previously the direct one quietly won.
-* The staged-plan emitter casts each stage to the annotation its own contract declares —
-  consumer builds no longer break with CS8604 on the emitted post-chain.
-* `RegisterFromAssembly(...)` is on its way out: the stable line marks it `[Obsolete]` as
-  of v2.2.0 and the preview line removes it next.
-* Housekeeping: `UnresolvableParticipantException` drops `[Serializable]`, matching the
-  recorded decision on the exception surface.
-* The benchmark table now speaks the public surface: the internal-engine rows are gone —
-  nothing but the facades reaches that entry point — and a **five-participant pipeline**
-  row joins, running the same five purposes (validate, rewrite the message, rewrite the
-  result, armed exception recovery, always-runs final) as Ergosfare interceptors, MediatR
-  behaviors and Mediator behaviors, each in its own idiomatic construct and default
-  lifetime.
-
-## v2.6.0-preview – '2026-08-08'
-
-Preview release. The theme: **interceptor-bearing pipelines go compile-time.** The plan
-work so far stopped where interceptors began — a message with a single handler dispatched
-through a compile-time plan, but one interceptor pushed the whole dispatch onto the runtime
-strategy's generic machinery. This release bakes the entire pipeline: the source generator
-now emits one bespoke plan class per interceptor-bearing message, running
-pre → handler → post (with exception and final semantics) as straight-line typed calls,
-participants constructed directly where that is provably identical to container activation.
-Every plan stays advisory: the executor re-validates the baked composition against the
-registry per version and falls back to the runtime strategy on any mismatch — behavior
-never changes, a stale plan only loses its speedup. Three defective flavored interceptor
-contracts and two registry-cache races are also fixed.
-
-### Staged pipeline plans
-
-* A message whose discovered pipeline is one async handler plus interceptors gets a sealed
-  `StagedVoidPlan<TMessage>`/`StagedResultPlan<TMessage, TResult>` emitted: stage order is
-  baked exactly as the runtime shape builder computes it (direct segment first, weight
-  descending, ordinal type-name tie-break), and each call's contract arm — the invocation
-  strategy's pattern match — is resolved at compile time, variance-aware. Anything
-  unmodelable (grouped/keyed participants, multi-registrations, contracts no arm serves)
-  disqualifies the message rather than risking divergence.
-* The hosting executor's advisory gate compares the baked `StagedPlanComposition` against
-  the live pipeline once per registry version — an ordered type-reference comparison,
-  never on the dispatch path — and requires unmemoized instances and no result adapters.
-* A strategy-parity matrix executes emitted plans end to end: message rewrite by
-  pre-interceptors, stage order, exception capture with strategy-identical swallowing,
-  propagation without an exception stage, `context.Abort()` skipping the exception stage
-  while finals still run, and post-interceptor result rewrite.
-
-### Direct construction, now for whole pipelines
-
-* Plan factories accept dependency-injected handlers: `AddVoidPlan`/`AddResultPlan` gain
-  `Func<IServiceProvider, THandler>` overloads, and the generator emits
-  `static provider => new THandler(provider.GetRequiredService<TDep>(), ...)` under a
-  strict gate — exactly one public constructor (the single shape where the container's
-  selection has no choice), plain or `[FromKeyedServices]` service parameters, nothing
-  optional, nothing disposable.
-* Staged plans fuse the same idea across the whole pipeline: an emitted `ExecuteDirect`
-  variant constructs every participant with a visible `new` (dependencies still resolve
-  from the dispatching provider). The executor uses it only after verifying at runtime
-  that every participant's registration is the module's own plain transient one; any
-  override falls back to the provider-resolving variant, with the composition gate above
-  both. The visible `new` also lets the JIT stack-allocate non-escaping participants —
-  something a container resolution structurally hides.
-* Measured (7800X3D, .NET 9.0.11): an intercepted void command (one pre- and one
-  post-interceptor) drops from **198.2 ns / 104 B** on the strategy path to
-  **49.2 ns / 24 B** through the fused staged plan — 4× faster with the pre/post/handler
-  transients stack-allocated; an intercepted `IQuery<int>` drops from
-  **198.3 ns / 144 B to 83.5 ns / 72 B**. Plain planned dispatches are unchanged
-  (void 21.0 ns, memoized 23.8 ns / 0 B).
-
-### Interceptor contract fixes
-
-* `ICommandExceptionInterceptor<TCommand>` extended the result-typed
-  `IAsyncExceptionInterceptor<TCommand, object>`, which no invocation-strategy arm can
-  match on a void pipeline (its internal `ValueTask` result carrier is a value type — no
-  variance): the exception stage itself threw `NotSupportedException`, burying the
-  handler's exception. Re-based on the result-agnostic contract; implementors compile
-  unchanged (the erased member signature is identical).
-* `IQueryFinalInterceptor` (non-generic) had the same defect via
-  `IAsyncFinalInterceptor<IQuery, object>` — the final stage failed for every value-typed
-  query result. Re-based likewise.
-* `IQueryPostInterceptor<TQuery>` closed its base over `IQuery` instead of `TQuery`,
-  silently applying the interceptor to **every** query in the application. It now targets
-  `TQuery` — see Notes.
-
-### Registry race stamps
-
-* Dependency and shape cache entries are stamped with the registry version their build
-  started at, and reads match on the stamp: a dependency build racing a runtime
-  registration can no longer be served as fresh after the invalidation clear — previously
-  a stale pipeline could stick until the next (possibly never-coming) version bump. Every
-  version-guarded executor and the broadcast/stream plan slots now read the version before
-  building, for the same reason.
-
-### Analyzer infos
-
-* **ERGOSG003** (info): a handler with multiple public constructors keeps the container's
-  constructor selection in play, so generated plans skip its direct-construction fast
-  path — collapse to one public constructor to enable it.
-* **ERGOSG004** (info): `[FromServices]` has no effect on constructor parameters —
-  constructor injection resolves services regardless.
-
-### Notes
-
-* **Behavioral fix worth auditing:** code that (knowingly or not) relied on an
-  `IQueryPostInterceptor<TQuery>` running for *other* queries must move that interceptor
-  to the non-generic `IQueryPostInterceptor`. The typed form now does what its name says.
-* **Source-compat:** the dispatch-root and staged-plan types moved into dedicated
-  namespaces (`Stella.Ergosfare.Core.Abstractions.DispatchRoots` / `.StagedPlans`);
-  code referencing `GeneratedDispatchRoots` or the plan bases directly needs a using
-  update. Generated code and the generator's version probes were updated in lockstep —
-  against older packages emission degrades gracefully, as always.
-* Per-dispatch invoker allocations in the strategy layer are gone (the four interceptor
-  invokers became static); the interceptor-bearing strategy path itself is otherwise
-  unchanged and remains the permanent fallback.
-* Housekeeping: one type per file across the runtime, and a solution-wide inspection
-  sweep — deliberate patterns (lock-free readers, static-generic slots, allocation-free
-  group matching) now carry explicit suppressions with rationale.
-
-## v2.5.0-preview – '2026-08-08'
-
-Preview release. The theme: **group filtering becomes first-class, and manual registration
-drops its reflection.** Grouped dispatch got fast in v2.4.0-preview but still asked callers
-to build a settings object per call and asked the caches to compare group names; canonical
-`GroupSet` filters remove both. And `Register<THandler>()` — the manual registration path —
-now consults compile-time descriptors instead of reflecting, wherever the source generator
-ran. Behavior is preserved everywhere; one narrow source-compat edge is called out in Notes.
-
-### `GroupSet` — canonical group filters
-
-* `GroupSet.Of("reporting")` interns equal group sequences (ordinal, order-sensitive,
-  bounded cap) to one immutable instance. Define filters once, statically, and reuse them:
-  every grouped cache — the executor slots, the broadcast and stream plan slots — matches a
-  reused filter with a **single reference check**, and a slot refresh reuses the set's
-  immutable name array and precomputed joined key.
-* **Every mediator gains group-filter overloads:** `SendAsync(command, groups)` (void and
-  result), `QueryAsync(query, groups)`, `StreamAsync(query, groups)`, and
-  `PublishAsync(event, groups)` (erased and typed) — added as default interface members
-  routing through the settings overloads, so foreign mediator implementations keep working
-  unchanged. The engine-backed facades override them to dispatch with **no settings
-  allocation**; `GroupSet.Empty` routes to the group-less fast lane.
-* The legacy lane recognizes the type too: a `GroupSet` assigned to `Filters.Groups` takes
-  the same reference fast path.
-* Measured (7800X3D, .NET 9.0.11): grouped command dispatch 36.2 → 34.0 ns — the grouped
-  premium over a plain dispatch (31.7 ns) drops from 4.5 to 2.3 ns; grouped event publish
-  55.1 → 52.1 ns, effective parity with the group-less publish (51.8 ns). Callers building
-  a settings object per grouped dispatch additionally drop ~3 allocations per call.
-
-### Precomputed descriptor catalog
-
-* The generator emits a module initializer handing `GeneratedDescriptorCatalog` one
-  compile-time descriptor factory per modeled handler type. `MessageRegistry.Register` —
-  behind every manual `Register<THandler>()` — consults the catalog first; the
-  reflection-based descriptor builders remain the fallback for types no generator saw
-  (runtime-loaded plugin assemblies, manually registered open generics, foreign assemblies
-  without the analyzer).
-* Manual-registration users benefit **without calling `RegisterGenerated()`**: the
-  initializer populates the lookup on assembly load, and it is purely a lookup
-  contribution — nothing registers at module load, discovery-key gating and both
-  registration idempotence contracts are untouched.
-* Interchangeability rests on the generator's pinned parity contract (its descriptor
-  computation mirrors the runtime builders exactly); the runtime test asserts the registry
-  serves the catalog's very descriptor instance — proof the reflective builders never ran.
-
-### Notes
-
-* **Public API additions:** `GroupSet` (with `Of`/`Empty`, an `IReadOnlyList<string>`);
-  the six group-filter mediator overloads above; `GeneratedDescriptorCatalog.Add`.
-  Nothing is removed or changed in shape.
-* **Source-compat edge:** a literal-null second argument (`SendAsync(cmd, null)`) is now
-  ambiguous between the settings and `GroupSet` overloads (CS0121) and needs a named
-  argument or a typed null — the same trade the context overloads accepted in v2.0.0.
-  Binary compatibility is unaffected; all interface additions are default members.
-* Emission degrades against older packages: without the catalog surface the generated
-  output is unchanged.
+* **Removed:** `IMessageRegistry` and descriptor APIs, `RegisterFromAssembly`,
+  `RegisterDescriptors`, `MediateOptions`, message-resolve strategies, the low-level
+  `IMessageMediator.Mediate` surface, `IExecutionContext`, `ExecutionContextScope`,
+  `IPoolReturnable`, `AddCoreModule`, `CoreModule`, `CoreModuleBuilder` and
+  `IModuleBuilder`.
+* **Replace registry calls** with source-generated `RegisterGenerated()` selections or
+  statically known `Register<T>()` selections. Runtime-computed participant and assembly
+  registration is no longer supported.
+* **Replace context types** with `ErgosfareContext` and create nested contexts only through
+  `context.CreateScope()`.
+* **Move plain messages** to `IEventHandler<T>` / `PublishAsync<T>`, and tag broad
+  interceptors with the command, query and event marker interfaces they should join.
+* **Audit abort callers:** abort now reaches the call site as `ExecutionAbortedException`
+  and prevents all downstream stages, including final interceptors.
+* **Audit contested handlers:** a direct handler and an assignable supertype handler now
+  conflict instead of allowing the direct registration to win silently.
+* The full solution, contract suite and NativeAOT smoke are green on the stable promotion
+  commit with zero build warnings.
 
 ## v2.2.0 – '2026-08-10'
 
@@ -454,271 +147,9 @@ builders' tests keep pinning the obsolete surface until the removal lands.
 
 ## v2.1.0 – '2026-08-07'
 
-Stable release. Promotes the entire preview cycle since v2.0.0 to the stable channel — the
-contents of the v2.2.0-preview, v2.3.0-preview and v2.4.0-preview entries below, exactly as
-shipped there: the dispatch fast path (executor-level dependency caches, sync fast path,
-transient facades), the shared dispatch engine with single-object facades and the broadcast
-fast lane, compile-time pipeline plans — void and result — with direct handler construction,
-the grouped and streaming fast lanes, the typed dispatch holders, and the NativeAOT smoke
-gate in CI. (v2.1.0-preview carried repository chores only.) No API or behavior changes
-beyond those entries; see them for the full details and benchmark tables.
-
-## v2.4.0-preview – '2026-08-07'
-
-Preview release. The theme: **the remaining lanes join the fast path.** v2.3.0-preview left three
-entry points on the original `Mediate` machinery — grouped publishes, grouped dispatches paying
-per-call key materialization, and streaming queries — and resolved every planned handler through
-the container even when the container had nothing to add. This release moves all of them onto the
-executors' cached-plan pattern, teaches generated plans to construct their handlers directly, and
-puts the benchmark up against the fastest widely-used alternative instead of only MediatR. CI
-gains an end-to-end NativeAOT gate. Behavior is preserved on every path (see Notes for the two
-deliberate edges).
-
-### Compile-time result plans and direct handler construction
-
-* The generator now emits `GeneratedDispatchRoots.AddResultPlan<TMessage, TResult, THandler>()`
-  for a dispatchable command/query with exactly one closed, non-stream result contract whose
-  whole discovered pipeline is a single async result handler — the void plan's eligibility rules,
-  applied to the result shape. The executor closes over all three types and invokes the handler
-  devirtualized.
-* Both plan shapes can additionally carry a **direct-construction factory**
-  (`static () => new THandler()`). The compile-time gate is deliberately strict: the handler's
-  *only* instance constructor must be public and parameterless (the container's greedy
-  constructor selection would pick any richer one), no `required` members (an emitted `new()`
-  would not compile), and no `IDisposable`/`IAsyncDisposable` (the container tracks transient
-  disposables; direct construction would not).
-* The factory is as advisory as the plan itself. At runtime it is used only while the handler's
-  *effective* DI registration is the module's own plain transient self-registration — no user
-  factory, no lifetime override, no forced memoization — re-validated with the same
-  registry-version guard as the dependency cache. Any customization routes the dispatch back
-  through the container.
-* The lifetime capture behind that verdict (and behind the existing memoized fast path) now runs
-  **at first resolution instead of inside `AddErgosfare`**, so registrations added between
-  `AddErgosfare` and `BuildServiceProvider` are honored by both features.
-* This reverses v2.3.0-preview's note that a result plan "showed no gain": devirtualization alone
-  did not pay, but together with direct construction the planned query path drops from ~44 ns to
-  ~25 ns per dispatch (see Benchmark).
-
-### Grouped dispatch fast lane
-
-* Grouped command/query dispatch used to materialize the caller's group sequence and build a
-  joined string key on every call. A per-message-type **last-used group-set slot** (void and
-  result alike) now answers the common shape — one message type, one stable group set — with an
-  ordinal element-wise compare: no materialization, no key, no per-dispatch allocation. Misses
-  fall back to the composite stores, which stay authoritative, so executor identity and its
-  version-guarded dependency cache are preserved when group sets alternate. The slot snapshots
-  the group contents, so mutating a reused settings instance reads as a new group set, never a
-  stale hit.
-* **Grouped publishes leave the `Mediate` fallback.** The broadcast invoker resolves the same
-  group-filtered dependencies the old path built — same factory call, same descriptor semantics —
-  from a last-used (factory, group set) plan slot, then runs the same strategy, including the
-  straight-through loop for interceptor-free, unfiltered pipelines. A grouped publish now costs
-  what a group-less one does (see Benchmark).
-
-### Streaming joins the executor path
-
-* Engine-backed facades no longer stream through `Mediate(options)`: no per-call
-  `MediateOptions`, no per-call descriptor lookup, no resolving the scope's `IMessageMediator`.
-  The stream invoker holds the query's pipeline plan (group-less and grouped slots, factory-keyed
-  and version-guarded) and runs the same streaming strategy against it. Context construction is
-  unchanged — one fresh, unpooled context per `StreamAsync` call, shared across re-enumerations
-  exactly as before — and an unregistered query still throws at call time, not at enumeration.
-
-### Typed void dispatch on the engine
-
-* `MessageDispatchEngine.DispatchVoidAsync<TMessage>` resolves its executor from a
-  static-generic holder — a field read and a cache-identity check instead of the type-keyed
-  dictionary lookup — guarded by `message.GetType() == typeof(TMessage)`, so base-typed generic
-  calls keep resolving by runtime type. It is deliberately **not** a `DispatchAsync` overload: a
-  same-name generic would join the candidate set of every explicit `DispatchAsync<T>(msg, …)`
-  call, and for echo-typed shapes (`ICommand<TResult> : ICommand : IMessage` makes them legal)
-  the identity conversion would out-rank the result overload — silently rerouting result
-  dispatches through the void pipeline or breaking compilation. The facade-level counterpart is
-  blocked by the same C# overload-resolution fact and was not shipped.
-
-### Benchmark: a real competitor
-
-* [martinothamar/Mediator](https://github.com/martinothamar/Mediator) 3.0.2 — source-generated
-  dispatch, singleton lifetime by default — joins the table as the `MediatorSg_*` rows, running
-  its out-of-the-box defaults just as the MediatR rows run theirs.
-* New Ergosfare rows make the comparison honest in both directions: `Command_Void_Memoized`
-  (`ForceMemoizedHandlers()` — the zero-allocation shape that matches Mediator's singleton
-  default), `Query_Result_Generated`, grouped rows for command dispatch and event publish, and
-  the engine's typed void dispatch.
-
-Per-operation numbers (BenchmarkDotNet v0.15.8, Windows 11, AMD Ryzen 7 7800X3D, .NET 9.0.11,
-RyuJIT x86-64-v4), measured 2026-08-07:
-
-| Method | Cat | Mean | Alloc |
-|---|---|---:|---:|
-| Engine_Void | Root | 35.16 ns | 24 B |
-| Engine_Void_Typed | Root | 29.60 ns | 24 B |
-| Command_Void | Root | 32.90 ns | 24 B |
-| Command_Void_Generated | Root | **21.21 ns** | 24 B |
-| Command_Void_Memoized | Root | 24.48 ns | **0 B** |
-| Command_Void_Grouped | Root | 36.73 ns | 24 B |
-| Query_Result | Root | 44.10 ns | 24 B |
-| Query_Result_Generated | Root | **25.04 ns** | 24 B |
-| Event_Publish | Root | 56.93 ns | 48 B |
-| Event_Publish_Grouped | Root | 56.22 ns | 48 B |
-| MediatR_Send_Void / _Result / _Publish | Root | 66.22 / 52.88 / 84.90 ns | 192 / 192 / 440 B |
-| MediatorSg_Send_Void / _Result / _Publish | Root | 8.31 / 8.21 / 15.90 ns | 0 / 0 / 0 B |
-| Engine_Void_Scoped | Scoped | 92.67 ns | 200 B |
-| Command_Void_Scoped | Scoped | 89.80 ns | 192 B |
-| Query_Result_Scoped | Scoped | 97.70 ns | 200 B |
-| Event_Publish_Scoped | Scoped | 107.90 ns | 232 B |
-| MediatR (void/result/publish, Scoped) | Scoped | 106.96 / 106.67 / 143.95 ns | 352 / 352 / 600 B |
-| MediatorSg (void/result/publish, Scoped) | Scoped | 56.57 / 56.92 / 70.64 ns | 128 / 128 / 128 B |
-
-The honest reading: Ergosfare leads MediatR on every row, and Mediator — which trades runtime
-registration, group filtering, polymorphic dispatch and the execution-context model for a fully
-static dispatch — leads Ergosfare. This cycle narrowed that gap on the planned void path from
-~3.4× to ~2.3×; the grouped publish row shows the grouped lane reaching parity with the
-group-less one; the remaining lifetime-honoring difference (24 B transient handler per dispatch
-vs. Mediator's shared singletons) is a semantic choice, not an overhead — `Command_Void_Memoized`
-is the like-for-like row.
-
-### NativeAOT smoke in CI
-
-* `examples/AotSmoke` publishes with `PublishAot=true` (trim/AOT analyzer warnings are errors)
-  and runs every dispatch shape — void and result commands through their generated plans, a
-  query, a two-handler class-event broadcast, and a struct event exercising the value-type
-  generic instantiations only generated roots can anchor. The new `AotSmoke` workflow publishes
-  and executes the binary on every push and PR.
-
-### Notes
-
-* **Public API additions:** `MessageDispatchEngine.DispatchVoidAsync<TMessage>`;
-  `GeneratedDispatchRoots.AddResultPlan`/`FindResultPlan` with `ResultPlanRoot`/
-  `IResultPlanRootVisitor`; `Func<THandler>`-taking overloads of `AddVoidPlan`/`AddResultPlan`.
-  Nothing is removed or changed in shape.
-* **Deliberate behavioral edges:** (1) a custom `IMessageMediator` registration decorating the
-  scope's mediator no longer sees grouped publishes or streams on engine-backed facades — those
-  lanes now run the engine directly, consistent with the group-less lane since v2.3.0-preview;
-  wrapped-construction facades and foreign mediator implementations keep the original path.
-  (2) Because the lifetime capture moved to first resolution, handler registrations added after
-  `AddErgosfare` are now honored by the memoized fast path too — strictly closer to the
-  container's own behavior.
-* The static plan/executor holders root the last-serving container's executor graph past
-  container disposal (at most one graph per message type — in a single-container process, the
-  live one). A `WeakReference` would tax every hot-path read instead; called out for review.
-
-## v2.3.0-preview – '2026-07-28'
-
-Preview release. The theme: **event publishing joins the fast lane, and resolving a mediator stops
-costing more than dispatching through it.** v2.2.0-preview put commands and queries on the
-executor fast path; this release brings event broadcasting onto the same footing, collapses every
-facade resolution to a single object over a shared dispatch engine, and ships the source
-generator's first compile-time pipeline plans. Behavior is unchanged on every path; the public API
-grows (see Notes) but nothing breaks.
-
-### Broadcast fast lane
-
-* **Pooled publish contexts and allocation-free default publishes.** A group-less `PublishAsync` without settings rents a pooled execution context and reuses a cached default broadcast strategy — no `EventMediationSettings`, no filter list, no strategy allocation. Caller-supplied settings items are adopted for the dispatch and detached untouched on return, so handler writes stay visible to the caller exactly as before.
-* **Invoker-cached pipeline plan.** The broadcast invoker holds the event's resolved pipeline directly, re-validated against the registry version — the executors' pattern applied to publishing. The plan is keyed by the dependencies-factory reference, so one container's plan (which may pin that container's provider for memoized pipelines) is never served to another container.
-* **Straight-through broadcast.** An unfiltered publish over an interceptor-free pipeline loops the handler arrays directly — synchronously while handlers complete synchronously, bailing to an awaiting helper on the first suspension, preserving strict sequential order. Exceptions propagate raw; `ThrowIfNoHandlerFound` is honored.
-* **Fixed:** a broadcast now continues with the event instance a pre-interceptor returns, matching the documented pre-interceptor contract.
-* Grouped publishes, handler-predicate filters, externally owned contexts and foreign `IMessageMediator` implementations keep the original `Mediate` path unchanged.
-
-### Single-object facades: `MessageDispatchEngine`
-
-* Resolving a facade used to build two transients per scope — the facade plus its `IMessageMediator` — while MediatR builds one. The executor dispatch bodies now live in **`MessageDispatchEngine`**, a process-wide singleton that takes the calling scope's provider per call; `IMessageMediator`'s executor overloads delegate to it unchanged.
-* `CommandMediator`, `QueryMediator` and `EventMediator` gain a public engine constructor, and DI binds single-constructor engine-backed shapes — constructor injection compiles the engine into a constant callsite, avoiding both MS.DI's ambiguous-constructor rejection and the per-resolution service lookup a factory registration would pay. The original `IMessageMediator` constructors remain for direct construction and foreign mediator implementations; `EventMediator` is unsealed to admit its DI shape.
-* Scoped handler resolution still binds to the calling scope (verified under `ValidateScopes = true`); the streaming and grouped paths resolve the scope's `IMessageMediator` on demand and are otherwise untouched.
-
-### Cheaper result-executor lookup
-
-* Group-less result dispatch paid a (message type, result type) composite-key hash per call while the void path got by on a single `Type`-keyed lookup. A per-message-type **last-used result-executor slot** closes the gap: one `Type` lookup plus a reference check on the recorded result type. Misses fall back to the composite store, which stays authoritative, so executor identity — and its registry-version-guarded dependency cache — is preserved.
-
-### Typed publish without the dictionary
-
-* The generic `PublishAsync<TEvent>` overload resolves its invoker from a static-generic holder (`Holder<TEvent>.Instance`), guarded by `@event.GetType() == typeof(TEvent)` — a base-typed generic call keeps resolving by runtime type, so polymorphic publishes dispatch exactly as before. The interface-erased overload keeps the dictionary path.
-
-### Compile-time pipeline plans (source generator)
-
-* When the generator can prove a dispatchable command's whole discovered pipeline is a single default-discovery, default-group async handler, it emits `GeneratedDispatchRoots.AddVoidPlan<TMessage, THandler>()` alongside the dispatch roots. The executor cache closes an executor over both types, so the fast path invokes the handler **devirtualized** — no contract pattern match, inlineable for sealed handlers.
-* The plan is advisory, never authoritative: the registry-version-guarded dependency cache re-validates the pipeline, so runtime registrations invalidate generated plans exactly as they invalidate runtime executors; a plan whose handler no longer matches falls through to the ordinary contract switch, then the strategy — behavior identical, only the speedup is lost. Grouped pipelines and `RegisterFromAssembly`/manual-registration users never see a plan.
-* Eligibility is conservative by design: one main-handler descriptor for the message across the compilation and scanned references, async void contract, unkeyed and ungrouped handler, no interceptor targeting the message, and a referenced package that exposes the plan surface (older packages keep the previous emission).
-
-### Benchmark
-
-Per-operation BenchmarkDotNet numbers (v0.15.8, Windows 11, AMD Ryzen 7 7800X3D, .NET 9.0.11,
-RyuJIT x86-64-v4), measured 2026-07-28. *Root* resolves mediators once; *Scoped* creates a fresh
-DI scope per dispatch and includes resolution in the measurement. MediatR columns are from the
-same runs.
-
-| Method | Cat | Mean | Alloc |
-|---|---|---:|---:|
-| Engine_Void | Root | 30.26 ns | 24 B |
-| Command_Void | Root | 30.52 ns | 24 B |
-| Command_Void_Generated | Root | **26.49 ns** | 24 B |
-| Query_Result | Root | 34.43 ns | 24 B |
-| Event_Publish | Root | 49.32 ns | 48 B |
-| MediatR_Send_Void / _Result / _Publish | Root | 60.29 / 53.79 / 83.42 ns | 192 / 192 / 440 B |
-| Engine_Void_Scoped | Scoped | 86.08 ns | 200 B |
-| Command_Void_Scoped | Scoped | 81.72 ns | 192 B |
-| Query_Result_Scoped | Scoped | 85.89 ns | 200 B |
-| Event_Publish_Scoped | Scoped | 100.90 ns | 232 B |
-| MediatR_Send_Void_Scoped / _Result_Scoped / _Publish_Scoped | Scoped | 101.48 / 115.76 / 130.32 ns | 352 / 352 / 600 B |
-
-Across this release cycle the scoped rows moved: command 91.4 → 81.7 ns (224 → 192 B), query
-109.7 → 85.9 ns (232 → 200 B), event publish 117.7 → 100.9 ns (264 → 232 B). The scoped query —
-the one row that still trailed MediatR when the cycle started — now leads it comfortably. The
-generated void-command plan beats the hand-written fast path by ~12%.
-
-### Notes
-
-* **Public API additions:** `MessageDispatchEngine` (constructed by DI only); engine-accepting public constructors on `CommandMediator`, `QueryMediator`, `EventMediator`; `GeneratedDispatchRoots.AddVoidPlan`/`FindVoidPlan` with `VoidPlanRoot`/`IVoidPlanRootVisitor`. `EventMediator` is no longer sealed. Nothing is removed or changed in shape; applications resolving mediators from DI see identical behavior with no migration steps.
-* A result-producing counterpart of the void plan was implemented and measured during the cycle: it showed no gain (the runtime contract switch's first arm already matches the async contract, and tiered PGO devirtualizes it), so it was deliberately not shipped.
-* Two runtime-registration test facts were shielded from assembly-scan pollution with `[ExcludeFromDiscovery]` — the registry is process-wide, and another test's `RegisterFromAssembly` sweep could slip a late-registered type into a pipeline before its fact warmed the cache. Test-only; no product change.
-
-## v2.2.0-preview – '2026-07-28'
-
-Preview release. The theme: **the dispatch path stops re-deriving what it already knows.** v2.0.0
-moved dispatch-shape work off the per-call path and onto compile time or a once-per-message-type
-plan; this release removes what was left — the per-dispatch lookup of that plan, the pipeline
-machinery around a pipeline that has exactly one stage, and a DI lifetime that charged the
-dispatch path for a scope entry it never used. No public API changes and no behavioral changes.
-
-### Dispatch fast path
-
-* **Executor-level dependency cache.** A pipeline executor is already per (message type, result type, group set), so it now holds its resolved `IMessageDependencies` directly, re-validated against the registry version on each dispatch. The per-dispatch factory call and its `ConcurrentDictionary` lookup collapse to a field read and an integer compare. Runtime registrations bump the version and the next dispatch rebuilds, so late registration keeps working; concurrent rebuilds are benign, since both writers publish equivalent state.
-* **Straight-through dispatch.** When a message's plan resolves to exactly one main handler, no interceptors in any of the four stages, and no registered result adapters, the executor invokes the handler's typed member and returns its `ValueTask` unchanged — no mediation-strategy object, no async state machine, no interface-dispatched stage-count checks. The condition is precomputed once when the plan is built (`MessageDependencies.FastSingleHandler`), not evaluated per dispatch. Adding a single interceptor returns the message to the full staged pipeline; a handler contract the fast path does not recognize falls through to the strategy, which raises its canonical `NotSupportedException`.
-* **Group-less executor lookup keyed by message type alone.** Dispatches that pass no groups — nearly all of them — skip group materialization and composite-key hashing entirely, hitting a `ConcurrentDictionary<Type, …>` instead.
-* **Adapter check split by shape.** `ResultAdapterService` exposes an internal emptiness check, read live so a late `AddAdapter` is observed, letting the fast path skip adapter consultation when none are registered. A foreign `IResultAdapterService` implementation always routes through the strategy.
-* **Which entry points this covers.** Both optimizations live in the pipeline executors, so they apply to `ICommandMediator.SendAsync`, `IQueryMediator.QueryAsync` and `IMessageMediator.DispatchAsync`. Event publishing (`IEventMediator`/`IPublisher.PublishAsync`, which broadcasts through `AsyncBroadcastMediationStrategy`) and streaming queries (`IQueryMediator.StreamAsync`) still dispatch through the options path, as does `IMessageMediator.Mediate` itself — they resolve dependencies per dispatch and build an unpooled context. Bringing those onto the executor path is future work.
-
-### Mediator lifetime
-
-* **The mediator facades are registered transient instead of scoped** — `ICommandMediator`, `IQueryMediator`, `IEventMediator`, `IPublisher` and `IMessageMediator`. A facade is stateless; the only thing it captures is the provider that resolved it, and DI hands a transient service the resolving scope's provider exactly as it does a scoped one, so handlers still resolve from the calling scope and scoped handler dependencies are honored unchanged (verified under `ValidateScopes = true`).
-* What changes is cost. Resolving a scoped service takes the scope's lock and writes the instance into the scope's resolved-services dictionary. That amortizes across a long-lived scope and never amortizes at all when every dispatch creates its own scope — and because `ICommandMediator` → `IMessageMediator` were both scoped, the scope-per-dispatch path paid it twice. This is the single largest contributor to the web-server-shape numbers below.
-
-### Benchmark
-
-100k sequential no-op dispatches per operation. BenchmarkDotNet v0.15.8, Windows 11, AMD Ryzen 7
-7800X3D, .NET 9.0.11 (RyuJIT x86-64-v4), measured 2026-07-28.
-
-| Scenario | v2.1.0-preview | v2.2.0-preview | MediatR (same runs) |
-|---|---:|---:|---:|
-| Typical usage — mean | 6.76 ms | **2.97 ms** | 5.79 ms |
-| Typical usage — allocated | 2.29 MB | 2.29 MB | 18.31 MB |
-| Web-server shape (scope per dispatch) — mean | 20.11 ms | **8.46 ms** | 10.28 ms |
-| Web-server shape — allocated | 38.91 MB | **21.36 MB** | 33.57 MB |
-
-The two Ergosfare columns are back-to-back runs on the same machine. The web-server shape was the
-one scenario v2.0.0 documented as a loss against MediatR; it is now a win on both axes, though the
-time margin there (~18%) is narrower than the allocation margin (~36%) and that row is dominated by
-DI scope creation for both libraries.
-
-The internal engine path (`IMessageMediator.Mediate` with pre-built `MediateOptions`) is unchanged
-at ~6.3 ms and now trails the public facade: it is a separate entry point that runs its own resolve
-and mediation strategies, so it reaches neither the executor's cached plan nor the straight-through
-path. It remains supported for custom mediation strategies.
-
-### Notes
-
-* No public API changes; no migration steps. Applications resolving mediators from DI see identical behavior.
-* Custom modules registering their own facade should follow suit and use `TryAddTransient`; see the plugins guide.
+Stable maintenance release of the v2 line. Its preview carried repository and release-channel
+chores only. The feature history that was previously repeated through the early preview
+entries is consolidated into the v2.3.0 stable entry above.
 
 ## v2.0.0 – '2026-07-25'
 
@@ -1453,4 +884,3 @@ ___
 * feat: Mediation strategies updated to support IExecutionContext
 * fix: correct PreInterceptorDescriptorBuilder filtering
 * chore: Ergosfare.Core 100% covered with unit tests
-
