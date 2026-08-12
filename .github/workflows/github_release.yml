@@ -16,7 +16,7 @@ on:
 
 jobs:
   release:
-    # Single job with both SDKs: the per-SDK matrix ran every step twice, and the
+    # Single job with every SDK: the per-SDK matrix ran every step twice, and the
     # duplicated release steps raced each other uploading the same assets — the
     # cause of the v1.4.0 failure.
     runs-on: ubuntu-latest
@@ -37,6 +37,13 @@ jobs:
           dotnet-version: |
             9.0.x
             10.0.x
+
+      # Separate step so `dotnet-quality: preview` does not pull pre-release patches of
+      # the shipping TFMs. Merge into the list above once .NET 11 reaches GA.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+          dotnet-quality: 'preview'
 
       - name: Set version
         run: |
