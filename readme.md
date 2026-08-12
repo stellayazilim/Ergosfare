@@ -2,12 +2,17 @@
 
 ![Ergosfare Logo](./7101c7df-6cac-4b25-994a-60e2adbdc546.png)
 
-[![NuGet (preview)](https://img.shields.io/nuget/vpre/Stella.Ergosfare.svg?label=nuget%20preview)](https://www.nuget.org/packages/Stella.Ergosfare/absoluteLatest)
+[![NuGet](https://img.shields.io/nuget/v/Stella.Ergosfare.svg?label=nuget)](https://www.nuget.org/packages/Stella.Ergosfare)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
-![Tests](https://img.shields.io/github/actions/workflow/status/stellayazilim/Ergosfare/coverage_tests.yml?branch=preview&label=tests)
+![Tests](https://img.shields.io/github/actions/workflow/status/stellayazilim/Ergosfare/coverage_tests.yml?branch=main&label=tests)
 [![Coverage](https://raw.githubusercontent.com/stellayazilim/Ergosfare/badges/.badges/coverage.svg)](https://github.com/stellayazilim/Ergosfare/actions/workflows/coverage_tests.yml)
 
 **Compile the pipeline. Dispatch the message.**
+
+> **v2 is the stable line**, released from [`main`](https://github.com/stellayazilim/Ergosfare/tree/main).
+> Work in progress lands on [`preview`](https://github.com/stellayazilim/Ergosfare/tree/preview)
+> first and ships as `-preview` pre-releases; see [Versioning and releases](#versioning-and-releases).
+> Coming from v1? See [Migrating from v1 to v2](https://stellayazilim.github.io/ergosfare.docs/migration/v1-to-v2).
 
 Ergosfare is a source-generated mediator for modern .NET applications. Commands, queries,
 events, interceptors and nested dispatch share one type-safe pipeline model whose shape is
@@ -31,8 +36,8 @@ control over execution state.
 Install the complete stack and its source generator:
 
 ```bash
-dotnet add package Stella.Ergosfare --prerelease
-dotnet add package Stella.Ergosfare.SourceGenerator --prerelease
+dotnet add package Stella.Ergosfare
+dotnet add package Stella.Ergosfare.SourceGenerator
 ```
 
 Declare a message and its handler:

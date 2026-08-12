@@ -75,7 +75,7 @@ public class CreateProductHandler : ICommandHandler<CreateProductCommand, Guid>
 var services = new ServiceCollection()
     .AddErgosfare(cfg =>
     {
-        cfg.AddCommandModule(b => b.RegisterFromAssembly(Assembly.GetExecutingAssembly()));
+        cfg.AddCommandModule(b => b.RegisterGenerated());
         cfg.AddInterceptors(); // enables interceptor pipeline
     })
     .BuildServiceProvider();
