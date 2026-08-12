@@ -18,8 +18,8 @@ on:
 
 jobs:
   release:
-    # Single job with both SDKs: the solution multi-targets net9.0/net10.0, and a
-    # per-SDK matrix packed and pushed every package twice.
+    # Single job with every SDK: the solution multi-targets net9.0/net10.0/net11.0, and
+    # a per-SDK matrix packed and pushed every package twice.
     runs-on: ubuntu-latest
     environment: publish
     permissions:
@@ -37,6 +37,17 @@ jobs:
           dotnet-version: |
             9.0.x
             10.0.x
+
+      # Separate step so `dotnet-quality: preview` does not pull pre-release patches of
+      # the shipping TFMs. Merge into the list above once .NET 11 reaches GA.
+      #
+      # Note this makes every package pushed from this line carry a lib/net11.0/ asset
+      # built against a preview ref pack — coherent on the preview line, which ships only
+      # -preview versions. It must not reach a stable tag before GA.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+          dotnet-quality: 'preview'
 
       - name: Set version
         run: |
