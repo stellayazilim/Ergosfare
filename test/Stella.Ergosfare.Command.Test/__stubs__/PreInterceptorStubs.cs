@@ -31,7 +31,7 @@ public class StubCommandPreInterceptor1: ICommandPreInterceptor<StubNonGenericCo
     /// <param name="context">The execution context for the pipeline.</param>
     /// <returns>The original command as an <see cref="object"/>.</returns>
 #pragma warning disable CS0618 // Type or member is obsolete
-    public virtual ValueTask<StubNonGenericCommand> HandleAsync(StubNonGenericCommand message, IExecutionContext context)
+    public virtual ValueTask<StubNonGenericCommand> HandleAsync(StubNonGenericCommand message, ErgosfareContext context)
 #pragma warning restore CS0618 // Type or member is obsolete
     {
         HasCalled = true;
@@ -62,7 +62,7 @@ public class StubCommandPreInterceptor2: ICommandPreInterceptor<StubNonGenericCo
     /// <param name="context">The execution context for the pipeline.</param>
     /// <returns>The original command as an <see cref="object"/>.</returns>
 #pragma warning disable CS0618 // Type or member is obsolete
-    public virtual ValueTask<StubNonGenericCommand>  HandleAsync(StubNonGenericCommand message, IExecutionContext context)
+    public virtual ValueTask<StubNonGenericCommand>  HandleAsync(StubNonGenericCommand message, ErgosfareContext context)
 #pragma warning restore CS0618 // Type or member is obsolete
     {
         HasCalled = true;

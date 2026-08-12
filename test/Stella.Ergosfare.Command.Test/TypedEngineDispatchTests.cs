@@ -17,9 +17,11 @@ public class TypedEngineDispatchTests
 {
     public sealed class TypedProbeCommand : ICommand { }
 
+    // ERGOSG007 (suppressed in the csproj): delivered through the engine's typed dispatch
+    // overloads below, which the closed-world dispatch-site analysis cannot see.
     public sealed class TypedProbeCommandHandler : ICommandHandler<TypedProbeCommand>
     {
-        public ValueTask HandleAsync(TypedProbeCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(TypedProbeCommand command, ErgosfareContext context)
         {
             context.Set("typedProbe", true);
             return ValueTask.CompletedTask;
@@ -30,11 +32,13 @@ public class TypedEngineDispatchTests
 
     public sealed class IdentityProbeCommand : ICommand { }
 
+    // ERGOSG007 (suppressed in the csproj): delivered through the engine's typed dispatch
+    // overloads below.
     public sealed class IdentityProbeCommandHandler : ICommandHandler<IdentityProbeCommand>
     {
         private readonly Guid _id = Guid.NewGuid();
 
-        public ValueTask HandleAsync(IdentityProbeCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(IdentityProbeCommand command, ErgosfareContext context)
         {
             context.Set("handlerId", _id);
             return ValueTask.CompletedTask;
@@ -145,7 +149,7 @@ public class TypedEngineDispatchTests
         // exception an unhandled message produces. The contract under test is exception
         // parity: the typed overload fails exactly like the erased one.
         var erased = await Record.ExceptionAsync(async () =>
-            await engine.DispatchAsync((object)new UnregisteredCommand(), provider));
+            await engine.DispatchAsync(new UnregisteredCommand(), provider));
         var typed = await Record.ExceptionAsync(async () =>
             await engine.DispatchVoidAsync(new UnregisteredCommand(), provider));
 

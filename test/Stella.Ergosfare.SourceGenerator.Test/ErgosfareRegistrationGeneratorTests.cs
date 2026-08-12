@@ -1,6 +1,5 @@
-using System.Reflection;
-using Stella.Ergosfare.Core.Abstractions.Registry;
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
+﻿using System.Reflection;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 
 namespace Stella.Ergosfare.SourceGenerator.Test;
 
@@ -18,7 +17,7 @@ public class ErgosfareRegistrationGeneratorTests
 
             public sealed class CreatePingHandler : ICommandHandler<CreatePing>
             {
-                public ValueTask HandleAsync(CreatePing message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                public ValueTask HandleAsync(CreatePing message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                     => default;
             }
 
@@ -38,7 +37,7 @@ public class ErgosfareRegistrationGeneratorTests
 
         var source = result.GeneratedSource;
         Assert.Contains("internal static class ErgosfareGeneratedRegistrations", source);
-        Assert.Contains("public static void RegisterAll(global::Stella.Ergosfare.Core.Abstractions.Registry.IMessageRegistry registry)", source);
+        Assert.Contains("public static void RegisterAll(global::Stella.Ergosfare.Core.Abstractions.DispatchRoots.FrozenCompositionCatalog compositions)", source);
         Assert.Contains("typeof(global::TestApp.CreatePing)", source);
         Assert.Contains("typeof(global::TestApp.CreatePingHandler)", source);
         Assert.Contains("typeof(global::TestApp.GetPong)", source);
@@ -55,70 +54,25 @@ public class ErgosfareRegistrationGeneratorTests
         var result = GeneratorTestHost.Run(FullSurfaceSource);
         var source = result.GeneratedSource;
 
-        // Plain messages register through the runtime fallback: once in RegisterAll and
-        // once in exactly one builder extension.
-        Assert.Equal(1, CountOccurrences(source, "registry.Register(typeof(global::TestApp.CreatePing));"));
+        // Messages are named one call each: once in the module-agnostic catalog surface
+        // and once in exactly one builder extension.
+        Assert.Equal(1, CountOccurrences(source, "compositions.Select(typeof(global::TestApp.CreatePing));"));
         Assert.Equal(1, CountOccurrences(source, "builder.Register(typeof(global::TestApp.CreatePing));"));
-        Assert.Equal(1, CountOccurrences(source, "registry.Register(typeof(global::TestApp.GetPong));"));
+        Assert.Equal(1, CountOccurrences(source, "compositions.Select(typeof(global::TestApp.GetPong));"));
         Assert.Equal(1, CountOccurrences(source, "builder.Register(typeof(global::TestApp.GetPong));"));
-        Assert.Equal(1, CountOccurrences(source, "registry.Register(typeof(global::TestApp.PingCreated));"));
+        Assert.Equal(1, CountOccurrences(source, "compositions.Select(typeof(global::TestApp.PingCreated));"));
         Assert.Equal(1, CountOccurrences(source, "builder.Register(typeof(global::TestApp.PingCreated));"));
 
-        // The handler registers through a pre-computed descriptor: once in the assembly-wide
-        // factory and once in its module's factory — never through the runtime fallback.
-        const string handlerDescriptor =
-            "global::Stella.Ergosfare.Core.Abstractions.Registry.Descriptors.HandlerDescriptors.Handler(" +
-            "typeof(global::TestApp.CreatePing), typeof(global::System.Threading.Tasks.ValueTask), typeof(global::TestApp.CreatePingHandler))";
-        Assert.Equal(2, CountOccurrences(source, handlerDescriptor));
-        Assert.DoesNotContain("Register(typeof(global::TestApp.CreatePingHandler))", source);
+        // Participants go into the builder's batch rather than through Register, which
+        // asserts module membership a participant contract need not carry.
+        Assert.Equal(1, CountOccurrences(source, "participants.Add(typeof(global::TestApp.CreatePingHandler));"));
+        Assert.Equal(1, CountOccurrences(source, "compositions.Select(typeof(global::TestApp.CreatePingHandler));"));
+        Assert.DoesNotContain("builder.Register(typeof(global::TestApp.CreatePingHandler))", source);
+        Assert.Contains("builder.RegisterParticipants(participants);", source);
     }
 
     [Fact]
-    public void InterceptorContracts_EmitDescriptorsMirroringRuntimeBuilders()
-    {
-        var result = GeneratorTestHost.Run("""
-            using Stella.Ergosfare.Commands.Abstractions;
-            using Stella.Ergosfare.Core.Abstractions.Attributes;
-            using System.Threading.Tasks;
-
-            namespace TestApp
-            {
-                public sealed record Ping : ICommand;
-
-                [Weight(5)]
-                [Group("audit", "ops")]
-                public sealed class AuditPre : ICommandPreInterceptor<Ping>
-                {
-                    public ValueTask<Ping> HandleAsync(Ping message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
-                        => new(message);
-                }
-
-                public sealed class LogPost : ICommandPostInterceptor<Ping>
-                {
-                    public ValueTask<object> HandleAsync(Ping message, object messageResult, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
-                        => new(messageResult);
-                }
-            }
-            """);
-
-        Assert.Empty(result.GeneratorDiagnostics);
-        Assert.Empty(result.CompilationErrors);
-
-        var source = result.GeneratedSource;
-
-        // Weight and groups flow into the descriptor entry as trailing arguments.
-        Assert.Contains(
-            ".PreInterceptor(typeof(global::TestApp.Ping), typeof(global::TestApp.AuditPre), 5u, new string[] { \"audit\", \"ops\" })",
-            source);
-
-        // The result-agnostic post contract maps to a ResultType of object.
-        Assert.Contains(
-            ".PostInterceptor(typeof(global::TestApp.Ping), typeof(object), typeof(global::TestApp.LogPost))",
-            source);
-    }
-
-    [Fact]
-    public void GenericMessages_AreNormalizedForInterceptorsAndKeptVerbatimForHandlers()
+    public void GenericMessages_AreNamedByDefinitionWhileParticipantsStayVerbatim()
     {
         var result = GeneratorTestHost.Run("""
             using Stella.Ergosfare.Commands.Abstractions;
@@ -132,12 +86,12 @@ public class ErgosfareRegistrationGeneratorTests
 
                 public sealed class WrappedIntHandler : ICommandHandler<Wrapped<int>>
                 {
-                    public ValueTask HandleAsync(Wrapped<int> message, IExecutionContext context) => default;
+                    public ValueTask HandleAsync(Wrapped<int> message, ErgosfareContext context) => default;
                 }
 
                 public sealed class WrappedIntPre : ICommandPreInterceptor<Wrapped<int>>
                 {
-                    public ValueTask<Wrapped<int>> HandleAsync(Wrapped<int> message, IExecutionContext context) => new(message);
+                    public ValueTask<Wrapped<int>> HandleAsync(Wrapped<int> message, ErgosfareContext context) => new(message);
                 }
             }
             """);
@@ -147,13 +101,11 @@ public class ErgosfareRegistrationGeneratorTests
 
         var source = result.GeneratedSource;
 
-        // Main handlers keep the declared message type verbatim; interceptors normalize to
-        // the generic definition — exactly what the runtime builders produce.
-        Assert.Contains(".Handler(typeof(global::TestApp.Wrapped<int>), typeof(global::System.Threading.Tasks.ValueTask), typeof(global::TestApp.WrappedIntHandler))", source);
-        Assert.Contains(".PreInterceptor(typeof(global::TestApp.Wrapped<>), typeof(global::TestApp.WrappedIntPre))", source);
-
-        // The open generic message itself falls back to runtime registration.
-        Assert.Contains("registry.Register(typeof(global::TestApp.Wrapped<>));", source);
+        // The open generic message is named by its definition — how the table keys it —
+        // while the participants closing over one instantiation are named verbatim.
+        Assert.Contains("compositions.Select(typeof(global::TestApp.Wrapped<>));", source);
+        Assert.Contains("participants.Add(typeof(global::TestApp.WrappedIntHandler));", source);
+        Assert.Contains("participants.Add(typeof(global::TestApp.WrappedIntPre));", source);
     }
 
     [Fact]
@@ -188,7 +140,7 @@ public class ErgosfareRegistrationGeneratorTests
                 public sealed class AuditPreInterceptor<TCommand> : ICommandPreInterceptor<TCommand>
                     where TCommand : ICommand
                 {
-                    public ValueTask<TCommand> HandleAsync(TCommand message, Stella.Ergosfare.Core.Abstractions.IExecutionContext context)
+                    public ValueTask<TCommand> HandleAsync(TCommand message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => new(message);
                 }
             }
@@ -245,7 +197,7 @@ public class ErgosfareRegistrationGeneratorTests
     }
 
     [Fact]
-    public void NoRegistrableTypes_EmitsNothing()
+    public void NoRegistrableTypes_EmitsOnlyTheDispatchManifestMarker()
     {
         var result = GeneratorTestHost.Run("""
             namespace TestApp
@@ -254,8 +206,12 @@ public class ErgosfareRegistrationGeneratorTests
             }
             """);
 
+        // No registrations to emit — but the manifest marker must still be stamped, so a
+        // composition root can tell "this assembly dispatches nothing" from "unknown".
         Assert.Empty(result.GeneratorDiagnostics);
-        Assert.Empty(result.DriverResult.GeneratedTrees);
+        Assert.Empty(result.CompilationErrors);
+        Assert.Contains("DispatchManifestAttribute(1)", result.GeneratedSource);
+        Assert.DoesNotContain("DispatchSiteAttribute(", result.GeneratedSource);
     }
 
     [Fact]
@@ -298,42 +254,15 @@ public class ErgosfareRegistrationGeneratorTests
     }
 
     [Fact]
-    public void GeneratedRegisterAll_ExecutesAgainstARegistry()
+    public void GeneratedRegisterAll_ExecutesAgainstACatalog()
     {
-        var result = GeneratorTestHost.Run(FullSurfaceSource + """
-
-            namespace TestApp
-            {
-                public sealed class RecordingRegistry : Stella.Ergosfare.Core.Abstractions.Registry.IMessageRegistry
-                {
-                    public System.Collections.Generic.List<System.Type> Registered { get; } = new();
-
-                    public System.Collections.Generic.List<Stella.Ergosfare.Core.Abstractions.Registry.Descriptors.IHandlerDescriptor> Descriptors { get; } = new();
-
-                    public int Count => 0;
-
-                    public System.Collections.Generic.IEnumerator<Stella.Ergosfare.Core.Abstractions.Registry.Descriptors.IMessageDescriptor> GetEnumerator()
-                    {
-                        yield break;
-                    }
-
-                    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
-
-                    public void Register(System.Type type) => Registered.Add(type);
-
-                    public void RegisterDescriptors(System.Collections.Generic.IEnumerable<Stella.Ergosfare.Core.Abstractions.Registry.Descriptors.IHandlerDescriptor> descriptors)
-                    {
-                        Descriptors.AddRange(descriptors);
-                    }
-                }
-            }
-            """);
+        var result = GeneratorTestHost.Run(FullSurfaceSource);
 
         Assert.Empty(result.CompilationErrors);
 
         // Make sure the real abstractions assembly is loaded so the emitted assembly's
         // references bind to it by name.
-        _ = typeof(IMessageRegistry);
+        _ = typeof(FrozenCompositionCatalog);
 
         using var stream = new MemoryStream();
         var emitResult = result.OutputCompilation.Emit(stream);
@@ -341,29 +270,20 @@ public class ErgosfareRegistrationGeneratorTests
 
         var assembly = Assembly.Load(stream.ToArray());
         var registrations = assembly.GetType("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
-        var registry = Activator.CreateInstance(assembly.GetType("TestApp.RecordingRegistry", throwOnError: true)!)!;
+        var catalog = new FrozenCompositionCatalog();
 
-        registrations.GetMethod("RegisterAll", [typeof(IMessageRegistry)])!.Invoke(null, [registry]);
+        registrations.GetMethod("RegisterAll", [typeof(FrozenCompositionCatalog)])!.Invoke(null, [catalog]);
 
-        // Plain messages go through the runtime fallback...
-        var registered = (List<Type>)registry.GetType().GetProperty("Registered")!.GetValue(registry)!;
-
+        // Messages and participants alike land in the container's selection — registration
+        // names constructs, and the compiled table decides what each one's pipeline is.
         Assert.Equal(
-        [
-            assembly.GetType("TestApp.CreatePing", throwOnError: true)!,
-            assembly.GetType("TestApp.GetPong", throwOnError: true)!,
-            assembly.GetType("TestApp.PingCreated", throwOnError: true)!,
-        ], registered);
-
-        // ...while the handler arrives as a fully pre-computed descriptor.
-        var descriptors = (System.Collections.IList)registry.GetType().GetProperty("Descriptors")!.GetValue(registry)!;
-        var descriptor = Assert.IsAssignableFrom<IMainHandlerDescriptor>(Assert.Single(descriptors.Cast<object>()));
-
-        Assert.Equal(assembly.GetType("TestApp.CreatePingHandler", throwOnError: true), descriptor.HandlerType);
-        Assert.Equal(assembly.GetType("TestApp.CreatePing", throwOnError: true), descriptor.MessageType);
-        Assert.Equal(typeof(ValueTask), descriptor.ResultType);
-        Assert.Equal(0u, descriptor.Weight);
-        Assert.Equal(["default"], descriptor.Groups);
+            [
+                assembly.GetType("TestApp.CreatePing", throwOnError: true)!,
+                assembly.GetType("TestApp.CreatePingHandler", throwOnError: true)!,
+                assembly.GetType("TestApp.GetPong", throwOnError: true)!,
+                assembly.GetType("TestApp.PingCreated", throwOnError: true)!,
+            ],
+            catalog.Selections.OrderBy(type => type.Name, StringComparer.Ordinal));
     }
 
     private static int CountOccurrences(string text, string value)

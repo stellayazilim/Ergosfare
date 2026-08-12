@@ -23,10 +23,10 @@ internal class CommandModule : IModule
     /// <summary>
     /// Builds the module by applying the provided configuration and registering the <see cref="ICommandMediator"/>.
     /// </summary>
-    /// <param name="configuration">The module configuration containing services and message registry.</param>
+    /// <param name="configuration">The module configuration containing services and this container's frozen composition selection.</param>
     public void Build(IModuleConfiguration configuration)
     {
-        _builder(new CommandModuleBuilder(configuration.MessageRegistry));
+        _builder(new CommandModuleBuilder(configuration.Compositions));
 
         // Transient: the mediator is a stateless facade whose only per-instance state is the
         // provider that resolved it — a transient still receives the calling scope's provider,

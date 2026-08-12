@@ -39,5 +39,5 @@ public interface IMessageMediationStrategy<in TMessage, out TMessageResult>
     ///     The implementation of this method defines the specific pattern for mediating messages, such as
     ///     executing a single handler, broadcasting to multiple handlers, or implementing more complex orchestration logic.
     /// </remarks>
-    TMessageResult Mediate(TMessage message, IMessageDependencies messageDependencies, IExecutionContext executionContext, IServiceProvider serviceProvider);
+    TMessageResult Mediate(TMessage message, IMessageDependencies messageDependencies, ErgosfareContext executionContext, IServiceProvider serviceProvider);
 }

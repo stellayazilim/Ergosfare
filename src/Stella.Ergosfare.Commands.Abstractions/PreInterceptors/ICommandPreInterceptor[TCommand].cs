@@ -19,8 +19,8 @@ namespace Stella.Ergosfare.Commands.Abstractions;
 public interface ICommandPreInterceptor<TCommand> : ICommand, IAsyncPreInterceptor<TCommand>
     where TCommand : ICommand
 {
-    /// <inheritdoc cref="IAsyncPreInterceptor{TMessage}.HandleAsync(TMessage,IExecutionContext)"/>
-    async ValueTask<object> IAsyncPreInterceptor<TCommand>.HandleAsync(TCommand command, IExecutionContext context)
+    /// <inheritdoc cref="IAsyncPreInterceptor{TMessage}.HandleAsync(TMessage,ErgosfareContext)"/>
+    async ValueTask<object> IAsyncPreInterceptor<TCommand>.HandleAsync(TCommand command, ErgosfareContext context)
         => await HandleAsync(command, context);
 
     /// <summary>
@@ -29,5 +29,5 @@ public interface ICommandPreInterceptor<TCommand> : ICommand, IAsyncPreIntercept
     /// </summary>
     /// <param name="command">The command to intercept.</param>
     /// <param name="context">The current execution context.</param>
-    new ValueTask<TCommand> HandleAsync(TCommand command, IExecutionContext context);
+    new ValueTask<TCommand> HandleAsync(TCommand command, ErgosfareContext context);
 }

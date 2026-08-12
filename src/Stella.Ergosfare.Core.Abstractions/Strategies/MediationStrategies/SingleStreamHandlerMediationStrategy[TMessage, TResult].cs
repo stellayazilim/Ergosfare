@@ -14,7 +14,6 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies;
 /// <typeparam name="TMessage">The type of the message being handled.</typeparam>
 /// <typeparam name="TResult">The type of the elements returned by the asynchronous stream.</typeparam>
 public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>( 
-    IResultAdapterService? resultAdapterService,
     CancellationToken cancellationToken) : IMessageMediationStrategy<TMessage, IAsyncEnumerable<TResult>>
     where TMessage : notnull
 {
@@ -41,21 +40,31 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
     /// An <see cref="IAsyncEnumerable{TResult}"/> representing the asynchronous stream of results produced by the handler.
     /// </returns>
     /// <exception cref="MultipleHandlerFoundException">Thrown if more than one handler is registered for the message.</exception>
-    /// <exception cref="InvalidOperationException">Thrown if no handler is registered for the message.</exception>
+    /// <exception cref="NoHandlerFoundException">Thrown if no handler is registered for the message.</exception>
     public async IAsyncEnumerable<TResult> Mediate(TMessage message, IMessageDependencies messageDependencies,
-        IExecutionContext context, IServiceProvider serviceProvider)
+        ErgosfareContext context, IServiceProvider serviceProvider)
     {
-        if (messageDependencies.Handlers.Count > 1)
+        // The main-handler priority ladder; see SingleAsyncHandlerMediationStrategy{TMessage}
+        // for the reasoning.
+        var handlers = messageDependencies.Handlers;
+        var indirectHandlers = messageDependencies.IndirectHandlers;
+
+        if (handlers.Count > 1)
         {
-            throw new MultipleHandlerFoundException(typeof(TMessage), messageDependencies.Handlers.Count);
+            throw new MultipleHandlerFoundException(typeof(TMessage), handlers.Count);
         }
 
-        if (messageDependencies.Handlers.Count == 0)
+        if (handlers.Count == 0 && indirectHandlers.Count > 1)
         {
-            throw new InvalidOperationException($"No handler is registered for {typeof(TMessage).Name}.");
+            throw new MultipleHandlerFoundException(typeof(TMessage), indirectHandlers.Count);
         }
 
-        var handler = messageDependencies.Handlers[0].Resolve(serviceProvider);
+        if (handlers.Count == 0 && indirectHandlers.Count == 0)
+        {
+            throw new NoHandlerFoundException(typeof(TMessage), $"No handler is registered for {typeof(TMessage).Name}.");
+        }
+
+        var handler = (handlers.Count == 1 ? handlers[0] : indirectHandlers[0]).Resolve(serviceProvider);
 
         // enumerator to consume
         IAsyncEnumerable<TResult>? enumerable = null;
@@ -63,8 +72,8 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         try
         {
             // run pre interceptors
-            var preInvoker = new PreInterceptorInvocationStrategy<TMessage>(messageDependencies, serviceProvider);
-            message =  (TMessage)await preInvoker.Invoke(message, context) ;
+            message = (TMessage) await PreInterceptorInvocationStrategy<TMessage>.Invoke(
+                messageDependencies, serviceProvider, message, context);
 
 
             // Typed dispatch only — no object bridge. `in TMessage` variance admits handlers
@@ -80,10 +89,11 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         }
         catch (ExecutionAbortedException)
         {
-            // aborted early no need to _consume
-            _consume = false;
+            // A participant stopped the pipeline before a single chunk existed. Nothing
+            // else runs — the final stage below included — and the signal reaches whoever
+            // is enumerating.
             _executionAborted = true;
-
+            throw;
         }
         catch (Exception exception) when (exception is not ExecutionAbortedException)
         {
@@ -106,52 +116,62 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
             }
             catch (ExecutionAbortedException)
             {
-                _consume = false;
+                // Stopped mid-stream: the chunks already yielded stand, nothing further is
+                // produced, and the signal reaches the enumerating caller.
                 _executionAborted = true;
-                
+                throw;
             }
             catch (Exception exception) when (exception is not ExecutionAbortedException)
             {
                 _consume = false;
                 _unknownException = exception;
             }
-            if (item is not null && _consume && _unknownException is null && !_executionAborted)
+            if (item is not null && _consume && _unknownException is null)
                 yield return item;
             if (!_consume || _unknownException is not null)
             {
-          
+
                 break; // exit loop to run post-interceptors
             }
-
-            if (_executionAborted)
-                yield break; // stop pipeline early
         }
         try
         {
             if (_unknownException is null)
             {
-                var postInvoker = new PostInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>(messageDependencies, resultAdapterService, serviceProvider);
                 // we can't override result since its chunked
-                await postInvoker.Invoke(message, enumerator, context).ConfigureAwait(false);
+                var (_, postCarried) = await PostInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>.Invoke(
+                    messageDependencies, Results.ResultAdapterBinding.For<TMessage, IAsyncEnumerator<TResult>>(serviceProvider), serviceProvider, message, enumerator, context).ConfigureAwait(false);
+
+                // A failure carried inside a post result enters the exception stage below
+                // without a throw — the stream's value channel.
+                _unknownException = postCarried;
             }
         }
         catch (ExecutionAbortedException)
-        { /*all chunks _consumed no action need*/ }
+        {
+            // A post-interceptor stopped the pipeline; see the arms above.
+            _executionAborted = true;
+            throw;
+        }
         catch (Exception exception) when (exception is not ExecutionAbortedException)
-        { 
+        {
             _unknownException = exception;
         }
         try
         {
             if (_unknownException is not null)
             {
-                var exceptionInvoker = new ExceptionInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>(messageDependencies, serviceProvider);
                 // we can't override result since its chunked
-                await exceptionInvoker.Invoke(
-                    message,
-                    enumerator,
-                    ExceptionDispatchInfo.Capture(_unknownException),
-                    context).ConfigureAwait(false);
+                var (matched, _) = await ExceptionInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>.Invoke(
+                    messageDependencies, serviceProvider, message, enumerator,
+                    _unknownException, context).ConfigureAwait(false);
+
+                if (!matched)
+                {
+                    // Nobody accepted the failure: it surfaces with its original stack,
+                    // exactly as the stage's own rethrow used to.
+                    ExceptionDispatchInfo.Capture(_unknownException).Throw();
+                }
             }
         }
         catch (Exception e) when (e is not ExecutionAbortedException)
@@ -160,8 +180,11 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         }
         finally
         {
-            var finalInvoker = new FinalInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>(messageDependencies, serviceProvider);
-            await finalInvoker.Invoke(message, enumerator, _unknownException, context);
+            if (!_executionAborted)
+            {
+                await FinalInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>.Invoke(
+                    messageDependencies, serviceProvider, message, enumerator, _unknownException, context);
+            }
         }
     }
     

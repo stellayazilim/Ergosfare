@@ -1,7 +1,3 @@
-// This file intentionally exercises the obsolete reflection-scanning surface until the
-// preview line removes it; the deprecation warning is expected and suppressed.
-#pragma warning disable CS0618
-
 using System.Reflection;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Events.Abstractions;
@@ -17,7 +13,7 @@ namespace Stella.Ergosfare.Events.Test;
 public class EventMediatorTests
 {
     /// <summary>
-    /// Tests that <see cref="IEventMediator.PublishAsync"/> correctly publishes a <see cref="StubNonGenericEvent"/>
+    /// Tests that <see cref="IEventMediator.PublishAsync(IEvent, EventMediationSettings?, CancellationToken)"/> correctly publishes a <see cref="StubNonGenericEvent"/>
     /// both with default and custom group settings.
     /// </summary>
     [Fact]
@@ -28,7 +24,7 @@ public class EventMediatorTests
         var services = new ServiceCollection()
             .AddErgosfare(
                 x => x.AddEventModule(
-                    e => e.RegisterFromAssembly(Assembly.GetExecutingAssembly())
+                    e => e.Register<StubNonGenericEventHandler1>()
                     ))
             .BuildServiceProvider();
         var mediator = services.GetRequiredService<IEventMediator>();

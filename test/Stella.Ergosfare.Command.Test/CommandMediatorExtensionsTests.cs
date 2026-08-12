@@ -1,9 +1,8 @@
-using Stella.Ergosfare.Commands.Abstractions;
+﻿using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
-using Moq;
 using Stella.Ergosfare.Command.Test.__stubs__;
 #pragma warning disable CS0618 // deliberately exercising the obsolete stub command type
 
@@ -24,27 +23,17 @@ public class CommandMediatorExtensionsTests
     [Fact]
     public async Task CommandMediatorExtensionsShouldExecuteCommandWithGroup()
     {
-        var mockInterceptor1 = new Mock<StubCommandPreInterceptor1>();
-        var mockInterceptor2 = new Mock<StubCommandPreInterceptor2>();
-
         var cancellationToken = CancellationToken.None;
         var cmd = new StubNonGenericCommand();
-
-        mockInterceptor1.Setup(s =>
-                s.HandleAsync(It.IsAny<StubNonGenericCommand>(), It.IsAny<IExecutionContext>()))
-            .CallBase();
-        mockInterceptor2.Setup(s =>
-            s.HandleAsync(It.IsAny<StubNonGenericCommand>(), It.IsAny<IExecutionContext>()))
-            .CallBase();
 
         var services = new ServiceCollection()
             .AddErgosfare(options =>
             {
                 options.AddCommandModule(module =>
                 {
-                    module.Register(mockInterceptor2.Object.GetType());
-                    module.Register(mockInterceptor1.Object.GetType());
-                    module.Register<StubNonGenericCommand>();
+                    module.Register<StubNonGenericCommandHandler>();
+                    module.Register<StubCommandPreInterceptor1>();
+                    module.Register<StubCommandPreInterceptor2>();
                 });
             }).BuildServiceProvider();
 

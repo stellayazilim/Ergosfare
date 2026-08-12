@@ -25,7 +25,7 @@ public class EngineBackedFacadeTests
 
     public sealed class ProbeCommandHandler(ScopedProbe probe) : ICommandHandler<ProbeCommand>
     {
-        public ValueTask HandleAsync(ProbeCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(ProbeCommand command, ErgosfareContext context)
         {
             context.Set("probeId", probe.Id);
             return ValueTask.CompletedTask;
@@ -39,7 +39,7 @@ public class EngineBackedFacadeTests
 
     public sealed class EchoCommandHandler : ICommandHandler<EchoCommand, string>
     {
-        public ValueTask<string> HandleAsync(EchoCommand command, IExecutionContext context)
+        public ValueTask<string> HandleAsync(EchoCommand command, ErgosfareContext context)
         {
             context.Set("sawPayload", command.Payload);
             return ValueTask.FromResult(command.Payload + "!");
@@ -123,7 +123,7 @@ public class EngineBackedFacadeTests
         {
             var settings = new CommandMediationSettings();
 
-            var result = await mediator.SendAsync<string>(
+            var result = await mediator.SendAsync(
                 new EchoCommand { Payload = "hi" }, settings);
 
             Assert.Equal("hi!", result);

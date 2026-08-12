@@ -1,7 +1,6 @@
 ﻿using Stella.Ergosfare.Commands;
-using Stella.Ergosfare.Core;
+using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Command.Test.__stubs__;
@@ -32,7 +31,7 @@ public class CommandMediatorTests
         var serviceCollection = new ServiceCollection()
             .AddErgosfare(options =>
             {
-                options.AddCoreModule(x =>
+                options.AddCommandModule(x =>
                 {
                     x.Register<StubNonGenericCommandHandler>();
                 });
@@ -41,7 +40,7 @@ public class CommandMediatorTests
         var messageMediator = serviceCollection.GetService<IMessageMediator>();
         var mediator = new CommandMediator(messageMediator!);
 
-        await mediator.SendAsync(new StubNonGenericCommand(), null, CancellationToken.None);
+        await mediator.SendAsync(new StubNonGenericCommand(), commandMediationSettings: null, CancellationToken.None);
     }
 
     /// <summary>
@@ -60,14 +59,14 @@ public class CommandMediatorTests
         var serviceCollection = new ServiceCollection()
             .AddErgosfare(options =>
             {
-                options.AddCoreModule(x =>
+                options.AddCommandModule(x =>
                 {
                     x.Register<StubNonGenericCommandStringResultHandler>();
                 });
             }).BuildServiceProvider();
 
         var messageMediator = serviceCollection.GetRequiredService<IMessageMediator>();
-        var mediator = new CommandMediator(messageMediator!);
+        var mediator = new CommandMediator(messageMediator);
 
         var result = mediator.SendAsync(new StubNonGenericCommandStringResult(), StubDefaultMediationSetting.CommandDefaultSetting, CancellationToken.None);
 

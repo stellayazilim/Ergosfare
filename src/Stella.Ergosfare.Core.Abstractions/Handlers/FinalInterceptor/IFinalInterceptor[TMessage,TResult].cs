@@ -25,5 +25,5 @@ public interface IFinalInterceptor<in TMessage, in TResult> : IFinalInterceptor
     /// <param name="result">The final result, if any.</param>
     /// <param name="exception">The exception that terminated the pipeline, if any.</param>
     /// <param name="executionContext">The current execution context.</param>
-    void Handle(TMessage message, TResult? result, Exception? exception, IExecutionContext executionContext);
+    void Handle(TMessage message, TResult? result, Exception? exception, ErgosfareContext executionContext);
 }

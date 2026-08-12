@@ -67,27 +67,47 @@ internal static class GeneratorTestHost
         string source,
         bool referenceModuleBuilders = true,
         IReadOnlyList<(string AssemblyName, string Source)>? libraries = null,
-        bool? scanReferences = null)
+        bool? scanReferences = null,
+        IReadOnlyDictionary<string, string>? buildProperties = null,
+        OutputKind outputKind = OutputKind.DynamicallyLinkedLibrary,
+        IReadOnlyDictionary<string, ReportDiagnostic>? diagnosticOptions = null)
     {
         var references = referenceModuleBuilders ? AllReferences.Value : ReferencesWithoutModuleBuilders.Value;
 
         if (libraries is { Count: > 0 })
         {
             references = references.AddRange(libraries.Select(library =>
+                // ReSharper disable once AccessToModifiedClosure
                 CompileLibrary(library.AssemblyName, library.Source, references)));
         }
+
+        // Test sources are deliberate consumers of the experimental result-adapter
+        // surface; the opt-in suppression every real consumer would carry is baked in.
+        var effectiveDiagnosticOptions = ImmutableDictionary<string, ReportDiagnostic>.Empty
+            .Add("ERGOEXP001", ReportDiagnostic.Suppress);
+
+        if (diagnosticOptions is not null)
+        {
+            // The way an .editorconfig severity override (dotnet_diagnostic.<id>.severity)
+            // reaches the generator driver's diagnostic filter.
+            effectiveDiagnosticOptions = effectiveDiagnosticOptions.SetItems(
+                diagnosticOptions.Select(pair => new KeyValuePair<string, ReportDiagnostic>(pair.Key, pair.Value)));
+        }
+
+        var compilationOptions = new CSharpCompilationOptions(outputKind)
+            .WithSpecificDiagnosticOptions(effectiveDiagnosticOptions);
 
         var compilation = CSharpCompilation.Create(
             "Ergosfare.SourceGeneratorTestApp",
             [CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Latest))],
             references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            compilationOptions);
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             generators: [new ErgosfareRegistrationGenerator().AsSourceGenerator()],
-            optionsProvider: scanReferences is null
+            optionsProvider: scanReferences is null && buildProperties is null
                 ? null
-                : new TestAnalyzerConfigOptionsProvider(scanReferences.Value));
+                : new TestAnalyzerConfigOptionsProvider(scanReferences, buildProperties));
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diagnostics);
 
         return new GeneratorRunResult(outputCompilation, driver.GetRunResult(), diagnostics);
@@ -103,7 +123,9 @@ internal static class GeneratorTestHost
             assemblyName,
             [CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Latest))],
             references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+                .WithSpecificDiagnosticOptions(ImmutableDictionary<string, ReportDiagnostic>.Empty
+                    .Add("ERGOEXP001", ReportDiagnostic.Suppress)));
 
         using var stream = new MemoryStream();
         var emitResult = compilation.Emit(stream);
@@ -122,30 +144,46 @@ internal static class GeneratorTestHost
     }
 
     /// <summary>
-    ///     Analyzer-config surface exposing only the reference-scanning build property, the
-    ///     way MSBuild's <c>CompilerVisibleProperty</c> plumbing would.
+    ///     Analyzer-config surface exposing the generator's build properties, the way
+    ///     MSBuild's <c>CompilerVisibleProperty</c> plumbing would. Property names in
+    ///     <paramref name="buildProperties"/> are the bare MSBuild names
+    ///     (<c>ErgosfareCompositionRoot</c>, …); the provider adds the
+    ///     <c>build_property.</c> prefix itself.
     /// </summary>
-    private sealed class TestAnalyzerConfigOptionsProvider(bool scanReferences) : AnalyzerConfigOptionsProvider
+    private sealed class TestAnalyzerConfigOptionsProvider(
+        bool? scanReferences,
+        IReadOnlyDictionary<string, string>? buildProperties) : AnalyzerConfigOptionsProvider
     {
-        public override AnalyzerConfigOptions GlobalOptions { get; } = new TestOptions(scanReferences);
+        public override AnalyzerConfigOptions GlobalOptions { get; } = new TestOptions(scanReferences, buildProperties);
 
         public override AnalyzerConfigOptions GetOptions(SyntaxTree tree) => GlobalOptions;
 
         public override AnalyzerConfigOptions GetOptions(AdditionalText textFile) => GlobalOptions;
 
-        private sealed class TestOptions(bool scanReferences) : AnalyzerConfigOptions
+        private sealed class TestOptions : AnalyzerConfigOptions
         {
-            public override bool TryGetValue(string key, [NotNullWhen(true)] out string? value)
+            private readonly Dictionary<string, string> _values = new(StringComparer.Ordinal);
+
+            public TestOptions(bool? scanReferences, IReadOnlyDictionary<string, string>? buildProperties)
             {
-                if (key == "build_property.ErgosfareSourceGeneratorScanReferences")
+                if (scanReferences is { } scan)
                 {
-                    value = scanReferences ? "true" : "false";
-                    return true;
+                    _values["build_property.ErgosfareSourceGeneratorScanReferences"] = scan ? "true" : "false";
                 }
 
-                value = null;
-                return false;
+                if (buildProperties is null)
+                {
+                    return;
+                }
+
+                foreach (var pair in buildProperties)
+                {
+                    _values["build_property." + pair.Key] = pair.Value;
+                }
             }
+
+            public override bool TryGetValue(string key, [NotNullWhen(true)] out string? value)
+                => _values.TryGetValue(key, out value);
         }
     }
 

@@ -25,5 +25,5 @@ public interface IAsyncPreInterceptor<in TMessage> : IPreInterceptor
     /// the pipeline — either the original message or a modified instance of
     /// <typeparamref name="TMessage"/>.
     /// </returns>
-    ValueTask<object> HandleAsync(TMessage message, IExecutionContext context);
+    ValueTask<object> HandleAsync(TMessage message, ErgosfareContext context);
 }

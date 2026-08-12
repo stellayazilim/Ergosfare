@@ -1,4 +1,3 @@
-using System.Runtime.ExceptionServices;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 
 namespace Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
@@ -11,45 +10,65 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 /// result-agnostic ones via <see cref="IAsyncExceptionInterceptor{TMessage}"/>, synchronous
 /// ones via <see cref="IExceptionInterceptor{TMessage, TResult}"/>. There is no object-typed
 /// bridge and no boxed awaitable; `in` variance admits interceptors registered for base
-/// message or result types. With no interceptors registered, the captured exception is
-/// rethrown with its original stack.
+/// message or result types.
+/// <para>
+/// An interceptor carrying an <see cref="IExceptionInterceptorFilter"/> runs only for the
+/// exceptions it accepts. The stage itself never rethrows: it reports whether any
+/// interceptor <em>matched</em> — the caller owns the unhandled-failure outcome, which
+/// differs by channel (rethrow for classic pipelines, a failed carrier for materializable
+/// result types, nothing for a value-carried failure that already lives in the result).
+/// </para>
 /// </summary>
 /// <typeparam name="TMessage">The dispatch message type (the runtime type on executor paths).</typeparam>
 /// <typeparam name="TResult">
-/// The pipeline's result type — <see cref="ValueTask"/> for void pipelines, where the
-/// completed-task box stands in as the (meaningless) result object.
+/// The pipeline's result type — <see cref="Unit"/> for pipelines that produce no result.
 /// </typeparam>
-internal sealed class ExceptionInterceptorInvocationStrategy<TMessage, TResult>(
-    IMessageDependencies messageDependencies,
-    IServiceProvider serviceProvider)
+/// <remarks>
+/// Static: the pipeline state travels as arguments, so a dispatch allocates no invoker object.
+/// </remarks>
+internal static class ExceptionInterceptorInvocationStrategy<TMessage, TResult>
     where TMessage : notnull
 {
     /// <summary>
     /// Executes all exception interceptors for the specified message, result, and exception.
     /// </summary>
-    /// <param name="message">The message whose processing threw.</param>
+    /// <param name="messageDependencies">The message's pipeline composition, supplying the exception-interceptor list.</param>
+    /// <param name="serviceProvider">The provider of the scope this dispatch runs in; interceptors resolve from it.</param>
+    /// <param name="message">The message whose processing failed.</param>
     /// <param name="result">The result produced by the pipeline so far, if any.</param>
-    /// <param name="exceptionDispatchInfo">The captured exception; rethrown when no interceptor is registered.</param>
+    /// <param name="exception">The failure — thrown by the pipeline or carried inside its result.</param>
     /// <param name="executionContext">The execution context for the current pipeline invocation.</param>
-    /// <returns>The (possibly replaced) result after all exception interceptors have executed.</returns>
-    public async ValueTask<object?> Invoke(
+    /// <returns>
+    /// Whether any interceptor accepted the exception, and the (possibly replaced) result
+    /// after all matching exception interceptors have executed. The result is meaningful
+    /// only when <c>Matched</c> is <c>true</c> — an unmatched stage ran nobody and handled
+    /// nothing.
+    /// </returns>
+    public static async ValueTask<(bool Matched, object? Result)> Invoke(
+        IMessageDependencies messageDependencies,
+        IServiceProvider serviceProvider,
         TMessage message,
         object? result,
-        ExceptionDispatchInfo exceptionDispatchInfo,
-        IExecutionContext executionContext)
+        Exception exception,
+        ErgosfareContext executionContext)
     {
         var interceptors = messageDependencies.ExceptionInterceptors;
-
-        if (interceptors.Count == 0)
-        {
-            exceptionDispatchInfo.Throw();
-        }
-
-        var exception = exceptionDispatchInfo.SourceException;
+        var matched = false;
 
         for (var i = 0; i < interceptors.Count; i++)
         {
             var interceptor = interceptors[i].Resolve(serviceProvider);
+
+            // A filtered interceptor that rejects this exception is not a participant at
+            // all: it neither runs nor counts towards "something handled it". Resolution
+            // still happens first — the filter lives on the instance, and resolving every
+            // registered interceptor is the behavior the unfiltered stage already had.
+            if (interceptor is IExceptionInterceptorFilter filter && !filter.Matches(exception))
+            {
+                continue;
+            }
+
+            matched = true;
 
             result = interceptor switch
             {
@@ -65,6 +84,6 @@ internal sealed class ExceptionInterceptorInvocationStrategy<TMessage, TResult>(
             };
         }
 
-        return result;
+        return (matched, result);
     }
 }

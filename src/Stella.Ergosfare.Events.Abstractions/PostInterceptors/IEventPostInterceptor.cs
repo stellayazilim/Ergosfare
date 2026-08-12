@@ -27,14 +27,14 @@ namespace Stella.Ergosfare.Events.Abstractions;
 public interface IEventPostInterceptor : IEvent, IAsyncPostInterceptor<IEvent>
 {
     
-    /// <inheritdoc cref="IAsyncPostInterceptor{TEvent, ValueTask}.HandleAsync"/>
-    async ValueTask<object> IAsyncPostInterceptor<IEvent>.HandleAsync(IEvent @event, object result, IExecutionContext context)
+    /// <inheritdoc cref="IEventPostInterceptor{TEvent}.HandleAsync(TEvent, object, ErgosfareContext)"/>
+    async ValueTask<object> IAsyncPostInterceptor<IEvent>.HandleAsync(IEvent @event, object result, ErgosfareContext context)
     {
-        // The cast is required so this call binds to the typed member below; without it
-        // the simple-name call resolved back to the inherited interface member — i.e.
-        // this very implementation — and recursed infinitely.
-        await HandleAsync(@event, (ValueTask) result, context);
-        return ValueTask.CompletedTask;
+        // The ValueTask argument is what binds this call to the typed member below: an
+        // object-typed one resolves back to the inherited interface member — this very
+        // implementation — and recurses infinitely.
+        await HandleAsync(@event, ValueTask.CompletedTask, context);
+        return Unit.Value;
     }
 
     /// <summary>
@@ -46,6 +46,6 @@ public interface IEventPostInterceptor : IEvent, IAsyncPostInterceptor<IEvent>
     /// </param>
     /// <param name="executionContext">The execution context for the current mediation pipeline.</param>
     /// <returns>A <see cref="ValueTask"/> representing the asynchronous post-processing operation.</returns>
-    ValueTask HandleAsync(IEvent @event, ValueTask result, IExecutionContext executionContext);
+    ValueTask HandleAsync(IEvent @event, ValueTask result, ErgosfareContext executionContext);
 
 }

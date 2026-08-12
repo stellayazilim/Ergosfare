@@ -26,10 +26,10 @@ public interface ICommandPreInterceptor<in TCommand,  TModifiedCommand>: IComman
     where TModifiedCommand : TCommand
 {
     
-    /// <inheritdoc cref="IAsyncPreInterceptor{TMessage}.HandleAsync(TMessage,IExecutionContext)"/>
+    /// <inheritdoc cref="IAsyncPreInterceptor{TMessage}.HandleAsync(TMessage,ErgosfareContext)"/>
 
     async ValueTask<object> IAsyncPreInterceptor<TCommand>
-        .HandleAsync(TCommand command, IExecutionContext context)
+        .HandleAsync(TCommand command, ErgosfareContext context)
     {
         return await HandleAsync(command, context);
     }
@@ -42,6 +42,6 @@ public interface ICommandPreInterceptor<in TCommand,  TModifiedCommand>: IComman
     /// <returns>
     /// A <see cref="ValueTask{TResult}"/> producing the modified command of type <typeparamref name="TModifiedCommand"/>.
     /// </returns>
-    public new ValueTask<TModifiedCommand> HandleAsync(TCommand command, IExecutionContext context);
+    public new ValueTask<TModifiedCommand> HandleAsync(TCommand command, ErgosfareContext context);
 
 }

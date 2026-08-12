@@ -26,5 +26,5 @@ public interface IAsyncPostInterceptor<in TMessage>
     /// A <see cref="ValueTask{Object}"/> whose result is the (possibly replaced) result that
     /// continues through the pipeline.
     /// </returns>
-    ValueTask<object> HandleAsync(TMessage message, object messageResult, IExecutionContext context);
+    ValueTask<object> HandleAsync(TMessage message, object messageResult, ErgosfareContext context);
 }

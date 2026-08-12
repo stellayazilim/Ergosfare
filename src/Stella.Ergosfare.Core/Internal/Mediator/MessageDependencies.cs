@@ -1,13 +1,13 @@
-using Stella.Ergosfare.Core.Abstractions;
+﻿using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
 
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 
 /// <summary>
 /// The resolved pipeline of a message type: fixed, ordered handler reference arrays per
-/// stage, built once from the cached <see cref="MessagePipelineShape"/> and shared
+/// stage, built once from the message's <see cref="FrozenPipelineShape"/> and shared
 /// process-wide.
 /// </summary>
 /// <remarks>
@@ -19,42 +19,25 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 internal sealed class MessageDependencies : IMessageDependencies
 {
     /// <inheritdoc />
-    public IReadOnlyList<IHandlerReference<IHandler, IMainHandlerDescriptor>> Handlers { get; }
+    public IReadOnlyList<IHandlerReference<IHandler>> Handlers { get; }
 
     /// <inheritdoc />
-    public IReadOnlyList<IHandlerReference<IHandler, IMainHandlerDescriptor>> IndirectHandlers { get; }
+    public IReadOnlyList<IHandlerReference<IHandler>> IndirectHandlers { get; }
 
     /// <inheritdoc />
-    public IReadOnlyList<IHandlerReference<IPreInterceptor, IPreInterceptorDescriptor>> PreInterceptors { get; }
+    public IReadOnlyList<IHandlerReference<IPreInterceptor>> PreInterceptors { get; }
 
     /// <inheritdoc />
-    public IReadOnlyList<IHandlerReference<IPostInterceptor, IPostInterceptorDescriptor>> PostInterceptors { get; }
+    public IReadOnlyList<IHandlerReference<IPostInterceptor>> PostInterceptors { get; }
 
     /// <inheritdoc />
-    public IReadOnlyList<IHandlerReference<IExceptionInterceptor, IExceptionInterceptorDescriptor>> ExceptionInterceptors { get; }
+    public IReadOnlyList<IHandlerReference<IExceptionInterceptor>> ExceptionInterceptors { get; }
 
     /// <inheritdoc />
-    public IReadOnlyList<IHandlerReference<IFinalInterceptor, IFinalInterceptorDescriptor>> FinalInterceptors { get; }
+    public IReadOnlyList<IHandlerReference<IFinalInterceptor>> FinalInterceptors { get; }
 
     /// <summary>
-    /// Convenience constructor building the shape on the fly and pinning resolution to the
-    /// given provider (memoized mode). Intended for tests; production code goes through
-    /// the cached-shape constructor.
-    /// </summary>
-    /// <param name="messageType">The type of the message for which dependencies are resolved.</param>
-    /// <param name="descriptor">The message descriptor providing handler metadata.</param>
-    /// <param name="serviceProvider">The provider handler instances are resolved from.</param>
-    /// <param name="groups">The groups to filter handlers by; if none provided, the default group is used.</param>
-    public MessageDependencies(Type messageType,
-        IMessageDescriptor descriptor,
-        IServiceProvider serviceProvider,
-        IEnumerable<string> groups)
-        : this(MessagePipelineShape.Create(messageType, descriptor, groups), serviceProvider)
-    {
-    }
-
-    /// <summary>
-    /// Initializes the fixed reference arrays from a (cached) pipeline shape.
+    /// Initializes the fixed reference arrays from a message's frozen pipeline shape.
     /// </summary>
     /// <param name="shape">The ordered, group-filtered pipeline shape with pre-resolved handler types.</param>
     /// <param name="memoizedProvider">
@@ -62,16 +45,16 @@ internal sealed class MessageDependencies : IMessageDependencies
     /// (memoized fast path); when null, references resolve per invocation from the
     /// execution context's provider.
     /// </param>
-    public MessageDependencies(MessagePipelineShape shape, IServiceProvider? memoizedProvider)
+    public MessageDependencies(FrozenPipelineShape shape, IServiceProvider? memoizedProvider)
     {
-        HandlerArray = Materialize<IHandler, IMainHandlerDescriptor>(shape.Handlers, memoizedProvider);
-        IndirectHandlerArray = Materialize<IHandler, IMainHandlerDescriptor>(shape.IndirectHandlers, memoizedProvider);
+        HandlerArray = Materialize<IHandler>(shape.Handlers, memoizedProvider);
+        IndirectHandlerArray = Materialize<IHandler>(shape.IndirectHandlers, memoizedProvider);
         Handlers = HandlerArray;
         IndirectHandlers = IndirectHandlerArray;
-        PreInterceptors = Materialize<IPreInterceptor, IPreInterceptorDescriptor>(shape.PreInterceptors, memoizedProvider);
-        PostInterceptors = Materialize<IPostInterceptor, IPostInterceptorDescriptor>(shape.PostInterceptors, memoizedProvider);
-        ExceptionInterceptors = Materialize<IExceptionInterceptor, IExceptionInterceptorDescriptor>(shape.ExceptionInterceptors, memoizedProvider);
-        FinalInterceptors = Materialize<IFinalInterceptor, IFinalInterceptorDescriptor>(shape.FinalInterceptors, memoizedProvider);
+        PreInterceptors = Materialize<IPreInterceptor>(shape.PreInterceptors, memoizedProvider);
+        PostInterceptors = Materialize<IPostInterceptor>(shape.PostInterceptors, memoizedProvider);
+        ExceptionInterceptors = Materialize<IExceptionInterceptor>(shape.ExceptionInterceptors, memoizedProvider);
+        FinalInterceptors = Materialize<IFinalInterceptor>(shape.FinalInterceptors, memoizedProvider);
 
         // Precomputed once per (message type, groups): the exact condition the single-handler
         // strategies use for their zero-interceptor fast path. Executors read this to invoke
@@ -82,7 +65,16 @@ internal sealed class MessageDependencies : IMessageDependencies
             && ExceptionInterceptors.Count == 0
             && FinalInterceptors.Count == 0;
 
-        FastSingleHandler = HasNoInterceptors && Handlers.Count == 1 ? Handlers[0] : null;
+        // The direct level wins outright: a sole direct handler serves the message no
+        // matter how many covariant candidates exist; without a direct one the dispatch
+        // falls to the covariant level. Only a same-level contest — or an empty candidate
+        // set — must reach the strategy to be told so, so the short circuit mirrors the
+        // strategies' selection exactly.
+        FastSingleHandler = HasNoInterceptors
+            ? Handlers.Count == 1
+                ? Handlers[0]
+                : Handlers.Count == 0 && IndirectHandlers.Count == 1 ? IndirectHandlers[0] : null
+            : null;
         MemoizedInstances = memoizedProvider is not null;
     }
 
@@ -91,8 +83,8 @@ internal sealed class MessageDependencies : IMessageDependencies
     /// dispatch. Same instances the <see cref="Handlers"/>/<see cref="IndirectHandlers"/>
     /// properties expose.
     /// </summary>
-    internal IHandlerReference<IHandler, IMainHandlerDescriptor>[] HandlerArray { get; }
-    internal IHandlerReference<IHandler, IMainHandlerDescriptor>[] IndirectHandlerArray { get; }
+    internal IHandlerReference<IHandler>[] HandlerArray { get; }
+    internal IHandlerReference<IHandler>[] IndirectHandlerArray { get; }
 
     /// <summary>
     /// Whether all four interceptor stages are empty — the broadcast fast path's
@@ -101,10 +93,11 @@ internal sealed class MessageDependencies : IMessageDependencies
     internal bool HasNoInterceptors { get; }
 
     /// <summary>
-    /// The sole main handler when the pipeline has exactly one handler and no interceptor
-    /// stages; <c>null</c> otherwise. Computed once at construction.
+    /// The main handler the priority ladder selects — the sole direct one, else the sole
+    /// covariant one — when the pipeline has no interceptor stages; <c>null</c> when the
+    /// winning level is contested or empty. Computed once at construction.
     /// </summary>
-    internal IHandlerReference<IHandler, IMainHandlerDescriptor>? FastSingleHandler { get; }
+    internal IHandlerReference<IHandler>? FastSingleHandler { get; }
 
     /// <summary>
     /// Whether references resolve once and cache the instance (memoized mode). Generated
@@ -114,26 +107,23 @@ internal sealed class MessageDependencies : IMessageDependencies
     internal bool MemoizedInstances { get; }
 
     /// <summary>
-    /// Wraps the shape's planned handlers in resolvable references. Runs once per
+    /// Wraps a shape's participant types in resolvable references. Runs once per
     /// (message type, groups) process-wide — never on the dispatch path.
     /// </summary>
-    private static IHandlerReference<THandler, TDescriptor>[] Materialize<THandler, TDescriptor>(
-        PlannedHandler<TDescriptor>[] plannedHandlers,
-        IServiceProvider? memoizedProvider) where TDescriptor : IHandlerDescriptor
+    private static IHandlerReference<THandler>[] Materialize<THandler>(
+        IReadOnlyList<Type> participants,
+        IServiceProvider? memoizedProvider)
     {
-        if (plannedHandlers.Length == 0)
+        if (participants.Count == 0)
         {
             return [];
         }
 
-        var references = new IHandlerReference<THandler, TDescriptor>[plannedHandlers.Length];
+        var references = new IHandlerReference<THandler>[participants.Count];
 
-        for (var i = 0; i < plannedHandlers.Length; i++)
+        for (var i = 0; i < participants.Count; i++)
         {
-            references[i] = new HandlerReference<THandler, TDescriptor>(
-                plannedHandlers[i].Descriptor,
-                plannedHandlers[i].HandlerType,
-                memoizedProvider);
+            references[i] = new HandlerReference<THandler>(participants[i], memoizedProvider);
         }
 
         return references;

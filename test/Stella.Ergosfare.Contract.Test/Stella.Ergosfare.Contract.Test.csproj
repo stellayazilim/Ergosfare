@@ -1,0 +1,43 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <IsPackable>false</IsPackable>
+        <!-- BasicDispatchTests deliberately dispatches messages no registration path
+             collects, to pin the runtime NoHandlerFoundException contract - the exact
+             failure mode ERGOSG005 exists to prove at compile time. Error-severity
+             diagnostics ignore pragmas and (for generator-reported ones) editorconfig
+             severities, so the verdict is suppressed project-wide here; every other
+             project keeps it. -->
+        <NoWarn>$(NoWarn);ERGOSG005</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="coverlet.collector" Version="6.0.4">
+          <PrivateAssets>all</PrivateAssets>
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="coverlet.msbuild" Version="6.0.4">
+          <PrivateAssets>all</PrivateAssets>
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0"/>
+        <PackageReference Include="xunit" Version="2.9.2"/>
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+      <!-- The whole public facade (commands, queries, events + their DI extensions):
+           the suite is written against this surface and nothing below it. -->
+      <ProjectReference Include="..\..\src\Stella.Ergosfare\Stella.Ergosfare.csproj" />
+      <!-- The source generator as an analyzer, so the generated-registration axis has a
+           RegisterGenerated() to call over this assembly's own types. -->
+      <ProjectReference Include="..\..\src\Stella.Ergosfare.SourceGenerator\Stella.Ergosfare.SourceGenerator.csproj"
+                        OutputItemType="Analyzer"
+                        ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+</Project>

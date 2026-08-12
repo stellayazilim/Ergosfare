@@ -1,53 +1,26 @@
-
 namespace Stella.Ergosfare.Core.Abstractions;
 
-
 /// <summary>
-/// Defines a contract for adapting and inspecting result objects of arbitrary types
-/// to extract exceptions without throwing them directly.
+/// Extracts a value-carried failure out of a pipeline result of type
+/// <typeparamref name="TResult"/> without throwing it — the bridge that lets result-pattern
+/// values (the framework's own <see cref="Result"/>/<see cref="Result{TValue}"/>, or foreign
+/// carriers such as FluentResults/OneOf) trigger the exception-interceptor stage.
 /// </summary>
+/// <typeparam name="TResult">The closed pipeline result type the adapter understands.</typeparam>
 /// <remarks>
-/// The primary purpose of a result adapter is to enable the framework to invoke
-/// exception interceptors based on exceptions contained within result objects, 
-/// without having to throw these exceptions. This allows the message handling 
-/// pipeline to process results and exceptions consistently, regardless of whether
-/// the exception occurred naturally or is wrapped inside a result type.
-///
-/// Implementations of this interface allow the pipeline to remain agnostic to the
-/// specific result type returned by handlers, supporting result wrapper types 
-/// such as <c>FluentResult</c>, <c>OneOf</c>, or any custom domain-specific result object.
-/// 
-/// Multiple adapters can be registered in an <see cref="IResultAdapterService"/>, and
-/// each adapter is evaluated in order until one indicates it can adapt the result
-/// and successfully extracts an exception.
+/// Typed on purpose: the previous object-based contract boxed every value-typed result on
+/// every probe and re-discovered its target by <c>CanAdapt</c> checks. This shape binds per
+/// closed result type — resolved once per pipeline, called devirtualized, and passed by
+/// readonly reference so nothing is copied or boxed. A pipeline whose result type has no
+/// adapter pays nothing at all.
 /// </remarks>
-public interface IResultAdapter
-   
+public interface IResultAdapter<TResult>
 {
-   /// <summary>
-   /// Determines whether this adapter can handle the provided <paramref name="result"/> object.
-   /// </summary>
-   /// <param name="result">The result object to evaluate. This may be any object type.</param>
-   /// <returns>
-   /// <c>true</c> if this adapter can process the given result; otherwise, <c>false</c>.
-   /// </returns>
-   bool CanAdapt(object result); 
-   
-   
-   /// <summary>
-   /// Attempts to extract an <see cref="Exception"/> from the given result object
-   /// without throwing it.
-   /// </summary>
-   /// <param name="result">The result object to inspect.</param>
-   /// <param name="exception">The exception extracted from the result, if found.</param>
-   /// <returns>
-   /// <c>true</c> if an exception was successfully extracted; otherwise, <c>false</c>.
-   /// </returns>
-   /// <remarks>
-   /// This method should only be called after <see cref="CanAdapt"/> returns <c>true</c>
-   /// for the same result object. Implementations should handle the logic for retrieving
-   /// exceptions from wrapped or custom result types, allowing the framework to invoke
-   /// exception interceptors without throwing.
-   /// </remarks>
-   bool TryGetException(object result, out Exception? exception);
+    /// <summary>
+    /// Attempts to extract a failure from <paramref name="result"/> without throwing.
+    /// </summary>
+    /// <param name="result">The pipeline result to inspect.</param>
+    /// <param name="exception">The carried failure, when present.</param>
+    /// <returns><c>true</c> when a failure was extracted; otherwise <c>false</c>.</returns>
+    bool TryGetException(in TResult result, out Exception? exception);
 }

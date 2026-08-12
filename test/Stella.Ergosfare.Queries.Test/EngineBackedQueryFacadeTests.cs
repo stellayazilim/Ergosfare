@@ -1,4 +1,4 @@
-using Stella.Ergosfare.Core;
+﻿using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -60,21 +60,16 @@ public class EngineBackedQueryFacadeTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task BothConstructors_QueryIdentically()
+    public async Task ADirectlyConstructedFacade_QueriesLikeTheResolvedOne()
     {
         var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddQueryModule(q => q.Register<StubNonGenericStringResultQueryHandler>()))
             .BuildServiceProvider();
         await using var _ = provider;
 
-        var strategy = provider.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>();
+        var constructed = new QueryMediator(provider.GetRequiredService<MessageDispatchEngine>(), provider);
 
-        var engineBacked = new QueryMediator(
-            provider.GetRequiredService<MessageDispatchEngine>(), provider, strategy);
-        var mediatorBacked = new QueryMediator(
-            strategy, provider.GetRequiredService<IMessageMediator>());
-
-        foreach (var mediator in new[] { engineBacked, mediatorBacked })
+        foreach (var mediator in new[] { constructed, (QueryMediator)provider.GetRequiredService<IQueryMediator>() })
         {
             Assert.Equal(string.Empty, await mediator.QueryAsync(new StubNonGenericStringResultQuery()));
         }

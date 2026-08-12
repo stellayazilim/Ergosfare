@@ -1,0 +1,4 @@
+# The lane map is re-captured on every modernization phase and diffed against the
+# committed copy. Normalizing it on commit and checking it out with native endings keeps
+# that diff about frames, never about CRLF.
+lane-map.txt text

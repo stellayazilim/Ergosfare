@@ -16,7 +16,7 @@ public static class EventMediatorExtensions
     /// <returns>A <see cref="ValueTask"/> representing the asynchronous publish operation.</returns>
     public static ValueTask PublishAsync(this IEventMediator eventMediator, IEvent @event, CancellationToken cancellationToken = default)
     {
-        return eventMediator.PublishAsync(@event, null, cancellationToken);
+        return eventMediator.PublishAsync(@event, eventMediationSettings: null, cancellationToken);
     }
 
     

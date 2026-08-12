@@ -1,8 +1,8 @@
 using Stella.Ergosfare.Command.Test.__stubs__;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
-using Stella.Ergosfare.Core.Internal.Contexts;
 
 namespace Stella.Ergosfare.Command.Test;
 
@@ -16,22 +16,26 @@ namespace Stella.Ergosfare.Command.Test;
 /// </remarks>
 public class CommandExceptionInterceptorDefaultImplementationTests
 {
+    // These probes are invoked directly by the tests below, never dispatched — deliberately
+    // outside the compiled closure, which is what silences ERGOSG001 for the private type.
+    [ExcludeFromDiscovery]
     private class TestCommandExceptionInterceptor : ICommandExceptionInterceptor<TestCommandStringResult, string>
     {
         public bool Called;
 
-        public ValueTask<string?> HandleAsync(TestCommandStringResult command, string? result, Exception exception, IExecutionContext context)
+        public ValueTask<string?> HandleAsync(TestCommandStringResult command, string? result, Exception exception, ErgosfareContext context)
         {
             Called = true;
             return ValueTask.FromResult(result);
         }
     }
 
+    [ExcludeFromDiscovery]
     private class TestCommandPostInterceptor : ICommandPostInterceptor<TestCommandStringResult, string>
     {
         public bool Called;
 
-        public ValueTask<string> HandleAsync(TestCommandStringResult command, string commandResult, IExecutionContext context)
+        public ValueTask<string> HandleAsync(TestCommandStringResult command, string commandResult, ErgosfareContext context)
         {
             Called = true;
             return ValueTask.FromResult(commandResult);
@@ -48,7 +52,7 @@ public class CommandExceptionInterceptorDefaultImplementationTests
 
         // act — invoke through the root interface member the pipeline uses
         var result = await ((IAsyncExceptionInterceptor<TestCommandStringResult, string>) interceptor).HandleAsync(
-            new TestCommandStringResult(), "original", new Exception("boom"), new ErgosfareExecutionContext(null, default));
+            new TestCommandStringResult(), "original", new Exception("boom"), new ErgosfareContext(null, default));
 
         // assert
         Assert.True(interceptor.Called);
@@ -63,7 +67,7 @@ public class CommandExceptionInterceptorDefaultImplementationTests
         var interceptor = new TestCommandPostInterceptor();
 
         var result = await ((IAsyncPostInterceptor<TestCommandStringResult, string>) interceptor).HandleAsync(
-            new TestCommandStringResult(), "result", new ErgosfareExecutionContext(null, default));
+            new TestCommandStringResult(), "result", new ErgosfareContext(null, default));
 
         Assert.True(interceptor.Called);
         Assert.Equal("result", result);

@@ -1,7 +1,8 @@
-using Stella.Ergosfare.Commands.Abstractions;
+﻿using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -28,7 +29,7 @@ public class GeneratedPlanDirectConstructionTests
 
         public bool ViaPlanFactory { get; init; }
 
-        public ValueTask HandleAsync(ConstructedCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(ConstructedCommand command, ErgosfareContext context)
         {
             context.Set("handlerId", _id);
             context.Set("viaPlanFactory", ViaPlanFactory);
@@ -77,7 +78,7 @@ public class GeneratedPlanDirectConstructionTests
     {
         public bool ViaUserFactory { get; init; }
 
-        public ValueTask HandleAsync(UserFactoryCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(UserFactoryCommand command, ErgosfareContext context)
         {
             context.Set("viaUserFactory", ViaUserFactory);
             return ValueTask.CompletedTask;
@@ -116,7 +117,7 @@ public class GeneratedPlanDirectConstructionTests
     {
         public bool ViaUser { get; init; }
 
-        public ValueTask HandleAsync(LateOverrideCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(LateOverrideCommand command, ErgosfareContext context)
         {
             context.Set("viaUser", ViaUser);
             return ValueTask.CompletedTask;
@@ -156,7 +157,7 @@ public class GeneratedPlanDirectConstructionTests
     {
         private readonly Guid _id = Guid.NewGuid();
 
-        public ValueTask HandleAsync(SingletonCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(SingletonCommand command, ErgosfareContext context)
         {
             context.Set("handlerId", _id);
             return ValueTask.CompletedTask;
@@ -197,7 +198,7 @@ public class GeneratedPlanDirectConstructionTests
     {
         private readonly Guid _id = Guid.NewGuid();
 
-        public ValueTask HandleAsync(MemoizedPlanCommand command, IExecutionContext context)
+        public ValueTask HandleAsync(MemoizedPlanCommand command, ErgosfareContext context)
         {
             context.Set("handlerId", _id);
             return ValueTask.CompletedTask;

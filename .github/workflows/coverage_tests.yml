@@ -9,8 +9,11 @@ on:
     paths-ignore:
       - '.badges/chore_workflows/coverage.svg'
   pull_request:
+    # '**' rather than '*': a single star does not match a slash, so a base branch
+    # like fix/modernization-phase-2 selects no workflow at all. Every pull request
+    # gets the gate regardless of what it targets.
     branches:
-      - '*'
+      - '**'
     paths-ignore:
       - '.badges/chore_workflows/coverage.svg'
 
@@ -37,10 +40,13 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore Stella.Ergosfare.slnx
 
+      # Category!=E2E: the end-to-end test spends its time in a `dotnet build` of a fixture
+      # outside this solution, so it instruments nothing here while being the slowest test
+      # in the suite. It is gated in the UnitTests workflow instead.
       - name: Run Unit & Coverage Tests
         shell: bash
         run: |
-          dotnet test Stella.Ergosfare.slnx --settings coverlet.runsettings /p:CoverletOutput=./.coverage/coverage.cobertura.xml /p:MergeWith=""  --logger "trx;LogFileName=TestResults.trx"
+          dotnet test Stella.Ergosfare.slnx --settings coverlet.runsettings /p:CoverletOutput=./.coverage/coverage.cobertura.xml /p:MergeWith=""  --logger "trx;LogFileName=TestResults.trx" --filter "Category!=E2E"
 
       - name: Install Report Generator
         run: dotnet tool install --global dotnet-reportgenerator-globaltool

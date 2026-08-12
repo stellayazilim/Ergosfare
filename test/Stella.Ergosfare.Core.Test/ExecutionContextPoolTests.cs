@@ -1,4 +1,4 @@
-using Stella.Ergosfare.Core.Internal.Contexts;
+using Stella.Ergosfare.Core.Abstractions;
 
 namespace Stella.Ergosfare.Core.Test;
 
@@ -11,12 +11,12 @@ public class ExecutionContextPoolTests
     [Fact]
     public void ReturnedContext_IsReusedWithCleanState()
     {
-        var first = ErgosfareExecutionContextPool.Rent(null, default);
+        var first = ErgosfareContextPool.Rent(null, default);
         first.Set("key", "value");
-        ErgosfareExecutionContextPool.Return(first);
+        ErgosfareContextPool.Return(first);
 
         using var cts = new CancellationTokenSource();
-        var second = ErgosfareExecutionContextPool.Rent(null, cts.Token);
+        var second = ErgosfareContextPool.Rent(null, cts.Token);
 
         try
         {
@@ -27,7 +27,7 @@ public class ExecutionContextPoolTests
         }
         finally
         {
-            ErgosfareExecutionContextPool.Return(second);
+            ErgosfareContextPool.Return(second);
         }
     }
 
@@ -35,7 +35,7 @@ public class ExecutionContextPoolTests
     public void CreateScope_ChildInheritsToken_AndDisposeReturnsItToThePool()
     {
         using var cts = new CancellationTokenSource();
-        var parent = ErgosfareExecutionContextPool.Rent(null, cts.Token);
+        var parent = ErgosfareContextPool.Rent(null, cts.Token);
         parent.Set("outer", "state");
 
         var scope = parent.CreateScope();
@@ -49,7 +49,7 @@ public class ExecutionContextPoolTests
         child.Set("child", "state");
         scope.Dispose();
 
-        var next = ErgosfareExecutionContextPool.Rent(null, default);
+        var next = ErgosfareContextPool.Rent(null, default);
 
         try
         {
@@ -57,15 +57,15 @@ public class ExecutionContextPoolTests
         }
         finally
         {
-            ErgosfareExecutionContextPool.Return(next);
-            ErgosfareExecutionContextPool.Return(parent);
+            ErgosfareContextPool.Return(next);
+            ErgosfareContextPool.Return(parent);
         }
     }
 
     [Fact]
     public void EmptyContext_ReadPaths_DoNotAllocateTheItemsDictionary()
     {
-        var context = new ErgosfareExecutionContext(null, default);
+        var context = new ErgosfareContext(null, default);
 
         Assert.False(context.Has("missing"));
         Assert.False(context.TryGet<string>("missing", out _));

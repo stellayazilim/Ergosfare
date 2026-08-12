@@ -29,7 +29,7 @@ public interface IEventPreInterceptor<in TEvent,  TModifiedEvent>: IAsyncPreInte
     where TModifiedEvent : TEvent
 {
     /// <inheritdoc cref="IAsyncPreInterceptor{TEvent}.HandleAsync"/>
-    async ValueTask<object> IAsyncPreInterceptor<TEvent>.HandleAsync(TEvent @event, IExecutionContext executionContext)
+    async ValueTask<object> IAsyncPreInterceptor<TEvent>.HandleAsync(TEvent @event, ErgosfareContext executionContext)
     {
         return await HandleAsync(@event, executionContext);
     }
@@ -38,10 +38,6 @@ public interface IEventPreInterceptor<in TEvent,  TModifiedEvent>: IAsyncPreInte
     /// Represents a type-safe pre-interceptor for events that can optionally modify
     /// the event before it reaches its handlers.
     /// </summary>
-    /// <typeparam name="TEvent">The type of the original event being intercepted. Must implement <see cref="IEvent"/>.</typeparam>
-    /// <typeparam name="TModifiedEvent">
-    /// The type of event returned after pre-processing. Must be the same or derived from <typeparamref name="TEvent"/>.
-    /// </typeparam>
     /// <remarks>
     /// <para>
     /// Implementing this interface allows pre-processing logic to run before the event
@@ -52,5 +48,5 @@ public interface IEventPreInterceptor<in TEvent,  TModifiedEvent>: IAsyncPreInte
     /// asynchronous pre-processing in the event mediation pipeline.
     /// </para>
     /// </remarks>
-    new ValueTask<TModifiedEvent> HandleAsync(TEvent @event, IExecutionContext context);
+    new ValueTask<TModifiedEvent> HandleAsync(TEvent @event, ErgosfareContext context);
 }

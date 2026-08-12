@@ -19,7 +19,12 @@ changelog/**
 changelog/**/
 docs/**
 docs/**
-BenchmarkDotNet.Artifacts/
+# Benchmark output is per-run and throwaway — except the dated baselines the
+# modernization phases re-run and compare against, which are committed. Excluding the
+# directory's contents rather than the directory itself is what makes that re-inclusion
+# possible: git never descends into an excluded directory.
+**/BenchmarkDotNet.Artifacts/*
+!**/BenchmarkDotNet.Artifacts/baselines/
 
 # docfx output — the API reference is generated on demand (see
 # .github/workflows/api_reference.yml) and consumed by the docs site, never committed.
@@ -43,8 +48,8 @@ xrefmap.yml
 examples/Playground/
 
 # e2e run artifacts: the SQLite database is recreated on every boot, ijhttp writes its
-# JUnit report under e2e/reports/, and e2e/run.mjs self-provisions the ijhttp CLI into
-# e2e/tools/ on first run.
-e2e/**/*.db
-e2e/reports/
-e2e/tools/
+# JUnit report under examples/e2e/reports/, and examples/e2e/run.mjs self-provisions the
+# ijhttp CLI into examples/e2e/tools/ on first run.
+examples/e2e/**/*.db
+examples/e2e/reports/
+examples/e2e/tools/

@@ -3,31 +3,23 @@ using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Test.Fixtures;
 using Stella.Ergosfare.Test.Fixtures.Stubs.Basic;
-using Xunit.Abstractions;
 
 namespace Stella.Ergosfare.Core.Test.Strategies;
 
 
 public class SingleAsyncHandlerMediationStrategyTMessageTests:
     IClassFixture<ExecutionContextFixture>,
-    IClassFixture<MessageDependencyFixture>,
-    IClassFixture<DescriptorFixture>
+    IClassFixture<MessageDependencyFixture>
 {
-    private readonly ITestOutputHelper _testOutputHelper;
     private MessageDependencyFixture _messageDependencyFixture;
-    private DescriptorFixture _descriptorFixture;
     private readonly ExecutionContextFixture _executionContextFixture;
     // ReSharper disable once ConvertToPrimaryConstructor
     public SingleAsyncHandlerMediationStrategyTMessageTests(
-        ITestOutputHelper testOutputHelper,
         MessageDependencyFixture messageDependencyFixture,
-        DescriptorFixture descriptorFixture,
         ExecutionContextFixture executionContextFixture)
     {
-        _testOutputHelper = testOutputHelper;
         _messageDependencyFixture = messageDependencyFixture;
-        _descriptorFixture = descriptorFixture;
-        _executionContextFixture = executionContextFixture; 
+        _executionContextFixture = executionContextFixture;
     }
 
     public record TestMessage : IMessage;
@@ -43,7 +35,6 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests:
         var message = new StubMessage();
         
         _messageDependencyFixture = _messageDependencyFixture.New;
-        _descriptorFixture = _descriptorFixture.New;
         _messageDependencyFixture.RegisterHandler(
             typeof(StubMessage),
             typeof(StubVoidAsyncHandler),
@@ -53,13 +44,10 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests:
             typeof(StubVoidAsyncFinalInterceptor));
         
         
-        _descriptorFixture.SetMessageRegistry(_messageDependencyFixture.MessageRegistry);
-        var descriptor = _descriptorFixture.GetDescriptorFromRegistry(typeof(StubMessage));
         
-        Assert.NotNull(descriptor);
         
-        var dependencies = _messageDependencyFixture.CreateDependenciesFromDescriptor<StubMessage>(descriptor!);
-        var mediationStrategy = new SingleAsyncHandlerMediationStrategy<StubMessage>(null);
+        var dependencies = _messageDependencyFixture.CreateDependencies<StubMessage>();
+        var mediationStrategy = new SingleAsyncHandlerMediationStrategy<StubMessage>();
 
         Assert.NotNull(dependencies);
         Assert.NotEmpty(dependencies.Handlers);
@@ -70,7 +58,6 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests:
        // assert
       Assert.Null(nonExceptionAsync);
       _messageDependencyFixture.Dispose();
-      _descriptorFixture.Dispose();
     }
     
     [Fact]
@@ -80,7 +67,6 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests:
         var message = new StubMessage();
         
         _messageDependencyFixture = _messageDependencyFixture.New;
-        _descriptorFixture = _descriptorFixture.New;
         
         // @todo Invokers produce problem when invoking sync interceptors eg. converting object to task
         _messageDependencyFixture.RegisterHandler(
@@ -89,13 +75,10 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests:
             typeof(StubVoidHandler));
     
          
-        _descriptorFixture.SetMessageRegistry(_messageDependencyFixture.MessageRegistry);
-        var descriptor = _descriptorFixture.GetDescriptorFromRegistry(typeof(StubMessage));
         
-        Assert.NotNull(descriptor);
         
-        var dependencies = _messageDependencyFixture.CreateDependenciesFromDescriptor<StubMessage>(descriptor!);
-        var mediationStrategy = new SingleAsyncHandlerMediationStrategy<StubMessage>(null);
+        var dependencies = _messageDependencyFixture.CreateDependencies<StubMessage>();
+        var mediationStrategy = new SingleAsyncHandlerMediationStrategy<StubMessage>();
         
         // act
         var multipleHandlerExceptionAsync = await Record.ExceptionAsync( async () => 
@@ -104,7 +87,6 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests:
         Assert.NotNull(multipleHandlerExceptionAsync);
         Assert.IsType<MultipleHandlerFoundException>(multipleHandlerExceptionAsync);
         
-        _descriptorFixture.Dispose();   
         _messageDependencyFixture.Dispose();
     }
 
@@ -115,21 +97,19 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests:
         var message = new StubMessage();
         
         _messageDependencyFixture = _messageDependencyFixture.New;
-        _descriptorFixture = _descriptorFixture.New;
-        var messageDependencies = _messageDependencyFixture
-            .RegisterHandler(
-                typeof(StubVoidHandlerThrows), // Handler that throws
-                typeof(StubVoidAsyncExceptionInterceptor), typeof(StubVoidAsyncFinalInterceptor));
-        
-        _descriptorFixture.SetMessageRegistry(_messageDependencyFixture.MessageRegistry);
-        var descriptor = _descriptorFixture.GetDescriptorFromRegistry(typeof(StubMessage));
-        
-        Assert.NotNull(descriptor);
-        
-        var dependencies = _messageDependencyFixture.CreateDependenciesFromDescriptor<StubMessage>(descriptor!);
-        var mediationStrategy = new SingleAsyncHandlerMediationStrategy<StubMessage>(null);
-        
-        
+
+        // The registration is the arrange's side effect — the returned dependencies are
+        // rebuilt from the descriptor below, so no local is kept.
+        _messageDependencyFixture.RegisterHandler(
+            typeof(StubVoidHandlerThrows), // Handler that throws
+            typeof(StubVoidAsyncExceptionInterceptor), typeof(StubVoidAsyncFinalInterceptor));
+
+
+
+        var dependencies = _messageDependencyFixture.CreateDependencies<StubMessage>();
+        var mediationStrategy = new SingleAsyncHandlerMediationStrategy<StubMessage>();
+
+
 
         // Act
         await mediationStrategy.Mediate(message, dependencies, _executionContextFixture.Ctx, _messageDependencyFixture.ServiceProvider);
@@ -156,7 +136,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTests:
     //         .RegisterHandler(typeof(StubVoidHandler), typeof(StubVoidIndirectHandler))
     //         .CreateDependencies<StubMessage>();
     //
-    //     var strategy = new SingleAsyncHandlerMediationStrategy<StubMessage>(null);
+    //     var strategy = new SingleAsyncHandlerMediationStrategy<StubMessage>();
     //     var message = new StubMessage();
     //
     //     // Act & Assert

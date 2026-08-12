@@ -1,5 +1,4 @@
 using Microsoft.Extensions.DependencyInjection;
-using Stella.Ergosfare.Commands;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
@@ -29,7 +28,7 @@ public class HandlerLifetimeResolutionTests
 
     public sealed class ScopedDepCommandHandler(ScopedProbe probe) : ICommandHandler<ScopedDepCommand>
     {
-        public ValueTask HandleAsync(ScopedDepCommand message, IExecutionContext context)
+        public ValueTask HandleAsync(ScopedDepCommand message, ErgosfareContext context)
         {
             message.ObservedDepId = probe.Id;
             message.ObservedProbe = probe;
@@ -46,7 +45,7 @@ public class HandlerLifetimeResolutionTests
     {
         private readonly Guid _id = Guid.NewGuid();
 
-        public ValueTask HandleAsync(SingletonCommand message, IExecutionContext context)
+        public ValueTask HandleAsync(SingletonCommand message, ErgosfareContext context)
         {
             message.ObservedHandlerId = _id;
             return ValueTask.CompletedTask;
@@ -60,7 +59,7 @@ public class HandlerLifetimeResolutionTests
 
     public sealed class ForcedCommandHandler(ScopedProbe probe) : ICommandHandler<ForcedCommand>
     {
-        public ValueTask HandleAsync(ForcedCommand message, IExecutionContext context)
+        public ValueTask HandleAsync(ForcedCommand message, ErgosfareContext context)
         {
             message.ObservedDepId = probe.Id;
             return ValueTask.CompletedTask;

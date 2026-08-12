@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- The ADO.NET provider, not EF Core: this app publishes with PublishAot, and an
+             ORM's runtime model building is precisely what NativeAOT cannot do. -->
+        <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+        <!-- Microsoft.Data.Sqlite 10.0.0 still resolves the native bundle to 2.1.11, which
+             carries GHSA-2m69-gcr7-jv3q. Pin the patched build directly; the Api treats
+             NU1903 as an error, so this stays honest. -->
+        <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
+        <!-- Came in transitively with EF Core before; the store still registers itself. -->
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Stella.Ergosfare.E2E.Domain\Stella.Ergosfare.E2E.Domain.csproj" />
+        <!-- The store publishes domain events on commit, so it needs the mediator. -->
+        <ProjectReference Include="..\..\..\src\Stella.Ergosfare.Events.Abstractions\Stella.Ergosfare.Events.Abstractions.csproj" />
+    </ItemGroup>
+
+</Project>

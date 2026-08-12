@@ -6,9 +6,11 @@ on:
     branches:
       - "*"
   pull_request:
+    # "**" rather than "*": a single star does not match a slash, so a base branch
+    # like fix/modernization-phase-2 selects no workflow at all. Every pull request
+    # gets the gate regardless of what it targets.
     branches:
-      - main
-      - preview
+      - "**"
 
 jobs:
   unit-tests:
@@ -29,8 +31,22 @@ jobs:
       - name: Restore Dependencies
         run: dotnet restore Stella.Ergosfare.slnx
 
+      # Category=Contract is the core-modernization safety net
+      # (test/Stella.Ergosfare.Contract.Test): it runs both registration axes on both
+      # TFMs and is named here explicitly so it can never fall out of CI unnoticed.
       - name: Run Unit Tests
         run: |
           dotnet test Stella.Ergosfare.slnx \
             --logger "trx;LogFileName=unit-tests.trx" \
-            --filter "Category=Unit"
+            --filter "Category=Unit|Category=Contract"
+
+      # Category=E2E drives a real `dotnet build` of a fixture that is meant not to
+      # compile — the analyzer travelling as an analyzer, the package's props, and K5's
+      # composition-root gate. The filter above leaves it out, so it gets its own step
+      # rather than going unrun; the fixture lives outside the solution precisely so a
+      # solution build never picks it up.
+      - name: Run End-to-End Tests
+        run: |
+          dotnet test test/Stella.Ergosfare.SourceGenerator.Test \
+            --logger "trx;LogFileName=e2e-tests.trx" \
+            --filter "Category=E2E"

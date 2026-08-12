@@ -43,7 +43,7 @@ public class ExcludeFromPipelineTests
     [ExcludeFromDiscovery]
     public sealed class BroadPre : IEventPreInterceptor
     {
-        public ValueTask HandleAsync(IEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(IEvent @event, ErgosfareContext context)
         {
             if (@event is ITracedEvent traced)
             {
@@ -57,7 +57,7 @@ public class ExcludeFromPipelineTests
     [ExcludeFromDiscovery]
     public sealed class QuietExactPre : IEventPreInterceptor<QuietEvent>
     {
-        public ValueTask<QuietEvent> HandleAsync(QuietEvent @event, IExecutionContext context)
+        public ValueTask<QuietEvent> HandleAsync(QuietEvent @event, ErgosfareContext context)
         {
             @event.Trace.Add("exact");
             return new(@event);
@@ -67,7 +67,7 @@ public class ExcludeFromPipelineTests
     [ExcludeFromDiscovery]
     public sealed class ChattyHandler : IEventHandler<ChattyEvent>
     {
-        public ValueTask HandleAsync(ChattyEvent message, IExecutionContext context)
+        public ValueTask HandleAsync(ChattyEvent message, ErgosfareContext context)
         {
             message.Trace.Add("handled");
             return default;
@@ -77,7 +77,7 @@ public class ExcludeFromPipelineTests
     [ExcludeFromDiscovery]
     public sealed class QuietHandler : IEventHandler<QuietEvent>
     {
-        public ValueTask HandleAsync(QuietEvent message, IExecutionContext context)
+        public ValueTask HandleAsync(QuietEvent message, ErgosfareContext context)
         {
             message.Trace.Add("handled");
             return default;

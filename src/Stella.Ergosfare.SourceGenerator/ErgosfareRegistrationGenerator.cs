@@ -1,8 +1,7 @@
-using System;
-using System.Collections.Generic;
+﻿
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Text;
-using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -20,20 +19,20 @@ namespace Stella.Ergosfare.SourceGenerator;
 /// </summary>
 /// <remarks>
 ///     <para>
-///     Phase 2: for types with handler contracts, the generator pre-computes the handler
-///     descriptors (message type, result carrier, weight, groups) that the runtime
-///     descriptor builders would otherwise derive reflectively, and registers them through
-///     <c>IMessageRegistry.RegisterDescriptors</c> / the module builders'
-///     <c>RegisterDescriptors</c>. Plain messages and open generic types (whose contract
-///     type arguments cannot appear in <c>typeof</c>) fall back to <c>Register(Type)</c>;
-///     both paths are mutually idempotent in the registry. Against older Ergosfare packages
-///     that lack the descriptor surface, emission degrades to pure <c>Register(Type)</c>
-///     calls.
+///     Registration names constructs and nothing more: messages through
+///     <c>Register(typeof(T))</c>, pipeline participants batched through the module
+///     builders' <c>RegisterParticipants</c>, both recorded as the container's selection
+///     from the frozen composition table this generator also bakes. What each construct's
+///     pipeline looks like is decided here, at compile time, not assembled from
+///     descriptors at run time. Generic definitions are named unbound — one table entry
+///     serves every instantiation, and the dispatch closes participants over the
+///     dispatched message's arguments. Against older Ergosfare packages that lack the
+///     batch surface, emission degrades to per-type <c>Register(Type)</c> calls.
 ///     </para>
 ///     <para>
 ///     Reference scanning: the generator also walks referenced assemblies for marker
-///     types, replacing cross-assembly <c>RegisterFromAssembly</c> calls — a library's
-///     handlers register through the consuming project's generated code. Only assemblies
+///     types — the compile-time replacement for the removed runtime assembly scanning: a
+///     library's handlers register through the consuming project's generated code. Only assemblies
 ///     that themselves reference Ergosfare are inspected (nothing else can implement a
 ///     marker), and Ergosfare's own assemblies are excluded because their handler contract
 ///     interfaces inherit the module markers. Types the generated code cannot name —
@@ -43,7 +42,7 @@ namespace Stella.Ergosfare.SourceGenerator;
 ///     </para>
 /// </remarks>
 [Generator(LanguageNames.CSharp)]
-public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
+public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerator
 {
     private const string CommandMarkerName = "ICommand";
     private const string CommandMarkerNamespace = "Stella.Ergosfare.Commands.Abstractions";
@@ -53,16 +52,40 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     private const string EventMarkerNamespace = "Stella.Ergosfare.Events.Abstractions";
 
     private const string HandlerContractNamespace = "Stella.Ergosfare.Core.Abstractions.Handlers";
+    private const string ExceptionFilterContractName = "IExceptionInterceptorFilter";
     private const string AttributeNamespace = "Stella.Ergosfare.Core.Abstractions.Attributes";
 
-    private const string MessageRegistryMetadataName = "Stella.Ergosfare.Core.Abstractions.Registry.IMessageRegistry";
-    private const string DispatchRootsMetadataName = "Stella.Ergosfare.Core.Abstractions.GeneratedDispatchRoots";
-    private const string DescriptorFactoryMetadataName = "Stella.Ergosfare.Core.Abstractions.Registry.Descriptors.HandlerDescriptors";
+    /// <summary>
+    ///     Mirror of <c>GroupAttribute.DefaultGroupName</c>: the group a participant
+    ///     without <c>[Group]</c> is registered under.
+    /// </summary>
+    private const string DefaultGroupName = "default";
+
+    // The result-adapter binding mirror: the native carriers, their built-in adapters and
+    // the runtime-probed enumerator slot of stream pipelines. The carriers live in the
+    // Core.Abstractions root; only their adapters live in .Results.
+    private const string NativeResultExpression = "global::Stella.Ergosfare.Core.Abstractions.Result";
+    private const string NativeResultAdapterExpression = "global::Stella.Ergosfare.Core.Abstractions.Results.ResultExceptionAdapter";
+    private const string AsyncEnumeratorExpression = "global::System.Collections.Generic.IAsyncEnumerator";
+
+    private const string CompositionCatalogMetadataName = "Stella.Ergosfare.Core.Abstractions.DispatchRoots.FrozenCompositionCatalog";
+    private const string DispatchRootsMetadataName = "Stella.Ergosfare.Core.Abstractions.DispatchRoots.GeneratedDispatchRoots";
     private const string CommandBuilderMetadataName = "Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.CommandModuleBuilder";
     private const string QueryBuilderMetadataName = "Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.QueryModuleBuilder";
     private const string EventBuilderMetadataName = "Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.EventModuleBuilder";
 
     private const string ValueTaskExpression = "global::System.Threading.Tasks.ValueTask";
+
+    /// <summary>
+    ///     The result representation of a pipeline that produces none — what the void
+    ///     plans' interceptor arms match against. <see cref="ValueTaskExpression"/> stays
+    ///     the completion signal (a void handler's return carrier), which is what the
+    ///     handler-descriptor gates below keep checking.
+    /// </summary>
+    private const string UnitExpression = "global::Stella.Ergosfare.Core.Abstractions.Unit";
+    private const string StagedVoidPlanMetadataName = "Stella.Ergosfare.Core.Abstractions.StagedPlans.StagedVoidPlan";
+    private const string ServiceProviderExtensionsMetadataName = "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions";
+    private const string KeyedServiceExtensionsMetadataName = "Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions";
 
     private const string ScanReferencesBuildProperty = "build_property.ErgosfareSourceGeneratorScanReferences";
     private const string ErgosfareAssemblyNamePrefix = "Stella.Ergosfare";
@@ -96,18 +119,30 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             var dispatchRoots = compilation.GetTypeByMetadataName(DispatchRootsMetadataName);
 
             return new ModuleBuilderAvailability(
-                HasMessageRegistry: compilation.GetTypeByMetadataName(MessageRegistryMetadataName) is not null,
+                HasCompositionCatalog: compilation.GetTypeByMetadataName(CompositionCatalogMetadataName) is not null,
                 HasCommandModuleBuilder: commandBuilder is not null,
                 HasQueryModuleBuilder: queryBuilder is not null,
                 HasEventModuleBuilder: eventBuilder is not null,
-                HasDescriptorFactory: compilation.GetTypeByMetadataName(DescriptorFactoryMetadataName) is not null,
-                CommandBuilderHasRegisterDescriptors: HasRegisterDescriptors(commandBuilder),
-                QueryBuilderHasRegisterDescriptors: HasRegisterDescriptors(queryBuilder),
-                EventBuilderHasRegisterDescriptors: HasRegisterDescriptors(eventBuilder),
+                CommandBuilderHasRegisterParticipants: HasRegisterParticipants(commandBuilder),
+                QueryBuilderHasRegisterParticipants: HasRegisterParticipants(queryBuilder),
+                EventBuilderHasRegisterParticipants: HasRegisterParticipants(eventBuilder),
                 HasDispatchRoots: dispatchRoots is not null,
                 DispatchRootsHasVoidPlans: dispatchRoots is not null && !dispatchRoots.GetMembers("AddVoidPlan").IsEmpty,
                 DispatchRootsHasResultPlans: dispatchRoots is not null && !dispatchRoots.GetMembers("AddResultPlan").IsEmpty,
-                DispatchRootsHasPlanFactories: dispatchRoots is not null && HasFactoryOverload(dispatchRoots));
+                DispatchRootsHasPlanFactories: dispatchRoots is not null && HasFactoryOverload(dispatchRoots),
+                DispatchRootsHasProviderPlanFactories: dispatchRoots is not null
+                    && HasProviderFactoryOverload(dispatchRoots)
+                    && compilation.GetTypeByMetadataName(ServiceProviderExtensionsMetadataName) is not null,
+                HasKeyedServiceExtensions: compilation.GetTypeByMetadataName(KeyedServiceExtensionsMetadataName) is not null,
+                DispatchRootsHasStagedPlans: dispatchRoots is not null
+                    && !dispatchRoots.GetMembers("AddStagedPlan").IsEmpty
+                    && compilation.GetTypeByMetadataName(ServiceProviderExtensionsMetadataName) is not null,
+                StagedPlansSupportDirectConstruction:
+                    compilation.GetTypeByMetadataName(StagedVoidPlanMetadataName) is { } stagedVoidPlan
+                    && !stagedVoidPlan.GetMembers("SupportsDirectConstruction").IsEmpty,
+                HasDispatchSiteAttribute: compilation.GetTypeByMetadataName(DispatchSiteAttributeMetadataName) is not null,
+                DispatchRootsHasFrozenCompositions: dispatchRoots is not null
+                    && !dispatchRoots.GetMembers("AddFrozenComposition").IsEmpty);
         });
 
         // Reference scanning is default-on; consumers opt out per project through the
@@ -123,13 +158,81 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 ? ScanReferencedAssemblies(pair.Left, ct)
                 : ImmutableArray<RegistrableTypeModel>.Empty);
 
+        // Dispatch sites of the current compilation: every mediator dispatch invocation
+        // with the static type of its message argument — the manifest emission's payload
+        // and the local half of the reachability judgment.
+        var dispatchSites = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                static (node, _) => IsDispatchInvocationCandidate(node),
+                static (ctx, ct) => TransformDispatchSite(ctx, ct))
+            .Where(static model => model is not null)
+            .Select(static (model, _) => model!.Value)
+            .Collect();
+
+        // Manual registration sites: Register<T>() / Register(typeof(T)) calls — the same
+        // collection path as RegisterGenerated(), per type instead of in bulk — plus the
+        // opaque shapes (RegisterFromAssembly, runtime-computed types) that make coverage
+        // evidence incomplete.
+        var registrationSites = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                static (node, _) => IsRegistrationInvocationCandidate(node),
+                static (ctx, ct) => TransformRegistrationSite(ctx, ct))
+            .Where(static model => model is not null)
+            .Select(static (model, _) => model!.Value)
+            .Collect();
+
+        // The container's default result adapter, when its UseDefaultResultAdapter
+        // callsite is a literal in this compilation — the staged plans then bake the
+        // binding for the slots it serves.
+        var defaultResultAdapterSites = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                static (node, _) => node is InvocationExpressionSyntax
+                {
+                    ArgumentList.Arguments.Count: 1,
+                    Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "UseDefaultResultAdapter" },
+                },
+                static (ctx, ct) => TransformDefaultResultAdapterSite(ctx, ct))
+            .Where(static model => model is not null)
+            .Select(static (model, _) => model!)
+            .Collect();
+
+        // The referenced assemblies' manifests: the closure half of the judgment. Gated on
+        // reference scanning like the type scan — with scanning off, the composition is
+        // deliberately incomplete and no closure-wide judgment is sound.
+        var referencedSites = context.CompilationProvider
+            .Combine(scanReferences)
+            .Select(static (pair, ct) => pair.Right
+                ? ScanReferencedManifests(pair.Left, ct)
+                : DispatchManifestScanResult.Empty);
+
+        var judgmentInputs = context.AnalyzerConfigOptionsProvider
+            .Combine(scanReferences)
+            .Combine(context.CompilationProvider.Select(
+                static (compilation, _) => IsExecutableOutputKind(compilation.Options.OutputKind)))
+            .Select(static (pair, _) => new JudgmentInputs(
+                ReadCompositionRootOverride(pair.Left.Left),
+                ReadTrimUnusedHandlers(pair.Left.Left),
+                pair.Left.Right,
+                pair.Right));
+
         context.RegisterSourceOutput(
-            registrableTypes.Combine(availability).Combine(referencedTypes),
-            static (spc, pair) => Execute(spc, pair.Left.Left, pair.Left.Right, pair.Right));
+            registrableTypes.Combine(availability).Combine(referencedTypes)
+                .Combine(dispatchSites).Combine(registrationSites).Combine(referencedSites).Combine(judgmentInputs)
+                .Combine(defaultResultAdapterSites),
+            static (spc, pair) => Execute(
+                spc,
+                pair.Left.Left.Left.Left.Left.Left.Left,
+                pair.Left.Left.Left.Left.Left.Left.Right,
+                pair.Left.Left.Left.Left.Left.Right,
+                pair.Left.Left.Left.Left.Right,
+                pair.Left.Left.Left.Right,
+                pair.Left.Left.Right,
+                pair.Left.Right,
+                pair.Right));
     }
 
-    private static bool HasRegisterDescriptors(INamedTypeSymbol? builder)
-        => builder is not null && !builder.GetMembers("RegisterDescriptors").IsEmpty;
+    private static bool HasRegisterParticipants(INamedTypeSymbol? builder)
+        => builder is not null && !builder.GetMembers("RegisterParticipants").IsEmpty;
 
     /// <summary>
     ///     Whether the referenced <c>GeneratedDispatchRoots</c> accepts a plan overload
@@ -150,6 +253,28 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     }
 
     /// <summary>
+    ///     Whether the referenced <c>GeneratedDispatchRoots</c> accepts a plan overload
+    ///     with a provider-taking factory parameter
+    ///     (<c>Func&lt;IServiceProvider, THandler&gt;</c>) — the surface the
+    ///     dependency-injected construction emission requires. Recognized by delegate
+    ///     arity: the parameterless factory overload's <c>Func&lt;THandler&gt;</c> has one
+    ///     type argument, the provider-taking one has two.
+    /// </summary>
+    private static bool HasProviderFactoryOverload(INamedTypeSymbol dispatchRoots)
+    {
+        foreach (var member in dispatchRoots.GetMembers("AddVoidPlan"))
+        {
+            if (member is IMethodSymbol { Parameters.Length: 1 } method
+                && method.Parameters[0].Type is INamedTypeSymbol { Arity: 2 })
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     ///     Whether generated code can construct the type with <c>new()</c> and doing so
     ///     is provably interchangeable with resolving its plain transient registration:
     ///     a concrete, non-generic class whose ONLY instance constructor is public and
@@ -160,6 +285,29 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     ///     transient disposables; direct construction would not).
     /// </summary>
     private static bool IsDirectlyConstructible(INamedTypeSymbol symbol)
+    {
+        if (!HasDirectConstructionShape(symbol))
+        {
+            return false;
+        }
+
+        // Exactly one instance constructor, public and parameterless: with any richer
+        // constructor present (records' synthesized copy constructor included), the
+        // container's selection and `new()` can diverge — dropping dependencies the
+        // container would have injected.
+        return symbol.InstanceConstructors.Length == 1
+               && symbol.InstanceConstructors[0] is { Parameters.IsEmpty: true, DeclaredAccessibility: Accessibility.Public };
+    }
+
+    /// <summary>
+    ///     Shared base qualification of both construction factories: a concrete,
+    ///     non-generic class implementing neither <c>IDisposable</c> nor
+    ///     <c>IAsyncDisposable</c> (the container tracks transient disposables in the
+    ///     resolving scope; direct construction would not), with no <c>required</c>
+    ///     members anywhere in the hierarchy (an emitted <c>new</c> fails compilation
+    ///     with CS9035, while the container activation the factory replaces ignores them).
+    /// </summary>
+    private static bool HasDirectConstructionShape(INamedTypeSymbol symbol)
     {
         if (symbol.TypeKind != TypeKind.Class || symbol.IsAbstract || symbol.IsGenericType)
         {
@@ -174,9 +322,6 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             }
         }
 
-        // Required members anywhere in the hierarchy make an emitted `new()` a compile
-        // error (CS9035); the reflection-based container activation the plan replaces
-        // does not enforce them, so such types stay on the container path.
         for (var type = symbol; type is not null; type = type.BaseType)
         {
             foreach (var member in type.GetMembers())
@@ -188,12 +333,250 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             }
         }
 
-        // Exactly one instance constructor, public and parameterless: with any richer
-        // constructor present (records' synthesized copy constructor included), the
-        // container's selection and `new()` can diverge — dropping dependencies the
-        // container would have injected.
-        return symbol.InstanceConstructors.Length == 1
-               && symbol.InstanceConstructors[0] is { Parameters.IsEmpty: true, DeclaredAccessibility: Accessibility.Public };
+        return true;
+    }
+
+    /// <summary>
+    ///     Builds the provider-taking construction factory
+    ///     (<c>static provider =&gt; new THandler(...)</c>) for a handler whose
+    ///     construction is provably identical to container activation, or <c>null</c>
+    ///     when the type does not qualify. The gate mirrors what
+    ///     <c>Microsoft.Extensions.DependencyInjection</c> would do with the type's plain
+    ///     transient registration: the container considers only public constructors, so a
+    ///     type with exactly one public constructor leaves it no choice; every parameter
+    ///     must be a plain service resolution (<c>GetRequiredService</c>) or a
+    ///     <c>[FromKeyedServices]</c> one (<c>GetRequiredKeyedService</c>) from the very
+    ///     provider container activation would resolve from. Anything that makes the
+    ///     container's behavior content-dependent disqualifies: optional/default-valued
+    ///     parameters (the container falls back to the default only when the service is
+    ///     unregistered), multiple public constructors (greedy selection), <c>ref</c>-ish
+    ///     or <c>params</c> parameters, <c>[ServiceKey]</c> injection, non-nameable
+    ///     parameter types, and keys the emission cannot reproduce exactly.
+    /// </summary>
+    private static string? GetProviderConstructionExpression(
+        INamedTypeSymbol symbol,
+        string handlerTypeExpression,
+        IAssemblySymbol? currentAssembly,
+        out bool usesKeyedServices)
+    {
+        var construction = TryBuildConstructionExpression(
+            symbol, handlerTypeExpression, currentAssembly, "provider", allowParameterless: false, out usesKeyedServices);
+
+        return construction is null ? null : "static provider => " + construction;
+    }
+
+    /// <summary>
+    ///     Builds the bare <c>new T(...)</c> expression for a participant whose
+    ///     construction is provably identical to container activation (see
+    ///     <see cref="GetProviderConstructionExpression"/> for the gate), resolving
+    ///     constructor dependencies from the given provider identifier. The staged plans'
+    ///     direct-construction emission consumes it with <c>serviceProvider</c>; the
+    ///     provider factories wrap it in a lambda. Parameterless constructions are only
+    ///     produced when asked for — the plan factories keep those on the cheaper
+    ///     <c>Func&lt;THandler&gt;</c> shape.
+    /// </summary>
+    private static string? TryBuildConstructionExpression(
+        INamedTypeSymbol symbol,
+        string typeExpression,
+        IAssemblySymbol? currentAssembly,
+        string providerIdentifier,
+        bool allowParameterless,
+        out bool usesKeyedServices)
+    {
+        usesKeyedServices = false;
+
+        if (!HasDirectConstructionShape(symbol))
+        {
+            return null;
+        }
+
+        IMethodSymbol? publicConstructor = null;
+
+        foreach (var constructor in symbol.InstanceConstructors)
+        {
+            if (constructor.DeclaredAccessibility != Accessibility.Public)
+            {
+                // Invisible to the container's constructor selection; irrelevant here too.
+                continue;
+            }
+
+            if (publicConstructor is not null)
+            {
+                return null;
+            }
+
+            publicConstructor = constructor;
+        }
+
+        if (publicConstructor is null)
+        {
+            return null;
+        }
+
+        if (publicConstructor.Parameters.IsEmpty)
+        {
+            return allowParameterless ? "new " + typeExpression + "()" : null;
+        }
+
+        var arguments = new List<string>(publicConstructor.Parameters.Length);
+
+        foreach (var parameter in publicConstructor.Parameters)
+        {
+            if (parameter.RefKind != RefKind.None || parameter.IsParams || parameter.IsOptional || parameter.HasExplicitDefaultValue)
+            {
+                return null;
+            }
+
+            string? keyLiteral = null;
+
+            foreach (var attribute in parameter.GetAttributes())
+            {
+                if (attribute.AttributeClass is not { } attributeClass
+                    || !IsDependencyInjectionNamespace(attributeClass.ContainingNamespace))
+                {
+                    continue;
+                }
+
+                switch (attributeClass.Name)
+                {
+                    case "FromKeyedServicesAttribute":
+                        keyLiteral = GetServiceKeyLiteral(attribute, currentAssembly);
+
+                        if (keyLiteral is null)
+                        {
+                            return null;
+                        }
+
+                        break;
+                    case "ServiceKeyAttribute":
+                        return null;
+                }
+            }
+
+            if (parameter.Type is not INamedTypeSymbol parameterType
+                || parameterType.IsRefLikeType
+                || parameterType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T
+                || !IsNameableClosedType(parameterType, currentAssembly))
+            {
+                return null;
+            }
+
+            var parameterTypeExpression = parameterType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            arguments.Add(keyLiteral is null
+                ? "global::" + ServiceProviderExtensionsMetadataName + ".GetRequiredService<" + parameterTypeExpression + ">(" + providerIdentifier + ")"
+                : "global::" + KeyedServiceExtensionsMetadataName + ".GetRequiredKeyedService<" + parameterTypeExpression + ">(" + providerIdentifier + ", " + keyLiteral + ")");
+
+            usesKeyedServices |= keyLiteral is not null;
+        }
+
+        return "new " + typeExpression + "(" + string.Join(", ", arguments) + ")";
+    }
+
+    /// <summary>
+    ///     Whether generated code in the current compilation can name the closed type in
+    ///     a generic argument position: spellable names and public accessibility along the
+    ///     whole containing chain (internal accepted only for the current compilation's
+    ///     own types — referenced-assembly IVT grants are deliberately not modeled here),
+    ///     recursively for every generic type argument.
+    /// </summary>
+    private static bool IsNameableClosedType(INamedTypeSymbol type, IAssemblySymbol? currentAssembly)
+    {
+        if (type.IsUnboundGenericType || !HasSpellableName(type))
+        {
+            return false;
+        }
+
+        for (var current = type; current is not null; current = current.ContainingType)
+        {
+            switch (current.DeclaredAccessibility)
+            {
+                case Accessibility.Public:
+                    break;
+                case Accessibility.Internal:
+                case Accessibility.ProtectedOrInternal:
+                    if (currentAssembly is null
+                        || !SymbolEqualityComparer.Default.Equals(current.ContainingAssembly, currentAssembly))
+                    {
+                        return false;
+                    }
+
+                    break;
+                default:
+                    return false;
+            }
+        }
+
+        foreach (var argument in type.TypeArguments)
+        {
+            if (argument is not INamedTypeSymbol named || !IsNameableClosedType(named, currentAssembly))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsDependencyInjectionNamespace(INamespaceSymbol? ns)
+        => ns is
+        {
+            Name: "DependencyInjection",
+            ContainingNamespace:
+            {
+                Name: "Extensions",
+                ContainingNamespace: { Name: "Microsoft", ContainingNamespace.IsGlobalNamespace: true }
+            }
+        };
+
+    /// <summary>
+    ///     The C# literal reproducing a <c>[FromKeyedServices]</c> key exactly — the
+    ///     container matches keys by boxed equality, so the emitted constant must carry
+    ///     the same runtime type and value as the attribute's. Strings, chars, bools,
+    ///     integral primitives, enums and <c>typeof</c> keys are reproducible; anything
+    ///     else (null, floating-point, arrays) returns <c>null</c> and keeps the handler
+    ///     on the container path.
+    /// </summary>
+    private static string? GetServiceKeyLiteral(AttributeData attribute, IAssemblySymbol? currentAssembly)
+    {
+        if (attribute.ConstructorArguments.Length != 1)
+        {
+            return null;
+        }
+
+        var key = attribute.ConstructorArguments[0];
+
+        switch (key.Kind)
+        {
+            case TypedConstantKind.Primitive:
+                return key.Value switch
+                {
+                    string s => SymbolDisplay.FormatLiteral(s, quote: true),
+                    char c => SymbolDisplay.FormatLiteral(c, quote: true),
+                    bool b => b ? "true" : "false",
+                    int i => i.ToString(CultureInfo.InvariantCulture),
+                    long l => l.ToString(CultureInfo.InvariantCulture) + "L",
+                    sbyte v => "(sbyte)" + v.ToString(CultureInfo.InvariantCulture),
+                    byte v => "(byte)" + v.ToString(CultureInfo.InvariantCulture),
+                    short v => "(short)" + v.ToString(CultureInfo.InvariantCulture),
+                    ushort v => "(ushort)" + v.ToString(CultureInfo.InvariantCulture),
+                    uint v => v.ToString(CultureInfo.InvariantCulture) + "U",
+                    ulong v => v.ToString(CultureInfo.InvariantCulture) + "UL",
+                    _ => null,
+                };
+            case TypedConstantKind.Enum:
+                return key.Type is INamedTypeSymbol enumType && IsNameableClosedType(enumType, currentAssembly)
+                    ? "(" + enumType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ")("
+                      + Convert.ToString(key.Value, CultureInfo.InvariantCulture) + ")"
+                    : null;
+            case TypedConstantKind.Type:
+                return key.Value is INamedTypeSymbol { IsUnboundGenericType: false } keyType
+                       && IsNameableClosedType(keyType, currentAssembly)
+                    ? "typeof(" + keyType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ")"
+                    : null;
+            default:
+                return null;
+        }
     }
 
     /// <summary>
@@ -224,12 +607,108 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
 
         if (IsExcludedFromDiscovery(symbol))
         {
-            return null;
+            // Deliberately outside the closed world — but the reachability judgment must
+            // know the zone exists, so the exclusion flows through as a shadow model
+            // instead of vanishing.
+            return CreateExcludedShadowModel(symbol, isCommand, isQuery, isEvent, referencedAssemblyName: null);
         }
 
         var isAccessible = IsAccessibleFromGeneratedCode(symbol);
         var descriptors = isAccessible ? BuildDescriptors(symbol) : ImmutableArray<DescriptorModel>.Empty;
         var isDispatchable = isAccessible && IsDispatchableMessage(symbol, descriptors);
+        var isMessageShape = isAccessible && IsMessageShape(symbol, descriptors);
+        var typeofExpression = BuildTypeofExpression(symbol);
+        var dispatchResults = isDispatchable ? GetDispatchResults(symbol) : ImmutableArray<DispatchResultModel>.Empty;
+        var hasIgnoredResultAdapter = false;
+        var resultAdapter = isDispatchable
+            ? GetResultAdapterModel(symbol, dispatchResults, isCommand, symbol.ContainingAssembly, out hasIgnoredResultAdapter)
+            : null;
+
+        var usesKeyedServices = false;
+        var providerConstruction = isAccessible
+            ? GetProviderConstructionExpression(symbol, typeofExpression, symbol.ContainingAssembly, out usesKeyedServices)
+            : null;
+
+        // Informational diagnostics apply to pipeline participants declared in source —
+        // the only place the user can act on them.
+        var hasMultipleCtors = !descriptors.IsEmpty && HasMultiplePublicInstanceConstructors(symbol);
+        var hasFromServices = !descriptors.IsEmpty && HasFromServicesOnConstructor(symbol);
+
+        var stagedKeyedServices = false;
+        var stagedConstruction = isAccessible && !descriptors.IsEmpty
+            ? TryBuildConstructionExpression(symbol, typeofExpression, symbol.ContainingAssembly,
+                "serviceProvider", allowParameterless: true, out stagedKeyedServices)
+            : null;
+
+        return new RegistrableTypeModel
+        {
+            TypeofExpression = typeofExpression,
+            DisplayName = symbol.ToDisplayString(),
+            IsCommand = isCommand,
+            IsQuery = isQuery,
+            IsEvent = isEvent,
+            IsAccessible = isAccessible,
+            Location = isAccessible ? null : LocationInfo.From(symbol),
+            Weight = GetWeight(symbol),
+            GroupsExpression = GetGroupsExpression(symbol),
+            GroupNames = GetGroupNames(symbol),
+            Descriptors = descriptors,
+            ReferencedAssemblyName = null,
+            DiscoveryKeys = GetDiscoveryKeys(symbol),
+            IsDispatchableMessage = isDispatchable,
+            IsMessageShape = isMessageShape,
+            DispatchResults = dispatchResults,
+            IsDirectlyConstructible = isAccessible && IsDirectlyConstructible(symbol),
+            ProviderConstructionExpression = providerConstruction,
+            ProviderConstructionUsesKeyedServices = usesKeyedServices,
+            HasPipelineExclusion = HasPipelineExclusionAttribute(symbol),
+            ExcludedInterceptorGroups = GetPipelineExclusionGroups(symbol),
+            IsValueType = symbol.IsValueType,
+            IsNestedType = symbol.ContainingType is not null,
+            AssignableKeys = isMessageShape ? GetAssignableKeys(symbol) : ImmutableArray<string>.Empty,
+            ContractShapes = isAccessible ? BuildContractShapes(symbol) : ImmutableArray<ContractShapeModel>.Empty,
+            StagedConstructionExpression = stagedConstruction,
+            StagedConstructionUsesKeyedServices = stagedKeyedServices,
+            HasMultiplePublicConstructors = hasMultipleCtors,
+            HasFromServicesConstructorParameter = hasFromServices,
+            // Handler-bearing types keep their declaration location too: the
+            // unreachable-handler diagnostics (ERGOSG007/008) anchor there; annotated
+            // messages anchor ERGOSG011/012 and dispatchable ones ERGOSG013 the same way.
+            InfoLocation = hasMultipleCtors || hasFromServices || !descriptors.IsEmpty
+                           || resultAdapter is not null || isDispatchable
+                ? LocationInfo.From(symbol)
+                : null,
+            IsExcludedFromDiscovery = false,
+            ResultAdapter = resultAdapter,
+            HasIgnoredResultAdapter = hasIgnoredResultAdapter,
+            MetadataSortKey = BuildMetadataName(symbol),
+        };
+    }
+
+    /// <summary>
+    ///     The reduced model of an <c>[ExcludeFromDiscovery]</c> type: only what the
+    ///     reachability judgment's exclusion zone needs — the type's assignable chain when
+    ///     it could be a runtime message instance, and its main-handler descriptor
+    ///     messages when it carries handler contracts. Never emitted, never diagnosed.
+    /// </summary>
+    private static RegistrableTypeModel CreateExcludedShadowModel(
+        INamedTypeSymbol symbol,
+        bool isCommand,
+        bool isQuery,
+        bool isEvent,
+        string? referencedAssemblyName)
+    {
+        var descriptors = BuildDescriptors(symbol);
+        var isDispatchable = IsDispatchableMessage(symbol, descriptors);
+
+        // Hidden from discovery, but still part of a pipeline: [ExcludeFromDiscovery]
+        // keeps a type out of bulk registration, it does not stop a handler from being
+        // written for it or someone registering it by hand. The frozen table therefore
+        // describes these types too — as messages and as participants — and the consuming
+        // container's own registrations decide whether the rows run. Emission names the
+        // type, so unlike the judgment's exclusion zone this needs real accessibility.
+        var isAccessible = IsAccessibleFromGeneratedCode(symbol);
+        var isMessageShape = isAccessible && IsMessageShape(symbol, descriptors);
 
         return new RegistrableTypeModel
         {
@@ -239,16 +718,69 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             IsQuery = isQuery,
             IsEvent = isEvent,
             IsAccessible = isAccessible,
-            Location = isAccessible ? null : LocationInfo.From(symbol),
+            Location = null,
             Weight = GetWeight(symbol),
             GroupsExpression = GetGroupsExpression(symbol),
+            GroupNames = GetGroupNames(symbol),
             Descriptors = descriptors,
-            ReferencedAssemblyName = null,
-            DiscoveryKeys = GetDiscoveryKeys(symbol),
+            ReferencedAssemblyName = referencedAssemblyName,
+            DiscoveryKeys = ImmutableArray<string>.Empty,
             IsDispatchableMessage = isDispatchable,
-            DispatchResults = isDispatchable ? GetDispatchResults(symbol) : ImmutableArray<DispatchResultModel>.Empty,
-            IsDirectlyConstructible = isAccessible && IsDirectlyConstructible(symbol),
+            IsMessageShape = isMessageShape,
+            DispatchResults = ImmutableArray<DispatchResultModel>.Empty,
+            IsDirectlyConstructible = false,
+            ProviderConstructionExpression = null,
+            ProviderConstructionUsesKeyedServices = false,
+            HasPipelineExclusion = HasPipelineExclusionAttribute(symbol),
+            ExcludedInterceptorGroups = GetPipelineExclusionGroups(symbol),
+            IsValueType = symbol.IsValueType,
+            IsNestedType = symbol.ContainingType is not null,
+            AssignableKeys = isMessageShape ? GetAssignableKeys(symbol) : ImmutableArray<string>.Empty,
+            ContractShapes = ImmutableArray<ContractShapeModel>.Empty,
+            StagedConstructionExpression = null,
+            StagedConstructionUsesKeyedServices = false,
+            HasMultiplePublicConstructors = false,
+            HasFromServicesConstructorParameter = false,
+            InfoLocation = null,
+            IsExcludedFromDiscovery = true,
+            ResultAdapter = null,
+            HasIgnoredResultAdapter = false,
+            MetadataSortKey = BuildMetadataName(symbol),
         };
+    }
+
+    private static bool HasMultiplePublicInstanceConstructors(INamedTypeSymbol symbol)
+    {
+        var count = 0;
+
+        foreach (var constructor in symbol.InstanceConstructors)
+        {
+            if (constructor.DeclaredAccessibility == Accessibility.Public && ++count > 1)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasFromServicesOnConstructor(INamedTypeSymbol symbol)
+    {
+        foreach (var constructor in symbol.InstanceConstructors)
+        {
+            foreach (var parameter in constructor.Parameters)
+            {
+                foreach (var attribute in parameter.GetAttributes())
+                {
+                    if (attribute.AttributeClass is { Name: "FromServicesAttribute" })
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -257,6 +789,45 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     ///     dispatch roots — abstract types and interfaces never carry a runtime message's
     ///     type, handlers are never dispatched, and open generics cannot be rooted.
     /// </summary>
+    /// <summary>
+    ///     Whether the type is a message shape a composition can be computed for: a
+    ///     construct carrying no handler contracts of its own. Wider than
+    ///     <see cref="IsDispatchableMessage"/> — an abstract base or an interface is never
+    ///     dispatched itself, but it is what the frozen table's ancestor ladder lands on
+    ///     when a message the generator never saw (a proxy, a type hidden from discovery)
+    ///     is dispatched.
+    /// </summary>
+    /// <remarks>
+    ///     A generic message definition is a shape too, and unlike
+    ///     <see cref="IsDispatchableMessage"/> it needs no closed instantiation: the table
+    ///     keys generic messages by their definition and the lookup normalizes a runtime
+    ///     <c>Wrap&lt;int&gt;</c> to <c>Wrap&lt;&gt;</c>, so one entry serves every
+    ///     instantiation. A generic containing type is still refused — see
+    ///     <see cref="BuildDescriptors"/>.
+    /// </remarks>
+    private static bool IsMessageShape(INamedTypeSymbol symbol, ImmutableArray<DescriptorModel> descriptors)
+    {
+        if (descriptors.Length > 0)
+        {
+            return false;
+        }
+
+        if (symbol.TypeKind is not (TypeKind.Class or TypeKind.Struct or TypeKind.Interface))
+        {
+            return false;
+        }
+
+        for (var current = symbol.ContainingType; current is not null; current = current.ContainingType)
+        {
+            if (current.Arity > 0)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private static bool IsDispatchableMessage(INamedTypeSymbol symbol, ImmutableArray<DescriptorModel> descriptors)
     {
         if (symbol.IsAbstract || descriptors.Length > 0)
@@ -310,7 +881,8 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                     continue;
             }
 
-            var model = new DispatchResultModel(VerbatimTypeExpression(iface.TypeArguments[0]), isStream);
+            var model = new DispatchResultModel(
+                VerbatimTypeExpression(iface.TypeArguments[0]), isStream, iface.TypeArguments[0].IsValueType);
 
             results ??= ImmutableArray.CreateBuilder<DispatchResultModel>();
 
@@ -324,6 +896,521 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     }
 
     /// <summary>
+    ///     Projects a dispatchable message's <c>[ResultAdapter]</c> annotation, or
+    ///     <c>null</c> when there is none, and reports whether the message carries
+    ///     <c>[IgnoreResultAdapter]</c>. The runtime binding reads both attributes with
+    ///     inheritance (<c>GetCustomAttribute</c>'s default), so the mirror walks the base
+    ///     chain — the most derived annotation wins; the opt-out wins from any level.
+    /// </summary>
+    private static ResultAdapterModel? GetResultAdapterModel(
+        INamedTypeSymbol symbol,
+        ImmutableArray<DispatchResultModel> dispatchResults,
+        bool isCommand,
+        IAssemblySymbol? currentAssembly,
+        out bool hasIgnore)
+    {
+        INamedTypeSymbol? adapterSymbol = null;
+        var annotationFound = false;
+        hasIgnore = false;
+
+        for (var current = symbol; current is not null; current = current.BaseType)
+        {
+            foreach (var attribute in current.GetAttributes())
+            {
+                if (attribute.AttributeClass is not { } attributeClass || !IsInNamespace(attributeClass, AttributeNamespace))
+                {
+                    continue;
+                }
+
+                switch (attributeClass.Name)
+                {
+                    case "IgnoreResultAdapterAttribute":
+                        hasIgnore = true;
+                        break;
+                    case "ResultAdapterAttribute" when !annotationFound:
+                        annotationFound = true;
+                        adapterSymbol = attribute.ConstructorArguments.Length == 1
+                            ? attribute.ConstructorArguments[0].Value as INamedTypeSymbol
+                            : null;
+                        break;
+                }
+            }
+        }
+
+        if (!annotationFound)
+        {
+            return null;
+        }
+
+        if (adapterSymbol is null || adapterSymbol.TypeKind == TypeKind.Error)
+        {
+            // A typeof the model cannot resolve: nothing can ever bind — ERGOSG011
+            // material carrying no slots at all.
+            return new ResultAdapterModel(
+                TypeofExpression: string.Empty,
+                DisplayName: adapterSymbol?.ToDisplayString() ?? "?",
+                AdapterSlotsKey: string.Empty,
+                MaterializerSlotsKey: string.Empty,
+                IsInstantiable: false,
+                IsBakeable: false,
+                FitsDeclaredSlot: false);
+        }
+
+        var adapterSlotsKey = BuildAdapterSlotsKey(adapterSymbol, "IResultAdapter");
+        var materializerSlotsKey = BuildAdapterSlotsKey(adapterSymbol, "IResultMaterializer");
+
+        var hasPublicParameterlessConstructor = false;
+
+        foreach (var constructor in adapterSymbol.InstanceConstructors)
+        {
+            if (constructor.Parameters.IsEmpty && constructor.DeclaredAccessibility == Accessibility.Public)
+            {
+                hasPublicParameterlessConstructor = true;
+                break;
+            }
+        }
+
+        // What the runtime binding's Activator.CreateInstance requires; bakeability
+        // additionally requires the emitted plan to be able to name the type.
+        var isInstantiable = hasPublicParameterlessConstructor
+            && !adapterSymbol.IsAbstract
+            && !adapterSymbol.IsUnboundGenericType
+            && adapterSymbol.TypeKind is TypeKind.Class or TypeKind.Struct;
+
+        var isBakeable = isInstantiable && IsNameableClosedType(adapterSymbol, currentAssembly);
+
+        // The message's runtime-probed slots: every declared result (a stream probes its
+        // enumerator), plus the Unit lane every command's void dispatch shape carries.
+        var fitsDeclaredSlot = isCommand && ContainsAdapterSlot(adapterSlotsKey, UnitExpression);
+
+        if (!fitsDeclaredSlot)
+        {
+            foreach (var dispatchResult in dispatchResults)
+            {
+                var slot = dispatchResult.IsStream
+                    ? AsyncEnumeratorExpression + "<" + dispatchResult.ResultTypeExpression + ">"
+                    : dispatchResult.ResultTypeExpression;
+
+                if (ContainsAdapterSlot(adapterSlotsKey, slot))
+                {
+                    fitsDeclaredSlot = true;
+                    break;
+                }
+            }
+        }
+
+        return new ResultAdapterModel(
+            TypeofExpression: VerbatimTypeExpression(adapterSymbol),
+            DisplayName: adapterSymbol.ToDisplayString(),
+            AdapterSlotsKey: adapterSlotsKey,
+            MaterializerSlotsKey: materializerSlotsKey,
+            IsInstantiable: isInstantiable,
+            IsBakeable: isBakeable,
+            FitsDeclaredSlot: fitsDeclaredSlot);
+    }
+
+    /// <summary>
+    ///     The result-type expressions of the adapter's implementations of the given
+    ///     Core.Abstractions arity-1 contract, joined with the model's slot separator.
+    /// </summary>
+    private static string BuildAdapterSlotsKey(INamedTypeSymbol adapterSymbol, string contractName)
+    {
+        StringBuilder? slots = null;
+
+        foreach (var iface in adapterSymbol.AllInterfaces)
+        {
+            if (iface.Arity != 1 || iface.Name != contractName || !IsInNamespace(iface, CoreAbstractionsNamespace))
+            {
+                continue;
+            }
+
+            (slots ??= new StringBuilder()).Append(slots.Length == 0 ? string.Empty : "\x1f")
+                .Append(VerbatimTypeExpression(iface.TypeArguments[0]));
+        }
+
+        return slots?.ToString() ?? string.Empty;
+    }
+
+    private static bool ContainsAdapterSlot(string slotsKey, string slot)
+        => ("\x1f" + slotsKey + "\x1f").Contains("\x1f" + slot + "\x1f");
+
+    private const string DependencyInjectionExtensionsNamespace = "Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection";
+
+    /// <summary>
+    ///     Projects one <c>UseDefaultResultAdapter(...)</c> callsite. A literal
+    ///     <c>typeof</c> projects the adapter's served slots (closed) or slot patterns
+    ///     (open definition); anything else — a variable, a conditional, an unresolvable
+    ///     type — projects the opaque marker, which turns baking off compilation-wide.
+    /// </summary>
+    private static DefaultResultAdapterSiteModel? TransformDefaultResultAdapterSite(GeneratorSyntaxContext ctx, CancellationToken ct)
+    {
+        var invocation = (InvocationExpressionSyntax)ctx.Node;
+
+        if (ctx.SemanticModel.GetSymbolInfo(invocation, ct).Symbol is not IMethodSymbol method
+            || method.Name != "UseDefaultResultAdapter"
+            || !IsInNamespace(method.ContainingType, DependencyInjectionExtensionsNamespace))
+        {
+            return null;
+        }
+
+        if (invocation.ArgumentList.Arguments[0].Expression is not TypeOfExpressionSyntax typeOf
+            || ctx.SemanticModel.GetTypeInfo(typeOf.Type, ct).Type is not INamedTypeSymbol adapterSymbol
+            || adapterSymbol.TypeKind == TypeKind.Error)
+        {
+            return DefaultResultAdapterSiteModel.Opaque;
+        }
+
+        // The unbound form (typeof(X<>)) carries no interfaces; project its definition.
+        // Type parameters on a containing type would need a nesting-aware closing — such
+        // definitions stay opaque rather than half-modeled.
+        var definition = adapterSymbol.IsUnboundGenericType ? adapterSymbol.OriginalDefinition : adapterSymbol;
+
+        for (var container = definition.ContainingType; container is not null; container = container.ContainingType)
+        {
+            if (container.Arity > 0)
+            {
+                return DefaultResultAdapterSiteModel.Opaque;
+            }
+        }
+
+        var isOpen = definition.IsGenericType && adapterSymbol.IsUnboundGenericType;
+
+        var hasPublicParameterlessConstructor = false;
+
+        foreach (var constructor in definition.InstanceConstructors)
+        {
+            if (constructor.Parameters.IsEmpty && constructor.DeclaredAccessibility == Accessibility.Public)
+            {
+                hasPublicParameterlessConstructor = true;
+                break;
+            }
+        }
+
+        var isBakeable = hasPublicParameterlessConstructor
+            && !definition.IsAbstract
+            && definition.TypeKind is TypeKind.Class or TypeKind.Struct
+            && HasSpellableName(definition)
+            && IsAccessibleChain(definition, ctx.SemanticModel.Compilation.Assembly)
+            && (isOpen || IsNameableClosedType(adapterSymbol, ctx.SemanticModel.Compilation.Assembly));
+
+        string parameterNamesKey;
+        var baseExpression = VerbatimTypeExpression(definition);
+
+        if (isOpen)
+        {
+            var names = new StringBuilder();
+
+            foreach (var parameter in definition.TypeParameters)
+            {
+                names.Append(names.Length == 0 ? string.Empty : "\x1f").Append(parameter.Name);
+            }
+
+            parameterNamesKey = names.ToString();
+
+            // "global::App.BoxAdapter<T>" → "global::App.BoxAdapter"; the closing per
+            // bound slot re-appends the unified argument list.
+            var angle = baseExpression.IndexOf('<');
+
+            if (angle < 0)
+            {
+                return DefaultResultAdapterSiteModel.Opaque;
+            }
+
+            baseExpression = baseExpression.Substring(0, angle);
+        }
+        else
+        {
+            parameterNamesKey = string.Empty;
+        }
+
+        return new DefaultResultAdapterSiteModel(
+            IsOpaque: false,
+            BaseTypeExpression: baseExpression,
+            IsOpenGeneric: isOpen,
+            Arity: isOpen ? definition.Arity : 0,
+            ParameterNamesKey: parameterNamesKey,
+            AdapterSlotsKey: BuildAdapterSlotsKey(definition, "IResultAdapter"),
+            MaterializerSlotsKey: BuildAdapterSlotsKey(definition, "IResultMaterializer"),
+            IsBakeable: isBakeable);
+    }
+
+    /// <summary>
+    ///     Whether every level of the containing-type chain is nameable from generated
+    ///     code in the current compilation — public, or at-least-internal within it.
+    /// </summary>
+    private static bool IsAccessibleChain(INamedTypeSymbol symbol, IAssemblySymbol currentAssembly)
+    {
+        for (var current = symbol; current is not null; current = current.ContainingType)
+        {
+            switch (current.DeclaredAccessibility)
+            {
+                case Accessibility.Public:
+                    break;
+                case Accessibility.Internal:
+                case Accessibility.ProtectedOrInternal:
+                    if (!SymbolEqualityComparer.Default.Equals(current.ContainingAssembly, currentAssembly))
+                    {
+                        return false;
+                    }
+
+                    break;
+                default:
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    ///     Reduces the compilation's <c>UseDefaultResultAdapter</c> callsites to one
+    ///     modeled view, or <c>null</c> when the mirror must stand down: no site at all,
+    ///     an opaque site, or sites disagreeing on the adapter. Standing down is never
+    ///     wrong — the runtime tier serves the default, the adapter-identity gate keeps
+    ///     unbaked plans off served slots, and no ERGOSG013 judgment runs over facts the
+    ///     mirror cannot see. Baking additionally requires <c>IsBakeable</c>.
+    /// </summary>
+    private static DefaultResultAdapterSiteModel? ReduceDefaultResultAdapter(
+        ImmutableArray<DefaultResultAdapterSiteModel> sites)
+    {
+        DefaultResultAdapterSiteModel? reduced = null;
+
+        foreach (var site in sites)
+        {
+            if (site.IsOpaque)
+            {
+                return null;
+            }
+
+            if (reduced is null)
+            {
+                reduced = site;
+                continue;
+            }
+
+            if (!reduced.Equals(site))
+            {
+                return null;
+            }
+        }
+
+        return reduced;
+    }
+
+    /// <summary>
+    ///     The ERGOSG013 predicate: a result-bearing message none of whose non-stream
+    ///     result slots any adapter tier serves — not native, not the configured default.
+    ///     Void and stream-only messages never qualify: they have no result value to
+    ///     carry a failure in, so throwing is their inherent contract, not a misfit.
+    /// </summary>
+    private static bool HasUnservedResultSlots(
+        RegistrableTypeModel message, DefaultResultAdapterSiteModel defaultAdapter, out string unservedSlotExpression)
+    {
+        unservedSlotExpression = string.Empty;
+        var sawResultSlot = false;
+
+        foreach (var dispatchResult in message.DispatchResults)
+        {
+            if (dispatchResult.IsStream)
+            {
+                continue;
+            }
+
+            sawResultSlot = true;
+            unservedSlotExpression = dispatchResult.ResultTypeExpression;
+
+            if (TryGetNativeAdapterExpression(dispatchResult.ResultTypeExpression, out _)
+                || TryBindDefaultAdapter(defaultAdapter, dispatchResult.ResultTypeExpression, out _, out _))
+            {
+                return false;
+            }
+        }
+
+        return sawResultSlot;
+    }
+
+    /// <summary>
+    ///     Binds the compilation's default adapter to a result slot: a closed adapter by
+    ///     exact slot fit, an open definition by unifying the slot against its declared
+    ///     carrier patterns and closing over the bound arguments — the compile-time
+    ///     mirror of the runtime <c>DefaultResultAdapter</c>'s closing.
+    /// </summary>
+    private static bool TryBindDefaultAdapter(
+        DefaultResultAdapterSiteModel defaultAdapter,
+        string resultTypeExpression,
+        out string? adapterTypeExpression,
+        out bool materializes)
+    {
+        adapterTypeExpression = null;
+        materializes = false;
+
+        if (!defaultAdapter.IsOpenGeneric)
+        {
+            if (!ContainsAdapterSlot(defaultAdapter.AdapterSlotsKey, resultTypeExpression))
+            {
+                return false;
+            }
+
+            adapterTypeExpression = defaultAdapter.BaseTypeExpression;
+            materializes = ContainsAdapterSlot(defaultAdapter.MaterializerSlotsKey, resultTypeExpression);
+            return true;
+        }
+
+        var parameterNames = defaultAdapter.ParameterNamesKey.Split('\x1f');
+
+        foreach (var pattern in SplitSlotsKey(defaultAdapter.AdapterSlotsKey))
+        {
+            var bindings = new string?[defaultAdapter.Arity];
+
+            if (!TryMatchTypePattern(pattern, resultTypeExpression, parameterNames, bindings)
+                || Array.IndexOf(bindings, null) >= 0)
+            {
+                continue;
+            }
+
+            adapterTypeExpression = defaultAdapter.BaseTypeExpression + "<" + string.Join(", ", bindings) + ">";
+
+            foreach (var materializerPattern in SplitSlotsKey(defaultAdapter.MaterializerSlotsKey))
+            {
+                if (RenderTypePattern(materializerPattern, parameterNames, bindings) == resultTypeExpression)
+                {
+                    materializes = true;
+                    break;
+                }
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string[] SplitSlotsKey(string slotsKey)
+        => slotsKey.Length == 0 ? Array.Empty<string>() : slotsKey.Split('\x1f');
+
+    /// <summary>
+    ///     Structurally unifies a carrier pattern (a type expression whose bare
+    ///     identifiers are the definition's type parameters) with a concrete slot
+    ///     expression, binding parameters by position; a parameter met twice must bind
+    ///     identically. Arrays, pointers and tuples are not unified through — their
+    ///     patterns only match textually, mirroring the runtime unifier.
+    /// </summary>
+    private static bool TryMatchTypePattern(string pattern, string concrete, string[] parameterNames, string?[] bindings)
+    {
+        var parameterPosition = Array.IndexOf(parameterNames, pattern);
+
+        if (parameterPosition >= 0)
+        {
+            if (bindings[parameterPosition] is { } bound)
+            {
+                return bound == concrete;
+            }
+
+            bindings[parameterPosition] = concrete;
+            return true;
+        }
+
+        if (!TrySplitGenericExpression(pattern, out var patternName, out var patternArguments))
+        {
+            return pattern == concrete;
+        }
+
+        if (!TrySplitGenericExpression(concrete, out var concreteName, out var concreteArguments)
+            || patternName != concreteName
+            || patternArguments.Count != concreteArguments.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < patternArguments.Count; i++)
+        {
+            if (!TryMatchTypePattern(patternArguments[i], concreteArguments[i], parameterNames, bindings))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>Substitutes bound parameters back into a pattern, reproducing the display format.</summary>
+    private static string RenderTypePattern(string pattern, string[] parameterNames, string?[] bindings)
+    {
+        var parameterPosition = Array.IndexOf(parameterNames, pattern);
+
+        if (parameterPosition >= 0)
+        {
+            return bindings[parameterPosition] ?? pattern;
+        }
+
+        if (!TrySplitGenericExpression(pattern, out var name, out var arguments))
+        {
+            return pattern;
+        }
+
+        var rendered = new StringBuilder(name).Append('<');
+
+        for (var i = 0; i < arguments.Count; i++)
+        {
+            rendered.Append(i == 0 ? string.Empty : ", ").Append(RenderTypePattern(arguments[i], parameterNames, bindings));
+        }
+
+        return rendered.Append('>').ToString();
+    }
+
+    /// <summary>
+    ///     Splits <c>Name&lt;A, B&lt;C&gt;&gt;</c> into the base name and its top-level
+    ///     argument expressions; <c>false</c> for non-generic expressions (including
+    ///     shapes the splitter does not model, such as tuples and arrays of generics —
+    ///     those compare textually).
+    /// </summary>
+    private static bool TrySplitGenericExpression(string expression, out string name, out List<string> arguments)
+    {
+        name = expression;
+        arguments = [];
+
+        var open = expression.IndexOf('<');
+
+        if (open < 0 || expression.Length == 0 || expression[expression.Length - 1] != '>')
+        {
+            return false;
+        }
+
+        name = expression.Substring(0, open);
+
+        var depth = 0;
+        var argumentStart = open + 1;
+
+        for (var i = open; i < expression.Length; i++)
+        {
+            switch (expression[i])
+            {
+                case '<':
+                    depth++;
+                    break;
+                case '>':
+                    depth--;
+
+                    if (depth == 0 && i != expression.Length - 1)
+                    {
+                        // A '>' closing the outer list before the end: not a plain
+                        // Name<...> shape (e.g. "X<T>.Nested") — compare textually.
+                        return false;
+                    }
+
+                    break;
+                case ',' when depth == 1:
+                    arguments.Add(expression.Substring(argumentStart, i - argumentStart).Trim());
+                    argumentStart = i + 1;
+                    break;
+            }
+        }
+
+        arguments.Add(expression.Substring(argumentStart, expression.Length - 1 - argumentStart).Trim());
+        return true;
+    }
+
+    /// <summary>
     ///     Whether the type — or its containing assembly — opts out of discovery via
     ///     <c>[ExcludeFromDiscovery]</c>. Excluded types produce no registration and no
     ///     diagnostics: the exclusion is deliberate, unlike an inaccessible type.
@@ -331,6 +1418,217 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     private static bool IsExcludedFromDiscovery(INamedTypeSymbol symbol)
         => HasExcludeFromDiscovery(symbol.GetAttributes())
            || HasExcludeFromDiscovery(symbol.ContainingAssembly.GetAttributes());
+
+    /// <summary>
+    ///     Whether the type declares <c>[ExcludeFromPipeline]</c>. The attribute shapes the
+    ///     indirect interceptor stages at runtime; staged plans conservatively skip such
+    ///     messages instead of modeling the exclusion.
+    /// </summary>
+    private static bool HasPipelineExclusionAttribute(INamedTypeSymbol symbol)
+    {
+        foreach (var attribute in symbol.GetAttributes())
+        {
+            if (attribute.AttributeClass is { Name: "ExcludeFromPipelineAttribute" } attributeClass
+                && IsInNamespace(attributeClass, AttributeNamespace))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     The group names a type's <c>[ExcludeFromPipeline]</c> names, or empty for the
+    ///     parameterless (blanket) form and for types without the attribute. Mirrors
+    ///     <c>MessageDescriptor</c>, which reads the attribute non-inherited.
+    /// </summary>
+    private static ImmutableArray<string> GetPipelineExclusionGroups(INamedTypeSymbol symbol)
+    {
+        foreach (var attribute in symbol.GetAttributes())
+        {
+            if (attribute.AttributeClass is not { Name: "ExcludeFromPipelineAttribute" } attributeClass
+                || !IsInNamespace(attributeClass, AttributeNamespace)
+                || attribute.ConstructorArguments.Length != 1)
+            {
+                continue;
+            }
+
+            var values = attribute.ConstructorArguments[0].Values;
+
+            if (values.IsDefaultOrEmpty)
+            {
+                return ImmutableArray<string>.Empty;
+            }
+
+            var groups = ImmutableArray.CreateBuilder<string>(values.Length);
+
+            foreach (var value in values)
+            {
+                if (value.Value is string name)
+                {
+                    groups.Add(name);
+                }
+            }
+
+            return groups.ToImmutable();
+        }
+
+        return ImmutableArray<string>.Empty;
+    }
+
+    /// <summary>
+    ///     The normalized type expressions of every base type and implemented interface —
+    ///     the compile-time domain of the runtime's <c>IsAssignableTo</c> checks that admit
+    ///     indirect (covariantly registered) interceptors into a message's pipeline.
+    /// </summary>
+    private static ImmutableArray<string> GetAssignableKeys(INamedTypeSymbol symbol)
+    {
+        var keys = ImmutableArray.CreateBuilder<string>();
+
+        for (var baseType = symbol.BaseType; baseType is not null; baseType = baseType.BaseType)
+        {
+            keys.Add(NormalizedTypeExpression(baseType));
+        }
+
+        foreach (var iface in symbol.AllInterfaces)
+        {
+            keys.Add(NormalizedTypeExpression(iface));
+        }
+
+        return keys.ToImmutable();
+    }
+
+    /// <summary>
+    ///     Collects the raw interceptor contracts the type implements — the undeduped
+    ///     counterpart of <see cref="BuildDescriptors"/>'s interceptor walk, keeping the
+    ///     async/sync and result-typed facts the staged-plan arm selection needs.
+    /// </summary>
+    private static ImmutableArray<ContractShapeModel> BuildContractShapes(INamedTypeSymbol symbol)
+    {
+        for (var current = symbol; current is not null; current = current.ContainingType)
+        {
+            if (current.Arity > 0)
+            {
+                return ImmutableArray<ContractShapeModel>.Empty;
+            }
+        }
+
+        ImmutableArray<ContractShapeModel>.Builder? shapes = null;
+
+        ReadExceptionFilter(symbol, out var exceptionFilterExpression, out var undecidableExceptionFilter);
+
+        foreach (var iface in symbol.AllInterfaces)
+        {
+            if (iface.Arity is not (1 or 2) || !IsInNamespace(iface, HandlerContractNamespace))
+            {
+                continue;
+            }
+
+            var arguments = iface.TypeArguments;
+
+            ContractShapeModel? shape = iface.Name switch
+            {
+                "IPreInterceptor" when iface.Arity == 1 => new ContractShapeModel(
+                    DescriptorKind.PreInterceptor, IsAsync: false, IsResultTyped: false,
+                    NormalizedTypeExpression(arguments[0]), null),
+                "IAsyncPreInterceptor" when iface.Arity == 1 => new ContractShapeModel(
+                    DescriptorKind.PreInterceptor, IsAsync: true, IsResultTyped: false,
+                    NormalizedTypeExpression(arguments[0]), null),
+                "IPostInterceptor" when iface.Arity == 2 => new ContractShapeModel(
+                    DescriptorKind.PostInterceptor, IsAsync: false, IsResultTyped: true,
+                    NormalizedTypeExpression(arguments[0]), VerbatimTypeExpression(arguments[1])),
+                "IAsyncPostInterceptor" when iface.Arity == 2 => new ContractShapeModel(
+                    DescriptorKind.PostInterceptor, IsAsync: true, IsResultTyped: true,
+                    NormalizedTypeExpression(arguments[0]), VerbatimTypeExpression(arguments[1])),
+                "IAsyncPostInterceptor" when iface.Arity == 1 => new ContractShapeModel(
+                    DescriptorKind.PostInterceptor, IsAsync: true, IsResultTyped: false,
+                    NormalizedTypeExpression(arguments[0]), null),
+                "IExceptionInterceptor" when iface.Arity == 2 => new ContractShapeModel(
+                    DescriptorKind.ExceptionInterceptor, IsAsync: false, IsResultTyped: true,
+                    NormalizedTypeExpression(arguments[0]), VerbatimTypeExpression(arguments[1]),
+                    exceptionFilterExpression, undecidableExceptionFilter),
+                "IAsyncExceptionInterceptor" when iface.Arity == 2 => new ContractShapeModel(
+                    DescriptorKind.ExceptionInterceptor, IsAsync: true, IsResultTyped: true,
+                    NormalizedTypeExpression(arguments[0]), VerbatimTypeExpression(arguments[1]),
+                    exceptionFilterExpression, undecidableExceptionFilter),
+                "IAsyncExceptionInterceptor" when iface.Arity == 1 => new ContractShapeModel(
+                    DescriptorKind.ExceptionInterceptor, IsAsync: true, IsResultTyped: false,
+                    NormalizedTypeExpression(arguments[0]), null,
+                    exceptionFilterExpression, undecidableExceptionFilter),
+                "IFinalInterceptor" when iface.Arity == 2 => new ContractShapeModel(
+                    DescriptorKind.FinalInterceptor, IsAsync: false, IsResultTyped: true,
+                    NormalizedTypeExpression(arguments[0]), VerbatimTypeExpression(arguments[1])),
+                "IAsyncFinalInterceptor" when iface.Arity == 2 => new ContractShapeModel(
+                    DescriptorKind.FinalInterceptor, IsAsync: true, IsResultTyped: true,
+                    NormalizedTypeExpression(arguments[0]), VerbatimTypeExpression(arguments[1])),
+                "IAsyncFinalInterceptor" when iface.Arity == 1 => new ContractShapeModel(
+                    DescriptorKind.FinalInterceptor, IsAsync: true, IsResultTyped: false,
+                    NormalizedTypeExpression(arguments[0]), null),
+                _ => null,
+            };
+
+            if (shape is { } value)
+            {
+                (shapes ??= ImmutableArray.CreateBuilder<ContractShapeModel>()).Add(value);
+            }
+        }
+
+        return shapes?.ToImmutable() ?? ImmutableArray<ContractShapeModel>.Empty;
+    }
+
+    /// <summary>
+    ///     Reads the exception type an interceptor accepts off its
+    ///     <c>IExceptionInterceptorFilter&lt;TException&gt;</c>, so the staged plan can
+    ///     bake the runtime stage's filter probe in as an <c>is</c> test.
+    /// </summary>
+    /// <remarks>
+    ///     Only the single-generic-filter shape is decidable. A type carrying the
+    ///     non-generic filter without exactly one generic one has written its own
+    ///     <c>Matches</c> (or has several to disambiguate by hand), and no compile-time test
+    ///     reproduces it — the plan is disqualified instead of guessing, and the dispatch
+    ///     asks the instance through the runtime stage.
+    /// </remarks>
+    private static void ReadExceptionFilter(INamedTypeSymbol symbol, out string? filterExpression, out bool undecidable)
+    {
+        filterExpression = null;
+        undecidable = false;
+
+        var carriesFilter = false;
+        var genericFilterCount = 0;
+
+        foreach (var iface in symbol.AllInterfaces)
+        {
+            if (iface.Name != ExceptionFilterContractName || !IsInNamespace(iface, HandlerContractNamespace))
+            {
+                continue;
+            }
+
+            if (iface.Arity == 0)
+            {
+                carriesFilter = true;
+                continue;
+            }
+
+            if (iface.Arity == 1)
+            {
+                genericFilterCount++;
+                filterExpression = VerbatimTypeExpression(iface.TypeArguments[0]);
+            }
+        }
+
+        if (!carriesFilter)
+        {
+            filterExpression = null;
+            return;
+        }
+
+        if (genericFilterCount != 1)
+        {
+            filterExpression = null;
+            undecidable = true;
+        }
+    }
 
     private static bool HasExcludeFromDiscovery(ImmutableArray<AttributeData> attributes)
     {
@@ -427,8 +1725,8 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    ///     Discovers registrable marker types in the compilation's referenced assemblies,
-    ///     replacing cross-assembly <c>RegisterFromAssembly</c> calls. Only assemblies that
+    ///     Discovers registrable marker types in the compilation's referenced assemblies —
+    ///     the compile-time replacement for runtime scanning. Only assemblies that
     ///     themselves reference an Ergosfare assembly can contain marker types, so
     ///     everything else is skipped on a metadata-name check without realizing any of its
     ///     types; Ergosfare's own assemblies are excluded because their handler contract
@@ -459,15 +1757,13 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 continue;
             }
 
-            // A library can opt out of discovery wholesale.
-            if (HasExcludeFromDiscovery(assembly.GetAttributes()))
-            {
-                continue;
-            }
+            // A library that opted out of discovery wholesale still shapes the judgment's
+            // exclusion zone: its marker types flow through as shadow models only.
+            var assemblyExcluded = HasExcludeFromDiscovery(assembly.GetAttributes());
 
             var givesAccess = assembly.GivesAccessTo(compilation.Assembly);
 
-            CollectNamespaceTypes(assembly.GlobalNamespace, assembly.Name, givesAccess, ref results, ct);
+            CollectNamespaceTypes(assembly.GlobalNamespace, assembly.Name, givesAccess, assemblyExcluded, ref results, ct);
         }
 
         return results?.ToImmutable() ?? ImmutableArray<RegistrableTypeModel>.Empty;
@@ -533,6 +1829,7 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         INamespaceSymbol ns,
         string assemblyName,
         bool givesAccess,
+        bool assemblyExcluded,
         ref ImmutableArray<RegistrableTypeModel>.Builder? results,
         CancellationToken ct)
     {
@@ -542,11 +1839,11 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         {
             if (member is INamespaceSymbol nestedNamespace)
             {
-                CollectNamespaceTypes(nestedNamespace, assemblyName, givesAccess, ref results, ct);
+                CollectNamespaceTypes(nestedNamespace, assemblyName, givesAccess, assemblyExcluded, ref results, ct);
             }
             else if (member is INamedTypeSymbol type)
             {
-                CollectTypeAndNested(type, assemblyName, givesAccess, ref results);
+                CollectTypeAndNested(type, assemblyName, givesAccess, assemblyExcluded, ref results);
             }
         }
     }
@@ -555,16 +1852,17 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         INamedTypeSymbol type,
         string assemblyName,
         bool givesAccess,
+        bool assemblyExcluded,
         ref ImmutableArray<RegistrableTypeModel>.Builder? results)
     {
-        if (TryCreateReferencedModel(type, assemblyName, givesAccess) is { } model)
+        if (TryCreateReferencedModel(type, assemblyName, givesAccess, assemblyExcluded) is { } model)
         {
             (results ??= ImmutableArray.CreateBuilder<RegistrableTypeModel>()).Add(model);
         }
 
         foreach (var nested in type.GetTypeMembers())
         {
-            CollectTypeAndNested(nested, assemblyName, givesAccess, ref results);
+            CollectTypeAndNested(nested, assemblyName, givesAccess, assemblyExcluded, ref results);
         }
     }
 
@@ -580,7 +1878,8 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     private static RegistrableTypeModel? TryCreateReferencedModel(
         INamedTypeSymbol symbol,
         string assemblyName,
-        bool givesAccess)
+        bool givesAccess,
+        bool assemblyExcluded)
     {
         if (symbol.IsStatic || symbol.IsImplicitlyDeclared)
         {
@@ -594,18 +1893,43 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             return null;
         }
 
-        if (IsExcludedFromDiscovery(symbol))
+        if (assemblyExcluded || IsExcludedFromDiscovery(symbol))
         {
-            return null;
+            // Same shadow posture as source-declared exclusions; see Transform.
+            return CreateExcludedShadowModel(symbol, isCommand, isQuery, isEvent, assemblyName);
         }
 
         var isAccessible = IsVisibleToCompilation(symbol, givesAccess) && HasSpellableName(symbol);
         var descriptors = isAccessible ? BuildDescriptors(symbol) : ImmutableArray<DescriptorModel>.Empty;
         var isDispatchable = isAccessible && IsDispatchableMessage(symbol, descriptors);
+        var isMessageShape = isAccessible && IsMessageShape(symbol, descriptors);
+        var typeofExpression = BuildTypeofExpression(symbol);
+        var dispatchResults = isDispatchable ? GetDispatchResults(symbol) : ImmutableArray<DispatchResultModel>.Empty;
+
+        // Referenced adapters get no current-assembly grant either: baking qualifies only
+        // over fully public adapter types. ERGOSG011/012 never fire here (the annotations
+        // were judged where the message was compiled); the model only feeds the plan binding.
+        var referencedHasIgnore = false;
+        var resultAdapter = isDispatchable
+            ? GetResultAdapterModel(symbol, dispatchResults, isCommand, currentAssembly: null, out referencedHasIgnore)
+            : null;
+
+        // Referenced handlers get no current-assembly grant: their construction factory
+        // qualifies only over fully public parameter types (IVT grants are not modeled).
+        var usesKeyedServices = false;
+        var providerConstruction = isAccessible
+            ? GetProviderConstructionExpression(symbol, typeofExpression, currentAssembly: null, out usesKeyedServices)
+            : null;
+
+        var referencedStagedKeyedServices = false;
+        var referencedStagedConstruction = isAccessible && !descriptors.IsEmpty
+            ? TryBuildConstructionExpression(symbol, typeofExpression, currentAssembly: null,
+                "serviceProvider", allowParameterless: true, out referencedStagedKeyedServices)
+            : null;
 
         return new RegistrableTypeModel
         {
-            TypeofExpression = BuildTypeofExpression(symbol),
+            TypeofExpression = typeofExpression,
             DisplayName = symbol.ToDisplayString(),
             IsCommand = isCommand,
             IsQuery = isQuery,
@@ -614,12 +1938,31 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             Location = null,
             Weight = GetWeight(symbol),
             GroupsExpression = GetGroupsExpression(symbol),
+            GroupNames = GetGroupNames(symbol),
             Descriptors = descriptors,
             ReferencedAssemblyName = assemblyName,
             DiscoveryKeys = GetDiscoveryKeys(symbol),
             IsDispatchableMessage = isDispatchable,
-            DispatchResults = isDispatchable ? GetDispatchResults(symbol) : ImmutableArray<DispatchResultModel>.Empty,
+            IsMessageShape = isMessageShape,
+            DispatchResults = dispatchResults,
             IsDirectlyConstructible = isAccessible && IsDirectlyConstructible(symbol),
+            ProviderConstructionExpression = providerConstruction,
+            ProviderConstructionUsesKeyedServices = usesKeyedServices,
+            HasPipelineExclusion = HasPipelineExclusionAttribute(symbol),
+            ExcludedInterceptorGroups = GetPipelineExclusionGroups(symbol),
+            IsValueType = symbol.IsValueType,
+            IsNestedType = symbol.ContainingType is not null,
+            AssignableKeys = isMessageShape ? GetAssignableKeys(symbol) : ImmutableArray<string>.Empty,
+            ContractShapes = isAccessible ? BuildContractShapes(symbol) : ImmutableArray<ContractShapeModel>.Empty,
+            StagedConstructionExpression = referencedStagedConstruction,
+            StagedConstructionUsesKeyedServices = referencedStagedKeyedServices,
+            HasMultiplePublicConstructors = false,
+            HasFromServicesConstructorParameter = false,
+            InfoLocation = null,
+            IsExcludedFromDiscovery = false,
+            ResultAdapter = resultAdapter,
+            HasIgnoredResultAdapter = referencedHasIgnore,
+            MetadataSortKey = BuildMetadataName(symbol),
         };
     }
 
@@ -675,17 +2018,35 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         SourceProductionContext context,
         ImmutableArray<RegistrableTypeModel> sourceModels,
         ModuleBuilderAvailability availability,
-        ImmutableArray<RegistrableTypeModel> referencedModels)
+        ImmutableArray<RegistrableTypeModel> referencedModels,
+        ImmutableArray<DispatchSiteModel> dispatchSites,
+        ImmutableArray<RegistrationSiteModel> registrationSites,
+        DispatchManifestScanResult referencedSites,
+        JudgmentInputs judgmentInputs,
+        ImmutableArray<DefaultResultAdapterSiteModel> defaultResultAdapterSites)
     {
         var seen = new HashSet<string>();
         var types = new List<RegistrableTypeModel>();
+        var excludedShadows = new List<RegistrableTypeModel>();
+        var defaultResultAdapter = ReduceDefaultResultAdapter(defaultResultAdapterSites);
 
         // Source-declared types first: on a (pathological) full-name collision with a
         // referenced type, typeof in the generated file binds to the source declaration.
-        AddModels(context, sourceModels, seen, types);
-        AddModels(context, referencedModels, seen, types);
+        AddModels(context, sourceModels, seen, types, excludedShadows, defaultResultAdapter);
+        AddModels(context, referencedModels, seen, types, excludedShadows, defaultResultAdapter);
 
-        if (types.Count == 0)
+        // Reachability verdicts and the opt-in handler trim; the returned list is what
+        // emission proceeds with.
+        types = ApplyDispatchJudgment(
+            context, types, excludedShadows, dispatchSites, registrationSites, referencedSites, judgmentInputs);
+
+        // The manifest must be emitted even from a compilation that declares no
+        // registrable type at all — a callsite-only library's sites would otherwise be
+        // invisible to the composition root, and a siteless assembly's marker is exactly
+        // what distinguishes "dispatches nothing" from "unknown".
+        var emitManifest = availability.HasDispatchSiteAttribute;
+
+        if (types.Count == 0 && !emitManifest)
         {
             return;
         }
@@ -701,8 +2062,686 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             ? ComputeResultPlans(types)
             : (IReadOnlyList<ResultPlanModel>)Array.Empty<ResultPlanModel>();
 
-        var source = RegistrationEmitter.Emit(types, availability, voidPlans, resultPlans, GeneratorVersion);
+        var stagedPlans = availability.DispatchRootsHasStagedPlans
+            ? ComputeStagedPlans(types, availability.HasKeyedServiceExtensions,
+                defaultResultAdapter is { IsBakeable: true } ? defaultResultAdapter : null)
+            : (IReadOnlyList<StagedPlanModel>)Array.Empty<StagedPlanModel>();
+
+        var frozenCompositions = availability.DispatchRootsHasFrozenCompositions
+            ? ComputeFrozenCompositions(types, excludedShadows)
+            : (IReadOnlyList<FrozenCompositionModel>)Array.Empty<FrozenCompositionModel>();
+
+        var source = RegistrationEmitter.Emit(types, availability, voidPlans, resultPlans, stagedPlans,
+            frozenCompositions,
+            emitManifest ? dispatchSites : ImmutableArray<DispatchSiteModel>.Empty,
+            emitManifest ? registrationSites : ImmutableArray<RegistrationSiteModel>.Empty,
+            emitManifest, GeneratorVersion);
         context.AddSource("ErgosfareRegistrations.g.cs", SourceText.From(source, Encoding.UTF8));
+    }
+
+    /// <summary>
+    ///     Computes the frozen pipeline compositions: for every dispatchable message, the
+    ///     full six-stage participant table in the runtime shape-builder's exact execution
+    ///     order — direct/indirect split at the seam the runtime descriptor split uses
+    ///     (declared message equality vs assignability), each segment sorted
+    ///     weight-descending then ordinal CLR <c>FullName</c>, group labels baked per row.
+    ///     The table is the dispatch authority, so it carries what the registry used to.
+    ///     Keyed participants get rows like any other — which of them an application runs
+    ///     is settled by what it registered, and the consuming catalog narrows the table
+    ///     to exactly that. A message's <c>[ExcludeFromPipeline]</c> is resolved here:
+    ///     the blanket form drops every covariantly matched interceptor, the group-scoped
+    ///     form drops the covariant interceptors carrying an excluded group, and neither
+    ///     touches directly registered interceptors or main handlers.
+    /// </summary>
+    /// <remarks>
+    ///     A participant generated code cannot name (inaccessible) contributes no row:
+    ///     no registration surface can reference it either, so its absence from the table
+    ///     is the same absence the container already sees. An exact comparator tie —
+    ///     equal weight and equal metadata name, i.e. the same type reached twice — is
+    ///     broken by discovery order, which is deterministic and, the participants being
+    ///     identical, unobservable.
+    /// </remarks>
+    private static List<FrozenCompositionModel> ComputeFrozenCompositions(
+        List<RegistrableTypeModel> types, List<RegistrableTypeModel> excludedShadows)
+    {
+        var compositions = new List<FrozenCompositionModel>();
+        var rows = new List<(uint Weight, string SortKey, FrozenParticipantModel Row)>?[10];
+
+        // Messages hidden from discovery still get entries: [ExcludeFromDiscovery] keeps a
+        // type out of bulk registration, it does not stop a handler from being written for
+        // it — and without an entry such a message (and every subtype resolving through it)
+        // would have no pipeline at all. Participants are widened the same way: a hidden
+        // interceptor is registered by hand, and the consuming catalog admits its row only
+        // for the container that did register it.
+        foreach (var message in Enumerate(types, excludedShadows))
+        {
+            if (!message.IsMessageShape)
+            {
+                continue;
+            }
+
+            var messageKey = DefinitionKey(message.TypeofExpression);
+            Array.Clear(rows, 0, rows.Length);
+
+            foreach (var candidate in Enumerate(types, excludedShadows))
+            {
+                if (candidate.Descriptors.IsEmpty || !candidate.IsAccessible)
+                {
+                    continue;
+                }
+
+                foreach (var descriptor in candidate.Descriptors)
+                {
+                    var declaredKey = DefinitionKey(descriptor.MessageTypeExpression);
+                    var direct = declaredKey == messageKey;
+
+                    if (!direct && !ContainsAssignableKey(message, declaredKey))
+                    {
+                        continue;
+                    }
+
+                    if (!direct
+                        && descriptor.Kind != DescriptorKind.MainHandler
+                        && IsExcludedFromPipeline(message, candidate))
+                    {
+                        continue;
+                    }
+
+                    var segment = (int)descriptor.Kind * 2 + (direct ? 0 : 1);
+                    (rows[segment] ??= []).Add((
+                        candidate.Weight,
+                        candidate.MetadataSortKey,
+                        new FrozenParticipantModel(
+                            candidate.TypeofExpression, candidate.GroupsExpression)));
+                }
+            }
+
+            var segments = new ImmutableArray<FrozenParticipantModel>[10];
+            var isEmpty = true;
+
+            for (var i = 0; i < rows.Length; i++)
+            {
+                if (rows[i] is not { Count: > 0 } segmentRows)
+                {
+                    segments[i] = ImmutableArray<FrozenParticipantModel>.Empty;
+                    continue;
+                }
+
+                isEmpty = false;
+                segmentRows.Sort(static (x, y) =>
+                {
+                    var byWeight = y.Weight.CompareTo(x.Weight);
+                    return byWeight != 0 ? byWeight : string.CompareOrdinal(x.SortKey, y.SortKey);
+                });
+
+                var builder = ImmutableArray.CreateBuilder<FrozenParticipantModel>(segmentRows.Count);
+
+                foreach (var row in segmentRows)
+                {
+                    builder.Add(row.Row);
+                }
+
+                segments[i] = builder.MoveToImmutable();
+            }
+
+            if (isEmpty)
+            {
+                continue;
+            }
+
+            compositions.Add(new FrozenCompositionModel(
+                message.TypeofExpression,
+                segments[0], segments[1], segments[2], segments[3], segments[4],
+                segments[5], segments[6], segments[7], segments[8], segments[9]));
+        }
+
+        return compositions;
+    }
+
+    /// <summary>Both model lists in order, without materializing a combined one.</summary>
+    private static IEnumerable<RegistrableTypeModel> Enumerate(
+        List<RegistrableTypeModel> types, List<RegistrableTypeModel> excludedShadows)
+    {
+        foreach (var type in types)
+        {
+            yield return type;
+        }
+
+        foreach (var shadow in excludedShadows)
+        {
+            yield return shadow;
+        }
+    }
+
+    /// <summary>
+    ///     Whether the message's <c>[ExcludeFromPipeline]</c> keeps a covariantly matched
+    ///     interceptor out of its pipeline: the parameterless form excludes every one, the
+    ///     group-scoped form only those carrying a named group. Mirrors the runtime
+    ///     shape-builder's <c>PrepareIndirect</c>, including its treatment of an
+    ///     interceptor without <c>[Group]</c> as carrying the default group alone.
+    /// </summary>
+    private static bool IsExcludedFromPipeline(RegistrableTypeModel message, RegistrableTypeModel interceptor)
+    {
+        if (!message.HasPipelineExclusion)
+        {
+            return false;
+        }
+
+        if (message.ExcludedInterceptorGroups.IsEmpty)
+        {
+            return true;
+        }
+
+        foreach (var excluded in message.ExcludedInterceptorGroups)
+        {
+            if (interceptor.GroupNames.IsEmpty)
+            {
+                if (excluded == DefaultGroupName)
+                {
+                    return true;
+                }
+
+                continue;
+            }
+
+            foreach (var group in interceptor.GroupNames)
+            {
+                if (string.Equals(group, excluded, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ContainsAssignableKey(RegistrableTypeModel message, string declaredKey)
+    {
+        foreach (var assignableKey in message.AssignableKeys)
+        {
+            if (DefinitionKey(assignableKey) == declaredKey)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Computes the staged pipeline plans: a dispatchable command (void) or
+    ///     command/query (single closed result) qualifies when its sole discovered handler
+    ///     is the matching async contract AND at least one discovered interceptor
+    ///     participates in its pipeline AND every part of that pipeline could be modeled
+    ///     exactly — the composition (membership and order) replicates the runtime
+    ///     shape-builder, and every call's pattern-match arm is decidable at compile time.
+    ///     Anything unmodelable disqualifies the message rather than risking divergence;
+    ///     the runtime gate then simply never sees a staged plan for it. The plan stays
+    ///     advisory regardless: the hosting executor validates it against the container's
+    ///     selected frozen composition.
+    /// </summary>
+    private static List<StagedPlanModel> ComputeStagedPlans(
+        List<RegistrableTypeModel> types,
+        bool hasKeyedServiceExtensions,
+        DefaultResultAdapterSiteModel? defaultResultAdapter)
+    {
+        CollectPipelineFacts(types, out var handlerCounts, out var soleHandlers, out _);
+
+        var plans = new List<StagedPlanModel>();
+
+        foreach (var type in types)
+        {
+            if (!type.IsDispatchableMessage || type.HasPipelineExclusion)
+            {
+                continue;
+            }
+
+            string? resultTypeExpression = null;
+            var resultIsValueType = false;
+
+            if (type.IsCommand && type.DispatchResults.Length == 0)
+            {
+                // Void pipeline.
+            }
+            else if ((type.IsCommand || type.IsQuery)
+                     && type.DispatchResults.Length == 1
+                     && !type.DispatchResults[0].IsStream)
+            {
+                resultTypeExpression = type.DispatchResults[0].ResultTypeExpression;
+                resultIsValueType = type.DispatchResults[0].ResultIsValueType;
+            }
+            else
+            {
+                continue;
+            }
+
+            // The sole handler gate mirrors the single-handler plans, minus the
+            // interceptor suppression (interceptors are the whole point here).
+            if (!handlerCounts.TryGetValue(type.TypeofExpression, out var count) || count != 1)
+            {
+                continue;
+            }
+
+            if (HasCovariantMainHandler(type, handlerCounts))
+            {
+                continue;
+            }
+
+            var (handler, handlerDescriptor) = soleHandlers[type.TypeofExpression];
+
+            if (!handler.IsAccessible || !handler.DiscoveryKeys.IsEmpty || handler.GroupsExpression is not null)
+            {
+                continue;
+            }
+
+            var expectedHandlerResult = resultTypeExpression is null
+                ? ValueTaskExpression
+                : ValueTaskExpression + "<" + resultTypeExpression + ">";
+
+            if (handlerDescriptor.ResultTypeExpression != expectedHandlerResult
+                || handlerDescriptor.MessageTypeExpression != type.TypeofExpression)
+            {
+                continue;
+            }
+
+            if (!TryAssembleStagedStages(type, types, resultTypeExpression, resultIsValueType, hasKeyedServiceExtensions,
+                    out var pre, out var post, out var exceptionCalls, out var finalCalls))
+            {
+                continue;
+            }
+
+            if (pre.Length + post.Length + exceptionCalls.Length + finalCalls.Length == 0)
+            {
+                // No interceptors: the single-handler plans already cover this shape.
+                continue;
+            }
+
+            // The runtime binding's compile-time mirror: the opt-out suppresses every
+            // tier; else the annotation when it fits the slot exactly, else the native
+            // carriers, else the compilation's discovered default adapter, else nothing.
+            // A fitting annotation the plan cannot bake (inaccessible or uninstantiable
+            // adapter) disqualifies the plan — the runtime mirror serves the pipeline
+            // instead. A default the discovery could not model (opaque callsite,
+            // disagreeing sites, unbakeable type) bakes nothing: a slot it binds at
+            // runtime then fails the hosting executor's adapter-identity gate and stays
+            // on the strategy.
+            var adapterKind = StagedResultAdapterKind.None;
+            string? adapterTypeExpression = null;
+            var adapterMaterializes = false;
+
+            if (type.HasIgnoredResultAdapter)
+            {
+                // Classic emission; the runtime binding resolves to null for every tier.
+            }
+            else if (resultTypeExpression is not null)
+            {
+                if (type.ResultAdapter is { } annotation && annotation.Fits(resultTypeExpression))
+                {
+                    if (!annotation.IsBakeable)
+                    {
+                        continue;
+                    }
+
+                    adapterKind = StagedResultAdapterKind.Custom;
+                    adapterTypeExpression = annotation.TypeofExpression;
+                    adapterMaterializes = annotation.Materializes(resultTypeExpression);
+                }
+                else if (TryGetNativeAdapterExpression(resultTypeExpression, out adapterTypeExpression))
+                {
+                    adapterKind = StagedResultAdapterKind.Native;
+                    adapterMaterializes = true;
+                }
+                else if (defaultResultAdapter is not null
+                         && TryBindDefaultAdapter(defaultResultAdapter, resultTypeExpression,
+                             out adapterTypeExpression, out adapterMaterializes))
+                {
+                    adapterKind = StagedResultAdapterKind.Custom;
+                }
+            }
+            else if (type.ResultAdapter is { } voidAnnotation && voidAnnotation.Fits(UnitExpression))
+            {
+                // A Unit-fitting annotation binds the void lane at runtime; void plans do
+                // not model adapters, so the plan is disqualified rather than diverging.
+                continue;
+            }
+            else if (!type.HasIgnoredResultAdapter
+                     && defaultResultAdapter is not null
+                     && TryBindDefaultAdapter(defaultResultAdapter, UnitExpression, out _, out _))
+            {
+                // A Unit-serving default binds every void lane at runtime; same posture.
+                continue;
+            }
+
+            plans.Add(new StagedPlanModel(
+                type.TypeofExpression,
+                resultTypeExpression,
+                resultIsValueType,
+                handler.TypeofExpression,
+                GatedConstructionExpression(handler, hasKeyedServiceExtensions),
+                pre, post, exceptionCalls, finalCalls,
+                adapterKind, adapterTypeExpression, adapterMaterializes));
+        }
+
+        return plans;
+    }
+
+    /// <summary>
+    ///     The built-in adapter expression of a native carrier result slot —
+    ///     <c>ResultExceptionAdapter</c> for <c>Result</c>, its closed generic twin for
+    ///     <c>Result&lt;T&gt;</c> — or <c>false</c> for every other result type.
+    /// </summary>
+    private static bool TryGetNativeAdapterExpression(string resultTypeExpression, out string? adapterTypeExpression)
+    {
+        if (resultTypeExpression == NativeResultExpression)
+        {
+            adapterTypeExpression = NativeResultAdapterExpression;
+            return true;
+        }
+
+        if (resultTypeExpression.Length > NativeResultExpression.Length + 2
+            && resultTypeExpression.StartsWith(NativeResultExpression + "<", StringComparison.Ordinal)
+            && resultTypeExpression[resultTypeExpression.Length - 1] == '>')
+        {
+            adapterTypeExpression = NativeResultAdapterExpression
+                + resultTypeExpression.Substring(NativeResultExpression.Length);
+            return true;
+        }
+
+        adapterTypeExpression = null;
+        return false;
+    }
+
+    /// <summary>
+    ///     Assembles the four staged interceptor stages for a message in the runtime
+    ///     shape-builder's exact execution order, or fails when any participant cannot be
+    ///     modeled: grouped/keyed/inaccessible/nested participants, a participant matching
+    ///     through more than one deduped contract registration, a participant with no
+    ///     variance-resolvable arm (the runtime would throw for it), or a reference-typed
+    ///     pipeline result with an inexactly-typed contract (runtime result variance the
+    ///     string model cannot verify).
+    /// </summary>
+    /// <summary>
+    ///     The participant's staged construction expression, or <c>null</c> when keyed
+    ///     resolutions are needed but the keyed-service extensions are not resolvable in
+    ///     the consuming compilation.
+    /// </summary>
+    private static string? GatedConstructionExpression(RegistrableTypeModel participant, bool hasKeyedServiceExtensions)
+        => participant.StagedConstructionUsesKeyedServices && !hasKeyedServiceExtensions
+            ? null
+            : participant.StagedConstructionExpression;
+
+    private static bool TryAssembleStagedStages(
+        RegistrableTypeModel message,
+        List<RegistrableTypeModel> types,
+        string? resultTypeExpression,
+        bool resultIsValueType,
+        bool hasKeyedServiceExtensions,
+        out ImmutableArray<StagedCallModel> preCalls,
+        out ImmutableArray<StagedCallModel> postCalls,
+        out ImmutableArray<StagedCallModel> exceptionCalls,
+        out ImmutableArray<StagedCallModel> finalCalls)
+    {
+        preCalls = postCalls = exceptionCalls = finalCalls = ImmutableArray<StagedCallModel>.Empty;
+
+        // The pipeline result the arms match against: the declared result for result
+        // pipelines, Unit for void ones — a reference type, so a void pipeline is on the
+        // variance-bearing side of the checks below just like a class-typed result.
+        var pipelineResultExpression = resultTypeExpression ?? UnitExpression;
+        var pipelineResultIsValueType = resultTypeExpression is not null && resultIsValueType;
+
+        var stages = new List<(RegistrableTypeModel Type, StagedCallArm Arm, bool Direct, string? ExceptionFilter)>?[4];
+
+        foreach (var candidate in types)
+        {
+            if (candidate.ContractShapes.IsEmpty)
+            {
+                continue;
+            }
+
+            for (var kindIndex = 0; kindIndex < 4; kindIndex++)
+            {
+                var kind = (DescriptorKind)(kindIndex + 1);
+
+                // Deduped registrations of this candidate that reach the message —
+                // mirrors the descriptor builders' first-wins (message, result) dedupe,
+                // where result-agnostic async contracts carry `object`.
+                string? matchedMessageKey = null;
+                var matchedDirect = false;
+                var registrationCount = 0;
+                HashSet<string>? seenRegistrations = null;
+
+                foreach (var shape in candidate.ContractShapes)
+                {
+                    if (shape.Kind != kind)
+                    {
+                        continue;
+                    }
+
+                    var direct = shape.MessageTypeExpression == message.TypeofExpression;
+
+                    if (!direct && !message.AssignableKeys.Contains(shape.MessageTypeExpression))
+                    {
+                        continue;
+                    }
+
+                    var dedupeKey = shape.MessageTypeExpression + "\x1f"
+                        + (kind == DescriptorKind.PreInterceptor
+                            ? string.Empty
+                            : shape.IsResultTyped ? shape.ResultTypeExpression : "object");
+
+                    if ((seenRegistrations ??= new HashSet<string>(StringComparer.Ordinal)).Add(dedupeKey))
+                    {
+                        registrationCount++;
+                        matchedMessageKey = shape.MessageTypeExpression;
+                        matchedDirect = direct;
+                    }
+                }
+
+                if (registrationCount == 0)
+                {
+                    continue;
+                }
+
+                // More than one registration would put the type into the stage more than
+                // once; the order among them is not worth modeling — disqualify.
+                if (registrationCount > 1)
+                {
+                    return false;
+                }
+
+                // Participation established. The participant itself must be modelable.
+                if (!candidate.IsAccessible
+                    || !candidate.DiscoveryKeys.IsEmpty
+                    || candidate.GroupsExpression is not null
+                    || candidate.IsNestedType)
+                {
+                    return false;
+                }
+
+                if (!TrySelectArm(candidate, kind, message, pipelineResultExpression, pipelineResultIsValueType,
+                        out var arm, out var exceptionFilter))
+                {
+                    return false;
+                }
+
+                (stages[kindIndex] ??= []).Add((candidate, arm, matchedDirect, exceptionFilter));
+                _ = matchedMessageKey;
+            }
+        }
+
+        preCalls = OrderStage(stages[0], hasKeyedServiceExtensions);
+        postCalls = OrderStage(stages[1], hasKeyedServiceExtensions);
+        exceptionCalls = OrderStage(stages[2], hasKeyedServiceExtensions);
+        finalCalls = OrderStage(stages[3], hasKeyedServiceExtensions);
+        return true;
+    }
+
+    /// <summary>
+    ///     Selects the pattern-match arm the runtime invoker would take for the
+    ///     interceptor, or fails when none resolves (the runtime would throw
+    ///     <c>NotSupportedException</c> — the strategy fallback preserves that) or when a
+    ///     reference-typed pipeline result meets an inexactly-typed contract (possible
+    ///     runtime result variance the string model cannot decide).
+    /// </summary>
+    private static bool TrySelectArm(
+        RegistrableTypeModel candidate,
+        DescriptorKind kind,
+        RegistrableTypeModel message,
+        string pipelineResultExpression,
+        bool pipelineResultIsValueType,
+        out StagedCallArm arm,
+        out string? exceptionFilter)
+    {
+        arm = default;
+        exceptionFilter = null;
+
+        var hasAsyncTyped = false;
+        var hasAsyncAgnostic = false;
+        var hasSync = false;
+
+        foreach (var shape in candidate.ContractShapes)
+        {
+            if (shape.Kind != kind)
+            {
+                continue;
+            }
+
+            // A filter the string model cannot reproduce takes the whole plan down: an
+            // emitted call with no guard runs an interceptor that declined the exception,
+            // and — worse — makes the stage count it as having handled one.
+            if (shape.HasUndecidableExceptionFilter)
+            {
+                return false;
+            }
+
+            exceptionFilter = shape.ExceptionFilterExpression;
+
+            // Message-side variance: exact match always works; a base/interface
+            // registration matches only for reference-typed messages.
+            var messageMatches = shape.MessageTypeExpression == message.TypeofExpression
+                || (!message.IsValueType && message.AssignableKeys.Contains(shape.MessageTypeExpression));
+
+            if (!messageMatches)
+            {
+                continue;
+            }
+
+            if (shape.IsResultTyped)
+            {
+                // Exact result match always works. An `object`-typed contract (the
+                // flavored marker interfaces' shape) matches any reference-typed result
+                // through the runtime's `in TResult` variance; value-typed results have
+                // no variance, so the contract is simply invisible to the pattern match.
+                if (shape.ResultTypeExpression == pipelineResultExpression
+                    || (!pipelineResultIsValueType && shape.ResultTypeExpression == "object"))
+                {
+                    if (shape.IsAsync)
+                    {
+                        hasAsyncTyped = true;
+                    }
+                    else
+                    {
+                        hasSync = true;
+                    }
+                }
+                else if (!pipelineResultIsValueType)
+                {
+                    // Any other base-of relationship the variance could admit is
+                    // undecidable in the string model — disqualify.
+                    return false;
+                }
+            }
+            else if (shape.IsAsync)
+            {
+                hasAsyncAgnostic = true;
+            }
+            else
+            {
+                // Sync pre carries no result typing.
+                hasSync = true;
+            }
+        }
+
+        if (kind == DescriptorKind.PreInterceptor)
+        {
+            if (hasAsyncAgnostic)
+            {
+                arm = StagedCallArm.AsyncAgnostic;
+                return true;
+            }
+
+            if (hasSync)
+            {
+                arm = StagedCallArm.Sync;
+                return true;
+            }
+
+            return false;
+        }
+
+        if (hasAsyncTyped)
+        {
+            arm = StagedCallArm.AsyncTyped;
+            return true;
+        }
+
+        if (hasAsyncAgnostic)
+        {
+            arm = StagedCallArm.AsyncAgnostic;
+            return true;
+        }
+
+        if (hasSync)
+        {
+            arm = StagedCallArm.Sync;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Orders one staged stage exactly like the runtime shape builder: the direct
+    ///     segment first, then the indirect one, each sorted by weight descending with the
+    ///     type name as the ordinal tie-break (participants are non-nested and
+    ///     non-generic, so the display name equals the runtime <c>Type.FullName</c>).
+    /// </summary>
+    private static ImmutableArray<StagedCallModel> OrderStage(
+        List<(RegistrableTypeModel Type, StagedCallArm Arm, bool Direct, string? ExceptionFilter)>? entries,
+        bool hasKeyedServiceExtensions)
+    {
+        if (entries is null)
+        {
+            return ImmutableArray<StagedCallModel>.Empty;
+        }
+
+        entries.Sort(static (x, y) =>
+        {
+            var bySegment = y.Direct.CompareTo(x.Direct);
+
+            if (bySegment != 0)
+            {
+                return bySegment;
+            }
+
+            var byWeight = y.Type.Weight.CompareTo(x.Type.Weight);
+
+            return byWeight != 0
+                ? byWeight
+                : string.CompareOrdinal(x.Type.DisplayName, y.Type.DisplayName);
+        });
+
+        var calls = ImmutableArray.CreateBuilder<StagedCallModel>(entries.Count);
+
+        foreach (var (type, arm, _, exceptionFilter) in entries)
+        {
+            calls.Add(new StagedCallModel(
+                type.TypeofExpression, arm, GatedConstructionExpression(type, hasKeyedServiceExtensions),
+                exceptionFilter));
+        }
+
+        return calls.MoveToImmutable();
     }
 
     /// <summary>
@@ -712,10 +2751,10 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     ///     (<c>IAsyncHandler&lt;TMessage&gt;</c>), its handler participates in default
     ///     discovery in the default group, and no discovered interceptor targets the
     ///     message directly. The check is deliberately conservative and only ever costs
-    ///     the speedup when wrong: the runtime executor re-validates the actual pipeline
-    ///     per registry version and falls back to the runtime dispatch shape on any
-    ///     mismatch (covariant handlers or interceptors registered for base contracts,
-    ///     keyed selections, runtime registrations).
+    ///     the speedup when wrong: the runtime executor validates the actual pipeline
+    ///     against the container's selected frozen composition and falls back to the
+    ///     general dispatch shape on any mismatch (covariant handlers or interceptors
+    ///     selected through base contracts, or keyed selections).
     /// </summary>
     private static List<VoidPlanModel> ComputeVoidPlans(List<RegistrableTypeModel> types)
     {
@@ -742,7 +2781,12 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 continue;
             }
 
-            plans.Add(new VoidPlanModel(type.TypeofExpression, handler.TypeofExpression, handler.IsDirectlyConstructible));
+            plans.Add(new VoidPlanModel(
+                type.TypeofExpression,
+                handler.TypeofExpression,
+                handler.IsDirectlyConstructible,
+                handler.ProviderConstructionExpression,
+                handler.ProviderConstructionUsesKeyedServices));
         }
 
         return plans;
@@ -752,8 +2796,8 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     ///     Result-producing counterpart of <see cref="ComputeVoidPlans"/>: a dispatchable
     ///     command/query with exactly one closed, non-stream result contract qualifies
     ///     when its whole discovered pipeline is a single async handler producing exactly
-    ///     that result. Equally conservative and equally advisory — the runtime
-    ///     re-validates per registry version.
+    ///     that result. Equally conservative and equally advisory — the runtime validates
+    ///     it against the container's selected frozen composition.
     /// </summary>
     private static List<ResultPlanModel> ComputeResultPlans(List<RegistrableTypeModel> types)
     {
@@ -795,7 +2839,9 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 type.TypeofExpression,
                 dispatchResult.ResultTypeExpression,
                 handler.TypeofExpression,
-                handler.IsDirectlyConstructible));
+                handler.IsDirectlyConstructible,
+                handler.ProviderConstructionExpression,
+                handler.ProviderConstructionUsesKeyedServices));
         }
 
         return plans;
@@ -857,6 +2903,11 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
             return false;
         }
 
+        if (HasCovariantMainHandler(type, handlerCounts))
+        {
+            return false;
+        }
+
         if (interceptedMessages.Contains(type.TypeofExpression))
         {
             return false;
@@ -869,16 +2920,54 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                && handler.GroupsExpression is null;
     }
 
+    /// <summary>
+    ///     Whether any main handler is registered against a base type or interface of the
+    ///     message. Single-handler mediation treats those as candidates alongside the
+    ///     direct ones, so a message that has both is contested and must fail its dispatch
+    ///     — something a plan, which bakes one handler in, cannot express. Disqualifying
+    ///     here keeps the compiled lane and the reflective one telling the same story.
+    /// </summary>
+    /// <remarks>
+    ///     Deliberately blunt: a message whose only handler is covariantly matched is
+    ///     dispatchable and could in principle be planned (<c>IAsyncHandler</c>'s
+    ///     <c>in TMessage</c> variance admits the base-typed handler), but the model has no
+    ///     way to prove the supertype registration is the only one the runtime will see.
+    ///     Those dispatches take the reflective path, as they did before covariance reached
+    ///     main handlers at all.
+    /// </remarks>
+    private static bool HasCovariantMainHandler(RegistrableTypeModel type, Dictionary<string, int> handlerCounts)
+    {
+        foreach (var assignableKey in type.AssignableKeys)
+        {
+            if (handlerCounts.ContainsKey(assignableKey))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static void AddModels(
         SourceProductionContext context,
         ImmutableArray<RegistrableTypeModel> models,
         HashSet<string> seen,
-        List<RegistrableTypeModel> types)
+        List<RegistrableTypeModel> types,
+        List<RegistrableTypeModel> excludedShadows,
+        DefaultResultAdapterSiteModel? defaultResultAdapter)
     {
         foreach (var model in models)
         {
             if (!seen.Add(model.TypeofExpression))
             {
+                continue;
+            }
+
+            if (model.IsExcludedFromDiscovery)
+            {
+                // Deliberate opt-out: no registration, no diagnostics — the shadow only
+                // feeds the reachability judgment's exclusion zone.
+                excludedShadows.Add(model);
                 continue;
             }
 
@@ -897,6 +2986,68 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
                 continue;
             }
 
+            if (model.HasMultiplePublicConstructors)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    GeneratorDiagnostics.MultiplePublicConstructors,
+                    model.InfoLocation?.ToLocation(),
+                    model.DisplayName));
+            }
+
+            if (model.HasFromServicesConstructorParameter)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    GeneratorDiagnostics.FromServicesOnConstructor,
+                    model.InfoLocation?.ToLocation(),
+                    model.DisplayName));
+            }
+
+            // ERGOSG011/012 judge where the message is compiled: a referenced message's
+            // annotations were already judged (or predate the rules) in its own build.
+            if (model.ReferencedAssemblyName is null && model.ResultAdapter is { } resultAdapter)
+            {
+                if (model.HasIgnoredResultAdapter)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        GeneratorDiagnostics.ConflictingResultAdapterAnnotations,
+                        model.InfoLocation?.ToLocation(),
+                        model.DisplayName));
+                }
+                else if (!resultAdapter.IsInstantiable || !resultAdapter.FitsDeclaredSlot)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        GeneratorDiagnostics.UnbindableResultAdapter,
+                        model.InfoLocation?.ToLocation(),
+                        resultAdapter.DisplayName,
+                        model.DisplayName,
+                        resultAdapter.IsInstantiable
+                            ? "it does not implement IResultAdapter<TResult> for any result slot the message dispatches"
+                            : "the runtime binding cannot instantiate it — a concrete, fully closed type with a " +
+                              "public parameterless constructor is required"));
+                }
+            }
+
+            // ERGOSG013/014: with a default adapter configured, a result-bearing message
+            // no tier serves stays a throwing pipeline. Unacknowledged, that is a design
+            // hole and fails the build right here — no reason to wait for a dispatch to
+            // reveal it; acknowledged via [IgnoreResultAdapter], it stays visible as a
+            // warning.
+            if (model.ReferencedAssemblyName is null
+                && defaultResultAdapter is not null
+                && model.IsDispatchableMessage
+                && model.ResultAdapter is null
+                && HasUnservedResultSlots(model, defaultResultAdapter, out var unservedSlot))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    model.HasIgnoredResultAdapter
+                        ? GeneratorDiagnostics.AcknowledgedThrowingPipeline
+                        : GeneratorDiagnostics.UnservedByDefaultResultAdapter,
+                    model.InfoLocation?.ToLocation(),
+                    model.DisplayName,
+                    unservedSlot,
+                    defaultResultAdapter.BaseTypeExpression));
+            }
+
             types.Add(model);
         }
     }
@@ -907,13 +3058,22 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
     ///     message types verbatim (sync contracts first, then result-less async, then
     ///     result-producing async, no dedupe), interceptors normalize generic messages to
     ///     their definitions and dedupe per (message, result) pair with the synchronous
-    ///     pattern winning. Open generic types return an empty set — their contract type
-    ///     arguments contain type parameters, which cannot appear in <c>typeof</c> — and
-    ///     fall back to runtime registration.
+    ///     pattern winning.
     /// </summary>
+    /// <remarks>
+    ///     A generic participant definition is modelled like any other: its message
+    ///     expressions carry type parameters (<c>Wrap&lt;T&gt;</c>), which is fine because
+    ///     nothing emits them — the composition table matches on the definition key and
+    ///     names the participant by its own unbound <c>typeof</c>, closing it over the
+    ///     dispatched message's arguments at runtime. Descriptors were empty here while
+    ///     they were still emitted as <c>typeof</c> arguments, which a type parameter
+    ///     cannot appear in; that emission is gone. A generic <em>containing</em> type is
+    ///     still refused: its parameters are not the participant's own, so closing over
+    ///     the message cannot supply them.
+    /// </remarks>
     private static ImmutableArray<DescriptorModel> BuildDescriptors(INamedTypeSymbol symbol)
     {
-        for (var current = symbol; current is not null; current = current.ContainingType)
+        for (var current = symbol.ContainingType; current is not null; current = current.ContainingType)
         {
             if (current.Arity > 0)
             {
@@ -1114,6 +3274,44 @@ public sealed class ErgosfareRegistrationGenerator : IIncrementalGenerator
         }
 
         return 0;
+    }
+
+    /// <summary>
+    ///     The declared <c>[Group]</c> names, empty when the type declares none; the name
+    ///     source behind <see cref="GetGroupsExpression"/>.
+    /// </summary>
+    private static ImmutableArray<string> GetGroupNames(INamedTypeSymbol symbol)
+    {
+        foreach (var attribute in symbol.GetAttributes())
+        {
+            if (attribute.AttributeClass is not { Name: "GroupAttribute" } attributeClass
+                || !IsInNamespace(attributeClass, AttributeNamespace)
+                || attribute.ConstructorArguments.Length != 1)
+            {
+                continue;
+            }
+
+            var values = attribute.ConstructorArguments[0].Values;
+
+            if (values.IsDefaultOrEmpty)
+            {
+                return ImmutableArray<string>.Empty;
+            }
+
+            var names = ImmutableArray.CreateBuilder<string>(values.Length);
+
+            foreach (var value in values)
+            {
+                if (value.Value is string name)
+                {
+                    names.Add(name);
+                }
+            }
+
+            return names.ToImmutable();
+        }
+
+        return ImmutableArray<string>.Empty;
     }
 
     /// <summary>

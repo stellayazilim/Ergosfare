@@ -24,7 +24,7 @@ public class GroupedBroadcastFastLaneTests
     [Group("alpha")]
     public sealed class AlphaHandler : IEventHandler<LaneEvent>
     {
-        public ValueTask HandleAsync(LaneEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(LaneEvent @event, ErgosfareContext context)
         {
             context.Set("alphaRan", true);
             return ValueTask.CompletedTask;
@@ -35,7 +35,7 @@ public class GroupedBroadcastFastLaneTests
     [Group("beta")]
     public sealed class BetaHandler : IEventHandler<LaneEvent>
     {
-        public ValueTask HandleAsync(LaneEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(LaneEvent @event, ErgosfareContext context)
         {
             context.Set("betaRan", true);
             return ValueTask.CompletedTask;
@@ -122,7 +122,7 @@ public class GroupedBroadcastFastLaneTests
     [Group("guarded")]
     public sealed class GuardedHandler : IEventHandler<InterceptedLaneEvent>
     {
-        public ValueTask HandleAsync(InterceptedLaneEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(InterceptedLaneEvent @event, ErgosfareContext context)
         {
             context.Set("guardedRan", true);
             return ValueTask.CompletedTask;
@@ -133,7 +133,7 @@ public class GroupedBroadcastFastLaneTests
     [Group("guarded")]
     public sealed class GuardedInterceptor : IEventPreInterceptor<InterceptedLaneEvent>
     {
-        public ValueTask<InterceptedLaneEvent> HandleAsync(InterceptedLaneEvent @event, IExecutionContext context)
+        public ValueTask<InterceptedLaneEvent> HandleAsync(InterceptedLaneEvent @event, ErgosfareContext context)
         {
             context.Set("guardedInterceptorRan", true);
             return ValueTask.FromResult(@event);

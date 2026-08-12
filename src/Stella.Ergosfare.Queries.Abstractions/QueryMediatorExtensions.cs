@@ -20,7 +20,7 @@ public static class QueryMediatorExtensions
         CancellationToken cancellationToken = default
     )
     {
-        return queryMediator.QueryAsync(query, null, cancellationToken);
+        return queryMediator.QueryAsync(query, queryMediationSettings: null, cancellationToken);
     }
 
 
@@ -63,7 +63,7 @@ public static class QueryMediatorExtensions
         CancellationToken cancellationToken = default
     )
     {
-        return queryMediator.StreamAsync(query, null, cancellationToken);
+        return queryMediator.StreamAsync(query, queryMediationSettings: null, cancellationToken);
     }
 
 

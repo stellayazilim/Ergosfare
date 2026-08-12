@@ -7,6 +7,11 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 /// </summary>
 /// <param name="ResultTypeExpression">Fully qualified expression of the closed result type.</param>
 /// <param name="IsStream">Whether the root feeds the streaming dispatch path.</param>
+/// <param name="ResultIsValueType">
+/// Whether the result is a value type — staged emission mirrors the runtime's erased
+/// generic cast semantics, which differ between value and reference results.
+/// </param>
 internal readonly record struct DispatchResultModel(
     string ResultTypeExpression,
-    bool IsStream);
+    bool IsStream,
+    bool ResultIsValueType);

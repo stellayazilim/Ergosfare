@@ -1,5 +1,4 @@
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Internal.Contexts;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Test.Fixtures;
@@ -12,7 +11,7 @@ namespace Stella.Ergosfare.Test.Fixtures;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Use <see cref="CreateContext"/> when you need a completely isolated <see cref="IExecutionContext"/>
+/// Use <see cref="CreateContext"/> when you need a completely isolated <see cref="ErgosfareContext"/>
 /// that is independent of the fixture’s default context and has no pre-existing state.
 /// </para>
 /// <para>
@@ -22,8 +21,8 @@ namespace Stella.Ergosfare.Test.Fixtures;
 /// </remarks>
 public class ExecutionContextFixture : IAsyncDisposable, IFixture<ExecutionContextFixture>
 {
-    private readonly IExecutionContext _executionContext =
-        new ErgosfareExecutionContext( new Dictionary<object, object?>(), CancellationToken.None);
+    private readonly ErgosfareContext _executionContext =
+        new ErgosfareContext( new Dictionary<object, object?>(), CancellationToken.None);
 
 
 
@@ -36,14 +35,14 @@ public class ExecutionContextFixture : IAsyncDisposable, IFixture<ExecutionConte
     /// <summary>
     /// Gets the default execution context created by this fixture.
     /// </summary>
-    public IExecutionContext Ctx => _executionContext;
+    public ErgosfareContext Ctx => _executionContext;
 
     /// <summary>
-    /// Creates a self-contained, empty <see cref="IExecutionContext"/> for tests that require a fresh context.
+    /// Creates a self-contained, empty <see cref="ErgosfareContext"/> for tests that require a fresh context.
     /// </summary>
-    /// <returns>A new instance of <see cref="ErgosfareExecutionContext"/> with no ambient state.</returns>
-    public IExecutionContext CreateContext() =>
-        new ErgosfareExecutionContext(  new Dictionary<object, object?>(), CancellationToken.None);
+    /// <returns>A new instance of <see cref="ErgosfareContext"/> with no ambient state.</returns>
+    public ErgosfareContext CreateContext() =>
+        new ErgosfareContext(  new Dictionary<object, object?>(), CancellationToken.None);
 
     /// <summary>
     /// Disposes the fixture. The fixture holds no disposable state.

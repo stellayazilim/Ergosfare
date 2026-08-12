@@ -1,8 +1,8 @@
 # Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection
 
 Microsoft.Extensions.DependencyInjection wiring for
-[Ergosfare](https://github.com/stellayazilim/Ergosfare)'s core: `AddErgosfare(...)`, the
-module registry, and the core module builder used to compose command/query/event modules.
+[Ergosfare](https://github.com/stellayazilim/Ergosfare)'s core: `AddErgosfare(...)` and the
+module registry the command/query/event modules plug into.
 
 ```csharp
 builder.Services.AddErgosfare(o => o

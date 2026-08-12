@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
-using Stella.Ergosfare.Core.Internal.Contexts;
 using Stella.Ergosfare.Core.Internal.Mediator;
 
 namespace Stella.Ergosfare.Core;
@@ -58,7 +58,7 @@ public sealed class MessageDispatchEngine
         ArgumentNullException.ThrowIfNull(message);
 
         var executor = _executorCache.GetVoidExecutor(message.GetType(), groups);
-        var context = ErgosfareExecutionContextPool.Rent(items, cancellationToken);
+        var context = ErgosfareContextPool.Rent(items, cancellationToken);
         ValueTask task;
 
         try
@@ -67,7 +67,7 @@ public sealed class MessageDispatchEngine
         }
         catch
         {
-            ErgosfareExecutionContextPool.Return(context);
+            ErgosfareContextPool.Return(context);
             throw;
         }
 
@@ -76,14 +76,14 @@ public sealed class MessageDispatchEngine
         // for the awaiting helper.
         if (task.IsCompletedSuccessfully)
         {
-            ErgosfareExecutionContextPool.Return(context);
+            ErgosfareContextPool.Return(context);
             return default;
         }
 
         return AwaitAndReturn(task, context);
 
         [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
-        static async ValueTask AwaitAndReturn(ValueTask task, ErgosfareExecutionContext context)
+        static async ValueTask AwaitAndReturn(ValueTask task, ErgosfareContext context)
         {
             try
             {
@@ -91,7 +91,7 @@ public sealed class MessageDispatchEngine
             }
             finally
             {
-                ErgosfareExecutionContextPool.Return(context);
+                ErgosfareContextPool.Return(context);
             }
         }
     }
@@ -122,14 +122,14 @@ public sealed class MessageDispatchEngine
     /// <param name="cancellationToken">Cancellation token for the dispatch.</param>
     public ValueTask DispatchVoidAsync<TMessage>(TMessage message, IServiceProvider serviceProvider,
         IDictionary<object, object?>? items = null, CancellationToken cancellationToken = default)
-        where TMessage : notnull, IMessage
+        where TMessage : IMessage
     {
         ArgumentNullException.ThrowIfNull(message);
 
         var executor = message.GetType() == typeof(TMessage)
             ? _executorCache.GetVoidExecutor<TMessage>()
             : _executorCache.GetVoidExecutor(message.GetType());
-        var context = ErgosfareExecutionContextPool.Rent(items, cancellationToken);
+        var context = ErgosfareContextPool.Rent(items, cancellationToken);
         ValueTask task;
 
         try
@@ -138,20 +138,20 @@ public sealed class MessageDispatchEngine
         }
         catch
         {
-            ErgosfareExecutionContextPool.Return(context);
+            ErgosfareContextPool.Return(context);
             throw;
         }
 
         if (task.IsCompletedSuccessfully)
         {
-            ErgosfareExecutionContextPool.Return(context);
+            ErgosfareContextPool.Return(context);
             return default;
         }
 
         return AwaitAndReturn(task, context);
 
         [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
-        static async ValueTask AwaitAndReturn(ValueTask task, ErgosfareExecutionContext context)
+        static async ValueTask AwaitAndReturn(ValueTask task, ErgosfareContext context)
         {
             try
             {
@@ -159,7 +159,7 @@ public sealed class MessageDispatchEngine
             }
             finally
             {
-                ErgosfareExecutionContextPool.Return(context);
+                ErgosfareContextPool.Return(context);
             }
         }
     }
@@ -176,7 +176,7 @@ public sealed class MessageDispatchEngine
         ArgumentNullException.ThrowIfNull(message);
 
         var executor = _executorCache.GetExecutor<TResult>(message.GetType(), groups);
-        var context = ErgosfareExecutionContextPool.Rent(items, cancellationToken);
+        var context = ErgosfareContextPool.Rent(items, cancellationToken);
         ValueTask<TResult> task;
 
         try
@@ -185,21 +185,21 @@ public sealed class MessageDispatchEngine
         }
         catch
         {
-            ErgosfareExecutionContextPool.Return(context);
+            ErgosfareContextPool.Return(context);
             throw;
         }
 
         if (task.IsCompletedSuccessfully)
         {
             var result = task.Result;
-            ErgosfareExecutionContextPool.Return(context);
+            ErgosfareContextPool.Return(context);
             return new ValueTask<TResult>(result);
         }
 
         return AwaitAndReturn(task, context);
 
         [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
-        static async ValueTask<TResult> AwaitAndReturn(ValueTask<TResult> task, ErgosfareExecutionContext context)
+        static async ValueTask<TResult> AwaitAndReturn(ValueTask<TResult> task, ErgosfareContext context)
         {
             try
             {
@@ -207,7 +207,7 @@ public sealed class MessageDispatchEngine
             }
             finally
             {
-                ErgosfareExecutionContextPool.Return(context);
+                ErgosfareContextPool.Return(context);
             }
         }
     }
@@ -221,7 +221,7 @@ public sealed class MessageDispatchEngine
     /// <param name="context">The externally owned execution context.</param>
     /// <param name="serviceProvider">The scope provider handlers resolve against.</param>
     /// <param name="groups">Optional group filters applied to the pipeline.</param>
-    public ValueTask DispatchAsync(object message, IExecutionContext context, IServiceProvider serviceProvider,
+    public ValueTask DispatchAsync(object message, ErgosfareContext context, IServiceProvider serviceProvider,
         IEnumerable<string>? groups = null)
     {
         ArgumentNullException.ThrowIfNull(message);
@@ -234,10 +234,10 @@ public sealed class MessageDispatchEngine
 
     /// <summary>
     /// Result-producing counterpart of
-    /// <see cref="DispatchAsync(object, IExecutionContext, IServiceProvider, IEnumerable{string}?)"/>.
+    /// <see cref="DispatchAsync(object, ErgosfareContext, IServiceProvider, IEnumerable{string}?)"/>.
     /// </summary>
     /// <typeparam name="TResult">The expected result type of the message.</typeparam>
-    public ValueTask<TResult> DispatchAsync<TResult>(object message, IExecutionContext context, IServiceProvider serviceProvider,
+    public ValueTask<TResult> DispatchAsync<TResult>(object message, ErgosfareContext context, IServiceProvider serviceProvider,
         IEnumerable<string>? groups = null)
     {
         ArgumentNullException.ThrowIfNull(message);

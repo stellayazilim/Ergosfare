@@ -32,6 +32,29 @@ public interface ICommandMediator
     ValueTask SendAsync(ICommand command, CommandMediationSettings? commandMediationSettings = null, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Sends a void command under an externally owned execution context — the
+    /// nested-dispatch path: a handler opens a scope on its own context
+    /// (<c>using var scope = context.CreateScope();</c>) and passes <c>scope.Context</c>
+    /// here. The caller owns the context's lifetime; cancellation flows from the context.
+    /// </summary>
+    /// <param name="command">The command to send.</param>
+    /// <param name="context">The externally owned execution context to dispatch under.</param>
+    /// <param name="commandMediationSettings">Optional mediation settings (groups etc.).</param>
+    ValueTask SendAsync(ICommand command, Core.Abstractions.ErgosfareContext context,
+        CommandMediationSettings? commandMediationSettings = null);
+
+    /// <summary>
+    /// Result-producing counterpart of
+    /// <see cref="SendAsync(ICommand, Core.Abstractions.ErgosfareContext, CommandMediationSettings?)"/>.
+    /// </summary>
+    /// <typeparam name="TResult">The expected result type of the command.</typeparam>
+    /// <param name="command">The command to send.</param>
+    /// <param name="context">The externally owned execution context to dispatch under.</param>
+    /// <param name="commandMediationSettings">Optional mediation settings (groups etc.).</param>
+    ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, Core.Abstractions.ErgosfareContext context,
+        CommandMediationSettings? commandMediationSettings = null);
+
+    /// <summary>
     ///     Asynchronously sends a command for mediation and returns a result.
     /// </summary>
     /// <typeparam name="TResult">The type of the result returned by the command.</typeparam>
@@ -48,30 +71,32 @@ public interface ICommandMediator
     ///     is executed, including pre-handlers, the main handler, post-handlers, and error handlers if exceptions occur.
     ///     The result produced by the handler is returned to the caller.
     /// </remarks>
-    /// <summary>
-    /// Sends a void command under an externally owned execution context — the
-    /// nested-dispatch path: a handler opens a scope on its own context
-    /// (<c>using var scope = context.CreateScope();</c>) and passes <c>scope.Context</c>
-    /// here. The caller owns the context's lifetime; cancellation flows from the context.
-    /// </summary>
-    /// <param name="command">The command to send.</param>
-    /// <param name="context">The externally owned execution context to dispatch under.</param>
-    /// <param name="commandMediationSettings">Optional mediation settings (groups etc.).</param>
-    ValueTask SendAsync(ICommand command, Core.Abstractions.IExecutionContext context,
-        CommandMediationSettings? commandMediationSettings = null);
-
-    /// <summary>
-    /// Result-producing counterpart of
-    /// <see cref="SendAsync(ICommand, Core.Abstractions.IExecutionContext, CommandMediationSettings?)"/>.
-    /// </summary>
-    /// <typeparam name="TResult">The expected result type of the command.</typeparam>
-    /// <param name="command">The command to send.</param>
-    /// <param name="context">The externally owned execution context to dispatch under.</param>
-    /// <param name="commandMediationSettings">Optional mediation settings (groups etc.).</param>
-    ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, Core.Abstractions.IExecutionContext context,
-        CommandMediationSettings? commandMediationSettings = null);
-
     ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command,
                                                    CommandMediationSettings? commandMediationSettings = null,
                                                    CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Sends a void command under a canonical group filter. With a reused
+    ///     <see cref="Core.Abstractions.GroupSet"/> (define filters once, statically) the
+    ///     grouped dispatch caches match on a single reference check and the call
+    ///     allocates no settings object. The default implementation routes through the
+    ///     settings overload, so foreign mediator implementations keep working unchanged.
+    /// </summary>
+    /// <param name="command">The command to send.</param>
+    /// <param name="groups">The canonical group filter; <see cref="Core.Abstractions.GroupSet.Empty"/> dispatches the default pipeline.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    ValueTask SendAsync(ICommand command, Core.Abstractions.GroupSet groups, CancellationToken cancellationToken = default)
+        => SendAsync(command, new CommandMediationSettings { Filters = { Groups = groups } }, cancellationToken);
+
+    /// <summary>
+    ///     Result-producing counterpart of
+    ///     <see cref="SendAsync(ICommand, Core.Abstractions.GroupSet, CancellationToken)"/>.
+    /// </summary>
+    /// <typeparam name="TResult">The expected result type of the command.</typeparam>
+    /// <param name="command">The command to send.</param>
+    /// <param name="groups">The canonical group filter.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, Core.Abstractions.GroupSet groups,
+        CancellationToken cancellationToken = default)
+        => SendAsync(command, new CommandMediationSettings { Filters = { Groups = groups } }, cancellationToken);
 }

@@ -20,7 +20,7 @@ public class TypedPublishHolderTests
 
     public sealed class DerivedEventHandler : IEventHandler<DerivedEvent>
     {
-        public ValueTask HandleAsync(DerivedEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(DerivedEvent @event, ErgosfareContext context)
         {
             context.Set("derivedRan", true);
             return ValueTask.CompletedTask;

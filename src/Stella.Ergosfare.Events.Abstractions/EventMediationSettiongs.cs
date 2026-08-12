@@ -10,7 +10,14 @@ public sealed class EventMediationSettings
     /// Gets or sets a value indicating whether an exception should be thrown
     /// if no handlers are found for a published event.
     /// </summary>
-    public bool ThrowIfNoHandlerFound { get; init; } = false;
+    /// <remarks>
+    /// Covers every way a publish can reach nobody: an event type absent from the
+    /// registry, a registered one with no handlers, and a registered one whose handlers
+    /// are all filtered out. Left unset, a publish that reaches nobody is a silent no-op —
+    /// fire-and-forget is the point of an event, and a publisher that must know whether
+    /// anyone listened wants this flag.
+    /// </remarks>
+    public bool ThrowIfNoHandlerFound { get; init; }
 
 
     /// <summary>

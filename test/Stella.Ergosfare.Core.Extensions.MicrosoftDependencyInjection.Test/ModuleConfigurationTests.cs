@@ -1,8 +1,5 @@
-// This file intentionally exercises the obsolete reflection-scanning surface until the
-// preview line removes it; the deprecation warning is expected and suppressed.
-#pragma warning disable CS0618
-
-using System.Reflection;
+﻿using System.Reflection;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -26,7 +23,7 @@ public class ModuleConfigurationTests
         var serviceProvier = new ServiceCollection()
             .AddTransient<MessageHandler>();
         
-        var moduleConfiguration = new ModuleConfiguration(serviceProvier, null!);
+        var moduleConfiguration = new ModuleConfiguration(serviceProvier, new FrozenCompositionCatalog());
         
         // act
         serviceProvier.BuildServiceProvider();
@@ -35,75 +32,6 @@ public class ModuleConfigurationTests
         Assert.Same(serviceProvier, moduleConfiguration.Services);
     }
     
-    /// <summary>
-    /// A test implementation of <see cref="IResultAdapter"/> used for verifying result adapter registration.
-    /// </summary>
-    private class TestAdapter: IResultAdapter
-    {
-        /// <summary>
-        /// Determines whether this adapter can adapt the provided result.
-        /// </summary>
-        /// <param name="result">The result to check.</param>
-        /// <returns>Always returns <c>true</c>.</returns>
-        public bool CanAdapt(object result)
-        {
-            return true;
-        }
-
-        /// <summary>
-        /// Attempts to extract an exception from the provided result.
-        /// </summary>
-        /// <param name="result">The result to extract from.</param>
-        /// <param name="exception">Outputs the extracted exception.</param>
-        /// <returns>Always returns <c>true</c> with a sample exception.</returns>
-        public bool TryGetException(object result, out Exception? exception)
-        {
-            exception = new Exception("Hello world");
-            return true;
-        }
-    }
     
-    /// <summary>
-    /// Tests that a custom result adapter can be registered and retrieved from the <see cref="IResultAdapterService"/>.
-    /// </summary>
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
-    public void ShouldAddMessageAdapter()
-    {
-        var serviceProvier = new ServiceCollection()
-            .AddErgosfare(options =>
-            {
-                options.ConfigureResultAdapters(adapter => adapter.Register<TestAdapter>())
-                    .AddCoreModule( b => {});
-            })
-            .BuildServiceProvider();
-
-        var resultAdapterService = serviceProvier.GetService<IResultAdapterService>();
-        
-        var exception = resultAdapterService?.LookupException("hello world");
-        Assert.NotNull(resultAdapterService);
-        Assert.Equal(new Exception("Hello world").Message, exception?.Message);
-        Assert.Single(resultAdapterService.GetAdapters());
-    }
     
-    /// <summary>
-    /// Tests that result adapters can be registered from an assembly and retrieved correctly.
-    /// </summary>
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
-    public void ShouldAddMessageAdapterFromAssembly()
-    {
-        var serviceProvier = new ServiceCollection()
-            .AddErgosfare(options => options
-                    .ConfigureResultAdapters(adapter => adapter.RegisterFromAssembly(Assembly.GetExecutingAssembly()))
-                    .AddCoreModule( b => {}))
-            .BuildServiceProvider();
-
-        var resultAdapterService = serviceProvier.GetService<IResultAdapterService>();
-        
-
-        Assert.IsType<TestAdapter>(resultAdapterService?.GetAdapters().FirstOrDefault());
-    }
 }

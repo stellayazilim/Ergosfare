@@ -1,6 +1,5 @@
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
-using Stella.Ergosfare.Core.Internal.Contexts;
 
 // ReSharper disable ClassNeverInstantiated.Global
 
@@ -19,7 +18,7 @@ public class StubVoidHandler : IHandler<StubMessage, object>
     /// <param name="message">The message to handle.</param>
     /// <param name="context">The execution context.</param>
     /// <returns>Always returns <c>null</c>, since no result is produced.</returns>
-    public object Handle(StubMessage message, IExecutionContext context)
+    public object Handle(StubMessage message, ErgosfareContext context)
     {
         return null!;
     }
@@ -35,7 +34,7 @@ public class StubVoidHandlerThrows : IHandler<StubMessage, object>
     /// <param name="message">The message to handle.</param>
     /// <param name="context">The execution context.</param>
     /// <returns>Always returns <c>null</c>, since no result is produced.</returns>
-    public object Handle(StubMessage message, IExecutionContext context)
+    public object Handle(StubMessage message, ErgosfareContext context)
     {
         throw new Exception("Stub exception");
     }
@@ -45,7 +44,7 @@ public class StubVoidHandlerThrows : IHandler<StubMessage, object>
 
 public class StubVoidIndirectHandler: IHandler<StubIndirectMessage, ValueTask>
 {
-    public ValueTask Handle(StubIndirectMessage message, IExecutionContext context)
+    public ValueTask Handle(StubIndirectMessage message, ErgosfareContext context)
     {
         return ValueTask.CompletedTask;
     }
@@ -63,7 +62,7 @@ public class StubPreInterceptor: IPreInterceptor<StubMessage>
     /// <param name="message">The message to handle.</param>
     /// <param name="context">The execution context.</param>
     /// <returns>Always returns <c>null</c>.</returns>
-    public object Handle(StubMessage message, IExecutionContext context)
+    public object Handle(StubMessage message, ErgosfareContext context)
     {
         return null!;
     }
@@ -85,7 +84,7 @@ public class StubPostInterceptor: IPostInterceptor<StubMessage, object>
     /// <param name="messageResult">The result from the main handler.</param>
     /// <param name="context">The execution context.</param>
     /// <returns>Always returns <c>null</c>.</returns>
-    public object Handle(StubMessage message, object? messageResult, IExecutionContext context)
+    public object Handle(StubMessage message, object? messageResult, ErgosfareContext context)
     {
         return null!;
     }
@@ -108,7 +107,7 @@ public class StubExceptionInterceptor: IExceptionInterceptor<StubMessage, object
     /// <param name="exception">The exception that was thrown.</param>
     /// <param name="context">The execution context.</param>
     /// <returns>The unchanged <paramref name="messageResult"/>.</returns>
-    public object? Handle(StubMessage message, object? messageResult, Exception exception, IExecutionContext context)
+    public object? Handle(StubMessage message, object? messageResult, Exception exception, ErgosfareContext context)
     {
         IsCalled = true;
         Result = messageResult;
@@ -131,7 +130,7 @@ public class StubFinalInterceptor: IFinalInterceptor<StubMessage, object>
     /// <param name="result">The result from the handler or previous interceptors.</param>
     /// <param name="exception">The exception, if one occurred during handling.</param>
     /// <param name="executionContext">The execution context.</param>
-    public void Handle(StubMessage message, object? result, Exception? exception, IExecutionContext executionContext)
+    public void Handle(StubMessage message, object? result, Exception? exception, ErgosfareContext executionContext)
     {
         IsCalled = true;
     }
@@ -153,7 +152,7 @@ public class StubIndirectFinalInterceptor: IFinalInterceptor<StubIndirectMessage
     /// <param name="result">The result from the handler or previous interceptors.</param>
     /// <param name="exception">The exception, if one occurred during handling.</param>
     /// <param name="executionContext">The execution context.</param>
-    public void Handle(StubIndirectMessage message, object? result, Exception? exception, IExecutionContext executionContext)
+    public void Handle(StubIndirectMessage message, object? result, Exception? exception, ErgosfareContext executionContext)
     {
         IsCalled = true;
     }

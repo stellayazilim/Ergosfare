@@ -1,8 +1,7 @@
-using Stella.Ergosfare.Core.Abstractions.Exceptions;
+﻿using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Test.Fixtures;
 using Stella.Ergosfare.Test.Fixtures.Stubs.Basic;
-using Xunit.Abstractions;
 
 namespace Stella.Ergosfare.Core.Test.Strategies;
 
@@ -18,7 +17,6 @@ public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
 
     // ReSharper disable once ConvertToPrimaryConstructor
     public SingleAsyncHandlerMediationStrategyTMessageTResultTests(
-        ITestOutputHelper testOutputHelper,
         MessageDependencyFixture messageDependencyFixture,
         ExecutionContextFixture executionContextFixture)
     {
@@ -39,7 +37,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
         _messageDependencyFixture = _messageDependencyFixture.New;
         _messageDependencyFixture.RegisterHandler(typeof(StubStringAsyncHandler));
         var dependencies = _messageDependencyFixture.CreateDependencies<StubMessage>();
-        var strategy = new SingleAsyncHandlerMediationStrategy<StubMessage, string>(null);
+        var strategy = new SingleAsyncHandlerMediationStrategy<StubMessage, string>();
 
         // act
         var result = await strategy.Mediate(
@@ -67,7 +65,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
             typeof(StubStringAsyncHandler),
             typeof(StubStringAsyncFinalInterceptor));
         var dependencies = _messageDependencyFixture.CreateDependencies<StubMessage>();
-        var strategy = new SingleAsyncHandlerMediationStrategy<StubMessage, string>(null);
+        var strategy = new SingleAsyncHandlerMediationStrategy<StubMessage, string>();
 
         Assert.NotEmpty(dependencies.FinalInterceptors);
 
@@ -97,7 +95,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
             typeof(StubStringAsyncHandler),
             typeof(StubStringHandler));
         var dependencies = _messageDependencyFixture.CreateDependencies<StubMessage>();
-        var strategy = new SingleAsyncHandlerMediationStrategy<StubMessage, string>(null);
+        var strategy = new SingleAsyncHandlerMediationStrategy<StubMessage, string>();
 
         // act
         var exception = await Record.ExceptionAsync(async () =>
@@ -113,7 +111,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
 
     /// <summary>
     /// A message with a descriptor but no direct handler must fail with an explicit
-    /// <see cref="InvalidOperationException"/>.
+    /// <see cref="NoHandlerFoundException"/>.
     /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
@@ -122,9 +120,9 @@ public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
     {
         // arrange
         _messageDependencyFixture = _messageDependencyFixture.New;
-        _messageDependencyFixture.MessageRegistry.Register(typeof(StubMessage));
+        _messageDependencyFixture.RegisterHandler(typeof(StubMessage));
         var dependencies = _messageDependencyFixture.CreateDependencies<StubMessage>();
-        var strategy = new SingleAsyncHandlerMediationStrategy<StubMessage, string>(null);
+        var strategy = new SingleAsyncHandlerMediationStrategy<StubMessage, string>();
 
         // act
         var exception = await Record.ExceptionAsync(async () =>
@@ -132,7 +130,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
                 new StubMessage(), dependencies, _executionContextFixture.Ctx, _messageDependencyFixture.ServiceProvider));
 
         // assert
-        Assert.IsType<InvalidOperationException>(exception);
+        Assert.IsType<NoHandlerFoundException>(exception);
 
         // cleanup
         _messageDependencyFixture.Dispose();
@@ -146,7 +144,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
     [Trait("Category", "Coverage")]
     public async Task Mediate_ShouldThrowArgumentNullException_WhenDependenciesNull()
     {
-        var strategy = new SingleAsyncHandlerMediationStrategy<StubMessage, string>(null);
+        var strategy = new SingleAsyncHandlerMediationStrategy<StubMessage, string>();
 
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
             strategy.Mediate(

@@ -1,4 +1,4 @@
-using Stella.Ergosfare.Core;
+﻿using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
@@ -27,7 +27,7 @@ public class EngineBackedEventFacadeTests
     [Group("audit")]
     public sealed class AuditGroupHandler : IEventHandler<GroupedEvent>
     {
-        public ValueTask HandleAsync(GroupedEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(GroupedEvent @event, ErgosfareContext context)
         {
             context.Set("auditRan", true);
             return ValueTask.CompletedTask;
@@ -36,7 +36,7 @@ public class EngineBackedEventFacadeTests
 
     public sealed class DefaultGroupHandler : IEventHandler<GroupedEvent>
     {
-        public ValueTask HandleAsync(GroupedEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(GroupedEvent @event, ErgosfareContext context)
         {
             context.Set("defaultRan", true);
             return ValueTask.CompletedTask;
@@ -83,8 +83,13 @@ public class EngineBackedEventFacadeTests
 
         var mediator = provider.GetRequiredService<IEventMediator>();
 
-        var settings = new EventMediationSettings();
-        settings.Filters.Groups = ["audit"];
+        var settings = new EventMediationSettings
+        {
+            Filters =
+            {
+                Groups = ["audit"]
+            }
+        };
 
         await mediator.PublishAsync(new GroupedEvent(), settings);
 
@@ -97,20 +102,14 @@ public class EngineBackedEventFacadeTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task BothConstructors_PublishIdentically()
+    public async Task ADirectlyConstructedFacade_PublishesLikeTheResolvedOne()
     {
         var provider = Build();
         await using var _ = provider;
 
-        var strategy = provider.GetRequiredService<ActualTypeOrFirstAssignableTypeMessageResolveStrategy>();
-        var adapters = provider.GetRequiredService<IResultAdapterService>();
+        var constructed = new EventMediator(provider.GetRequiredService<MessageDispatchEngine>(), provider);
 
-        var engineBacked = new EventMediator(
-            provider.GetRequiredService<MessageDispatchEngine>(), provider, strategy, adapters);
-        var mediatorBacked = new EventMediator(
-            strategy, adapters, provider.GetRequiredService<IMessageMediator>());
-
-        foreach (var mediator in new EventMediator[] { engineBacked, mediatorBacked })
+        foreach (var mediator in new [] { constructed, (EventMediator)provider.GetRequiredService<IEventMediator>() })
         {
             var settings = new EventMediationSettings();
 

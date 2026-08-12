@@ -43,7 +43,7 @@ public interface IEventMediator
     /// <param name="event">The event to publish.</param>
     /// <param name="context">The externally owned execution context to publish under.</param>
     /// <param name="eventMediationSettings">Optional settings for pipeline execution.</param>
-    ValueTask PublishAsync(IEvent @event, Core.Abstractions.IExecutionContext context, EventMediationSettings? eventMediationSettings = null);
+    ValueTask PublishAsync(IEvent @event, Core.Abstractions.ErgosfareContext context, EventMediationSettings? eventMediationSettings = null);
 
     /// <summary>
     ///     Asynchronously publishes an event with a specific type.
@@ -67,4 +67,29 @@ public interface IEventMediator
     /// </remarks>
     ValueTask PublishAsync<TEvent>(TEvent @event, EventMediationSettings? eventMediationSettings = null, CancellationToken cancellationToken = default)
         where TEvent : notnull;
+
+    /// <summary>
+    ///     Publishes an event under a canonical group filter. With a reused
+    ///     <see cref="Core.Abstractions.GroupSet"/> (define filters once, statically) the
+    ///     grouped broadcast plan matches on a single reference check and the call
+    ///     allocates no settings object. The default implementation routes through the
+    ///     settings overload, so foreign mediator implementations keep working unchanged.
+    /// </summary>
+    /// <param name="event">The event to publish.</param>
+    /// <param name="groups">The canonical group filter; <see cref="Core.Abstractions.GroupSet.Empty"/> publishes the default pipeline.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    ValueTask PublishAsync(IEvent @event, Core.Abstractions.GroupSet groups, CancellationToken cancellationToken = default)
+        => PublishAsync(@event, new EventMediationSettings { Filters = { Groups = groups } }, cancellationToken);
+
+    /// <summary>
+    ///     Strongly-typed counterpart of
+    ///     <see cref="PublishAsync(IEvent, Core.Abstractions.GroupSet, CancellationToken)"/>.
+    /// </summary>
+    /// <typeparam name="TEvent">The type of the event to publish.</typeparam>
+    /// <param name="event">The event to publish.</param>
+    /// <param name="groups">The canonical group filter.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    ValueTask PublishAsync<TEvent>(TEvent @event, Core.Abstractions.GroupSet groups, CancellationToken cancellationToken = default)
+        where TEvent : notnull
+        => PublishAsync(@event, new EventMediationSettings { Filters = { Groups = groups } }, cancellationToken);
 }

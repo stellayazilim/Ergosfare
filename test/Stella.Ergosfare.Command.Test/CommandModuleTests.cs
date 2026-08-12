@@ -1,8 +1,4 @@
-﻿// This file intentionally exercises the obsolete reflection-scanning surface until the
-// preview line removes it; the deprecation warning is expected and suppressed.
-#pragma warning disable CS0618
-
-using System.Reflection;
+﻿using System.Reflection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
@@ -32,7 +28,7 @@ public class CommandModuleTests
         /// <param name="message">The message to handle.</param>
         /// <param name="context">The execution context.</param>
         /// <returns>A completed <see cref="Task"/>.</returns>
-        public ValueTask Handle(IMessage message, IExecutionContext context)
+        public ValueTask Handle(IMessage message, ErgosfareContext context)
         {
             return ValueTask.CompletedTask;
         }
@@ -51,12 +47,11 @@ public class CommandModuleTests
 
             .AddErgosfare(x => x.AddCommandModule(c =>
                 c.Register<TestCommandHandler>()
-                    .RegisterFromAssembly(Assembly.GetExecutingAssembly()
-                    )
+                    .Register<TestCommandStringResultHandler>()
             )).BuildServiceProvider();
         var mediator = serviceCollection.GetRequiredService<ICommandMediator>();
         await mediator.SendAsync(new TestCommand());
-        var stringResult = mediator.SendAsync<string>(new TestCommandStringResult());
+        var stringResult = mediator.SendAsync(new TestCommandStringResult());
 
         Assert.Equal(string.Empty, await stringResult);
         

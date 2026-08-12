@@ -1,7 +1,10 @@
+﻿using System.Collections;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
-using Stella.Ergosfare.Core.Abstractions.Registry;
+using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Events.Abstractions;
 using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
@@ -30,7 +33,7 @@ public class BroadcastFastLaneTests
 
     public sealed class FastLaneEventHandler : IEventHandler<FastLaneEvent>
     {
-        public ValueTask HandleAsync(FastLaneEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(FastLaneEvent @event, ErgosfareContext context)
         {
             context.Set("writtenByHandler", @event.Tag ?? "-");
             return ValueTask.CompletedTask;
@@ -39,7 +42,7 @@ public class BroadcastFastLaneTests
 
     public sealed class FastLaneSecondHandler : IEventHandler<FastLaneEvent>
     {
-        public ValueTask HandleAsync(FastLaneEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(FastLaneEvent @event, ErgosfareContext context)
         {
             context.Set("secondHandlerRan", true);
             return ValueTask.CompletedTask;
@@ -106,13 +109,13 @@ public class BroadcastFastLaneTests
 
     public sealed class RewritingPreInterceptor : IEventPreInterceptor<RewrittenEvent>
     {
-        public ValueTask<RewrittenEvent> HandleAsync(RewrittenEvent @event, IExecutionContext context)
+        public ValueTask<RewrittenEvent> HandleAsync(RewrittenEvent @event, ErgosfareContext context)
             => ValueTask.FromResult(new RewrittenEvent { Payload = @event.Payload + "+rewritten" });
     }
 
     public sealed class RewrittenEventHandler : IEventHandler<RewrittenEvent>
     {
-        public ValueTask HandleAsync(RewrittenEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(RewrittenEvent @event, ErgosfareContext context)
         {
             context.Set("observedPayload", @event.Payload);
             context.Set("observedInstance", @event);
@@ -145,7 +148,7 @@ public class BroadcastFastLaneTests
 
     public sealed class ThrowingEventHandler : IEventHandler<ThrowingEvent>
     {
-        public ValueTask HandleAsync(ThrowingEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(ThrowingEvent @event, ErgosfareContext context)
             => throw new InvalidOperationException("evt-boom");
     }
 
@@ -202,7 +205,7 @@ public class BroadcastFastLaneTests
 
     public sealed class SlowEventHandler : IEventHandler<SlowEvent>
     {
-        public async ValueTask HandleAsync(SlowEvent @event, IExecutionContext context)
+        public async ValueTask HandleAsync(SlowEvent @event, ErgosfareContext context)
         {
             await Task.Delay(10);
             context.Set("afterAwait", 42);
@@ -228,7 +231,7 @@ public class BroadcastFastLaneTests
 
     public sealed class InnerEventHandler : IEventHandler<InnerEvent>
     {
-        public ValueTask HandleAsync(InnerEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(InnerEvent @event, ErgosfareContext context)
         {
             context.Set("innerRan", true);
             return ValueTask.CompletedTask;
@@ -237,7 +240,7 @@ public class BroadcastFastLaneTests
 
     public sealed class OuterEventHandler(IEventMediator events) : IEventHandler<OuterEvent>
     {
-        public async ValueTask HandleAsync(OuterEvent @event, IExecutionContext context)
+        public async ValueTask HandleAsync(OuterEvent @event, ErgosfareContext context)
         {
             using var scope = context.CreateScope();
             await events.PublishAsync(new InnerEvent(), scope.Context);
@@ -273,40 +276,11 @@ public class BroadcastFastLaneTests
     [ExcludeFromDiscovery]
     public sealed class LateEventHandler : IEventHandler<LateEvent>
     {
-        public ValueTask HandleAsync(LateEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(LateEvent @event, ErgosfareContext context)
         {
             context.Set("lateHandlerRan", true);
             return ValueTask.CompletedTask;
         }
-    }
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
-    public async Task Publish_ShouldPickUpRuntimeRegistrations_AfterWarmingTheInvokerPlan()
-    {
-        var provider = new ServiceCollection()
-            .AddTransient<LateEventHandler>()
-            .AddErgosfare(x => x.AddEventModule(e => e.Register<LateEvent>()))
-            .BuildServiceProvider();
-        await using var _ = provider;
-
-        var mediator = provider.GetRequiredService<IEventMediator>();
-        var registry = provider.GetRequiredService<IMessageRegistry>();
-
-        // Warm the invoker-cached plan with zero handlers (silent publishes).
-        var warm = new EventMediationSettings();
-        await mediator.PublishAsync(new LateEvent(), warm);
-        await mediator.PublishAsync(new LateEvent(), warm);
-        Assert.False(warm.Items.ContainsKey("lateHandlerRan"));
-
-        // A runtime registration bumps the registry version; the cached plan must rebuild.
-        registry.Register(typeof(LateEventHandler));
-
-        var probe = new EventMediationSettings();
-        await mediator.PublishAsync(new LateEvent(), probe);
-
-        Assert.Equal(true, probe.Items["lateHandlerRan"]);
     }
 
     [Fact]
@@ -343,7 +317,7 @@ public class BroadcastFastLaneTests
 
     public sealed class ScopedEventHandler(ScopedProbe probe) : IEventHandler<ScopedEvent>
     {
-        public ValueTask HandleAsync(ScopedEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(ScopedEvent @event, ErgosfareContext context)
         {
             context.Set("probe", probe);
             return ValueTask.CompletedTask;
@@ -354,7 +328,7 @@ public class BroadcastFastLaneTests
 
     public sealed class IsolatedEventHandler : IEventHandler<IsolatedEvent>
     {
-        public ValueTask HandleAsync(IsolatedEvent @event, IExecutionContext context)
+        public ValueTask HandleAsync(IsolatedEvent @event, ErgosfareContext context)
         {
             context.Set("handlerInstance", this);
             return ValueTask.CompletedTask;
@@ -414,5 +388,26 @@ public class BroadcastFastLaneTests
             .PublishAsync(new ScopedEvent(), settings);
 
         Assert.Same(expected, settings.Items["probe"]);
+    }
+
+    [ExcludeFromDiscovery]
+    public sealed class NeverRegisteredEvent : IEvent { }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task Publish_ShouldHonorThrowIfNoHandlerFound_ForAnUnregisteredType()
+    {
+        await using var provider = Build();
+
+        var mediator = provider.GetRequiredService<IEventMediator>();
+
+        // Default: silent, exactly as for a registered event nobody handles.
+        await mediator.PublishAsync(new NeverRegisteredEvent());
+
+        await Assert.ThrowsAsync<NoHandlerFoundException>(async () =>
+            await mediator.PublishAsync(
+                new NeverRegisteredEvent(),
+                new EventMediationSettings { ThrowIfNoHandlerFound = true }));
     }
 }

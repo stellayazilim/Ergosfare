@@ -1,4 +1,5 @@
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 
 namespace Stella.Ergosfare.Core.Test;
 
@@ -39,8 +40,8 @@ public class GeneratedDispatchRootsTests
 
         Assert.NotNull(classRoot);
         Assert.NotNull(structRoot);
-        Assert.Equal(typeof(ClassMessage), classRoot!.Accept(TypeProbeVisitor.Instance, state: false));
-        Assert.Equal(typeof(StructMessage), structRoot!.Accept(TypeProbeVisitor.Instance, state: false));
+        Assert.Equal(typeof(ClassMessage), classRoot.Accept(TypeProbeVisitor.Instance, state: false));
+        Assert.Equal(typeof(StructMessage), structRoot.Accept(TypeProbeVisitor.Instance, state: false));
     }
 
     [Fact]
@@ -52,7 +53,7 @@ public class GeneratedDispatchRootsTests
         var resultRoot = GeneratedDispatchRoots.FindResult(typeof(ClassMessage), typeof(string));
 
         Assert.NotNull(resultRoot);
-        Assert.Equal((typeof(ClassMessage), typeof(string)), resultRoot!.Accept(PairProbeVisitor.Instance, state: false));
+        Assert.Equal((typeof(ClassMessage), typeof(string)), resultRoot.Accept(PairProbeVisitor.Instance, state: false));
 
         // Result and stream stores are independent; pairs don't leak across them.
         Assert.Null(GeneratedDispatchRoots.FindResult(typeof(ClassMessage), typeof(int)));

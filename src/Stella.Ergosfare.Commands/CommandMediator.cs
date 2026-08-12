@@ -100,12 +100,44 @@ public class CommandMediator : ICommandMediator
     }
 
     /// <summary>
+    /// Sends a void command under a canonical group filter — no settings object, and with
+    /// a reused <see cref="GroupSet"/> the grouped executor lookup matches on a single
+    /// reference check. An empty set routes to the group-less fast lane.
+    /// </summary>
+    public ValueTask SendAsync(ICommand commandConstruct, GroupSet groups, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(groups);
+
+        IEnumerable<string>? effectiveGroups = groups.Count == 0 ? null : groups;
+
+        return _engine is not null
+            ? _engine.DispatchAsync(commandConstruct, _serviceProvider!, null, cancellationToken, effectiveGroups)
+            : _messageMediator!.DispatchAsync(commandConstruct, null, cancellationToken, effectiveGroups);
+    }
+
+    /// <summary>
+    /// Result-producing counterpart of
+    /// <see cref="SendAsync(ICommand, GroupSet, CancellationToken)"/>.
+    /// </summary>
+    public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct, GroupSet groups,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(groups);
+
+        IEnumerable<string>? effectiveGroups = groups.Count == 0 ? null : groups;
+
+        return _engine is not null
+            ? _engine.DispatchAsync<TResult>(commandConstruct, _serviceProvider!, null, cancellationToken, effectiveGroups)
+            : _messageMediator!.DispatchAsync<TResult>(commandConstruct, null, cancellationToken, effectiveGroups);
+    }
+
+    /// <summary>
     /// Sends a void command under an externally owned execution context — the
     /// nested-dispatch path: a handler opens a scope on its own context and passes the
     /// child here. The caller owns the context's lifetime; cancellation flows from the
     /// context.
     /// </summary>
-    public ValueTask SendAsync(ICommand commandConstruct, IExecutionContext context,
+    public ValueTask SendAsync(ICommand commandConstruct, ErgosfareContext context,
         CommandMediationSettings? commandMediationSettings = null)
     {
         return _engine is not null
@@ -122,9 +154,9 @@ public class CommandMediator : ICommandMediator
 
     /// <summary>
     /// Result-producing counterpart of
-    /// <see cref="SendAsync(ICommand, IExecutionContext, CommandMediationSettings?)"/>.
+    /// <see cref="SendAsync(ICommand, ErgosfareContext, CommandMediationSettings?)"/>.
     /// </summary>
-    public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct, IExecutionContext context,
+    public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct, ErgosfareContext context,
         CommandMediationSettings? commandMediationSettings = null)
     {
         return _engine is not null

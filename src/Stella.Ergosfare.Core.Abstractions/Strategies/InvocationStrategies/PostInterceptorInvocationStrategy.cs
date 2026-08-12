@@ -17,21 +17,36 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 /// The pipeline's result type — <see cref="ValueTask"/> for void pipelines, where the
 /// completed-task box stands in as the (meaningless) result object.
 /// </typeparam>
+/// <remarks>
+/// Static: the pipeline state travels as arguments, so a dispatch allocates no invoker object.
+/// </remarks>
 #pragma warning disable CS8714 // TResult is used as a pattern type argument; interceptor contracts declare notnull results
-internal sealed class PostInterceptorInvocationStrategy<TMessage, TResult>(
-    IMessageDependencies messageDependencies,
-    IResultAdapterService? resultAdapterService,
-    IServiceProvider serviceProvider)
+internal static class PostInterceptorInvocationStrategy<TMessage, TResult>
     where TMessage : notnull
 {
     /// <summary>
     /// Executes all post-interceptors for the specified message and result.
     /// </summary>
+    /// <param name="messageDependencies">The message's pipeline composition, supplying the post-interceptor list.</param>
+    /// <param name="resultAdapter">The result type's bound adapter, surfacing a failure carried inside an interceptor's result; null when the type has none.</param>
+    /// <param name="serviceProvider">The provider of the scope this dispatch runs in; interceptors resolve from it.</param>
     /// <param name="message">The message that was handled.</param>
     /// <param name="result">The result produced by the pipeline so far.</param>
     /// <param name="context">The execution context for the current pipeline invocation.</param>
-    /// <returns>The (possibly replaced) result after all post-interceptors have executed.</returns>
-    public async ValueTask<object?> Invoke(TMessage message, object? result, IExecutionContext context)
+    /// <returns>
+    /// The (possibly replaced) result after the executed post-interceptors, and the failure
+    /// carried inside one of their results, if any — a carried failure stops the stage at
+    /// the interceptor that produced it (the remaining post-interceptors never run, exactly
+    /// as a thrown failure would skip them) and the returned result is that failed carrier.
+    /// The caller owns the transition into the exception stage; nothing is thrown here.
+    /// </returns>
+    public static async ValueTask<(object? Result, Exception? CarriedException)> Invoke(
+        IMessageDependencies messageDependencies,
+        IResultAdapter<TResult>? resultAdapter,
+        IServiceProvider serviceProvider,
+        TMessage message,
+        object? result,
+        ErgosfareContext context)
     {
         var interceptors = messageDependencies.PostInterceptors;
 
@@ -53,15 +68,14 @@ internal sealed class PostInterceptorInvocationStrategy<TMessage, TResult>(
                     "Interface-erased dispatch is not supported; dispatch with the concrete message type."),
             };
 
-            var ex = resultAdapterService?.LookupException(result);
-
-            if (ex != null)
+            if (resultAdapter is not null && result is TResult typedResult
+                && resultAdapter.TryGetException(in typedResult, out var carried) && carried is not null)
             {
-                throw ex;
+                return (result, carried);
             }
         }
 
-        return result;
+        return (result, null);
     }
 }
 #pragma warning restore CS8714

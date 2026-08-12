@@ -24,5 +24,5 @@ public interface IPreInterceptor<in TMessage> : IPreInterceptor
     /// The message that continues through the pipeline — either <paramref name="message"/>
     /// itself or a modified instance of <typeparamref name="TMessage"/>.
     /// </returns>
-    object Handle(TMessage message, IExecutionContext context);
+    object Handle(TMessage message, ErgosfareContext context);
 }

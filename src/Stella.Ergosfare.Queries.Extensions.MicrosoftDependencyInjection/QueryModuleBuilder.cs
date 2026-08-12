@@ -1,25 +1,25 @@
 ﻿using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
-using Stella.Ergosfare.Core.Abstractions.Attributes;
-using Stella.Ergosfare.Core.Abstractions.Registry;
-using Stella.Ergosfare.Core.Abstractions.Registry.Descriptors;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Queries.Abstractions;
 
 namespace Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
 
 /// <summary>
-/// Provides a builder for registering query types in the message registry
-/// as part of the query module configuration.
+/// Provides a builder for selecting the query constructs this container runs from the
+/// compiled composition table.
 /// </summary>
-public sealed class QueryModuleBuilder(IMessageRegistry messageRegistry)
+/// <param name="compositions">
+/// The container's composition catalog, told which constructs this registration selects.
+/// </param>
+public sealed class QueryModuleBuilder(FrozenCompositionCatalog compositions)
 {
-    private readonly IMessageRegistry _messageRegistry = messageRegistry ?? throw new ArgumentNullException(nameof(messageRegistry));
+    private readonly FrozenCompositionCatalog _compositions = compositions ?? throw new ArgumentNullException(nameof(compositions));
 
-    
+
     /// <summary>
-    /// Registers a specific query type <typeparamref name="TQuery"/> in the message registry.
+    /// Registers a query construct.
     /// </summary>
-    /// <typeparam name="TQuery">The query type to register. Must implement <see cref="IQuery"/>.</typeparam>
+    /// <typeparam name="TQuery">The type to register. Must be a query construct.</typeparam>
     /// <returns>The current <see cref="QueryModuleBuilder"/> instance for fluent chaining.</returns>
     public QueryModuleBuilder Register<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] TQuery>() where TQuery : IQuery
     {
@@ -28,79 +28,37 @@ public sealed class QueryModuleBuilder(IMessageRegistry messageRegistry)
     }
 
     /// <summary>
-    /// Registers a query type by its <see cref="Type"/> in the message registry.
+    /// Registers a query construct — a query, or one of the handlers and interceptors
+    /// serving queries (their contracts carry the module marker too).
     /// </summary>
-    /// <param name="queryType">The <see cref="Type"/> of the query to register.</param>
+    /// <param name="queryType">The <see cref="Type"/> to register.</param>
     /// <returns>The current <see cref="QueryModuleBuilder"/> instance for fluent chaining.</returns>
-    /// <exception cref="NotSupportedException">Thrown if the type does not implement <see cref="IQuery"/>.</exception>
+    /// <exception cref="NotSupportedException">Thrown if the type is not a query construct.</exception>
     public QueryModuleBuilder Register([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type queryType)
     {
-        if (!queryType.IsAssignableTo(typeof(IQuery)))    
+        if (!queryType.IsAssignableTo(typeof(IQuery)))
             throw new NotSupportedException($"The given type '{queryType.Name}' is not a query construct and cannot be registered.");
-        
-        _messageRegistry.Register(queryType);
-        return this;
 
-    }
-
-    /// <summary>
-    /// Registers pre-built handler descriptors, bypassing reflection-based descriptor
-    /// construction — the registration path used by source-generated code.
-    /// </summary>
-    /// <param name="descriptors">The descriptors to register; every handler type must be a query construct.</param>
-    /// <returns>The current <see cref="QueryModuleBuilder"/> instance for fluent chaining.</returns>
-    /// <exception cref="NotSupportedException">Thrown when a descriptor's handler type is not a query construct.</exception>
-    public QueryModuleBuilder RegisterDescriptors(IEnumerable<IHandlerDescriptor> descriptors)
-    {
-        var accepted = new List<IHandlerDescriptor>();
-
-        foreach (var descriptor in descriptors)
-        {
-            if (!descriptor.HandlerType.IsAssignableTo(typeof(IQuery)))
-            {
-                throw new NotSupportedException($"The given type '{descriptor.HandlerType.Name}' is not a query construct and cannot be registered.");
-            }
-
-            accepted.Add(descriptor);
-        }
-
-        _messageRegistry.RegisterDescriptors(accepted);
+        _compositions.Select(queryType);
         return this;
     }
 
     /// <summary>
-    /// Registers the assembly's query types that participate in default discovery: types
-    /// excluded via <see cref="ExcludeFromDiscoveryAttribute"/> or gated behind a
-    /// <see cref="DiscoveryKeyAttribute"/> are skipped, mirroring source-generated
-    /// <c>RegisterGenerated()</c>.
+    /// Registers a batch of pipeline participants — the bulk path source-generated
+    /// registration uses.
     /// </summary>
-    /// <param name="assembly">The <see cref="Assembly"/> to scan for query types.</param>
+    /// <remarks>
+    /// No module assertion here: the generator has already partitioned its discoveries by
+    /// module, and not every participant contract carries the module marker (the modifying
+    /// interceptor shapes are declared purely over the core contracts).
+    /// <see cref="Register(Type)"/> keeps the assertion, since a hand-written registration
+    /// is where a wrong-module type actually surfaces.
+    /// </remarks>
+    /// <param name="participantTypes">The handler and interceptor types to register.</param>
     /// <returns>The current <see cref="QueryModuleBuilder"/> instance for fluent chaining.</returns>
-    [Obsolete("Reflection-based assembly scanning is deprecated and will be removed in the next release. Use source-generated RegisterGenerated() — or RegisterGenerated(pattern) for discovery keys — and Register<T>() for explicit registrations.")]
-    [RequiresUnreferencedCode("Assembly scanning discovers query types via reflection; trimming may remove them. Register queries explicitly (or use source-generated registration) in trimmed or AOT applications.")]
-    public QueryModuleBuilder RegisterFromAssembly(Assembly assembly)
-        => RegisterFromAssembly(assembly, DiscoveryKeyAttribute.DefaultKey);
-
-    /// <summary>
-    /// Registers the assembly's query types whose discovery keys match the given pattern —
-    /// an exact key or a trailing-<c>*</c> prefix glob. See
-    /// <see cref="DiscoveryKeyAttribute"/> for the key model.
-    /// </summary>
-    /// <param name="assembly">The <see cref="Assembly"/> to scan for query types.</param>
-    /// <param name="discoveryKeyPattern">The discovery key pattern to select types by.</param>
-    /// <returns>The current <see cref="QueryModuleBuilder"/> instance for fluent chaining.</returns>
-    [Obsolete("Reflection-based assembly scanning is deprecated and will be removed in the next release. Use source-generated RegisterGenerated() — or RegisterGenerated(pattern) for discovery keys — and Register<T>() for explicit registrations.")]
-    [RequiresUnreferencedCode("Assembly scanning discovers query types via reflection; trimming may remove them. Register queries explicitly (or use source-generated registration) in trimmed or AOT applications.")]
-    public QueryModuleBuilder RegisterFromAssembly(Assembly assembly, string discoveryKeyPattern)
+    public QueryModuleBuilder RegisterParticipants(IEnumerable<Type> participantTypes)
     {
-        foreach (var type in assembly.GetTypes())
-        {
-            if (type.IsAssignableTo(typeof(IQuery)) && Discovery.Matches(type, discoveryKeyPattern))
-            {
-                _messageRegistry.Register(type);
-            }
-        }
-
+        _compositions.Select(participantTypes);
         return this;
     }
 }
