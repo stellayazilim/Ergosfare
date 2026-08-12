@@ -7,7 +7,8 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 ///     <c>GeneratedDispatchRoots.AddResultPlan&lt;TMessage, TResult, THandler&gt;()</c> so
 ///     the runtime executor closes over all three types and calls the handler
 ///     devirtualized. Advisory exactly like the void plan: the runtime re-validates the
-///     pipeline per registry version and a mismatched plan only loses the speedup.
+///     pipeline against the container's selected frozen composition, and a mismatched plan
+///     only loses the speedup.
 /// </summary>
 /// <param name="MessageTypeExpression">Fully qualified expression of the closed message type.</param>
 /// <param name="ResultTypeExpression">Fully qualified expression of the closed result type.</param>

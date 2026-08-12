@@ -2278,8 +2278,8 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
     ///     shape-builder, and every call's pattern-match arm is decidable at compile time.
     ///     Anything unmodelable disqualifies the message rather than risking divergence;
     ///     the runtime gate then simply never sees a staged plan for it. The plan stays
-    ///     advisory regardless: the hosting executor re-validates the composition per
-    ///     registry version.
+    ///     advisory regardless: the hosting executor validates it against the container's
+    ///     selected frozen composition.
     /// </summary>
     private static List<StagedPlanModel> ComputeStagedPlans(
         List<RegistrableTypeModel> types,
@@ -2751,10 +2751,10 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
     ///     (<c>IAsyncHandler&lt;TMessage&gt;</c>), its handler participates in default
     ///     discovery in the default group, and no discovered interceptor targets the
     ///     message directly. The check is deliberately conservative and only ever costs
-    ///     the speedup when wrong: the runtime executor re-validates the actual pipeline
-    ///     per registry version and falls back to the runtime dispatch shape on any
-    ///     mismatch (covariant handlers or interceptors registered for base contracts,
-    ///     keyed selections, runtime registrations).
+    ///     the speedup when wrong: the runtime executor validates the actual pipeline
+    ///     against the container's selected frozen composition and falls back to the
+    ///     general dispatch shape on any mismatch (covariant handlers or interceptors
+    ///     selected through base contracts, or keyed selections).
     /// </summary>
     private static List<VoidPlanModel> ComputeVoidPlans(List<RegistrableTypeModel> types)
     {
@@ -2796,8 +2796,8 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
     ///     Result-producing counterpart of <see cref="ComputeVoidPlans"/>: a dispatchable
     ///     command/query with exactly one closed, non-stream result contract qualifies
     ///     when its whole discovered pipeline is a single async handler producing exactly
-    ///     that result. Equally conservative and equally advisory — the runtime
-    ///     re-validates per registry version.
+    ///     that result. Equally conservative and equally advisory — the runtime validates
+    ///     it against the container's selected frozen composition.
     /// </summary>
     private static List<ResultPlanModel> ComputeResultPlans(List<RegistrableTypeModel> types)
     {

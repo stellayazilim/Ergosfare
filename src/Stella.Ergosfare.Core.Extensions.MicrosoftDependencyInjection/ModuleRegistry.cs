@@ -176,8 +176,9 @@ public class ModuleRegistry(
     /// message's arguments before resolving it.
     /// </remarks>
     [UnconditionalSuppressMessage("Trimming", "IL2072",
-        Justification = "Every element originates from a frozen participant row, whose handler type the generated " +
-                        "table references through typeof — statically rooted, so the constructors survive trimming.")]
+        Justification = "Every element originates from FrozenParticipant.HandlerType, which is annotated to " +
+                        "preserve public constructors; the HashSet the catalog collects them into only " +
+                        "deduplicates and cannot carry the annotation.")]
     private HashSet<Type> RegisterParticipants()
     {
         var registered = new HashSet<Type>();

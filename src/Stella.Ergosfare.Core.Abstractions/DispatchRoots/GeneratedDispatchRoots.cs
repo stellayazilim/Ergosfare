@@ -53,10 +53,9 @@ public static class GeneratedDispatchRoots
     /// Roots a compile-time pipeline plan for a void message whose entire pipeline is a
     /// single async handler: the dispatch executor closes over both the message and the
     /// handler type, so the handler is invoked devirtualized — no contract pattern match.
-    /// The plan is advisory: the executor re-validates the actual pipeline against the
-    /// registry on every version change and falls back to the runtime dispatch shape
-    /// whenever the pipeline no longer matches (interceptors registered at runtime, a
-    /// different handler resolved, adapters configured). Idempotent.
+    /// The plan is advisory: the executor validates it against the container's selected
+    /// frozen composition and falls back to the general dispatch shape whenever the
+    /// composition does not match. Idempotent.
     /// </summary>
     public static void AddVoidPlan<TMessage, THandler>()
         where TMessage : IMessage
@@ -103,7 +102,8 @@ public static class GeneratedDispatchRoots
     /// Result-producing counterpart of <see cref="AddVoidPlan{TMessage, THandler}()"/>:
     /// roots a compile-time pipeline plan for a message whose entire pipeline is a single
     /// async result handler, so the dispatch executor invokes it devirtualized. The plan
-    /// is advisory and re-validated per registry version exactly like the void plan.
+    /// is advisory and validated against the container's selected frozen composition,
+    /// exactly like the void plan.
     /// Idempotent.
     /// </summary>
     public static void AddResultPlan<TMessage, TResult, THandler>()
@@ -141,8 +141,9 @@ public static class GeneratedDispatchRoots
     /// Roots a staged pipeline plan for a void message whose pipeline carries interceptor
     /// stages: bespoke straight-line code for the whole pipeline, replacing the runtime
     /// strategy's generic machinery. Advisory exactly like the single-handler plans — the
-    /// hosting executor re-validates the plan's <see cref="StagedPlanComposition"/> against
-    /// the registry per version and falls back to the runtime strategy on any mismatch.
+    /// hosting executor validates the plan's <see cref="StagedPlanComposition"/> against
+    /// the container's selected frozen composition and falls back to the general strategy
+    /// on any mismatch.
     /// Idempotent.
     /// </summary>
     public static void AddStagedPlan<TMessage>(StagedVoidPlan<TMessage> plan)
@@ -168,10 +169,9 @@ public static class GeneratedDispatchRoots
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, FrozenComposition?> FrozenCompositionLadder = new();
 
     /// <summary>
-    /// Roots a message's frozen pipeline composition — the compile-time image of the
-    /// registry-derived pipeline shape. Appended at load time by generated module
-    /// initializers (a plugin assembly loading later appends its own entries the same
-    /// way) and immutable afterwards. Idempotent.
+    /// Roots a message's frozen pipeline composition — the pipeline shape produced at
+    /// compile time. Generated module initializers populate the process-wide table as
+    /// assemblies load; each entry is immutable after publication. Idempotent.
     /// </summary>
     public static void AddFrozenComposition(FrozenComposition composition)
         => FrozenCompositions.TryAdd(composition.MessageType, composition);

@@ -13,8 +13,8 @@ public static class ModuleRegistryExtensions
     /// </summary>
     /// <param name="registry">The module registry to which the event module will be added.</param>
     /// <param name="builder">
-    /// An action to configure the <see cref="EventModuleBuilder"/>, 
-    /// allowing registration of events in the message registry.
+    /// An action that configures the <see cref="EventModuleBuilder"/> by selecting event
+    /// participants from the compile-time frozen composition table.
     /// </param>
     /// <returns>The same <see cref="IModuleRegistry"/> instance for fluent chaining.</returns>
     public static IModuleRegistry AddEventModule(this IModuleRegistry registry, Action<EventModuleBuilder> builder)

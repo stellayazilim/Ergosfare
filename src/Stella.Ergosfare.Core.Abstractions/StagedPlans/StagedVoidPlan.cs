@@ -7,10 +7,10 @@ namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 /// pattern.
 /// </summary>
 /// <remarks>
-/// The plan is advisory: the hosting executor re-validates <see cref="Composition"/>
-/// against the live registry on every version change and falls back to the runtime
-/// strategy whenever the pipeline no longer matches, so a stale plan only loses its
-/// speedup, never changes behavior. <see cref="StagedVoidPlan{TMessage}.Execute"/> must
+/// The plan is advisory: the hosting executor validates <see cref="Composition"/> against
+/// the container's selected frozen composition and falls back to the general strategy on
+/// a mismatch, so a stale plan only loses its speedup, never changes behavior.
+/// <see cref="StagedVoidPlan{TMessage}.Execute"/> must
 /// resolve every participant from the provider it is handed — that is exactly what the
 /// runtime handler references do outside memoized mode, which the executor's gate
 /// excludes.

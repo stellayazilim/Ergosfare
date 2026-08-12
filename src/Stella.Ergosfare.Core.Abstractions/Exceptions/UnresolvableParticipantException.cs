@@ -2,15 +2,14 @@
 namespace Stella.Ergosfare.Core.Abstractions.Exceptions;
 
 /// <summary>
-/// Exception thrown when a message's pipeline names a participant the dispatching
-/// container cannot resolve — typically a type added to the process-wide message registry
-/// after that container was built.
+/// Exception thrown when a message's selected frozen composition names a participant that
+/// the dispatching container cannot resolve.
 /// </summary>
 /// <remarks>
 /// Raised while the pipeline is being built rather than part-way through a dispatch, so no
-/// participant runs before the failure. Nothing is cached for the failed build: registering
-/// the participant with a container and dispatching again works, which is the only way back
-/// since the registry has no removal.
+/// participant runs before the failure. Nothing is cached for the failed build. Ensure the
+/// module that selected the participant also registers it with dependency injection before
+/// building the container.
 /// </remarks>
 /// <param name="messageType">The message type whose pipeline could not be built.</param>
 /// <param name="participantType">The participant the container cannot resolve.</param>
