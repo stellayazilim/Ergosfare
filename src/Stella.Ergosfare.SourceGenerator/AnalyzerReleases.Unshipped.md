@@ -20,4 +20,4 @@ ERGOSG012 | Usage | Error | Conflicting result-adapter annotations
 ERGOSG013 | Usage | Error | Result type is not served by the configured default result adapter
 ERGOSG014 | Usage | Warning | Opted-out message keeps a throwing pipeline
 ERGOSG015 | Usage | Warning | Plugin assembly is excluded from reference scanning by the reserved name prefix
-ERGOSG016 | Usage | Warning | Generic participant over an open message type binds to nothing and never executes
+ERGOSG016 | Usage | Warning | Generic participant closes over no message and never executes

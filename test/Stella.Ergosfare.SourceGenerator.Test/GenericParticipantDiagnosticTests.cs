@@ -9,6 +9,12 @@ namespace Stella.Ergosfare.SourceGenerator.Test;
 /// </summary>
 public class GenericParticipantDiagnosticTests
 {
+    /// <summary>
+    ///     A participant whose constraint no compiled message satisfies. Monomorphization
+    ///     closes an open participant over every message its constraint admits, so the only
+    ///     way one still binds to nothing is for that set to be empty — which is exactly
+    ///     when ERGOSG016 has something to say.
+    /// </summary>
     private const string GenericInterceptor = """
         using Stella.Ergosfare.Core.Abstractions;
         using Stella.Ergosfare.Commands.Abstractions;
@@ -23,8 +29,10 @@ public class GenericParticipantDiagnosticTests
                 public ValueTask HandleAsync(Ship command, ErgosfareContext context) => default;
             }
 
+            public interface IAudited : ICommand { }
+
             public sealed class ValidateCommands<TCommand> : ICommandPreInterceptor<TCommand>
-                where TCommand : ICommand
+                where TCommand : IAudited
             {
                 public ValueTask<TCommand> HandleAsync(TCommand command, ErgosfareContext context)
                     => ValueTask.FromResult(command);
@@ -43,14 +51,13 @@ public class GenericParticipantDiagnosticTests
     }
 
     /// <summary>
-    ///     The diagnostic states the truth the emitted code shows: the message's pipeline
-    ///     really does come out without the participant. Pinning both together keeps the
-    ///     diagnostic honest if the binding is ever fixed — the day a generic participant
-    ///     binds, this test fails and says so.
+    ///     The diagnostic states the truth the emitted code shows: the participant is
+    ///     registered, and no message's pipeline contains it. Pinning both together is what
+    ///     keeps the diagnostic honest — the day this participant binds, this test says so.
     /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
-    public void GenericParticipant_IsAbsentFromTheMessagePipeline()
+    public void GenericParticipant_IsAbsentFromEveryMessagePipeline()
     {
         var result = GeneratorTestHost.Run(GenericInterceptor);
 

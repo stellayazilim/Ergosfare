@@ -158,11 +158,21 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
             !provider.GlobalOptions.TryGetValue(ScanReferencesBuildProperty, out var value)
             || !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase));
 
+        // Referenced types, plus the monomorphized participants — the ones that take their
+        // message as a type parameter, closed over the messages their constraint admits.
+        // Both are compilation-wide questions rather than per-declaration ones, so they
+        // share a stage; each model carries its own provenance, and joining the array here
+        // keeps the positional Combine chain below untouched.
         var referencedTypes = context.CompilationProvider
             .Combine(scanReferences)
-            .Select(static (pair, ct) => pair.Right
-                ? ScanReferencedAssemblies(pair.Left, ct)
-                : ImmutableArray<RegistrableTypeModel>.Empty);
+            .Select(static (pair, ct) =>
+            {
+                var referenced = pair.Right
+                    ? ScanReferencedAssemblies(pair.Left, ct)
+                    : ImmutableArray<RegistrableTypeModel>.Empty;
+
+                return referenced.AddRange(MonomorphizeOpenParticipants(pair.Left, ct));
+            });
 
         // Dispatch sites of the current compilation: every mediator dispatch invocation
         // with the static type of its message argument — the manifest emission's payload
@@ -1523,9 +1533,13 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
     /// </summary>
     private static ImmutableArray<ContractShapeModel> BuildContractShapes(INamedTypeSymbol symbol)
     {
+        // Arity alone is not the question — a closed constructed participant has the same
+        // arity as the definition it came from, and its contracts name concrete types. What
+        // disqualifies a type here is an *unbound* level anywhere in its chain: the staged
+        // plan has to name the participant, and a name with an open level cannot be written.
         for (var current = symbol; current is not null; current = current.ContainingType)
         {
-            if (current.Arity > 0)
+            if (current.Arity > 0 && IsUnboundOrDefinition(current))
             {
                 return ImmutableArray<ContractShapeModel>.Empty;
             }
@@ -2051,8 +2065,21 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
 
         // Source-declared types first: on a (pathological) full-name collision with a
         // referenced type, typeof in the generated file binds to the source declaration.
-        AddModels(context, sourceModels, seen, types, excludedShadows, defaultResultAdapter);
-        AddModels(context, referencedModels, seen, types, excludedShadows, defaultResultAdapter);
+        // The open definitions monomorphization answered for. A definition that closed over
+        // at least one message still carries IsGenericParticipant on its own model — it is a
+        // declared open generic, after all — but it is no longer the shape ERGOSG016 reports.
+        var monomorphizedDefinitions = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var model in referencedModels)
+        {
+            if (model.MonomorphizedFrom is { } definition)
+            {
+                monomorphizedDefinitions.Add(definition);
+            }
+        }
+
+        AddModels(context, sourceModels, seen, types, excludedShadows, monomorphizedDefinitions, defaultResultAdapter);
+        AddModels(context, referencedModels, seen, types, excludedShadows, monomorphizedDefinitions, defaultResultAdapter);
 
         // Reachability verdicts and the opt-in handler trim; the returned list is what
         // emission proceeds with.
@@ -3321,6 +3348,7 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
         HashSet<string> seen,
         List<RegistrableTypeModel> types,
         List<RegistrableTypeModel> excludedShadows,
+        HashSet<string> monomorphizedDefinitions,
         DefaultResultAdapterSiteModel? defaultResultAdapter)
     {
         foreach (var model in models)
@@ -3354,8 +3382,9 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
             }
 
             // Ahead of the informational ones: a participant that never runs makes every
-            // finding about how it would be constructed moot.
-            if (model.IsGenericParticipant)
+            // finding about how it would be constructed moot. A definition that closed over
+            // at least one message is not that shape — monomorphization answered for it.
+            if (model.IsGenericParticipant && !monomorphizedDefinitions.Contains(model.TypeofExpression))
             {
                 context.ReportDiagnostic(Diagnostic.Create(
                     GeneratorDiagnostics.GenericParticipantNeverBinds,
@@ -3763,6 +3792,29 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
     ///     type, so no message's stage arrays ever contain it.
     ///     </para>
     /// </remarks>
+    /// <summary>
+    ///     Whether a generic level is still open — the definition itself, or a constructed
+    ///     form whose arguments are its own type parameters. A form closed over concrete
+    ///     types is neither, and can be named.
+    /// </summary>
+    private static bool IsUnboundOrDefinition(INamedTypeSymbol type)
+    {
+        if (type.IsUnboundGenericType || SymbolEqualityComparer.Default.Equals(type, type.OriginalDefinition))
+        {
+            return true;
+        }
+
+        foreach (var argument in type.TypeArguments)
+        {
+            if (argument is ITypeParameterSymbol)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static bool IsUnbindableGenericParticipant(INamedTypeSymbol symbol)
     {
         if (symbol.Arity == 0)
@@ -3784,6 +3836,270 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
         }
 
         return false;
+    }
+
+    /// <summary>
+    ///     Closes every unbindable open participant over the messages its constraint admits,
+    ///     one closed model per pair — the compile-time counterpart of the instantiations a
+    ///     generic method gets in the binary.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///     The closing set does not come from the source: nobody writes
+    ///     <c>ValidateCommands&lt;RegisterUser&gt;</c>. It comes from the type parameter's
+    ///     constraint intersected with the compiled message set, and every pair that
+    ///     survives becomes a distinct type with its own registration and its own place in
+    ///     that message's pipeline.
+    ///     </para>
+    ///     <para>
+    ///     A participant that closes over nothing keeps ERGOSG016: it was registered and it
+    ///     still runs for no message.
+    ///     </para>
+    /// </remarks>
+    private static ImmutableArray<RegistrableTypeModel> MonomorphizeOpenParticipants(
+        Compilation compilation,
+        CancellationToken ct)
+    {
+        List<INamedTypeSymbol>? openParticipants = null;
+        List<INamedTypeSymbol>? messages = null;
+
+        CollectMonomorphizationCandidates(
+            compilation.Assembly.GlobalNamespace, ref openParticipants, ref messages, ct);
+
+        if (openParticipants is null || messages is null)
+        {
+            return ImmutableArray<RegistrableTypeModel>.Empty;
+        }
+
+        ImmutableArray<RegistrableTypeModel>.Builder? results = null;
+
+        foreach (var participant in openParticipants)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            // Only the single-parameter shape is modeled: the message is the one thing a
+            // constraint can name, and a second parameter has nothing to be closed from.
+            if (participant.Arity != 1)
+            {
+                continue;
+            }
+
+            var parameter = participant.TypeParameters[0];
+
+            foreach (var message in messages)
+            {
+                if (!SatisfiesConstraints(parameter, message))
+                {
+                    continue;
+                }
+
+                var closed = participant.OriginalDefinition.Construct(message);
+
+                if (!IsNameableClosedType(closed, compilation.Assembly))
+                {
+                    continue;
+                }
+
+                var model = CreateMonomorphizedModel(closed, participant, compilation.Assembly);
+
+                if (model is { } value)
+                {
+                    (results ??= ImmutableArray.CreateBuilder<RegistrableTypeModel>()).Add(value);
+                }
+            }
+        }
+
+        return results?.ToImmutable() ?? ImmutableArray<RegistrableTypeModel>.Empty;
+    }
+
+    /// <summary>
+    ///     Walks the compilation's own types for the two halves monomorphization needs: the
+    ///     open participants that bind to nothing, and the messages a constraint can admit.
+    /// </summary>
+    private static void CollectMonomorphizationCandidates(
+        INamespaceSymbol ns,
+        ref List<INamedTypeSymbol>? openParticipants,
+        ref List<INamedTypeSymbol>? messages,
+        CancellationToken ct)
+    {
+        foreach (var member in ns.GetMembers())
+        {
+            ct.ThrowIfCancellationRequested();
+
+            switch (member)
+            {
+                case INamespaceSymbol nested:
+                    CollectMonomorphizationCandidates(nested, ref openParticipants, ref messages, ct);
+                    continue;
+                case INamedTypeSymbol type:
+                    CollectMonomorphizationCandidate(type, ref openParticipants, ref messages);
+                    continue;
+            }
+        }
+    }
+
+    private static void CollectMonomorphizationCandidate(
+        INamedTypeSymbol type,
+        ref List<INamedTypeSymbol>? openParticipants,
+        ref List<INamedTypeSymbol>? messages)
+    {
+        foreach (var nested in type.GetTypeMembers())
+        {
+            CollectMonomorphizationCandidate(nested, ref openParticipants, ref messages);
+        }
+
+        if (type.IsStatic || type.IsImplicitlyDeclared || IsExcludedFromDiscovery(type))
+        {
+            return;
+        }
+
+        GetMarkers(type, out var isCommand, out var isQuery, out var isEvent);
+
+        if (!isCommand && !isQuery && !isEvent)
+        {
+            return;
+        }
+
+        if (IsUnbindableGenericParticipant(type))
+        {
+            (openParticipants ??= []).Add(type);
+            return;
+        }
+
+        // A message is what a constraint can admit: dispatchable, and therefore not itself
+        // a participant.
+        if (IsDispatchableMessage(type, BuildDescriptors(type)))
+        {
+            (messages ??= []).Add(type);
+        }
+    }
+
+    /// <summary>
+    ///     Whether a message satisfies every constraint the participant's type parameter
+    ///     declares — the compile-time question "would <c>Participant&lt;Message&gt;</c>
+    ///     have compiled if someone had written it".
+    /// </summary>
+    private static bool SatisfiesConstraints(ITypeParameterSymbol parameter, INamedTypeSymbol candidate)
+    {
+        if (parameter.HasReferenceTypeConstraint && candidate.IsValueType)
+        {
+            return false;
+        }
+
+        if (parameter.HasValueTypeConstraint && !candidate.IsValueType)
+        {
+            return false;
+        }
+
+        if (parameter.HasConstructorConstraint
+            && !candidate.InstanceConstructors.Any(c =>
+                c is { Parameters.Length: 0, DeclaredAccessibility: Accessibility.Public }))
+        {
+            return false;
+        }
+
+        foreach (var constraint in parameter.ConstraintTypes)
+        {
+            if (constraint is not INamedTypeSymbol named || !IsAssignableToConstraint(candidate, named))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsAssignableToConstraint(INamedTypeSymbol candidate, INamedTypeSymbol constraint)
+    {
+        for (var current = candidate; current is not null; current = current.BaseType)
+        {
+            if (SymbolEqualityComparer.Default.Equals(current, constraint))
+            {
+                return true;
+            }
+        }
+
+        foreach (var iface in candidate.AllInterfaces)
+        {
+            if (SymbolEqualityComparer.Default.Equals(iface, constraint))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Projects one monomorphized participant to its registration model. The closed form
+    ///     is a distinct type — it names itself in full rather than in the unbound form a
+    ///     declared generic uses — and its contracts now name a concrete message, which is
+    ///     what lets the composition table bind it like any other participant.
+    /// </summary>
+    private static RegistrableTypeModel? CreateMonomorphizedModel(
+        INamedTypeSymbol closed,
+        INamedTypeSymbol openDefinition,
+        IAssemblySymbol currentAssembly)
+    {
+        var descriptors = BuildDescriptors(closed);
+
+        if (descriptors.IsEmpty)
+        {
+            return null;
+        }
+
+        GetMarkers(openDefinition, out var isCommand, out var isQuery, out var isEvent);
+
+        var usesKeyedServices = false;
+        var typeofExpression = VerbatimTypeExpression(closed);
+        var providerConstruction =
+            GetProviderConstructionExpression(closed, typeofExpression, currentAssembly, out usesKeyedServices);
+
+        var stagedKeyedServices = false;
+        var stagedConstruction = TryBuildConstructionExpression(
+            closed, typeofExpression, currentAssembly, "serviceProvider",
+            allowParameterless: true, out stagedKeyedServices);
+
+        return new RegistrableTypeModel
+        {
+            TypeofExpression = typeofExpression,
+            DisplayName = closed.ToDisplayString(),
+            IsCommand = isCommand,
+            IsQuery = isQuery,
+            IsEvent = isEvent,
+            IsAccessible = true,
+            Location = null,
+            Weight = GetWeight(openDefinition),
+            GroupsExpression = GetGroupsExpression(openDefinition),
+            GroupNames = GetGroupNames(openDefinition),
+            Descriptors = descriptors,
+            ReferencedAssemblyName = null,
+            DiscoveryKeys = GetDiscoveryKeys(openDefinition),
+            IsDispatchableMessage = false,
+            IsMessageShape = false,
+            DispatchResults = ImmutableArray<DispatchResultModel>.Empty,
+            IsDirectlyConstructible = IsDirectlyConstructible(closed),
+            ProviderConstructionExpression = providerConstruction,
+            ProviderConstructionUsesKeyedServices = usesKeyedServices,
+            HasPipelineExclusion = HasPipelineExclusionAttribute(openDefinition),
+            ExcludedInterceptorGroups = GetPipelineExclusionGroups(openDefinition),
+            IsValueType = closed.IsValueType,
+            IsNestedType = closed.ContainingType is not null,
+            // Bound, so no longer the shape ERGOSG016 reports.
+            IsGenericParticipant = false,
+            MonomorphizedFrom = BuildTypeofExpression(openDefinition),
+            AssignableKeys = ImmutableArray<string>.Empty,
+            ContractShapes = BuildContractShapes(closed),
+            StagedConstructionExpression = stagedConstruction,
+            StagedConstructionUsesKeyedServices = stagedKeyedServices,
+            HasMultiplePublicConstructors = false,
+            HasFromServicesConstructorParameter = false,
+            InfoLocation = null,
+            IsExcludedFromDiscovery = false,
+            ResultAdapter = null,
+            HasIgnoredResultAdapter = false,
+            MetadataSortKey = BuildMetadataName(closed),
+        };
     }
 
     private static bool IsAccessibleFromGeneratedCode(INamedTypeSymbol symbol)

@@ -175,6 +175,17 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     public required bool IsGenericParticipant { get; init; }
 
     /// <summary>
+    ///     For a monomorphized participant: the <c>typeof</c> expression of the open
+    ///     definition it was closed from. <c>null</c> for every declared type.
+    /// </summary>
+    /// <remarks>
+    ///     The link back matters for exactly one thing: a definition that closed over at
+    ///     least one message is not the shape ERGOSG016 reports, and the only way to know is
+    ///     to see whether anything came out of it.
+    /// </remarks>
+    public string? MonomorphizedFrom { get; init; }
+
+    /// <summary>
     ///     For dispatchable messages: the normalized type expressions of every base type
     ///     and implemented interface — the compile-time domain of the runtime's
     ///     <c>IsAssignableTo</c> checks that admit indirect (covariant) interceptors.
@@ -281,6 +292,7 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
             || IsValueType != other.IsValueType
             || IsNestedType != other.IsNestedType
             || IsGenericParticipant != other.IsGenericParticipant
+            || MonomorphizedFrom != other.MonomorphizedFrom
             || StagedConstructionExpression != other.StagedConstructionExpression
             || StagedConstructionUsesKeyedServices != other.StagedConstructionUsesKeyedServices
             || HasMultiplePublicConstructors != other.HasMultiplePublicConstructors
