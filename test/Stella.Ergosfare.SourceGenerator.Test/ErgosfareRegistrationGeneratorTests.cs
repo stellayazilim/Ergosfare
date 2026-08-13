@@ -146,9 +146,14 @@ public class ErgosfareRegistrationGeneratorTests
             }
             """);
 
-        Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
         Assert.Contains("typeof(global::TestApp.AuditPreInterceptor<>)", result.GeneratedSource);
+
+        // Emitted in unbound form — and bound by nothing, which this test used to assert
+        // was fine by demanding no diagnostics. It is not fine: an interceptor taking its
+        // message as a type parameter appears in no message's pipeline and never runs, so
+        // the registration above is all there is. ERGOSG016 is that fact said out loud.
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "ERGOSG016");
     }
 
     [Fact]

@@ -160,6 +160,21 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     public required bool IsNestedType { get; init; }
 
     /// <summary>
+    ///     Whether this is a generic participant no message can bind: one whose contract
+    ///     names a bare type parameter as its message. It registers like any other
+    ///     participant and then appears in no pipeline — participants are matched to
+    ///     messages by concrete type, and a concrete message carries no generic arguments
+    ///     to close this one over. It never executes, and until ERGOSG016 it never said so.
+    /// </summary>
+    /// <remarks>
+    ///     Not every generic participant: one whose contract's message type is built from
+    ///     its own type parameters (a handler for a generic message) binds fine — the table
+    ///     keys the message by its definition and the dispatch closes the participant over
+    ///     the message's arguments.
+    /// </remarks>
+    public required bool IsGenericParticipant { get; init; }
+
+    /// <summary>
     ///     For dispatchable messages: the normalized type expressions of every base type
     ///     and implemented interface — the compile-time domain of the runtime's
     ///     <c>IsAssignableTo</c> checks that admit indirect (covariant) interceptors.
@@ -265,6 +280,7 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
             || HasPipelineExclusion != other.HasPipelineExclusion
             || IsValueType != other.IsValueType
             || IsNestedType != other.IsNestedType
+            || IsGenericParticipant != other.IsGenericParticipant
             || StagedConstructionExpression != other.StagedConstructionExpression
             || StagedConstructionUsesKeyedServices != other.StagedConstructionUsesKeyedServices
             || HasMultiplePublicConstructors != other.HasMultiplePublicConstructors
