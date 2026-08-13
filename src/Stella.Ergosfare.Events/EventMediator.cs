@@ -46,91 +46,63 @@ public class EventMediator : IPublisher
         _serviceProvider = serviceProvider;
     }
 
-    /// <summary>
-    /// Publishes a non-generic event asynchronously through the mediation pipeline.
-    /// </summary>
-    /// <param name="event">The event message to publish.</param>
-    /// <param name="eventMediationSettings">Optional settings for pipeline execution, e.g., filters, items, and exception behavior.</param>
-    /// <param name="cancellationToken">Cancellation token for async execution.</param>
-    /// <returns>A <see cref="ValueTask"/> representing the asynchronous publish operation.</returns>
-    public ValueTask PublishAsync(IEvent @event,
-                             EventMediationSettings? eventMediationSettings = null,
-                             CancellationToken cancellationToken = default)
-    {
-        return _engine.BroadcastAsync(
-            @event, _serviceProvider, eventMediationSettings?.Items, cancellationToken,
-            eventMediationSettings?.Filters.Groups,
-            eventMediationSettings?.ThrowIfNoHandlerFound ?? false);
-    }
+    /// <inheritdoc />
+    public ValueTask PublishAsync(IEvent @event, IEnumerable<string>? groups, IDictionary<object, object?>? items,
+        bool throwIfNoHandlerFound, CancellationToken cancellationToken)
+        => _engine.BroadcastAsync(
+            @event, _serviceProvider, items, cancellationToken, groups, throwIfNoHandlerFound);
 
-    /// <summary>
-    /// Publishes a strongly-typed event asynchronously through the mediation pipeline.
-    /// </summary>
-    /// <typeparam name="TEvent">The event type being published.</typeparam>
-    /// <param name="event">The event message to publish.</param>
-    /// <param name="eventMediationSettings">Optional settings for pipeline execution.</param>
-    /// <param name="cancellationToken">Cancellation token for async execution.</param>
-    /// <returns>A <see cref="ValueTask"/> representing the asynchronous publish operation.</returns>
-    public ValueTask PublishAsync<TEvent>(TEvent @event,
-                                     EventMediationSettings? eventMediationSettings = null,
-                                     CancellationToken cancellationToken = default) where TEvent : notnull
-    {
-        // The typed overload: when the runtime type is exactly TEvent (the overwhelmingly
-        // common typed publish) the pipeline comes from a static-generic slot instead of the
+    /// <inheritdoc />
+    public ValueTask PublishAsync<TEvent>(TEvent @event, IEnumerable<string>? groups, IDictionary<object, object?>? items,
+        bool throwIfNoHandlerFound, CancellationToken cancellationToken)
+        where TEvent : notnull
+        // The typed entry: when the runtime type is exactly TEvent (the overwhelmingly common
+        // typed publish) the pipeline comes from a static-generic slot instead of the
         // type-keyed dictionary. The engine applies that guard itself.
-        return _engine.BroadcastAsync<TEvent>(
-            @event, _serviceProvider, eventMediationSettings?.Items, cancellationToken,
-            eventMediationSettings?.Filters.Groups,
-            eventMediationSettings?.ThrowIfNoHandlerFound ?? false);
-    }
+        => _engine.BroadcastAsync<TEvent>(
+            @event, _serviceProvider, items, cancellationToken, groups, throwIfNoHandlerFound);
 
-    /// <summary>
-    /// Publishes an event under a canonical group filter — no settings object, and with a
-    /// reused <see cref="GroupSet"/> the grouped broadcast plan matches on a single
-    /// reference check. An empty set publishes the default pipeline.
-    /// </summary>
+    /// <inheritdoc />
+    public ValueTask PublishAsync(IEvent @event, ErgosfareContext context, IEnumerable<string>? groups = null,
+        bool throwIfNoHandlerFound = false)
+        => _engine.BroadcastAsync(@event, context, _serviceProvider, groups, throwIfNoHandlerFound);
+
+    /// <summary>Publishes an event through its default pipeline.</summary>
+    /// <remarks>
+    /// The conveniences are declared here as well as on the interface. They used to be
+    /// extension methods, which a concrete-typed receiver finds; a default interface method is
+    /// not, so carrying them only on the interface would have broken every call made through
+    /// this class.
+    /// </remarks>
+    public ValueTask PublishAsync(IEvent @event, CancellationToken cancellationToken = default)
+        => PublishAsync(@event, null, null, false, cancellationToken);
+
+    /// <summary>Publishes with contextual items the handlers can read and write.</summary>
+    public ValueTask PublishAsync(IEvent @event, IDictionary<object, object?> items,
+        CancellationToken cancellationToken = default)
+        => PublishAsync(@event, null, items, false, cancellationToken);
+
+    /// <summary>Publishes under a canonical group filter.</summary>
     public ValueTask PublishAsync(IEvent @event, GroupSet groups, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(groups);
+        => PublishAsync(@event, groups.Count == 0 ? null : groups, null, false, cancellationToken);
 
-        IEnumerable<string>? effectiveGroups = groups.Count == 0 ? null : groups;
+    /// <summary>Publishes under a group filter given as a plain array.</summary>
+    public ValueTask PublishAsync(IEvent @event, string[] groups, CancellationToken cancellationToken = default)
+        => PublishAsync(@event, groups, null, false, cancellationToken);
 
-        return _engine.BroadcastAsync(
-            @event, _serviceProvider, items: null, cancellationToken, effectiveGroups);
-    }
+    /// <summary>Typed counterpart of <see cref="PublishAsync(IEvent, CancellationToken)"/>.</summary>
+    public ValueTask PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
+        where TEvent : notnull
+        => PublishAsync(@event, null, null, false, cancellationToken);
 
-    /// <summary>
-    /// Strongly-typed counterpart of
-    /// <see cref="PublishAsync(IEvent, GroupSet, CancellationToken)"/>; the pipeline comes
-    /// from the static-generic slot when the runtime type is exactly
-    /// <typeparamref name="TEvent"/>.
-    /// </summary>
+    /// <summary>Typed counterpart of the contextual-items overload.</summary>
+    public ValueTask PublishAsync<TEvent>(TEvent @event, IDictionary<object, object?> items,
+        CancellationToken cancellationToken = default)
+        where TEvent : notnull
+        => PublishAsync(@event, null, items, false, cancellationToken);
+
+    /// <summary>Typed counterpart of the canonical group-filter overload.</summary>
     public ValueTask PublishAsync<TEvent>(TEvent @event, GroupSet groups, CancellationToken cancellationToken = default)
         where TEvent : notnull
-    {
-        ArgumentNullException.ThrowIfNull(groups);
-
-        IEnumerable<string>? effectiveGroups = groups.Count == 0 ? null : groups;
-
-        return _engine.BroadcastAsync<TEvent>(
-            @event, _serviceProvider, items: null, cancellationToken, effectiveGroups);
-    }
-
-    /// <summary>
-    /// Publishes an event under an externally owned execution context — the
-    /// nested-dispatch path: a handler opens a scope on its own context and passes the
-    /// child here. The caller owns the context's lifetime; cancellation flows from the
-    /// context.
-    /// </summary>
-    /// <param name="event">The event message to publish.</param>
-    /// <param name="context">The externally owned execution context to publish under.</param>
-    /// <param name="eventMediationSettings">Optional settings for pipeline execution.</param>
-    public ValueTask PublishAsync(IEvent @event, ErgosfareContext context,
-                             EventMediationSettings? eventMediationSettings = null)
-    {
-        return _engine.BroadcastAsync(
-            @event, context, _serviceProvider,
-            eventMediationSettings?.Filters.Groups,
-            eventMediationSettings?.ThrowIfNoHandlerFound ?? false);
-    }
+        => PublishAsync(@event, groups.Count == 0 ? null : groups, null, false, cancellationToken);
 }

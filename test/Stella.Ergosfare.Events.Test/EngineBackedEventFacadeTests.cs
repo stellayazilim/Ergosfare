@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Core;
+using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
@@ -65,12 +65,12 @@ public class EngineBackedEventFacadeTests
         Assert.IsAssignableFrom<EventMediator>(mediator);
         Assert.NotEqual(typeof(EventMediator), mediator.GetType());
 
-        var settings = new EventMediationSettings();
+        var settings = new Dictionary<object, object?>();
         await mediator.PublishAsync(new GroupedEvent(), settings);
 
         // A group-less publish serves the default group only.
-        Assert.Equal(true, settings.Items["defaultRan"]);
-        Assert.False(settings.Items.ContainsKey("auditRan"));
+        Assert.Equal(true, settings["defaultRan"]);
+        Assert.False(settings.ContainsKey("auditRan"));
     }
 
     [Fact]
@@ -83,20 +83,16 @@ public class EngineBackedEventFacadeTests
 
         var mediator = provider.GetRequiredService<IEventMediator>();
 
-        var settings = new EventMediationSettings
-        {
-            Filters =
-            {
-                Groups = ["audit"]
-            }
-        };
+        var items = new Dictionary<object, object?>();
+        string[] groupFilter = ["audit"];
 
-        await mediator.PublishAsync(new GroupedEvent(), settings);
+        await mediator.PublishAsync(
+            new GroupedEvent(), groupFilter, items, false, CancellationToken.None);
 
         // The grouped publish runs the group-filtered plan; only the requested group's
         // handler runs.
-        Assert.Equal(true, settings.Items["auditRan"]);
-        Assert.False(settings.Items.ContainsKey("defaultRan"));
+        Assert.Equal(true, items["auditRan"]);
+        Assert.False(items.ContainsKey("defaultRan"));
     }
 
     [Fact]
@@ -111,12 +107,12 @@ public class EngineBackedEventFacadeTests
 
         foreach (var mediator in new [] { constructed, (EventMediator)provider.GetRequiredService<IEventMediator>() })
         {
-            var settings = new EventMediationSettings();
+            var settings = new Dictionary<object, object?>();
 
-            await mediator.PublishAsync(new GroupedEvent(), settings);
+            await mediator.PublishAsync(new GroupedEvent(), (IDictionary<object, object?>)settings);
 
-            Assert.Equal(true, settings.Items["defaultRan"]);
-            Assert.False(settings.Items.ContainsKey("auditRan"));
+            Assert.Equal(true, settings["defaultRan"]);
+            Assert.False(settings.ContainsKey("auditRan"));
         }
     }
 }

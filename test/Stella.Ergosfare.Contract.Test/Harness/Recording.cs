@@ -20,9 +20,9 @@ public static class Recording
     public static QueryMediationSettings Queries(this PipelineRecorder recorder)
         => new() { Items = { [PipelineRecorder.ItemsKey] = recorder } };
 
-    /// <summary>Settings that carry <paramref name="recorder"/> into a publish.</summary>
-    public static EventMediationSettings Events(this PipelineRecorder recorder)
-        => new() { Items = { [PipelineRecorder.ItemsKey] = recorder } };
+    /// <summary>Contextual items that carry <paramref name="recorder"/> into a publish.</summary>
+    public static Dictionary<object, object?> Events(this PipelineRecorder recorder)
+        => new() { [PipelineRecorder.ItemsKey] = recorder };
 
     /// <summary>Shorthand for a pipeline participant marking its own stage.</summary>
     public static void Mark(this ErgosfareContext context, string stage, string? detail = null)

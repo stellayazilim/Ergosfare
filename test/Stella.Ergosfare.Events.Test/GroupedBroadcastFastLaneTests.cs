@@ -53,12 +53,12 @@ public class GroupedBroadcastFastLaneTests
 
     private static async Task<IDictionary<object, object?>> Publish(IEventMediator mediator, params string[] groups)
     {
-        var settings = new EventMediationSettings();
-        settings.Filters.Groups = groups;
+        var settings = new Dictionary<object, object?>();
+        var groupFilter = groups;
 
-        await mediator.PublishAsync(new LaneEvent(), settings);
+        await mediator.PublishAsync(new LaneEvent(), groupFilter, settings, false, CancellationToken.None);
 
-        return settings.Items;
+        return settings;
     }
 
     [Fact]
@@ -100,19 +100,19 @@ public class GroupedBroadcastFastLaneTests
         // snapshots group contents, so the second publish must re-resolve, not replay
         // alpha's plan.
         var groups = new List<string> { "alpha" };
-        var settings = new EventMediationSettings();
-        settings.Filters.Groups = groups;
+        var settings = new Dictionary<object, object?>();
+        var groupFilter = groups;
 
-        await mediator.PublishAsync(new LaneEvent(), settings);
-        Assert.Equal(true, settings.Items["alphaRan"]);
+        await mediator.PublishAsync(new LaneEvent(), groupFilter, settings, false, CancellationToken.None);
+        Assert.Equal(true, settings["alphaRan"]);
 
         groups.Clear();
         groups.Add("beta");
-        settings.Items.Clear();
+        settings.Clear();
 
-        await mediator.PublishAsync(new LaneEvent(), settings);
-        Assert.Equal(true, settings.Items["betaRan"]);
-        Assert.False(settings.Items.ContainsKey("alphaRan"));
+        await mediator.PublishAsync(new LaneEvent(), groupFilter, settings, false, CancellationToken.None);
+        Assert.Equal(true, settings["betaRan"]);
+        Assert.False(settings.ContainsKey("alphaRan"));
     }
 
     [ExcludeFromDiscovery]
@@ -160,14 +160,14 @@ public class GroupedBroadcastFastLaneTests
 
         var mediator = guarded.GetRequiredService<IEventMediator>();
 
-        var settings = new EventMediationSettings();
-        settings.Filters.Groups = ["guarded"];
+        var settings = new Dictionary<object, object?>();
+        string[] groupFilter = ["guarded"];
 
-        await mediator.PublishAsync(new InterceptedLaneEvent(), settings);
+        await mediator.PublishAsync(new InterceptedLaneEvent(), groupFilter, settings, false, CancellationToken.None);
 
         // A grouped pipeline that carries an interceptor must leave the straight-through
         // loop to the strategy, which runs the interceptor before the handler.
-        Assert.Equal(true, settings.Items["guardedInterceptorRan"]);
-        Assert.Equal(true, settings.Items["guardedRan"]);
+        Assert.Equal(true, settings["guardedInterceptorRan"]);
+        Assert.Equal(true, settings["guardedRan"]);
     }
 }

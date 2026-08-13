@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;

@@ -460,7 +460,6 @@ public class MediationBenchmark
     // Reused across dispatches, mirroring a caller that keeps its settings: the grouped
     // rows measure the grouped lane itself, not per-call settings construction.
     private readonly CommandMediationSettings _groupedCommandSettings = new() { Filters = { Groups = BenchGroups } };
-    private readonly EventMediationSettings _groupedEventSettings = new() { Filters = { Groups = BenchGroups } };
     private readonly MediatrVoidRequest _mediatrVoid = new();
     private readonly MediatrIntRequest _mediatrInt = new();
     private readonly MediatrPingNotification _mediatrPing = new();
@@ -736,7 +735,7 @@ public class MediationBenchmark
     public ValueTask Event_Publish() => _events.PublishAsync(_pingEvent);
 
     [Benchmark, BenchmarkCategory("Root")]
-    public ValueTask Event_Publish_Grouped() => _events.PublishAsync(_groupedPingEvent, _groupedEventSettings);
+    public ValueTask Event_Publish_Grouped() => _events.PublishAsync(_groupedPingEvent, BenchGroups);
 
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask Event_Publish_Grouped_GroupSet() => _events.PublishAsync(_groupedPingEvent, BenchGroupSet);

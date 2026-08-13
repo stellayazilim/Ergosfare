@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Internal.Factories;
@@ -44,10 +44,7 @@ public class BroadcastPipelineTests
         Exception? exception = null;
         try
         {
-           await mediator.PublishAsync(new StubNonGenericEvent(), new EventMediationSettings()
-           {
-               ThrowIfNoHandlerFound = true
-           });
+           await mediator.PublishAsync(new StubNonGenericEvent(), groups: null, items: null, throwIfNoHandlerFound: true, CancellationToken.None);
 
         }
         catch (Exception ex)
@@ -73,10 +70,7 @@ public class BroadcastPipelineTests
         Exception? exception = null;
         try
         {
-            await mediator.PublishAsync(new StubNonGenericEvent(), new EventMediationSettings()
-            {
-                ThrowIfNoHandlerFound = false
-            });
+            await mediator.PublishAsync(new StubNonGenericEvent(), groups: null, items: null, throwIfNoHandlerFound: false, CancellationToken.None);
         }
         catch (Exception ex)
         {

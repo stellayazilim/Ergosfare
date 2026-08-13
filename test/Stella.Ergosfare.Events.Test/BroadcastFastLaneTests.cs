@@ -56,12 +56,12 @@ public class BroadcastFastLaneTests
     {
         await using var provider = Build();
         var mediator = provider.GetRequiredService<IEventMediator>();
-        var settings = new EventMediationSettings();
+        var settings = new Dictionary<object, object?>();
 
         await mediator.PublishAsync(new FastLaneEvent { Tag = "t1" }, settings);
 
-        Assert.Equal("t1", settings.Items["writtenByHandler"]);
-        Assert.Equal(true, settings.Items["secondHandlerRan"]);
+        Assert.Equal("t1", settings["writtenByHandler"]);
+        Assert.Equal(true, settings["secondHandlerRan"]);
     }
 
     [Fact]
@@ -71,14 +71,14 @@ public class BroadcastFastLaneTests
     {
         await using var provider = Build();
         var mediator = provider.GetRequiredService<IEventMediator>();
-        var settings = new EventMediationSettings();
-        settings.Items["seed"] = "hello";
+        var settings = new Dictionary<object, object?>();
+        settings["seed"] = "hello";
 
         await mediator.PublishAsync(new FastLaneEvent(), settings);
 
         // The dictionary is adopted for the dispatch and detached on return — never wiped.
-        Assert.Equal("hello", settings.Items["seed"]);
-        Assert.True(settings.Items.ContainsKey("writtenByHandler"));
+        Assert.Equal("hello", settings["seed"]);
+        Assert.True(settings.ContainsKey("writtenByHandler"));
     }
 
     [Fact]
@@ -90,19 +90,19 @@ public class BroadcastFastLaneTests
         var mediator = provider.GetRequiredService<IEventMediator>();
 
         // First publish seeds a caller dictionary through the pooled context.
-        var settings = new EventMediationSettings();
-        settings.Items["seed"] = "hello";
+        var settings = new Dictionary<object, object?>();
+        settings["seed"] = "hello";
         await mediator.PublishAsync(new FastLaneEvent(), settings);
 
         // A default-settings publish right after must not observe any of it, and must not
         // pollute the earlier caller's dictionary either.
-        var probe = new EventMediationSettings();
+        var probe = new Dictionary<object, object?>();
         await mediator.PublishAsync(new FastLaneEvent { Tag = "probe" }, probe);
 
-        Assert.False(probe.Items.ContainsKey("seed"));
-        Assert.Equal("probe", probe.Items["writtenByHandler"]);
-        Assert.Equal("hello", settings.Items["seed"]);
-        Assert.NotEqual("probe", settings.Items["writtenByHandler"]);
+        Assert.False(probe.ContainsKey("seed"));
+        Assert.Equal("probe", probe["writtenByHandler"]);
+        Assert.Equal("hello", settings["seed"]);
+        Assert.NotEqual("probe", settings["writtenByHandler"]);
     }
 
     public sealed class RewrittenEvent : IEvent { public string Payload { get; init; } = "original"; }
@@ -134,14 +134,14 @@ public class BroadcastFastLaneTests
             e.Register<RewrittenEventHandler>();
         });
         var mediator = provider.GetRequiredService<IEventMediator>();
-        var settings = new EventMediationSettings();
+        var settings = new Dictionary<object, object?>();
         var original = new RewrittenEvent();
 
         await mediator.PublishAsync(original, settings);
 
         // The handler received the brand-new instance the pre-interceptor returned.
-        Assert.Equal("original+rewritten", settings.Items["observedPayload"]);
-        Assert.NotSame(original, settings.Items["observedInstance"]);
+        Assert.Equal("original+rewritten", settings["observedPayload"]);
+        Assert.NotSame(original, settings["observedInstance"]);
     }
 
     public sealed class ThrowingEvent : IEvent { }
@@ -181,8 +181,7 @@ public class BroadcastFastLaneTests
 
         await Assert.ThrowsAsync<NoHandlerFoundException>(async () =>
             await mediator.PublishAsync(
-                new HandlerlessEvent(),
-                new EventMediationSettings { ThrowIfNoHandlerFound = true }));
+                new HandlerlessEvent(), groups: null, items: null, throwIfNoHandlerFound: true, CancellationToken.None));
     }
 
     public sealed class SlowEvent : IEvent { }
@@ -203,11 +202,11 @@ public class BroadcastFastLaneTests
     {
         await using var provider = Build(e => e.Register<SlowEventHandler>());
         var mediator = provider.GetRequiredService<IEventMediator>();
-        var settings = new EventMediationSettings();
+        var settings = new Dictionary<object, object?>();
 
         await mediator.PublishAsync(new SlowEvent(), settings);
 
-        Assert.Equal(42, settings.Items["afterAwait"]);
+        Assert.Equal(42, settings["afterAwait"]);
     }
 
     public sealed class OuterEvent : IEvent { }
@@ -243,11 +242,11 @@ public class BroadcastFastLaneTests
             e.Register<InnerEventHandler>();
         });
         var mediator = provider.GetRequiredService<IEventMediator>();
-        var settings = new EventMediationSettings();
+        var settings = new Dictionary<object, object?>();
 
         await mediator.PublishAsync(new OuterEvent(), settings);
 
-        Assert.Equal(true, settings.Items["outerSawInner"]);
+        Assert.Equal(true, settings["outerSawInner"]);
     }
 
     public sealed class LateEvent : IEvent { }
@@ -280,12 +279,12 @@ public class BroadcastFastLaneTests
         {
             for (var i = 0; i < 2_000; i++)
             {
-                var settings = new EventMediationSettings();
+                var settings = new Dictionary<object, object?>();
                 var tag = $"{lane}:{i}";
 
                 await mediator.PublishAsync(new FastLaneEvent { Tag = tag }, settings);
 
-                if (!Equals(settings.Items["writtenByHandler"], tag))
+                if (!Equals(settings["writtenByHandler"], tag))
                 {
                     Interlocked.Increment(ref mismatches);
                 }
@@ -340,17 +339,17 @@ public class BroadcastFastLaneTests
         var secondInstance = second.GetRequiredService<IsolatedEventHandler>();
         Assert.NotSame(firstInstance, secondInstance);
 
-        var settings = new EventMediationSettings();
+        var settings = new Dictionary<object, object?>();
         await first.GetRequiredService<IEventMediator>().PublishAsync(new IsolatedEvent(), settings);
-        Assert.Same(firstInstance, settings.Items["handlerInstance"]);
+        Assert.Same(firstInstance, settings["handlerInstance"]);
 
-        settings = new EventMediationSettings();
+        settings = new Dictionary<object, object?>();
         await second.GetRequiredService<IEventMediator>().PublishAsync(new IsolatedEvent(), settings);
-        Assert.Same(secondInstance, settings.Items["handlerInstance"]);
+        Assert.Same(secondInstance, settings["handlerInstance"]);
 
-        settings = new EventMediationSettings();
+        settings = new Dictionary<object, object?>();
         await first.GetRequiredService<IEventMediator>().PublishAsync(new IsolatedEvent(), settings);
-        Assert.Same(firstInstance, settings.Items["handlerInstance"]);
+        Assert.Same(firstInstance, settings["handlerInstance"]);
     }
 
     [Fact]
@@ -366,12 +365,12 @@ public class BroadcastFastLaneTests
 
         using var scope = provider.CreateScope();
         var expected = scope.ServiceProvider.GetRequiredService<ScopedProbe>();
-        var settings = new EventMediationSettings();
+        var settings = new Dictionary<object, object?>();
 
         await scope.ServiceProvider.GetRequiredService<IEventMediator>()
             .PublishAsync(new ScopedEvent(), settings);
 
-        Assert.Same(expected, settings.Items["probe"]);
+        Assert.Same(expected, settings["probe"]);
     }
 
     [ExcludeFromDiscovery]
@@ -391,7 +390,6 @@ public class BroadcastFastLaneTests
 
         await Assert.ThrowsAsync<NoHandlerFoundException>(async () =>
             await mediator.PublishAsync(
-                new NeverRegisteredEvent(),
-                new EventMediationSettings { ThrowIfNoHandlerFound = true }));
+                new NeverRegisteredEvent(), groups: null, items: null, throwIfNoHandlerFound: true, CancellationToken.None));
     }
 }
