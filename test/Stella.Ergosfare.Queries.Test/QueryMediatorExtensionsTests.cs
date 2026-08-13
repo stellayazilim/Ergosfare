@@ -1,3 +1,7 @@
+// Stream messaging is under revision and its entry points carry the notice; these are
+// deliberate call sites of the surface as it stands today.
+#pragma warning disable CS0618
+
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Queries.Abstractions;
 using Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;

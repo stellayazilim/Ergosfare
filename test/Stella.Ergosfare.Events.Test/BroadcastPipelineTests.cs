@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Internal.Factories;
@@ -11,10 +11,10 @@ using Xunit.Abstractions;
 namespace Stella.Ergosfare.Events.Test;
 
 /// <summary>
-/// Contains unit tests for <see cref="EventMediator"/> using <c>AsyncBroadcastMediationStrategy</c>,
+/// Contains unit tests for <see cref="EventMediator"/>'s interceptor-bearing broadcast lane,
 /// validating handler execution and exception handling behavior.
 /// </summary>
-public class AsyncBroadcastMediationStrategyTests
+public class BroadcastPipelineTests
 (ITestOutputHelper  testOutputHelper)
 {
     /// <summary>
@@ -44,10 +44,7 @@ public class AsyncBroadcastMediationStrategyTests
         Exception? exception = null;
         try
         {
-           await mediator.PublishAsync(new StubNonGenericEvent(), new EventMediationSettings()
-           {
-               ThrowIfNoHandlerFound = true
-           });
+           await mediator.PublishAsync(new StubNonGenericEvent(), null, true, CancellationToken.None);
 
         }
         catch (Exception ex)
@@ -73,10 +70,7 @@ public class AsyncBroadcastMediationStrategyTests
         Exception? exception = null;
         try
         {
-            await mediator.PublishAsync(new StubNonGenericEvent(), new EventMediationSettings()
-            {
-                ThrowIfNoHandlerFound = false
-            });
+            await mediator.PublishAsync(new StubNonGenericEvent(), null, false, CancellationToken.None);
         }
         catch (Exception ex)
         {

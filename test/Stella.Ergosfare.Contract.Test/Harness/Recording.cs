@@ -12,17 +12,29 @@ namespace Stella.Ergosfare.Contract.Test.Harness;
 /// </summary>
 public static class Recording
 {
-    /// <summary>Settings that carry <paramref name="recorder"/> into a command dispatch.</summary>
-    public static CommandMediationSettings Commands(this PipelineRecorder recorder)
-        => new() { Items = { [PipelineRecorder.ItemsKey] = recorder } };
+    /// <summary>A context carrying <paramref name="recorder"/> into a command dispatch.</summary>
+    /// <remarks>
+    /// Built directly rather than rented: a context the caller constructs is never pooled,
+    /// which is exactly what a test wants when it means to read back what the pipeline wrote.
+    /// </remarks>
+    public static ErgosfareContext Commands(this PipelineRecorder recorder)
+        => new(new Dictionary<object, object?> { [PipelineRecorder.ItemsKey] = recorder });
 
-    /// <summary>Settings that carry <paramref name="recorder"/> into a query dispatch.</summary>
-    public static QueryMediationSettings Queries(this PipelineRecorder recorder)
-        => new() { Items = { [PipelineRecorder.ItemsKey] = recorder } };
+    /// <summary>A context carrying <paramref name="recorder"/> into a query dispatch.</summary>
+    /// <remarks>
+    /// Built directly rather than rented: a context the caller constructs is never pooled,
+    /// which is exactly what a test wants when it means to read back what the pipeline wrote.
+    /// </remarks>
+    public static ErgosfareContext Queries(this PipelineRecorder recorder)
+        => new(new Dictionary<object, object?> { [PipelineRecorder.ItemsKey] = recorder });
 
-    /// <summary>Settings that carry <paramref name="recorder"/> into a publish.</summary>
-    public static EventMediationSettings Events(this PipelineRecorder recorder)
-        => new() { Items = { [PipelineRecorder.ItemsKey] = recorder } };
+    /// <summary>A context carrying <paramref name="recorder"/> into a publish.</summary>
+    /// <remarks>
+    /// Built directly rather than rented: a context the caller constructs is never pooled,
+    /// which is exactly what a test wants when it means to read back what the pipeline wrote.
+    /// </remarks>
+    public static ErgosfareContext Events(this PipelineRecorder recorder)
+        => new(new Dictionary<object, object?> { [PipelineRecorder.ItemsKey] = recorder });
 
     /// <summary>Shorthand for a pipeline participant marking its own stage.</summary>
     public static void Mark(this ErgosfareContext context, string stage, string? detail = null)

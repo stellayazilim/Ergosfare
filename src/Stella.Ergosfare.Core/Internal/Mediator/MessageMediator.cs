@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 
@@ -26,7 +26,7 @@ internal sealed class MessageMediator(
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        return RequireEngine().DispatchAsync(message, _serviceProvider, items, cancellationToken, groups);
+        return RequireEngine().DispatchAsync(message, _serviceProvider, cancellationToken, groups);
     }
 
     /// <inheritdoc />
@@ -34,7 +34,7 @@ internal sealed class MessageMediator(
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        return RequireEngine().DispatchAsync<TResult>(message, _serviceProvider, items, cancellationToken, groups);
+        return RequireEngine().DispatchAsync<TResult>(message, _serviceProvider, cancellationToken, groups);
     }
 
     /// <inheritdoc />

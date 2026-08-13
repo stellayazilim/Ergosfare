@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions;
@@ -56,7 +56,7 @@ public class BroadcastFastLaneTests
     {
         await using var provider = Build();
         var mediator = provider.GetRequiredService<IEventMediator>();
-        var settings = new EventMediationSettings();
+        var settings = new ErgosfareContext();
 
         await mediator.PublishAsync(new FastLaneEvent { Tag = "t1" }, settings);
 
@@ -71,7 +71,7 @@ public class BroadcastFastLaneTests
     {
         await using var provider = Build();
         var mediator = provider.GetRequiredService<IEventMediator>();
-        var settings = new EventMediationSettings();
+        var settings = new ErgosfareContext();
         settings.Items["seed"] = "hello";
 
         await mediator.PublishAsync(new FastLaneEvent(), settings);
@@ -90,13 +90,13 @@ public class BroadcastFastLaneTests
         var mediator = provider.GetRequiredService<IEventMediator>();
 
         // First publish seeds a caller dictionary through the pooled context.
-        var settings = new EventMediationSettings();
+        var settings = new ErgosfareContext();
         settings.Items["seed"] = "hello";
         await mediator.PublishAsync(new FastLaneEvent(), settings);
 
         // A default-settings publish right after must not observe any of it, and must not
         // pollute the earlier caller's dictionary either.
-        var probe = new EventMediationSettings();
+        var probe = new ErgosfareContext();
         await mediator.PublishAsync(new FastLaneEvent { Tag = "probe" }, probe);
 
         Assert.False(probe.Items.ContainsKey("seed"));
@@ -134,7 +134,7 @@ public class BroadcastFastLaneTests
             e.Register<RewrittenEventHandler>();
         });
         var mediator = provider.GetRequiredService<IEventMediator>();
-        var settings = new EventMediationSettings();
+        var settings = new ErgosfareContext();
         var original = new RewrittenEvent();
 
         await mediator.PublishAsync(original, settings);
@@ -181,24 +181,7 @@ public class BroadcastFastLaneTests
 
         await Assert.ThrowsAsync<NoHandlerFoundException>(async () =>
             await mediator.PublishAsync(
-                new HandlerlessEvent(),
-                new EventMediationSettings { ThrowIfNoHandlerFound = true }));
-    }
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
-    public async Task Publish_ShouldApplyHandlerPredicateFilter()
-    {
-        await using var provider = Build();
-        var mediator = provider.GetRequiredService<IEventMediator>();
-        var settings = new EventMediationSettings();
-        settings.Filters.HandlerPredicate = type => type != typeof(FastLaneSecondHandler);
-
-        await mediator.PublishAsync(new FastLaneEvent { Tag = "filtered" }, settings);
-
-        Assert.Equal("filtered", settings.Items["writtenByHandler"]);
-        Assert.False(settings.Items.ContainsKey("secondHandlerRan"));
+                new HandlerlessEvent(), null, true, CancellationToken.None));
     }
 
     public sealed class SlowEvent : IEvent { }
@@ -219,7 +202,7 @@ public class BroadcastFastLaneTests
     {
         await using var provider = Build(e => e.Register<SlowEventHandler>());
         var mediator = provider.GetRequiredService<IEventMediator>();
-        var settings = new EventMediationSettings();
+        var settings = new ErgosfareContext();
 
         await mediator.PublishAsync(new SlowEvent(), settings);
 
@@ -259,7 +242,7 @@ public class BroadcastFastLaneTests
             e.Register<InnerEventHandler>();
         });
         var mediator = provider.GetRequiredService<IEventMediator>();
-        var settings = new EventMediationSettings();
+        var settings = new ErgosfareContext();
 
         await mediator.PublishAsync(new OuterEvent(), settings);
 
@@ -296,7 +279,7 @@ public class BroadcastFastLaneTests
         {
             for (var i = 0; i < 2_000; i++)
             {
-                var settings = new EventMediationSettings();
+                var settings = new ErgosfareContext();
                 var tag = $"{lane}:{i}";
 
                 await mediator.PublishAsync(new FastLaneEvent { Tag = tag }, settings);
@@ -356,15 +339,15 @@ public class BroadcastFastLaneTests
         var secondInstance = second.GetRequiredService<IsolatedEventHandler>();
         Assert.NotSame(firstInstance, secondInstance);
 
-        var settings = new EventMediationSettings();
+        var settings = new ErgosfareContext();
         await first.GetRequiredService<IEventMediator>().PublishAsync(new IsolatedEvent(), settings);
         Assert.Same(firstInstance, settings.Items["handlerInstance"]);
 
-        settings = new EventMediationSettings();
+        settings = new ErgosfareContext();
         await second.GetRequiredService<IEventMediator>().PublishAsync(new IsolatedEvent(), settings);
         Assert.Same(secondInstance, settings.Items["handlerInstance"]);
 
-        settings = new EventMediationSettings();
+        settings = new ErgosfareContext();
         await first.GetRequiredService<IEventMediator>().PublishAsync(new IsolatedEvent(), settings);
         Assert.Same(firstInstance, settings.Items["handlerInstance"]);
     }
@@ -382,7 +365,7 @@ public class BroadcastFastLaneTests
 
         using var scope = provider.CreateScope();
         var expected = scope.ServiceProvider.GetRequiredService<ScopedProbe>();
-        var settings = new EventMediationSettings();
+        var settings = new ErgosfareContext();
 
         await scope.ServiceProvider.GetRequiredService<IEventMediator>()
             .PublishAsync(new ScopedEvent(), settings);
@@ -407,7 +390,6 @@ public class BroadcastFastLaneTests
 
         await Assert.ThrowsAsync<NoHandlerFoundException>(async () =>
             await mediator.PublishAsync(
-                new NeverRegisteredEvent(),
-                new EventMediationSettings { ThrowIfNoHandlerFound = true }));
+                new NeverRegisteredEvent(), null, true, CancellationToken.None));
     }
 }

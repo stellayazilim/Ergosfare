@@ -61,7 +61,7 @@ public class StagedPlanExecutionTests
 
     private sealed class StagedCommandPlan : StagedVoidPlan<StagedCommand>
     {
-        public override StagedPlanComposition Composition { get; } = new(
+        public override StagedPlanKey Composition { get; } = new(
             typeof(StagedCommandHandler),
             [typeof(StagedCommandPreInterceptor)],
             [typeof(StagedCommandPostInterceptor)],
@@ -140,7 +140,7 @@ public class StagedPlanExecutionTests
 
     private sealed class FallbackCommandPlan : StagedVoidPlan<FallbackCommand>
     {
-        public override StagedPlanComposition Composition { get; } = new(
+        public override StagedPlanKey Composition { get; } = new(
             typeof(FallbackCommandHandler),
             [typeof(FallbackCommandPreInterceptor)],
             [],
@@ -185,7 +185,7 @@ public class StagedPlanExecutionTests
     {
         // Baked against a post-interceptor stage the registry never sees — the gate must
         // fail on the very first rebuild and keep the dispatch on the strategy path.
-        public override StagedPlanComposition Composition { get; } = new(
+        public override StagedPlanKey Composition { get; } = new(
             typeof(MismatchedCommandHandler),
             [typeof(MismatchedCommandPreInterceptor)],
             [typeof(StagedCommandPostInterceptor)],
@@ -251,7 +251,7 @@ public class StagedPlanExecutionTests
 
     private sealed class MemoizedStagedCommandPlan : StagedVoidPlan<MemoizedStagedCommand>
     {
-        public override StagedPlanComposition Composition { get; } = new(
+        public override StagedPlanKey Composition { get; } = new(
             typeof(MemoizedStagedCommandHandler),
             [typeof(MemoizedStagedCommandPreInterceptor)],
             [],
@@ -323,7 +323,7 @@ public class StagedPlanExecutionTests
 
     private sealed class DirectStagedCommandPlan : StagedVoidPlan<DirectStagedCommand>
     {
-        public override StagedPlanComposition Composition { get; } = new(
+        public override StagedPlanKey Composition { get; } = new(
             typeof(DirectStagedCommandHandler),
             [typeof(DirectStagedCommandPreInterceptor)],
             [],
@@ -397,7 +397,7 @@ public class StagedPlanExecutionTests
 
     private sealed class OverriddenDirectCommandPlan : StagedVoidPlan<OverriddenDirectCommand>
     {
-        public override StagedPlanComposition Composition { get; } = new(
+        public override StagedPlanKey Composition { get; } = new(
             typeof(OverriddenDirectCommandHandler),
             [typeof(OverriddenDirectCommandPreInterceptor)],
             [],
@@ -475,7 +475,7 @@ public class StagedPlanExecutionTests
 
     private sealed class StagedResultCommandPlan : StagedResultPlan<StagedResultCommand, int>
     {
-        public override StagedPlanComposition Composition { get; } = new(
+        public override StagedPlanKey Composition { get; } = new(
             typeof(StagedResultCommandHandler),
             [typeof(StagedResultCommandPreInterceptor)],
             [],
@@ -545,7 +545,7 @@ public class StagedPlanExecutionTests
     {
         // The composition matches the live pipeline exactly — but bakes no adapter type,
         // while the Result<int> slot binds the native adapter at runtime.
-        public override StagedPlanComposition Composition { get; } = new(
+        public override StagedPlanKey Composition { get; } = new(
             typeof(AdapterGateCommandHandler),
             [typeof(AdapterGateCommandPreInterceptor)],
             [],
@@ -590,7 +590,7 @@ public class StagedPlanExecutionTests
     {
         // The same shape as the mismatch scenario, now baking the adapter identity the
         // runtime binds for the Result<int> slot — the gate's admission ticket.
-        public override StagedPlanComposition Composition { get; } = new(
+        public override StagedPlanKey Composition { get; } = new(
             typeof(AdapterMatchCommandHandler),
             [typeof(AdapterMatchCommandPreInterceptor)],
             [],
@@ -706,7 +706,7 @@ public class StagedPlanExecutionTests
     {
         // Matches the live pipeline but models no adapter — while the container's
         // configured default serves the slot, the plan must stand down.
-        public override StagedPlanComposition Composition { get; } = new(
+        public override StagedPlanKey Composition { get; } = new(
             typeof(DefaultGateCommandHandler),
             [typeof(DefaultGateCommandPreInterceptor)],
             [],

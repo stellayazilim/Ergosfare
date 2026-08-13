@@ -8,7 +8,7 @@ namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 public abstract class StagedResultPlan
 {
     /// <summary>The pipeline composition the plan was baked against.</summary>
-    public abstract StagedPlanComposition Composition { get; }
+    public abstract StagedPlanKey Composition { get; }
 
     /// <inheritdoc cref="StagedVoidPlan.SupportsDirectConstruction"/>
     public virtual bool SupportsDirectConstruction => false;

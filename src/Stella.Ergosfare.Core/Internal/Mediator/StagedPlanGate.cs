@@ -6,16 +6,32 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 /// <summary>
 /// The staged plans' advisory gate: whether the live pipeline is exactly the composition a
-/// plan was baked against — one main handler of the planned type and the four interceptor
-/// stages matching the planned type lists in order. Anything else (a runtime-registered
+/// plan was baked against — the two main-handler segments and the four interceptor stages
+/// matching the planned type lists in order. Anything else (a runtime-registered
 /// interceptor, a different or additional handler, reordered stages) fails the match and
 /// keeps the dispatch on the runtime strategy.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Handlers are compared exactly like the interceptor stages, which is what lets one gate
+/// serve both a broadcast and a single-handler pipeline: the latter's baked composition is
+/// one direct handler and an empty indirect segment, so "the live pipeline has exactly this
+/// one handler" falls out of the same list comparison instead of needing its own arm.
+/// </para>
+/// <para>
+/// The indirect segment is compared even for a single-handler plan, which does not run it —
+/// a sole direct handler wins the resolution ladder outright. That is deliberate: a covariant
+/// handler the generator never saw means the live composition is not the one the plan was
+/// baked against, and the advisory contract is "trust the plan only when the pipeline is
+/// exactly what was compiled". The dispatch then costs the strategy instead of the plan, and
+/// behaves identically either way.
+/// </para>
+/// </remarks>
 internal static class StagedPlanGate
 {
-    internal static bool Matches(MessageDependencies dependencies, StagedPlanComposition composition)
-        => dependencies.Handlers.Count == 1
-           && dependencies.Handlers[0].HandlerType == composition.HandlerType
+    internal static bool Matches(MessageDependencies dependencies, StagedPlanKey composition)
+        => StageMatches(dependencies.Handlers, composition.HandlerTypeArray)
+           && StageMatches(dependencies.IndirectHandlers, composition.IndirectHandlerTypeArray)
            && StageMatches(dependencies.PreInterceptors, composition.PreInterceptorTypeArray)
            && StageMatches(dependencies.PostInterceptors, composition.PostInterceptorTypeArray)
            && StageMatches(dependencies.ExceptionInterceptors, composition.ExceptionInterceptorTypeArray)
@@ -48,8 +64,9 @@ internal static class StagedPlanGate
     /// identical to container resolution. Any override (user factory, lifetime change)
     /// routes the plan back to its provider-resolving variant.
     /// </summary>
-    internal static bool AllPlainTransient(MessageDependenciesFactory factory, StagedPlanComposition composition)
-        => factory.IsPlainTransientRegistration(composition.HandlerType)
+    internal static bool AllPlainTransient(MessageDependenciesFactory factory, StagedPlanKey composition)
+        => StagePlainTransient(factory, composition.HandlerTypeArray)
+           && StagePlainTransient(factory, composition.IndirectHandlerTypeArray)
            && StagePlainTransient(factory, composition.PreInterceptorTypeArray)
            && StagePlainTransient(factory, composition.PostInterceptorTypeArray)
            && StagePlainTransient(factory, composition.ExceptionInterceptorTypeArray)

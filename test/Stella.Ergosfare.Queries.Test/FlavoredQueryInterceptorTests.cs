@@ -53,7 +53,7 @@ public class FlavoredQueryInterceptorTests
             .BuildServiceProvider();
         await using var _ = provider;
 
-        var settings = new QueryMediationSettings();
+        var settings = new ErgosfareContext();
 
         // Before the contract fix the final stage itself threw NotSupportedException for
         // value-typed results; now it observes the outcome like any final interceptor.
@@ -112,11 +112,11 @@ public class FlavoredQueryInterceptorTests
 
         // Before the contract fix the interceptor's base closed over IQuery, so it ran
         // for every query in the application — including this untargeted one.
-        var untargetedSettings = new QueryMediationSettings();
+        var untargetedSettings = new ErgosfareContext();
         await queries.QueryAsync(new UntargetedQuery(), untargetedSettings);
         Assert.False(untargetedSettings.Items.ContainsKey("postRan"));
 
-        var targetedSettings = new QueryMediationSettings();
+        var targetedSettings = new ErgosfareContext();
         await queries.QueryAsync(new TargetedQuery(), targetedSettings);
         Assert.Equal(true, targetedSettings.Items["postRan"]);
     }

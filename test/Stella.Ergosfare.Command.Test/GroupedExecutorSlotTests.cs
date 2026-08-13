@@ -61,9 +61,9 @@ public class GroupedExecutorSlotTests
 
         static async Task<string> Dispatch(ICommandMediator mediator, params string[] groups)
         {
-            var settings = new CommandMediationSettings { Filters = { Groups = groups } };
-            await mediator.SendAsync(new RoutedCommand(), settings);
-            return Assert.IsType<string>(settings.Items["ran"]);
+            var items = new ErgosfareContext();
+            await mediator.SendAsync(new RoutedCommand(), items, groups);
+            return Assert.IsType<string>(items.Items["ran"]);
         }
     }
 
@@ -107,8 +107,7 @@ public class GroupedExecutorSlotTests
 
         static async Task<string> Dispatch(ICommandMediator mediator, params string[] groups)
         {
-            var settings = new CommandMediationSettings { Filters = { Groups = groups } };
-            return await mediator.SendAsync(new RoutedEcho(), settings);
+            return await mediator.SendAsync(new RoutedEcho(), new ErgosfareContext(null), groups);
         }
     }
 }

@@ -157,7 +157,7 @@ public class GroupSetDispatchTests
         // The legacy lane: a GroupSet assigned to Filters.Groups behaves as the same
         // filter, and the caches recognize the canonical instance there too.
         _lastRan = null;
-        var settings = new CommandMediationSettings { Filters = { Groups = West } };
+        var settings = West;
         await mediator.SendAsync(new SlottedCommand(), settings);
 
         Assert.Equal("west", _lastRan);

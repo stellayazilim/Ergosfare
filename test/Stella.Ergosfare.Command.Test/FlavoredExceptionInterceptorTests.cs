@@ -52,7 +52,7 @@ public class FlavoredExceptionInterceptorTests
             .BuildServiceProvider();
         await using var _ = provider;
 
-        var settings = new CommandMediationSettings();
+        var settings = new ErgosfareContext();
 
         // Before the contract fix this dispatch failed with NotSupportedException from
         // the exception invoker itself; now the interceptor observes the handler's

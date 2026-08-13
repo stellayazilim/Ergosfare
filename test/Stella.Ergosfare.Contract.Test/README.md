@@ -308,12 +308,15 @@ than change by accident.
    `RegisterGenerated` does for every discovered message — filed the base handler as an
    indirect one, and single-handler mediation never looked there, so the dispatch failed.
 
-   Direct and indirect handlers are one candidate set now, so whether a message has a
-   descriptor of its own no longer decides who serves it. Two candidates are a contest and
-   fail the dispatch with `MultipleHandlerFoundException` — the same outcome two direct
-   handlers produce, counted before anything resolves so neither claimant runs. Pinned by
-   the two `A_base_typed_handler_*` scenarios and
-   `A_direct_and_a_base_typed_handler_claiming_one_message_fail_the_dispatch`.
+   Direct and indirect handlers are read as one priority ladder now, so whether a message
+   has a descriptor of its own no longer decides who serves it. A sole direct handler wins
+   the ladder outright — a covariant handler is a fallback for messages nobody claims
+   directly, not a competitor — and without one, the covariant level serves. The ladder has
+   no tiebreaker *within* a level: two claimants on the same level are a contest and fail
+   the dispatch with `MultipleHandlerFoundException`, counted before anything resolves so
+   neither claimant runs. Pinned by the two `A_base_typed_handler_*` scenarios,
+   `A_direct_handler_beats_a_base_typed_one_claiming_the_same_message` and
+   `Two_covariant_claimants_with_no_direct_handler_fail_the_dispatch`.
 
    Two consequences worth knowing:
 

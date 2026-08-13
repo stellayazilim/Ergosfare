@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Commands.Abstractions;
+using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
@@ -69,9 +69,9 @@ public class GeneratedPlanProviderConstructionTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        var first = new CommandMediationSettings();
+        var first = new ErgosfareContext();
         await mediator.SendAsync(new InjectedCommand(), first);
-        var second = new CommandMediationSettings();
+        var second = new ErgosfareContext();
         await mediator.SendAsync(new InjectedCommand(), second);
 
         // The factory constructs (transient semantics intact — fresh handler per
@@ -113,7 +113,7 @@ public class GeneratedPlanProviderConstructionTests
         // Container activation resolves a scoped dependency from the resolving scope;
         // the provider factory must land on the very same instance.
         using var firstScope = provider.CreateScope();
-        var firstSettings = new CommandMediationSettings();
+        var firstSettings = new ErgosfareContext();
         await firstScope.ServiceProvider.GetRequiredService<ICommandMediator>()
             .SendAsync(new ScopedInjectedCommand(), firstSettings);
 
@@ -122,7 +122,7 @@ public class GeneratedPlanProviderConstructionTests
             firstSettings.Items["dependencyId"]);
 
         using var secondScope = provider.CreateScope();
-        var secondSettings = new CommandMediationSettings();
+        var secondSettings = new ErgosfareContext();
         await secondScope.ServiceProvider.GetRequiredService<ICommandMediator>()
             .SendAsync(new ScopedInjectedCommand(), secondSettings);
 
@@ -168,9 +168,9 @@ public class GeneratedPlanProviderConstructionTests
         // A provider-factory construction would hand out fresh instances; the user's
         // singleton override must keep sharing one — the gate routes back through the
         // container exactly as it does for parameterless factories.
-        var first = new CommandMediationSettings();
+        var first = new ErgosfareContext();
         await mediator.SendAsync(new OverriddenInjectedCommand(), first);
-        var second = new CommandMediationSettings();
+        var second = new ErgosfareContext();
         await mediator.SendAsync(new OverriddenInjectedCommand(), second);
 
         Assert.Equal(first.Items["handlerId"], second.Items["handlerId"]);

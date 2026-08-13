@@ -4,10 +4,10 @@ namespace Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 /// see <see cref="GeneratedDispatchRoots.AddVoidPlan{TMessage, THandler}()"/> and
 /// <see cref="MessageRoot"/> for the visitor re-entry pattern.
 /// </summary>
-public abstract class VoidPlanRoot
+public abstract class VoidHandlerPlan
 {
     /// <summary>Invokes the visitor with this plan's message and handler types as the generic arguments.</summary>
-    public abstract TReturn Accept<TReturn, TState>(IVoidPlanRootVisitor<TReturn, TState> visitor, TState state);
+    public abstract TReturn Accept<TReturn, TState>(IVoidHandlerPlanVisitor<TReturn, TState> visitor, TState state);
 
     /// <summary>
     /// The compile-time handler construction path — a <c>Func&lt;THandler&gt;</c> or a

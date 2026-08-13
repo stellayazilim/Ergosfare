@@ -103,6 +103,12 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
+        // The plugin facade: its own source output, emitted only for an assembly that
+        // declares itself a plugin. Kept separate because it shares no input with the
+        // registration emission below and must not add a tree to ordinary compilations.
+        RegisterPluginFacade(context);
+        RegisterPluginScanDiagnostics(context);
+
         var registrableTypes = context.SyntaxProvider
             .CreateSyntaxProvider(
                 static (node, _) => node is TypeDeclarationSyntax { BaseList.Types.Count: > 0 },
@@ -215,13 +221,22 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 pair.Left.Right,
                 pair.Right));
 
+        // The plugin methods visible to this compilation. Gated on reference scanning like
+        // every other reference-derived input: a plugin arrives as a referenced assembly's
+        // metadata, so scanning off means no plugin, which is also the shape a compilation
+        // that references none produces — and that shape emits nothing.
+        var pluginInvocations = context.CompilationProvider
+            .Combine(scanReferences)
+            .Select(static (pair, ct) => ScanPluginInvocations(pair.Left, pair.Right, ct));
+
         context.RegisterSourceOutput(
             registrableTypes.Combine(availability).Combine(referencedTypes)
                 .Combine(dispatchSites).Combine(registrationSites).Combine(referencedSites).Combine(judgmentInputs)
-                .Combine(defaultResultAdapterSites),
+                .Combine(defaultResultAdapterSites).Combine(pluginInvocations),
             static (spc, pair) => Execute(
                 spc,
-                pair.Left.Left.Left.Left.Left.Left.Left,
+                pair.Left.Left.Left.Left.Left.Left.Left.Left,
+                pair.Left.Left.Left.Left.Left.Left.Left.Right,
                 pair.Left.Left.Left.Left.Left.Left.Right,
                 pair.Left.Left.Left.Left.Left.Right,
                 pair.Left.Left.Left.Left.Right,
@@ -2023,7 +2038,8 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
         ImmutableArray<RegistrationSiteModel> registrationSites,
         DispatchManifestScanResult referencedSites,
         JudgmentInputs judgmentInputs,
-        ImmutableArray<DefaultResultAdapterSiteModel> defaultResultAdapterSites)
+        ImmutableArray<DefaultResultAdapterSiteModel> defaultResultAdapterSites,
+        ImmutableArray<PluginInvocationModel> pluginInvocations)
     {
         var seen = new HashSet<string>();
         var types = new List<RegistrableTypeModel>();
@@ -2064,8 +2080,27 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
 
         var stagedPlans = availability.DispatchRootsHasStagedPlans
             ? ComputeStagedPlans(types, availability.HasKeyedServiceExtensions,
-                defaultResultAdapter is { IsBakeable: true } ? defaultResultAdapter : null)
+                defaultResultAdapter is { IsBakeable: true } ? defaultResultAdapter : null,
+                pluginInvocations)
             : (IReadOnlyList<StagedPlanModel>)Array.Empty<StagedPlanModel>();
+
+        // A message a plugin pulled into the staged family leaves the single-handler one:
+        // the executor checks staged plans first, and two plans for one message would leave
+        // the handler plan permanently dead while still costing its emission and its
+        // registration-time validation. Without a plugin the two families are disjoint by
+        // construction, so this filters nothing.
+        if (!pluginInvocations.IsEmpty && stagedPlans.Count > 0)
+        {
+            var stagedMessages = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var plan in stagedPlans)
+            {
+                stagedMessages.Add(plan.MessageTypeExpression);
+            }
+
+            voidPlans = WithoutMessages(voidPlans, stagedMessages, static plan => plan.MessageTypeExpression);
+            resultPlans = WithoutMessages(resultPlans, stagedMessages, static plan => plan.MessageTypeExpression);
+        }
 
         var frozenCompositions = availability.DispatchRootsHasFrozenCompositions
             ? ComputeFrozenCompositions(types, excludedShadows)
@@ -2077,6 +2112,34 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
             emitManifest ? registrationSites : ImmutableArray<RegistrationSiteModel>.Empty,
             emitManifest, GeneratorVersion);
         context.AddSource("ErgosfareRegistrations.g.cs", SourceText.From(source, Encoding.UTF8));
+    }
+
+    /// <summary>The plans whose message is not in the given set, without copying when none is.</summary>
+    private static IReadOnlyList<TPlan> WithoutMessages<TPlan>(
+        IReadOnlyList<TPlan> plans, HashSet<string> excluded, Func<TPlan, string> messageOf)
+    {
+        List<TPlan>? kept = null;
+
+        for (var i = 0; i < plans.Count; i++)
+        {
+            if (!excluded.Contains(messageOf(plans[i])))
+            {
+                kept?.Add(plans[i]);
+                continue;
+            }
+
+            if (kept is null)
+            {
+                kept = new List<TPlan>(plans.Count);
+
+                for (var j = 0; j < i; j++)
+                {
+                    kept.Add(plans[j]);
+                }
+            }
+        }
+
+        return kept ?? plans;
     }
 
     /// <summary>
@@ -2284,7 +2347,8 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
     private static List<StagedPlanModel> ComputeStagedPlans(
         List<RegistrableTypeModel> types,
         bool hasKeyedServiceExtensions,
-        DefaultResultAdapterSiteModel? defaultResultAdapter)
+        DefaultResultAdapterSiteModel? defaultResultAdapter,
+        ImmutableArray<PluginInvocationModel> pluginInvocations)
     {
         CollectPipelineFacts(types, out var handlerCounts, out var soleHandlers, out _);
 
@@ -2299,10 +2363,17 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
 
             string? resultTypeExpression = null;
             var resultIsValueType = false;
+            var isBroadcast = false;
 
             if (type.IsCommand && type.DispatchResults.Length == 0)
             {
                 // Void pipeline.
+            }
+            else if (type.IsEvent && type.DispatchResults.Length == 0)
+            {
+                // Broadcast pipeline: a resultless pipeline like the void one, differing in
+                // one thing — every matched handler runs instead of a sole one.
+                isBroadcast = true;
             }
             else if ((type.IsCommand || type.IsQuery)
                      && type.DispatchResults.Length == 1
@@ -2316,33 +2387,54 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 continue;
             }
 
-            // The sole handler gate mirrors the single-handler plans, minus the
-            // interceptor suppression (interceptors are the whole point here).
-            if (!handlerCounts.TryGetValue(type.TypeofExpression, out var count) || count != 1)
+            ImmutableArray<StagedHandlerModel> handlers;
+            ImmutableArray<StagedHandlerModel> indirectHandlers;
+
+            if (isBroadcast)
             {
-                continue;
+                // No sole-handler gate and no covariant disqualification: a broadcast is
+                // where a covariant handler is a legitimate participant rather than a
+                // competing claim on the message.
+                if (!TryAssembleBroadcastHandlers(type, types, hasKeyedServiceExtensions,
+                        out handlers, out indirectHandlers))
+                {
+                    continue;
+                }
             }
-
-            if (HasCovariantMainHandler(type, handlerCounts))
+            else
             {
-                continue;
-            }
+                // The sole handler gate mirrors the single-handler plans, minus the
+                // interceptor suppression (interceptors are the whole point here).
+                if (!handlerCounts.TryGetValue(type.TypeofExpression, out var count) || count != 1)
+                {
+                    continue;
+                }
 
-            var (handler, handlerDescriptor) = soleHandlers[type.TypeofExpression];
+                if (HasCovariantMainHandler(type, handlerCounts))
+                {
+                    continue;
+                }
 
-            if (!handler.IsAccessible || !handler.DiscoveryKeys.IsEmpty || handler.GroupsExpression is not null)
-            {
-                continue;
-            }
+                var (handler, handlerDescriptor) = soleHandlers[type.TypeofExpression];
 
-            var expectedHandlerResult = resultTypeExpression is null
-                ? ValueTaskExpression
-                : ValueTaskExpression + "<" + resultTypeExpression + ">";
+                if (!handler.IsAccessible || !handler.DiscoveryKeys.IsEmpty || handler.GroupsExpression is not null)
+                {
+                    continue;
+                }
 
-            if (handlerDescriptor.ResultTypeExpression != expectedHandlerResult
-                || handlerDescriptor.MessageTypeExpression != type.TypeofExpression)
-            {
-                continue;
+                var expectedHandlerResult = resultTypeExpression is null
+                    ? ValueTaskExpression
+                    : ValueTaskExpression + "<" + resultTypeExpression + ">";
+
+                if (handlerDescriptor.ResultTypeExpression != expectedHandlerResult
+                    || handlerDescriptor.MessageTypeExpression != type.TypeofExpression)
+                {
+                    continue;
+                }
+
+                handlers = ImmutableArray.Create(new StagedHandlerModel(
+                    handler.TypeofExpression, GatedConstructionExpression(handler, hasKeyedServiceExtensions)));
+                indirectHandlers = ImmutableArray<StagedHandlerModel>.Empty;
             }
 
             if (!TryAssembleStagedStages(type, types, resultTypeExpression, resultIsValueType, hasKeyedServiceExtensions,
@@ -2351,9 +2443,17 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 continue;
             }
 
-            if (pre.Length + post.Length + exceptionCalls.Length + finalCalls.Length == 0)
+            var pluginCalls = SelectPluginCalls(pluginInvocations, type, resultTypeExpression is null);
+
+            if (pre.Length + post.Length + exceptionCalls.Length + finalCalls.Length == 0
+                && pluginCalls.IsEmpty)
             {
-                // No interceptors: the single-handler plans already cover this shape.
+                // No interceptors and no plugin: the single-handler plans already cover this
+                // shape. A plugin is what pulls an interceptorless pipeline in here — its
+                // observer has to be emitted into both plan families, and a plan body is the
+                // only place a call can live. The body collapses accordingly: with no pre
+                // chain, the pipeline start and the pre-handler boundary are the same point,
+                // as are the post-handler and after-post ones.
                 continue;
             }
 
@@ -2417,13 +2517,157 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 type.TypeofExpression,
                 resultTypeExpression,
                 resultIsValueType,
-                handler.TypeofExpression,
-                GatedConstructionExpression(handler, hasKeyedServiceExtensions),
+                handlers,
+                indirectHandlers,
                 pre, post, exceptionCalls, finalCalls,
-                adapterKind, adapterTypeExpression, adapterMaterializes));
+                adapterKind, adapterTypeExpression, adapterMaterializes,
+                pluginCalls));
         }
 
         return plans;
+    }
+
+    /// <summary>
+    ///     The plugin methods emitted into one plan: those whose declared shape matches the
+    ///     pipeline's, whose family filter admits the message's module, whose discovery-key
+    ///     filter admits the message's keys, and whose generic constraints the message
+    ///     satisfies. A method failing any of them contributes nothing to this plan — no
+    ///     call, no runtime check — which is the design's point about a constraint being the
+    ///     filter.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         The order is ordinal by service type then method name. Weight-by-registration
+    ///         order is a property of the consumer's fluent chain, which this slice does not
+    ///         read; a stable arbitrary order is preferable to an unstable one, and pinning it
+    ///         here keeps the emitted source deterministic.
+    ///     </para>
+    ///     <para>
+    ///         Events never reach this path: the staged family covers void commands and
+    ///         single-result commands and queries, so a plugin filtered to the event module
+    ///         alone currently selects nothing.
+    ///     </para>
+    /// </remarks>
+    private static ImmutableArray<PluginInvocationModel> SelectPluginCalls(
+        ImmutableArray<PluginInvocationModel> invocations,
+        RegistrableTypeModel message,
+        bool isVoidPipeline)
+    {
+        if (invocations.IsEmpty)
+        {
+            return ImmutableArray<PluginInvocationModel>.Empty;
+        }
+
+        var shape = isVoidPipeline ? PluginPipelineShape.Void : PluginPipelineShape.Result;
+
+        // The method's own arity is what emission closes over: one type parameter for the
+        // resultless shape, two for the result-bearing one. Anything else is a declaration
+        // this emission cannot write a call for.
+        var expectedArity = isVoidPipeline ? 1 : 2;
+
+        ImmutableArray<PluginInvocationModel>.Builder? selected = null;
+
+        foreach (var invocation in invocations)
+        {
+            if (invocation.Shape != shape
+                || invocation.Arity != expectedArity
+                || invocation.Constraints.IsUnmodelable
+                || !MatchesModule(invocation.Modules, message)
+                || !MatchesDiscoveryKeys(invocation.Keys, message.DiscoveryKeys)
+                || !SatisfiesConstraints(invocation.Constraints, message))
+            {
+                continue;
+            }
+
+            (selected ??= ImmutableArray.CreateBuilder<PluginInvocationModel>()).Add(invocation);
+        }
+
+        if (selected is null)
+        {
+            return ImmutableArray<PluginInvocationModel>.Empty;
+        }
+
+        selected.Sort(static (x, y) =>
+        {
+            var byType = string.CompareOrdinal(x.ServiceTypeExpression, y.ServiceTypeExpression);
+            return byType != 0 ? byType : string.CompareOrdinal(x.MethodName, y.MethodName);
+        });
+
+        return selected.ToImmutable();
+    }
+
+    private static bool MatchesModule(PluginModule modules, RegistrableTypeModel message)
+        => (message.IsCommand && (modules & PluginModule.Command) != 0)
+           || (message.IsQuery && (modules & PluginModule.Query) != 0)
+           || (message.IsEvent && (modules & PluginModule.Event) != 0);
+
+    /// <summary>
+    ///     The key filter. An unwritten one selects the default key alone — the same set
+    ///     <c>RegisterGenerated()</c> without a pattern selects. A keyed message was opted
+    ///     out of default discovery by its author, and a plugin the consumer installed
+    ///     without naming a key should not quietly opt it back in.
+    /// </summary>
+    private static bool MatchesDiscoveryKeys(ImmutableArray<string> filter, ImmutableArray<string> declared)
+    {
+        if (filter.IsDefaultOrEmpty)
+        {
+            return declared.IsDefaultOrEmpty;
+        }
+
+        foreach (var key in filter)
+        {
+            if (declared.IsDefaultOrEmpty)
+            {
+                if (key.Length == 0)
+                {
+                    return true;
+                }
+
+                continue;
+            }
+
+            foreach (var candidate in declared)
+            {
+                if (string.Equals(key, candidate, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Whether the message satisfies the method's message-parameter constraints, decided
+    ///     against the same assignable chain the covariant interceptor match uses.
+    /// </summary>
+    private static bool SatisfiesConstraints(PluginConstraintModel constraints, RegistrableTypeModel message)
+    {
+        if (constraints.RequiresReferenceType && message.IsValueType)
+        {
+            return false;
+        }
+
+        if (constraints.RequiresValueType && !message.IsValueType)
+        {
+            return false;
+        }
+
+        foreach (var required in constraints.MessageTypes)
+        {
+            if (required == message.TypeofExpression)
+            {
+                continue;
+            }
+
+            if (!message.AssignableKeys.Contains(required))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -2707,6 +2951,126 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
     ///     type name as the ordinal tie-break (participants are non-nested and
     ///     non-generic, so the display name equals the runtime <c>Type.FullName</c>).
     /// </summary>
+    /// <summary>
+    ///     Assembles a broadcast plan's two handler segments — directly registered handlers
+    ///     first, then the covariantly matched ones — in the runtime's own execution order
+    ///     (weight-descending, then ordinal by display name). Fails, leaving the message to
+    ///     the runtime strategy, when any part of the handler set cannot be modeled exactly.
+    /// </summary>
+    /// <remarks>
+    ///     The covariant segment is the reason a broadcast needs its own assembly step: for a
+    ///     single-handler pipeline a covariant handler is a competing claim that disqualifies
+    ///     the plan, while here it is an ordinary participant the publish delivers to.
+    /// </remarks>
+    private static bool TryAssembleBroadcastHandlers(
+        RegistrableTypeModel message,
+        List<RegistrableTypeModel> types,
+        bool hasKeyedServiceExtensions,
+        out ImmutableArray<StagedHandlerModel> handlers,
+        out ImmutableArray<StagedHandlerModel> indirectHandlers)
+    {
+        handlers = ImmutableArray<StagedHandlerModel>.Empty;
+        indirectHandlers = ImmutableArray<StagedHandlerModel>.Empty;
+
+        List<(RegistrableTypeModel Type, bool Direct)>? entries = null;
+
+        foreach (var candidate in types)
+        {
+            if (candidate.Descriptors.IsEmpty)
+            {
+                continue;
+            }
+
+            var matched = 0;
+            var direct = false;
+
+            foreach (var descriptor in candidate.Descriptors)
+            {
+                if (descriptor.Kind != DescriptorKind.MainHandler)
+                {
+                    continue;
+                }
+
+                var isDirect = descriptor.MessageTypeExpression == message.TypeofExpression;
+
+                if (!isDirect && !message.AssignableKeys.Contains(descriptor.MessageTypeExpression))
+                {
+                    continue;
+                }
+
+                // Only the asynchronous resultless contract is modeled. The runtime also
+                // dispatches the ValueTask-shaped and synchronous ones through a type
+                // switch; a plan would have to reproduce that choice per handler, and the
+                // strategy already does it correctly.
+                if (descriptor.ResultTypeExpression != ValueTaskExpression)
+                {
+                    return false;
+                }
+
+                matched++;
+                direct = isDirect;
+            }
+
+            if (matched == 0)
+            {
+                continue;
+            }
+
+            // Reached through two registrations — the handler would appear in the pipeline
+            // more than once and the order among the appearances is not worth modeling.
+            if (matched > 1)
+            {
+                return false;
+            }
+
+            if (!candidate.IsAccessible
+                || !candidate.DiscoveryKeys.IsEmpty
+                || candidate.GroupsExpression is not null
+                || candidate.IsNestedType)
+            {
+                return false;
+            }
+
+            (entries ??= []).Add((candidate, direct));
+        }
+
+        if (entries is null)
+        {
+            return false;
+        }
+
+        entries.Sort(static (x, y) =>
+        {
+            var bySegment = y.Direct.CompareTo(x.Direct);
+
+            if (bySegment != 0)
+            {
+                return bySegment;
+            }
+
+            var byWeight = y.Type.Weight.CompareTo(x.Type.Weight);
+
+            return byWeight != 0
+                ? byWeight
+                : string.CompareOrdinal(x.Type.DisplayName, y.Type.DisplayName);
+        });
+
+        var directBuilder = ImmutableArray.CreateBuilder<StagedHandlerModel>();
+        var indirectBuilder = ImmutableArray.CreateBuilder<StagedHandlerModel>();
+
+        foreach (var (type, isDirect) in entries)
+        {
+            var model = new StagedHandlerModel(
+                type.TypeofExpression, GatedConstructionExpression(type, hasKeyedServiceExtensions));
+
+            (isDirect ? directBuilder : indirectBuilder).Add(model);
+        }
+
+        handlers = directBuilder.ToImmutable();
+        indirectHandlers = indirectBuilder.ToImmutable();
+        return true;
+    }
+
     private static ImmutableArray<StagedCallModel> OrderStage(
         List<(RegistrableTypeModel Type, StagedCallArm Arm, bool Direct, string? ExceptionFilter)>? entries,
         bool hasKeyedServiceExtensions)

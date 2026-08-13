@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Core;
+using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Queries.Abstractions;
 
@@ -40,93 +40,74 @@ public class QueryMediator : IQueryMediator
         _serviceProvider = serviceProvider;
     }
 
-    /// <summary>
-    /// Executes a query and returns a single result of type <typeparamref name="TResult"/>.
-    /// The query is processed through the mediation pipeline, including pre/post/final interceptors.
-    /// </summary>
-    /// <typeparam name="TResult">The expected result type of the query.</typeparam>
-    /// <param name="query">The query message to process.</param>
-    /// <param name="queryMediationSettings">
-    /// Optional settings to influence pipeline execution, such as filters and custom items.
-    /// </param>
-    /// <param name="cancellationToken">A cancellation token for async execution.</param>
-    /// <returns>A <see cref="ValueTask{TResult}"/> representing the asynchronous execution of the query.</returns>
-    public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, QueryMediationSettings? queryMediationSettings = null,
-        CancellationToken cancellationToken = default)
-    {
-        return _engine.DispatchAsync<TResult>(
-            query,
-            _serviceProvider,
-            queryMediationSettings?.Items,
-            cancellationToken,
-            queryMediationSettings?.Filters.Groups);
-    }
+    /// <inheritdoc />
+    public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, IEnumerable<string>? groups,
+        CancellationToken cancellationToken)
+        => _engine.DispatchAsync<TResult>(query, _serviceProvider, cancellationToken, groups);
 
+    /// <inheritdoc />
+    public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, ErgosfareContext context,
+        IEnumerable<string>? groups = null)
+        => _engine.DispatchAsync<TResult>(query, context, _serviceProvider, groups);
 
-    /// <summary>
-    /// Executes a streaming query and returns an asynchronous enumerable of results.
-    /// The query is processed through the streaming pipeline, supporting interceptors and result adapters.
-    /// </summary>
-    /// <typeparam name="TResult">The type of elements produced by the stream query.</typeparam>
-    /// <param name="query">The streaming query to execute.</param>
-    /// <param name="queryMediationSettings">
-    /// Optional settings to influence pipeline execution, such as filters and custom items.
-    /// </param>
-    /// <param name="cancellationToken">A cancellation token for async streaming.</param>
-    /// <returns>An <see cref="IAsyncEnumerable{TResult}"/> representing the results of the streaming query.</returns>
-    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, QueryMediationSettings? queryMediationSettings = null,
-        CancellationToken cancellationToken = default)
-    {
-        // Streams run against the invoker-cached pipeline plan — no per-call mediator
+    /// <inheritdoc />
+    [Obsolete(StreamRevision.Notice)]
+    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, IEnumerable<string>? groups,
+        CancellationToken cancellationToken)
+        // Streams run against this container's cached pipeline — no per-call mediator
         // resolution and no composition lookup.
-        return QueryStreamInvokerCache.Get<TResult>(query.GetType()).Stream(
-            query, queryMediationSettings, cancellationToken, _engine, _serviceProvider);
-    }
+        => _engine.StreamAsync<TResult>(query, _serviceProvider, cancellationToken, groups);
 
-    /// <summary>
-    /// Executes a query under a canonical group filter — no settings object, and with a
-    /// reused <see cref="GroupSet"/> the grouped executor lookup matches on a single
-    /// reference check. An empty set routes to the group-less fast lane.
-    /// </summary>
+    /// <inheritdoc />
+    [Obsolete(StreamRevision.Notice)]
+    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, ErgosfareContext context,
+        IEnumerable<string>? groups = null)
+        => _engine.StreamAsync<TResult>(query, context, _serviceProvider, groups);
+
+    /// <summary>Executes a query through its default pipeline.</summary>
+    /// <remarks>
+    /// The conveniences are declared here as well as on the interface. They used to be
+    /// extension methods, which a concrete-typed receiver finds; a default interface method is
+    /// not, so carrying them only on the interface would have broken every call made through
+    /// this class.
+    /// </remarks>
+    public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, CancellationToken cancellationToken = default)
+        => QueryAsync(query, (IEnumerable<string>?)null, cancellationToken);
+
+
+    /// <summary>Executes under a canonical group filter; an empty set routes to the group-less lane.</summary>
     public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, GroupSet groups,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(groups);
 
-        IEnumerable<string>? effectiveGroups = groups.Count == 0 ? null : groups;
-
-        return _engine.DispatchAsync<TResult>(query, _serviceProvider, null, cancellationToken, effectiveGroups);
+        return QueryAsync(query, groups.Count == 0 ? null : (IEnumerable<string>?)groups, cancellationToken);
     }
 
-    /// <summary>
-    /// Streaming counterpart of
-    /// <see cref="QueryAsync{TResult}(IQuery{TResult}, GroupSet, CancellationToken)"/>:
-    /// the group filter flows into the invoker's plan slot directly, with no settings
-    /// object on the way.
-    /// </summary>
+    /// <summary>Executes under a group filter given as a plain array.</summary>
+    public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, string[] groups,
+        CancellationToken cancellationToken = default)
+        => QueryAsync(query, (IEnumerable<string>?)groups, cancellationToken);
+
+    /// <summary>Streams a query through its default pipeline.</summary>
+    [Obsolete(StreamRevision.Notice)]
+    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query,
+        CancellationToken cancellationToken = default)
+        => StreamAsync(query, (IEnumerable<string>?)null, cancellationToken);
+
+    /// <summary>Streams under a canonical group filter.</summary>
+    [Obsolete(StreamRevision.Notice)]
     public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, GroupSet groups,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(groups);
 
-        IEnumerable<string>? effectiveGroups = groups.Count == 0 ? null : groups;
-
-        return QueryStreamInvokerCache.Get<TResult>(query.GetType()).Stream(
-            query, null, cancellationToken, _engine, _serviceProvider, effectiveGroups);
+        return StreamAsync(query, groups.Count == 0 ? null : (IEnumerable<string>?)groups, cancellationToken);
     }
 
-    /// <summary>
-    /// Executes a query under an externally owned execution context — the nested-dispatch
-    /// path: a handler opens a scope on its own context and passes the child here. The
-    /// caller owns the context's lifetime; cancellation flows from the context.
-    /// </summary>
-    public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, ErgosfareContext context,
-        QueryMediationSettings? queryMediationSettings = null)
-    {
-        return _engine.DispatchAsync<TResult>(
-            query,
-            context,
-            _serviceProvider,
-            queryMediationSettings?.Filters.Groups);
-    }
+    /// <summary>Streams under a group filter given as a plain array.</summary>
+    [Obsolete(StreamRevision.Notice)]
+    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, string[] groups,
+        CancellationToken cancellationToken = default)
+        => StreamAsync(query, (IEnumerable<string>?)groups, cancellationToken);
 }

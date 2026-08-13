@@ -81,11 +81,11 @@ public class EngineBackedFacadeTests
         {
             var mediator = scope.ServiceProvider.GetRequiredService<ICommandMediator>();
 
-            var firstSettings = new CommandMediationSettings();
+            var firstSettings = new ErgosfareContext();
             await mediator.SendAsync(new ProbeCommand(), firstSettings);
             first = Assert.IsType<Guid>(firstSettings.Items["probeId"]);
 
-            var secondSettings = new CommandMediationSettings();
+            var secondSettings = new ErgosfareContext();
             await mediator.SendAsync(new ProbeCommand(), secondSettings);
             second = Assert.IsType<Guid>(secondSettings.Items["probeId"]);
         }
@@ -94,7 +94,7 @@ public class EngineBackedFacadeTests
         {
             var mediator = scope.ServiceProvider.GetRequiredService<ICommandMediator>();
 
-            var thirdSettings = new CommandMediationSettings();
+            var thirdSettings = new ErgosfareContext();
             await mediator.SendAsync(new ProbeCommand(), thirdSettings);
             third = Assert.IsType<Guid>(thirdSettings.Items["probeId"]);
         }
@@ -121,7 +121,7 @@ public class EngineBackedFacadeTests
 
         foreach (var mediator in new[] { engineBacked, mediatorBacked })
         {
-            var settings = new CommandMediationSettings();
+            var settings = new ErgosfareContext();
 
             var result = await mediator.SendAsync(
                 new EchoCommand { Payload = "hi" }, settings);
