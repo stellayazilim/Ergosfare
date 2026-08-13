@@ -26,11 +26,4 @@ public abstract class StagedVoidPlan<TMessage> : StagedVoidPlan
     /// <inheritdoc />
     public sealed override TReturn Accept<TReturn, TState>(IStagedVoidPlanVisitor<TReturn, TState> visitor, TState state)
         => visitor.Visit<TMessage>(state);
-
-    /// <inheritdoc />
-    internal sealed override ValueTask ExecuteErased(
-        object message, ErgosfareContext context, IServiceProvider serviceProvider, bool direct)
-        => direct
-            ? ExecuteDirect((TMessage)message, context, serviceProvider)
-            : Execute((TMessage)message, context, serviceProvider);
 }

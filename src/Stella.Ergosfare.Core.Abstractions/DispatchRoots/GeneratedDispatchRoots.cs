@@ -23,6 +23,7 @@ public static class GeneratedDispatchRoots
     private static readonly ConcurrentDictionary<Type, VoidHandlerPlan> VoidPlans = new();
     private static readonly ConcurrentDictionary<(Type MessageType, Type ResultType), ResultHandlerPlan> ResultPlans = new();
     private static readonly ConcurrentDictionary<Type, StagedVoidPlan> StagedVoidPlans = new();
+    private static readonly ConcurrentDictionary<Type, StagedBroadcastPlan> BroadcastPlans = new();
     private static readonly ConcurrentDictionary<(Type MessageType, Type ResultType), StagedResultPlan> StagedResultPlans = new();
 
     /// <summary>Roots the void dispatch generics of a message type. Idempotent.</summary>
@@ -157,9 +158,23 @@ public static class GeneratedDispatchRoots
         where TMessage : IMessage
         => StagedResultPlans.TryAdd((typeof(TMessage), typeof(TResult)), plan);
 
+    /// <summary>
+    /// Roots a staged pipeline plan for a broadcast. Its own store rather than a shape of the
+    /// void one: a publish asks here and a send asks there, so which store answered settles
+    /// the delivery difference and nothing has to branch on the message.
+    /// Idempotent.
+    /// </summary>
+    public static void AddBroadcastPlan<TEvent>(StagedBroadcastPlan<TEvent> plan)
+        where TEvent : notnull
+        => BroadcastPlans.TryAdd(typeof(TEvent), plan);
+
     /// <summary>The staged void plan of the message type, or <c>null</c> when none was generated.</summary>
     public static StagedVoidPlan? FindStagedVoidPlan(Type messageType)
         => StagedVoidPlans.TryGetValue(messageType, out var plan) ? plan : null;
+
+    /// <summary>The broadcast plan of the message type, or <c>null</c> when none was generated.</summary>
+    public static StagedBroadcastPlan? FindBroadcastPlan(Type messageType)
+        => BroadcastPlans.TryGetValue(messageType, out var plan) ? plan : null;
 
     /// <summary>The staged result plan of the (message, result) pair, or <c>null</c> when none was generated.</summary>
     public static StagedResultPlan? FindStagedResultPlan(Type messageType, Type resultType)

@@ -136,7 +136,7 @@ public class BroadcastPlanExecutionTests
     {
         var (assembly, provider) = Host.Value;
 
-        Assert.NotNull(GeneratedDispatchRoots.FindStagedVoidPlan(assembly.GetType("TestApp.GenOrderPlaced")!));
+        Assert.NotNull(GeneratedDispatchRoots.FindBroadcastPlan(assembly.GetType("TestApp.GenOrderPlaced")!));
 
         Entries.Clear();
 

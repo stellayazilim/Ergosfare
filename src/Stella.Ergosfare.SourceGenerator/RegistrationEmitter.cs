@@ -468,8 +468,12 @@ internal static class RegistrationEmitter
         {
             var plan = stagedPlans[i];
 
+            // A broadcast roots into its own store: a publish looks there and a send looks at
+            // the resultless plans, so which store answered settles the delivery difference
+            // and no dispatch has to branch on the message.
             sb.Append("            ").Append(DispatchRootsFullName)
-              .Append(".AddStagedPlan<").Append(plan.MessageTypeExpression);
+              .Append(plan.IsBroadcast ? ".AddBroadcastPlan<" : ".AddStagedPlan<")
+              .Append(plan.MessageTypeExpression);
 
             if (plan.ResultTypeExpression is not null)
             {
@@ -603,7 +607,11 @@ internal static class RegistrationEmitter
             StartMember(sb, ref wroteMember);
             sb.Append("        private sealed class StagedPlan").Append(i).Append(" : global::Stella.Ergosfare.Core.Abstractions.StagedPlans.");
 
-            if (isVoid)
+            if (plan.IsBroadcast)
+            {
+                sb.Append("StagedBroadcastPlan<").Append(plan.MessageTypeExpression).AppendLine(">");
+            }
+            else if (isVoid)
             {
                 sb.Append("StagedVoidPlan<").Append(plan.MessageTypeExpression).AppendLine(">");
             }

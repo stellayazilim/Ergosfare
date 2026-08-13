@@ -37,21 +37,25 @@ public class BroadcastPlanEmissionTests
 
     /// <summary>
     ///     The plan exists at all — the event lane never had one, so this is the whole point:
-    ///     an interceptor-bearing broadcast gets a compiled body instead of the strategy.
+    ///     an interceptor-bearing broadcast gets a compiled body instead of the runtime
+    ///     delivery.
     /// </summary>
     [Fact]
-    public void InterceptedBroadcast_EmitsAStagedPlan()
+    public void InterceptedBroadcast_EmitsABroadcastPlan()
     {
         var result = GeneratorTestHost.Run(EventPipeline);
 
         Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
 
-        // Resultless, so the void plan surface — the same one a void command uses.
+        // Its own family: a publish looks in the broadcast store and a send in the resultless
+        // one, so which store answered settles the delivery difference — nothing branches on
+        // the message.
         Assert.Contains(
-            "GeneratedDispatchRoots.AddStagedPlan<global::TestApp.OrderPlaced>(new StagedPlan0());",
+            "GeneratedDispatchRoots.AddBroadcastPlan<global::TestApp.OrderPlaced>(new StagedPlan0());",
             result.GeneratedSource);
-        Assert.Contains("StagedVoidPlan<global::TestApp.OrderPlaced>", result.GeneratedSource);
+        Assert.Contains("StagedBroadcastPlan<global::TestApp.OrderPlaced>", result.GeneratedSource);
+        Assert.DoesNotContain("StagedVoidPlan<global::TestApp.OrderPlaced>", result.GeneratedSource);
     }
 
     /// <summary>
@@ -187,6 +191,6 @@ public class BroadcastPlanEmissionTests
             """);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.DoesNotContain("AddStagedPlan<global::TestApp.OrderPlaced>", result.GeneratedSource);
+        Assert.DoesNotContain("AddBroadcastPlan<global::TestApp.OrderPlaced>", result.GeneratedSource);
     }
 }
