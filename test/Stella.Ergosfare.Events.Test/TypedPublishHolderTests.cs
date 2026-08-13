@@ -1,5 +1,8 @@
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Factories;
+using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
+using Stella.Ergosfare.Core.Internal.Mediator;
 using Stella.Ergosfare.Events.Abstractions;
 using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,13 +10,21 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Stella.Ergosfare.Events.Test;
 
 /// <summary>
-/// Covers the static-generic invoker holder behind the typed publish overload: it must be
-/// the same instance the runtime-type cache serves (one plan cache per event type), and a
-/// generic call made through a base-typed variable must keep dispatching by the event's
-/// runtime type.
+/// Covers the static-generic slot behind the typed publish overload: it must serve the same
+/// pipeline the runtime-type lookup does (one composition cache per message type), it must not
+/// leak between containers, and a generic call made through a base-typed variable must keep
+/// dispatching by the event's runtime type.
 /// </summary>
 public class TypedPublishHolderTests
 {
+    private sealed class NoCompositionFactory : IMessageDependenciesFactory
+    {
+        public IMessageDependencies Create(Type messageType, IEnumerable<string> groups)
+            => throw new NotSupportedException();
+
+        public IMessageDependencies? Find(Type messageType, IEnumerable<string> groups) => null;
+    }
+
     public class BaseEvent : IEvent { }
 
     public sealed class DerivedEvent : BaseEvent { }
@@ -30,12 +41,34 @@ public class TypedPublishHolderTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public void Holder_ServesTheSameInstance_AsTheRuntimeTypeCache()
+    public void TypedSlot_ServesTheSameInstance_AsTheRuntimeTypeLookup()
     {
-        var fromHolder = EventBroadcastInvokerCache.Holder<DerivedEvent>.Instance;
-        var fromCache = EventBroadcastInvokerCache.Get(typeof(DerivedEvent));
+        var table = new BroadcastDispatchTable(new NoCompositionFactory());
 
-        Assert.Same(fromCache, fromHolder);
+        var fromSlot = table.Get<DerivedEvent>();
+        var fromLookup = table.Get(typeof(DerivedEvent));
+
+        // Two entries per type would mean two composition caches and two gate verdicts for
+        // one pipeline — the typed slot has to be a shortcut to the dictionary, not a second
+        // store beside it.
+        Assert.Same(fromLookup, fromSlot);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void TypedSlot_DoesNotLeakBetweenContainers()
+    {
+        var first = new BroadcastDispatchTable(new NoCompositionFactory());
+        var second = new BroadcastDispatchTable(new NoCompositionFactory());
+
+        var fromFirst = first.Get<DerivedEvent>();
+        var fromSecond = second.Get<DerivedEvent>();
+
+        // The slot is process-wide while the table is per container, so it carries a table
+        // identity check; without it the second container would be served the first's
+        // pipeline — and with it, the first still reads its own on the next publish.
+        Assert.NotSame(fromFirst, fromSecond);
+        Assert.Same(fromFirst, first.Get<DerivedEvent>());
     }
 
     [Fact]

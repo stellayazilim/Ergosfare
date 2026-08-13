@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Core;
+using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Events.Abstractions;
 
@@ -57,9 +57,10 @@ public class EventMediator : IPublisher
                              EventMediationSettings? eventMediationSettings = null,
                              CancellationToken cancellationToken = default)
     {
-        return EventBroadcastInvokerCache.Get(@event.GetType()).Publish(
-            @event, eventMediationSettings, cancellationToken,
-            _engine, _serviceProvider);
+        return _engine.BroadcastAsync(
+            @event, _serviceProvider, eventMediationSettings?.Items, cancellationToken,
+            eventMediationSettings?.Filters.Groups,
+            eventMediationSettings?.ThrowIfNoHandlerFound ?? false);
     }
 
     /// <summary>
@@ -74,17 +75,13 @@ public class EventMediator : IPublisher
                                      EventMediationSettings? eventMediationSettings = null,
                                      CancellationToken cancellationToken = default) where TEvent : notnull
     {
-        // When the runtime type is exactly TEvent (the overwhelmingly common typed
-        // publish), the static-generic holder hands back the invoker without a dictionary
-        // lookup. A base-typed generic call keeps resolving by the runtime type — the
-        // holder for a base TEvent would dispatch the wrong closed pipeline.
-        var invoker = @event.GetType() == typeof(TEvent)
-            ? EventBroadcastInvokerCache.Holder<TEvent>.Instance
-            : EventBroadcastInvokerCache.Get(@event.GetType());
-
-        return invoker.Publish(
-            @event, eventMediationSettings, cancellationToken,
-            _engine, _serviceProvider);
+        // The typed overload: when the runtime type is exactly TEvent (the overwhelmingly
+        // common typed publish) the pipeline comes from a static-generic slot instead of the
+        // type-keyed dictionary. The engine applies that guard itself.
+        return _engine.BroadcastAsync<TEvent>(
+            @event, _serviceProvider, eventMediationSettings?.Items, cancellationToken,
+            eventMediationSettings?.Filters.Groups,
+            eventMediationSettings?.ThrowIfNoHandlerFound ?? false);
     }
 
     /// <summary>
@@ -97,18 +94,15 @@ public class EventMediator : IPublisher
         ArgumentNullException.ThrowIfNull(groups);
 
         IEnumerable<string>? effectiveGroups = groups.Count == 0 ? null : groups;
-        var invoker = EventBroadcastInvokerCache.Get(@event.GetType());
 
-        return invoker.Publish(
-            @event, null, cancellationToken,
-            _engine, _serviceProvider,
-            groupsOverride: effectiveGroups);
+        return _engine.BroadcastAsync(
+            @event, _serviceProvider, items: null, cancellationToken, effectiveGroups);
     }
 
     /// <summary>
     /// Strongly-typed counterpart of
-    /// <see cref="PublishAsync(IEvent, GroupSet, CancellationToken)"/>; the invoker comes
-    /// from the static-generic holder when the runtime type is exactly
+    /// <see cref="PublishAsync(IEvent, GroupSet, CancellationToken)"/>; the pipeline comes
+    /// from the static-generic slot when the runtime type is exactly
     /// <typeparamref name="TEvent"/>.
     /// </summary>
     public ValueTask PublishAsync<TEvent>(TEvent @event, GroupSet groups, CancellationToken cancellationToken = default)
@@ -117,14 +111,9 @@ public class EventMediator : IPublisher
         ArgumentNullException.ThrowIfNull(groups);
 
         IEnumerable<string>? effectiveGroups = groups.Count == 0 ? null : groups;
-        var invoker = @event.GetType() == typeof(TEvent)
-            ? EventBroadcastInvokerCache.Holder<TEvent>.Instance
-            : EventBroadcastInvokerCache.Get(@event.GetType());
 
-        return invoker.Publish(
-            @event, null, cancellationToken,
-            _engine, _serviceProvider,
-            groupsOverride: effectiveGroups);
+        return _engine.BroadcastAsync<TEvent>(
+            @event, _serviceProvider, items: null, cancellationToken, effectiveGroups);
     }
 
     /// <summary>
@@ -139,8 +128,9 @@ public class EventMediator : IPublisher
     public ValueTask PublishAsync(IEvent @event, ErgosfareContext context,
                              EventMediationSettings? eventMediationSettings = null)
     {
-        return EventBroadcastInvokerCache.Get(@event.GetType()).Publish(
-            @event, eventMediationSettings, context.CancellationToken,
-            _engine, _serviceProvider, context);
+        return _engine.BroadcastAsync(
+            @event, context, _serviceProvider,
+            eventMediationSettings?.Filters.Groups,
+            eventMediationSettings?.ThrowIfNoHandlerFound ?? false);
     }
 }
