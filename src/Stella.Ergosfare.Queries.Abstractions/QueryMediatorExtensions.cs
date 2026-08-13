@@ -57,6 +57,7 @@ public static class QueryMediatorExtensions
     /// <param name="query">The stream query to be dispatched.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
     /// <returns>An <see cref="IAsyncEnumerable{TResult}"/> producing results asynchronously.</returns>
+    [Obsolete(StreamRevision.Notice)]
     public static IAsyncEnumerable<TResult> StreamAsync<TResult>(
         this IQueryMediator queryMediator,
         IStreamQuery<TResult> query,
@@ -77,6 +78,7 @@ public static class QueryMediatorExtensions
     /// <param name="groups">An array of groups to filter which handlers are invoked.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
     /// <returns>An <see cref="IAsyncEnumerable{TResult}"/> producing results asynchronously.</returns>
+    [Obsolete(StreamRevision.Notice)]
     public static IAsyncEnumerable<TResult> StreamAsync<TResult>(
         this IQueryMediator queryMediator,
         IStreamQuery<TResult> query,

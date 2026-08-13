@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Core;
+using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Queries.Abstractions;
 
@@ -77,10 +77,11 @@ public class QueryMediator : IQueryMediator
     public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, QueryMediationSettings? queryMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
-        // Streams run against the invoker-cached pipeline plan — no per-call mediator
+        // Streams run against this container's cached pipeline — no per-call mediator
         // resolution and no composition lookup.
-        return QueryStreamInvokerCache.Get<TResult>(query.GetType()).Stream(
-            query, queryMediationSettings, cancellationToken, _engine, _serviceProvider);
+        return _engine.StreamAsync<TResult>(
+            query, _serviceProvider, queryMediationSettings?.Items, cancellationToken,
+            queryMediationSettings?.Filters.Groups);
     }
 
     /// <summary>
@@ -111,8 +112,8 @@ public class QueryMediator : IQueryMediator
 
         IEnumerable<string>? effectiveGroups = groups.Count == 0 ? null : groups;
 
-        return QueryStreamInvokerCache.Get<TResult>(query.GetType()).Stream(
-            query, null, cancellationToken, _engine, _serviceProvider, effectiveGroups);
+        return _engine.StreamAsync<TResult>(
+            query, _serviceProvider, items: null, cancellationToken, effectiveGroups);
     }
 
     /// <summary>

@@ -33,6 +33,11 @@ public sealed class MessageDispatchEngine
     private readonly BroadcastDispatchTable _broadcasts;
 
     /// <summary>
+    /// This container's streaming pipelines, one per (query, result) pair.
+    /// </summary>
+    private readonly StreamDispatchTable _streams;
+
+    /// <summary>
     /// The dependencies factory the executors build their pipeline plans against.
     /// </summary>
     private readonly IMessageDependenciesFactory _dependenciesFactory;
@@ -42,6 +47,7 @@ public sealed class MessageDispatchEngine
         _executorCache = executorCache ?? throw new ArgumentNullException(nameof(executorCache));
         _dependenciesFactory = dependenciesFactory ?? throw new ArgumentNullException(nameof(dependenciesFactory));
         _broadcasts = new BroadcastDispatchTable(_dependenciesFactory);
+        _streams = new StreamDispatchTable(_dependenciesFactory);
     }
 
     /// <inheritdoc cref="_dependenciesFactory"/>
@@ -101,6 +107,21 @@ public sealed class MessageDispatchEngine
 
         return _broadcasts.Get(message.GetType())
             .Publish(message, context, serviceProvider, groups, throwIfNoHandlerFound);
+    }
+
+    /// <summary>
+    /// Streams a query through this container's pipeline for it. The context is fresh and
+    /// unpooled: enumeration happens after this call returns, so its completion is not
+    /// observable here and the context cannot go back to the pool.
+    /// </summary>
+    public IAsyncEnumerable<TResult> StreamAsync<TResult>(object query, IServiceProvider serviceProvider,
+        IDictionary<object, object?>? items = null, CancellationToken cancellationToken = default,
+        IEnumerable<string>? groups = null)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        return _streams.Get<TResult>(query.GetType())
+            .Stream(query, items, cancellationToken, serviceProvider, groups);
     }
 
     private static ValueTask Rent(

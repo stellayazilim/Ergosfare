@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions;
 
 namespace Stella.Ergosfare.Queries.Abstractions;
 
@@ -61,6 +61,7 @@ public interface IQueryMediator: IMessage
     ///     The sequence of results produced by the handler is returned to the caller as an <see cref="IAsyncEnumerable{T}" />,
     ///     allowing for asynchronous enumeration of the results.
     /// </remarks>
+    [Obsolete(StreamRevision.Notice)]
     IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query,
                                                              QueryMediationSettings? queryMediationSettings = null,
                                                              CancellationToken cancellationToken = default);
@@ -88,7 +89,10 @@ public interface IQueryMediator: IMessage
     /// <param name="query">The stream query to execute.</param>
     /// <param name="groups">The canonical group filter.</param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    [Obsolete(StreamRevision.Notice)]
     IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query, GroupSet groups,
         CancellationToken cancellationToken = default)
+#pragma warning disable CS0618
         => StreamAsync(query, new QueryMediationSettings { Filters = { Groups = groups } }, cancellationToken);
+#pragma warning restore CS0618
 }
