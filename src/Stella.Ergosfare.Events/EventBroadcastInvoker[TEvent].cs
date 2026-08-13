@@ -1,8 +1,11 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.StagedPlans;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
+using Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 using Stella.Ergosfare.Core.Internal.Factories;
 using Stella.Ergosfare.Core.Internal.Mediator;
 using Stella.Ergosfare.Events.Abstractions;
@@ -15,15 +18,6 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     // One copy per closed event type is deliberate — the invoker itself is per-event-type.
     // ReSharper disable once StaticMemberInGenericType
     private static readonly string[] EmptyGroups = [];
-
-    /// <summary>
-    /// Shared strategy for publishes without caller-supplied settings. Safe to share: the
-    /// settings instance is private and never mutated, and the strategy keeps all
-    /// per-publish state in locals — one instance serves concurrent publishes.
-    /// </summary>
-    // ReSharper disable once StaticMemberInGenericType
-    private static readonly EventMediationSettings DefaultSettings = new();
-    private static readonly AsyncBroadcastMediationStrategy<TEvent> DefaultStrategy = new(DefaultSettings);
 
     /// <summary>
     /// Publishes against the dispatch engine: the concrete machinery is known by
@@ -47,37 +41,20 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
         try
         {
             var groups = groupsOverride ?? settings?.Filters.Groups;
-            var dependencies = groups is null or List<string> { Count: 0 } or string[] { Length: 0 } or GroupSet { Count: 0 }
+            var groupless = groups is null or List<string> { Count: 0 } or string[] { Length: 0 } or GroupSet { Count: 0 };
+            var dependencies = groupless
                 ? GetPlan(engine.DependenciesFactory)
-                : GetGroupedPlan(engine.DependenciesFactory, groups);
+                : GetGroupedPlan(engine.DependenciesFactory, groups!);
 
-            // Straight-through broadcast: with no interceptor stages and no handler
-            // filtering requested, loop the handler arrays directly — synchronously while
-            // handlers complete synchronously, bailing to an awaiting helper on the first
-            // suspension. No strategy or per-stage async frames.
-            if (dependencies is null)
-            {
-                task = NoPipeline(settings?.ThrowIfNoHandlerFound ?? false);
-            }
-            else if (dependencies is MessageDependencies { HasNoInterceptors: true } plan
-                && (settings is null
-                    || ReferenceEquals(settings.Filters.HandlerPredicate,
-                        EventMediationSettings.EventMediationFilters.AcceptAllHandlers)))
-            {
-                task = PublishStraightThrough(
-                    (TEvent)@event, plan, context, serviceProvider,
+            // Compiled plan first: the whole pipeline as straight-line calls. Ahead of the
+            // runtime lane because a plan can exist for an interceptorless broadcast too —
+            // a plugin's observers live in the plan body, and the loop below would deliver
+            // the event without ever running them.
+            task = groupless && _usePlan
+                ? StagedPlan!.ExecuteErased(@event, context, serviceProvider, _usePlanDirect)
+                : Broadcast(
+                    (TEvent)@event, dependencies, context, serviceProvider,
                     settings?.ThrowIfNoHandlerFound ?? false);
-            }
-            else
-            {
-                // Null settings (the common publish) reuse the cached default strategy — no
-                // EventMediationSettings, no Filters/List/Dictionary, no strategy allocation.
-                var strategy = settings is null
-                    ? DefaultStrategy
-                    : new AsyncBroadcastMediationStrategy<TEvent>(settings);
-
-                task = strategy.Mediate((TEvent)@event, dependencies, context, serviceProvider);
-            }
         }
         catch
         {
@@ -124,6 +101,23 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     private IMessageDependencies? _cachedDependencies;
     private MessageDependenciesFactory? _cachedFactory;
 
+    /// <summary>
+    /// The compiled plan for this event type, resolved once per closed invoker. Null when the
+    /// generator modeled no plan — an unintercepted broadcast, or one whose handler set it
+    /// could not model exactly.
+    /// </summary>
+    // ReSharper disable once StaticMemberInGenericType
+    private static readonly StagedVoidPlan? StagedPlan = GeneratedDispatchRoots.FindStagedVoidPlan(typeof(TEvent));
+
+    /// <summary>
+    /// Whether the live composition is the one <see cref="StagedPlan"/> was baked against,
+    /// and whether its direct-construction variant qualifies. Decided with the dependency
+    /// cache — once per (invoker, factory) — because the gate answers a question about the
+    /// composition, and the composition is frozen by the first dispatch.
+    /// </summary>
+    private bool _usePlan;
+    private bool _usePlanDirect;
+
     private IMessageDependencies? GetPlan(
         Core.Abstractions.Factories.IMessageDependenciesFactory dependenciesFactory)
     {
@@ -152,6 +146,13 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
                 // consistent for concurrent readers, which a "cached null" could not.
                 return null;
             }
+
+            _usePlan = StagedPlan is not null
+                       && dependencies is MessageDependencies { MemoizedInstances: false } fastDependencies
+                       && StagedPlanGate.Matches(fastDependencies, StagedPlan.Composition);
+            _usePlanDirect = _usePlan
+                             && StagedPlan!.SupportsDirectConstruction
+                             && StagedPlanGate.AllPlainTransient(typedFactory, StagedPlan.Composition);
 
             _cachedDependencies = dependencies;
             _cachedFactory = typedFactory;
@@ -224,12 +225,140 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
     }
 
     /// <summary>
+    /// The runtime lane: the publish the compiled plan did not claim — because the event has
+    /// none, because the live composition is not the one it was baked against, or because the
+    /// publish selected groups. Picks the cheapest shape the pipeline allows.
+    /// </summary>
+    /// <remarks>
+    /// This is where the broadcast mediation strategy used to live. Folding it in removes a
+    /// layer and, with it, the per-publish strategy instance a non-null settings object used
+    /// to allocate; what remains is one decision and one loop.
+    /// </remarks>
+    private static ValueTask Broadcast(
+        TEvent @event,
+        IMessageDependencies? dependencies,
+        ErgosfareContext context,
+        IServiceProvider serviceProvider,
+        bool throwIfNoHandlerFound)
+    {
+        if (dependencies is null)
+        {
+            return NoPipeline(throwIfNoHandlerFound);
+        }
+
+        if (dependencies is MessageDependencies { HasNoInterceptors: true } fast)
+        {
+            return PublishStraightThrough(@event, fast, context, serviceProvider, throwIfNoHandlerFound);
+        }
+
+        return PublishThroughStages(@event, dependencies, context, serviceProvider, throwIfNoHandlerFound);
+    }
+
+    /// <summary>
+    /// The full interceptor-bearing broadcast: pre stages (which may replace the event),
+    /// every handler in order, post stages over the resultless <see cref="Unit"/> slot,
+    /// exception stages that swallow only when one actually matched, and final stages an
+    /// abort skips.
+    /// </summary>
+    private static async ValueTask PublishThroughStages(
+        TEvent @event,
+        IMessageDependencies dependencies,
+        ErgosfareContext context,
+        IServiceProvider serviceProvider,
+        bool throwIfNoHandlerFound)
+    {
+        var handlers = dependencies.Handlers;
+        var indirectHandlers = dependencies.IndirectHandlers;
+
+        if (handlers.Count == 0 && indirectHandlers.Count == 0)
+        {
+            if (throwIfNoHandlerFound)
+            {
+                throw new NoHandlerFoundException(typeof(TEvent));
+            }
+
+            return;
+        }
+
+        Exception? exception = null;
+        var aborted = false;
+
+        try
+        {
+            // Empty stages are skipped outright — an invoker pass over an empty stage is a
+            // no-op, so the guards only cut dead work, not behavior.
+            if (dependencies.PreInterceptors.Count > 0)
+            {
+                // Pre-interceptors may transform the event — including returning a brand new
+                // instance — so the broadcast continues with the returned one, exactly as the
+                // single-handler pipelines do. Events carry no result adapter.
+                @event = (TEvent)await PreInterceptorInvocationStrategy<TEvent>.Invoke(
+                    dependencies, serviceProvider, @event, context);
+            }
+
+            for (var i = 0; i < handlers.Count; i++)
+            {
+                await Invoke(handlers[i], @event, context, serviceProvider);
+            }
+
+            for (var i = 0; i < indirectHandlers.Count; i++)
+            {
+                await Invoke(indirectHandlers[i], @event, context, serviceProvider);
+            }
+
+            if (dependencies.PostInterceptors.Count > 0)
+            {
+                // A publish produces nothing, so the result slot carries the one value a
+                // resultless pipeline has — the same Unit the void plans hand their stages.
+                _ = await PostInterceptorInvocationStrategy<TEvent, Unit>.Invoke(
+                    dependencies, null, serviceProvider, @event, Unit.Value, context);
+            }
+        }
+        catch (ExecutionAbortedException)
+        {
+            // A participant stopped the publish. Nothing else runs — not the exception
+            // stage, not the final stage — and the signal continues to the publisher.
+            aborted = true;
+            throw;
+        }
+        catch (Exception e)
+        {
+            exception = e;
+
+            // Zero exception interceptors: rethrow directly. Final interceptors still run
+            // from the finally block.
+            if (dependencies.ExceptionInterceptors.Count == 0)
+            {
+                throw;
+            }
+
+            var (matched, _) = await ExceptionInterceptorInvocationStrategy<TEvent, Unit>.Invoke(
+                dependencies, serviceProvider, @event, Unit.Value, e, context);
+
+            // Every registered interceptor filtered the exception out — nothing handled it,
+            // so it propagates with its original stack.
+            if (!matched)
+            {
+                throw;
+            }
+        }
+        finally
+        {
+            if (dependencies.FinalInterceptors.Count > 0 && !aborted)
+            {
+                await FinalInterceptorInvocationStrategy<TEvent, Unit>.Invoke(
+                    dependencies, serviceProvider, @event, Unit.Value, exception, context);
+            }
+        }
+    }
+
+    /// <summary>
     /// Broadcasts sequentially over the direct then indirect handler arrays without any
     /// async machinery while handlers complete synchronously; the first suspension hands
     /// the remainder to an awaiting helper, preserving strict sequential order. Semantics
-    /// match <see cref="AsyncBroadcastMediationStrategy{TMessage}"/> for the
-    /// zero-interceptor, unfiltered case: exceptions propagate raw, and an empty pipeline
-    /// throws only when <paramref name="throwIfNoHandlerFound"/> asks for it.
+    /// match the interceptor-bearing lane for the zero-interceptor case: exceptions
+    /// propagate raw, and an empty pipeline throws only when
+    /// <paramref name="throwIfNoHandlerFound"/> asks for it.
     /// </summary>
     private static ValueTask PublishStraightThrough(
         TEvent @event,

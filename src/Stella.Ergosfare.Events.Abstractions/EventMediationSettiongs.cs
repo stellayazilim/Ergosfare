@@ -36,27 +36,18 @@ public sealed class EventMediationSettings
     /// Represents the filtering options applied during event mediation to select
     /// which handlers should be invoked.
     /// </summary>
+    /// <remarks>
+    /// Groups are the only handler filter, deliberately. A per-publish predicate over handler
+    /// types used to live here too; it was the one setting a compiled plan could not honour —
+    /// an arbitrary delegate is unknowable until the call — and it said nothing groups cannot
+    /// say declaratively, where the composition can be baked instead of tested per handler.
+    /// </remarks>
     public sealed class EventMediationFilters
     {
-   
-        /// <summary>
-        /// The canonical accept-everything predicate. Publish paths compare against this
-        /// instance by reference to recognize "no filtering requested" and skip the
-        /// per-handler predicate loop entirely.
-        /// </summary>
-        internal static readonly Func<Type, bool> AcceptAllHandlers = static _ => true;
-
         /// <summary>
         /// Gets or sets the collection of group names used to filter event handlers.
         /// Only handlers belonging to these groups will receive the event.
         /// </summary>
         public IEnumerable<string> Groups { get; set; } = new List<string>();
-
-
-        /// <summary>
-        /// Gets or sets a predicate function to filter handlers by their type.
-        /// By default, all handler types are included.
-        /// </summary>
-        public Func<Type, bool> HandlerPredicate { get; set; } = AcceptAllHandlers;
     }
 }

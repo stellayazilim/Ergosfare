@@ -617,7 +617,10 @@ internal static class RegistrationEmitter
 
             sb.Append("            private static readonly ").Append(StagedCompositionFullName)
               .Append(" BakedComposition = new ").Append(StagedCompositionFullName).AppendLine("(");
-            sb.Append("                typeof(").Append(plan.HandlerTypeExpression).AppendLine("),");
+            AppendHandlerSegment(sb, plan.Handlers);
+            sb.AppendLine(",");
+            AppendHandlerSegment(sb, plan.IndirectHandlers);
+            sb.AppendLine(",");
             AppendCompositionStage(sb, plan.PreCalls);
             sb.AppendLine(",");
             AppendCompositionStage(sb, plan.PostCalls);
@@ -711,6 +714,35 @@ internal static class RegistrationEmitter
 
             sb.AppendLine("        }");
         }
+    }
+
+    /// <summary>
+    ///     Appends one baked handler segment. A single-handler plan writes a one-element
+    ///     array and an empty second segment, which is the same comparison the runtime gate
+    ///     applies to a broadcast — one shape, one gate.
+    /// </summary>
+    private static void AppendHandlerSegment(
+        StringBuilder sb, System.Collections.Immutable.ImmutableArray<StagedHandlerModel> handlers)
+    {
+        if (handlers.IsEmpty)
+        {
+            sb.Append("                global::System.Array.Empty<global::System.Type>()");
+            return;
+        }
+
+        sb.Append("                new global::System.Type[] { ");
+
+        for (var i = 0; i < handlers.Length; i++)
+        {
+            if (i > 0)
+            {
+                sb.Append(", ");
+            }
+
+            sb.Append("typeof(").Append(handlers[i].TypeExpression).Append(')');
+        }
+
+        sb.Append(" }");
     }
 
     private static void AppendCompositionStage(StringBuilder sb, System.Collections.Immutable.ImmutableArray<StagedCallModel> calls)
@@ -852,6 +884,40 @@ internal static class RegistrationEmitter
             }
 
             sb.AppendLine(");");
+        }
+    }
+
+    /// <summary>
+    ///     Emits the plan's main-handler calls: the directly registered segment, then the
+    ///     covariantly matched one. A single-handler pipeline is the same code with one
+    ///     entry and an empty second segment.
+    /// </summary>
+    /// <remarks>
+    ///     The pre- and post-handler plugin boundaries are emitted <b>per handler</b>: they
+    ///     name the seam around a handler, and a broadcast has one such seam per delivery.
+    ///     At N = 1 that is exactly where they were before, so a command or query plan is
+    ///     byte-identical to what it emitted when the boundary was written by the body.
+    /// </remarks>
+    private static void EmitHandlerCalls(StringBuilder sb, StagedPlanModel plan, bool direct, string indent)
+    {
+        EmitHandlerSegment(sb, plan, plan.Handlers, direct, indent);
+        EmitHandlerSegment(sb, plan, plan.IndirectHandlers, direct, indent);
+    }
+
+    private static void EmitHandlerSegment(
+        StringBuilder sb,
+        StagedPlanModel plan,
+        System.Collections.Immutable.ImmutableArray<StagedHandlerModel> handlers,
+        bool direct,
+        string indent)
+    {
+        foreach (var handler in handlers)
+        {
+            EmitPluginCalls(sb, plan, PluginStage.PreMainHandler, null, indent);
+            sb.Append(indent).Append("await ");
+            AppendParticipant(sb, handler.TypeExpression, direct ? handler.ConstructionExpression : null);
+            sb.AppendLine(".HandleAsync(message, context);");
+            EmitPluginCalls(sb, plan, PluginStage.PostMainHandler, null, indent);
         }
     }
 
@@ -1068,11 +1134,7 @@ internal static class RegistrationEmitter
             // boundaries keeps the body exactly this shape.
             EmitPluginCalls(sb, plan, PluginStage.PipelineStart, null, "                ");
             EmitPreCalls(sb, plan, direct, "                ");
-            EmitPluginCalls(sb, plan, PluginStage.PreMainHandler, null, "                ");
-            sb.Append("                await ");
-            AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
-            sb.AppendLine(".HandleAsync(message, context);");
-            EmitPluginCalls(sb, plan, PluginStage.PostMainHandler, null, "                ");
+            EmitHandlerCalls(sb, plan, direct, "                ");
             EmitPluginCalls(sb, plan, PluginStage.AfterPost, null, "                ");
             return;
         }
@@ -1084,12 +1146,8 @@ internal static class RegistrationEmitter
         sb.AppendLine("                {");
         EmitPluginCalls(sb, plan, PluginStage.PipelineStart, null, "                    ");
         EmitPreCalls(sb, plan, direct, "                    ");
-        EmitPluginCalls(sb, plan, PluginStage.PreMainHandler, null, "                    ");
-        sb.Append("                    await ");
-        AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
-        sb.AppendLine(".HandleAsync(message, context);");
+        EmitHandlerCalls(sb, plan, direct, "                    ");
         sb.Append("                    result = ").Append(UnitFullName).AppendLine(".Value;");
-        EmitPluginCalls(sb, plan, PluginStage.PostMainHandler, null, "                    ");
 
         if (!plan.PostCalls.IsEmpty)
         {

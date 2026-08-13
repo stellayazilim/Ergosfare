@@ -2363,10 +2363,17 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
 
             string? resultTypeExpression = null;
             var resultIsValueType = false;
+            var isBroadcast = false;
 
             if (type.IsCommand && type.DispatchResults.Length == 0)
             {
                 // Void pipeline.
+            }
+            else if (type.IsEvent && type.DispatchResults.Length == 0)
+            {
+                // Broadcast pipeline: a resultless pipeline like the void one, differing in
+                // one thing — every matched handler runs instead of a sole one.
+                isBroadcast = true;
             }
             else if ((type.IsCommand || type.IsQuery)
                      && type.DispatchResults.Length == 1
@@ -2380,33 +2387,54 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 continue;
             }
 
-            // The sole handler gate mirrors the single-handler plans, minus the
-            // interceptor suppression (interceptors are the whole point here).
-            if (!handlerCounts.TryGetValue(type.TypeofExpression, out var count) || count != 1)
+            ImmutableArray<StagedHandlerModel> handlers;
+            ImmutableArray<StagedHandlerModel> indirectHandlers;
+
+            if (isBroadcast)
             {
-                continue;
+                // No sole-handler gate and no covariant disqualification: a broadcast is
+                // where a covariant handler is a legitimate participant rather than a
+                // competing claim on the message.
+                if (!TryAssembleBroadcastHandlers(type, types, hasKeyedServiceExtensions,
+                        out handlers, out indirectHandlers))
+                {
+                    continue;
+                }
             }
-
-            if (HasCovariantMainHandler(type, handlerCounts))
+            else
             {
-                continue;
-            }
+                // The sole handler gate mirrors the single-handler plans, minus the
+                // interceptor suppression (interceptors are the whole point here).
+                if (!handlerCounts.TryGetValue(type.TypeofExpression, out var count) || count != 1)
+                {
+                    continue;
+                }
 
-            var (handler, handlerDescriptor) = soleHandlers[type.TypeofExpression];
+                if (HasCovariantMainHandler(type, handlerCounts))
+                {
+                    continue;
+                }
 
-            if (!handler.IsAccessible || !handler.DiscoveryKeys.IsEmpty || handler.GroupsExpression is not null)
-            {
-                continue;
-            }
+                var (handler, handlerDescriptor) = soleHandlers[type.TypeofExpression];
 
-            var expectedHandlerResult = resultTypeExpression is null
-                ? ValueTaskExpression
-                : ValueTaskExpression + "<" + resultTypeExpression + ">";
+                if (!handler.IsAccessible || !handler.DiscoveryKeys.IsEmpty || handler.GroupsExpression is not null)
+                {
+                    continue;
+                }
 
-            if (handlerDescriptor.ResultTypeExpression != expectedHandlerResult
-                || handlerDescriptor.MessageTypeExpression != type.TypeofExpression)
-            {
-                continue;
+                var expectedHandlerResult = resultTypeExpression is null
+                    ? ValueTaskExpression
+                    : ValueTaskExpression + "<" + resultTypeExpression + ">";
+
+                if (handlerDescriptor.ResultTypeExpression != expectedHandlerResult
+                    || handlerDescriptor.MessageTypeExpression != type.TypeofExpression)
+                {
+                    continue;
+                }
+
+                handlers = ImmutableArray.Create(new StagedHandlerModel(
+                    handler.TypeofExpression, GatedConstructionExpression(handler, hasKeyedServiceExtensions)));
+                indirectHandlers = ImmutableArray<StagedHandlerModel>.Empty;
             }
 
             if (!TryAssembleStagedStages(type, types, resultTypeExpression, resultIsValueType, hasKeyedServiceExtensions,
@@ -2489,8 +2517,8 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 type.TypeofExpression,
                 resultTypeExpression,
                 resultIsValueType,
-                handler.TypeofExpression,
-                GatedConstructionExpression(handler, hasKeyedServiceExtensions),
+                handlers,
+                indirectHandlers,
                 pre, post, exceptionCalls, finalCalls,
                 adapterKind, adapterTypeExpression, adapterMaterializes,
                 pluginCalls));
@@ -2923,6 +2951,126 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
     ///     type name as the ordinal tie-break (participants are non-nested and
     ///     non-generic, so the display name equals the runtime <c>Type.FullName</c>).
     /// </summary>
+    /// <summary>
+    ///     Assembles a broadcast plan's two handler segments — directly registered handlers
+    ///     first, then the covariantly matched ones — in the runtime's own execution order
+    ///     (weight-descending, then ordinal by display name). Fails, leaving the message to
+    ///     the runtime strategy, when any part of the handler set cannot be modeled exactly.
+    /// </summary>
+    /// <remarks>
+    ///     The covariant segment is the reason a broadcast needs its own assembly step: for a
+    ///     single-handler pipeline a covariant handler is a competing claim that disqualifies
+    ///     the plan, while here it is an ordinary participant the publish delivers to.
+    /// </remarks>
+    private static bool TryAssembleBroadcastHandlers(
+        RegistrableTypeModel message,
+        List<RegistrableTypeModel> types,
+        bool hasKeyedServiceExtensions,
+        out ImmutableArray<StagedHandlerModel> handlers,
+        out ImmutableArray<StagedHandlerModel> indirectHandlers)
+    {
+        handlers = ImmutableArray<StagedHandlerModel>.Empty;
+        indirectHandlers = ImmutableArray<StagedHandlerModel>.Empty;
+
+        List<(RegistrableTypeModel Type, bool Direct)>? entries = null;
+
+        foreach (var candidate in types)
+        {
+            if (candidate.Descriptors.IsEmpty)
+            {
+                continue;
+            }
+
+            var matched = 0;
+            var direct = false;
+
+            foreach (var descriptor in candidate.Descriptors)
+            {
+                if (descriptor.Kind != DescriptorKind.MainHandler)
+                {
+                    continue;
+                }
+
+                var isDirect = descriptor.MessageTypeExpression == message.TypeofExpression;
+
+                if (!isDirect && !message.AssignableKeys.Contains(descriptor.MessageTypeExpression))
+                {
+                    continue;
+                }
+
+                // Only the asynchronous resultless contract is modeled. The runtime also
+                // dispatches the ValueTask-shaped and synchronous ones through a type
+                // switch; a plan would have to reproduce that choice per handler, and the
+                // strategy already does it correctly.
+                if (descriptor.ResultTypeExpression != ValueTaskExpression)
+                {
+                    return false;
+                }
+
+                matched++;
+                direct = isDirect;
+            }
+
+            if (matched == 0)
+            {
+                continue;
+            }
+
+            // Reached through two registrations — the handler would appear in the pipeline
+            // more than once and the order among the appearances is not worth modeling.
+            if (matched > 1)
+            {
+                return false;
+            }
+
+            if (!candidate.IsAccessible
+                || !candidate.DiscoveryKeys.IsEmpty
+                || candidate.GroupsExpression is not null
+                || candidate.IsNestedType)
+            {
+                return false;
+            }
+
+            (entries ??= []).Add((candidate, direct));
+        }
+
+        if (entries is null)
+        {
+            return false;
+        }
+
+        entries.Sort(static (x, y) =>
+        {
+            var bySegment = y.Direct.CompareTo(x.Direct);
+
+            if (bySegment != 0)
+            {
+                return bySegment;
+            }
+
+            var byWeight = y.Type.Weight.CompareTo(x.Type.Weight);
+
+            return byWeight != 0
+                ? byWeight
+                : string.CompareOrdinal(x.Type.DisplayName, y.Type.DisplayName);
+        });
+
+        var directBuilder = ImmutableArray.CreateBuilder<StagedHandlerModel>();
+        var indirectBuilder = ImmutableArray.CreateBuilder<StagedHandlerModel>();
+
+        foreach (var (type, isDirect) in entries)
+        {
+            var model = new StagedHandlerModel(
+                type.TypeofExpression, GatedConstructionExpression(type, hasKeyedServiceExtensions));
+
+            (isDirect ? directBuilder : indirectBuilder).Add(model);
+        }
+
+        handlers = directBuilder.ToImmutable();
+        indirectHandlers = indirectBuilder.ToImmutable();
+        return true;
+    }
+
     private static ImmutableArray<StagedCallModel> OrderStage(
         List<(RegistrableTypeModel Type, StagedCallArm Arm, bool Direct, string? ExceptionFilter)>? entries,
         bool hasKeyedServiceExtensions)

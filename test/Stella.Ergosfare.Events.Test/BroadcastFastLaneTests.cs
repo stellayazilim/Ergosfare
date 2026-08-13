@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions;
@@ -183,22 +183,6 @@ public class BroadcastFastLaneTests
             await mediator.PublishAsync(
                 new HandlerlessEvent(),
                 new EventMediationSettings { ThrowIfNoHandlerFound = true }));
-    }
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
-    public async Task Publish_ShouldApplyHandlerPredicateFilter()
-    {
-        await using var provider = Build();
-        var mediator = provider.GetRequiredService<IEventMediator>();
-        var settings = new EventMediationSettings();
-        settings.Filters.HandlerPredicate = type => type != typeof(FastLaneSecondHandler);
-
-        await mediator.PublishAsync(new FastLaneEvent { Tag = "filtered" }, settings);
-
-        Assert.Equal("filtered", settings.Items["writtenByHandler"]);
-        Assert.False(settings.Items.ContainsKey("secondHandlerRan"));
     }
 
     public sealed class SlowEvent : IEvent { }

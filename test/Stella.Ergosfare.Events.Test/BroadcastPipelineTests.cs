@@ -11,10 +11,10 @@ using Xunit.Abstractions;
 namespace Stella.Ergosfare.Events.Test;
 
 /// <summary>
-/// Contains unit tests for <see cref="EventMediator"/> using <c>AsyncBroadcastMediationStrategy</c>,
+/// Contains unit tests for <see cref="EventMediator"/>'s interceptor-bearing broadcast lane,
 /// validating handler execution and exception handling behavior.
 /// </summary>
-public class AsyncBroadcastMediationStrategyTests
+public class BroadcastPipelineTests
 (ITestOutputHelper  testOutputHelper)
 {
     /// <summary>
