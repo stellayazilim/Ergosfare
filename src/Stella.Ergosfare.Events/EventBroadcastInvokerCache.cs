@@ -27,28 +27,13 @@ internal static class EventBroadcastInvokerCache
         public static readonly IEventBroadcastInvoker Instance = Get(typeof(TEvent));
     }
 
-    [UnconditionalSuppressMessage("Trimming", "IL2055",
-        Justification = "The invoker generic is closed over a live event's runtime type; the event roots its type.")]
-    [UnconditionalSuppressMessage("AOT", "IL3050",
-        Justification = "Generated dispatch roots cover source-generated event types; this reflective path is the " +
-                        "JIT fallback for runtime-only registrations.")]
     public static IEventBroadcastInvoker Get(Type eventType)
-    {
-        if (Invokers.TryGetValue(eventType, out var invoker))
-        {
-            return invoker;
-        }
-
-        // Generated dispatch roots close the invoker generic at compile time; the
-        // reflective path below only serves event types without a root.
-        if (GeneratedDispatchRoots.FindMessage(eventType) is { } root)
-        {
-            return Invokers.GetOrAdd(eventType, root.Accept(InvokerVisitor.Instance, state: false));
-        }
-
-        return Invokers.GetOrAdd(eventType,
-            static t => (IEventBroadcastInvoker)Activator.CreateInstance(typeof(EventBroadcastInvoker<>).MakeGenericType(t))!);
-    }
+        => Invokers.TryGetValue(eventType, out var invoker)
+            ? invoker
+            : Invokers.GetOrAdd(
+                eventType,
+                DispatchLookup.OverMessage(
+                    eventType, InvokerVisitor.Instance, state: false, typeof(EventBroadcastInvoker<>)));
 
     /// <summary>
     /// Re-enters a generic context with a root's event type and constructs the closed

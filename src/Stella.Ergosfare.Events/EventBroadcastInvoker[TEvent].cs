@@ -199,7 +199,7 @@ internal sealed class EventBroadcastInvoker<TEvent> : IEventBroadcastInvoker
             // ReSharper disable once PossibleMultipleEnumeration
             if (slot is not null
                 && ReferenceEquals(slot.Factory, typedFactory)
-                && PipelineExecutorCache.SlotMatches(groups, slot.Groups, slot.Canonical))
+                && GroupSlotMatch.Matches(groups, slot.Groups, slot.Canonical))
             {
                 return slot.Dependencies;
             }

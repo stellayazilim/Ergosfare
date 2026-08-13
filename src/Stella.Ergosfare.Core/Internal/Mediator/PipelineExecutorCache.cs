@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Stella.Ergosfare.Core.Abstractions;
@@ -73,101 +73,6 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
     }
 
     /// <summary>
-    /// Slot match with the canonical fast path: a <see cref="GroupSet"/> that is the very
-    /// instance the slot was built from matches on one reference check — interning makes
-    /// that the steady state for callers reusing a filter. Everything else (a different
-    /// or un-interned set, a plain sequence) falls to the ordinal element-wise compare.
-    /// Only immutable <see cref="GroupSet"/> instances take the reference shortcut; a
-    /// reused mutable list must keep being compared by content so in-place mutation is
-    /// always observed.
-    /// </summary>
-    internal static bool SlotMatches(IEnumerable<string> groups, string[] cachedNames, GroupSet? canonical)
-        => groups is GroupSet set
-            ? ReferenceEquals(set, canonical) || GroupsMatch(set, cachedNames)
-            : GroupsMatch(groups, cachedNames);
-
-    /// <summary>
-    /// Ordinal element-wise comparison of the caller's group sequence against a cached
-    /// snapshot, allocation-free for the <see cref="GroupSet"/>, array and list shapes.
-    /// Order is significant, matching the joined composite key exactly.
-    /// </summary>
-    internal static bool GroupsMatch(IEnumerable<string> groups, string[] cached)
-    {
-        switch (groups)
-        {
-            case GroupSet set:
-            {
-                var names = set.Names;
-
-                if (names.Length != cached.Length)
-                {
-                    return false;
-                }
-
-                for (var i = 0; i < names.Length; i++)
-                {
-                    if (!string.Equals(names[i], cached[i], StringComparison.Ordinal))
-                    {
-                        return false;
-                    }
-                }
-
-                return true;
-            }
-            case string[] array:
-            {
-                if (array.Length != cached.Length)
-                {
-                    return false;
-                }
-
-                for (var i = 0; i < array.Length; i++)
-                {
-                    if (!string.Equals(array[i], cached[i], StringComparison.Ordinal))
-                    {
-                        return false;
-                    }
-                }
-
-                return true;
-            }
-            case List<string> list:
-            {
-                if (list.Count != cached.Length)
-                {
-                    return false;
-                }
-
-                for (var i = 0; i < cached.Length; i++)
-                {
-                    if (!string.Equals(list[i], cached[i], StringComparison.Ordinal))
-                    {
-                        return false;
-                    }
-                }
-
-                return true;
-            }
-            default:
-            {
-                var index = 0;
-
-                foreach (var group in groups)
-                {
-                    if (index >= cached.Length || !string.Equals(group, cached[index], StringComparison.Ordinal))
-                    {
-                        return false;
-                    }
-
-                    index++;
-                }
-
-                return index == cached.Length;
-            }
-        }
-    }
-
-    /// <summary>
     /// Group-less void executor lookup for a compile-time-known message type: a
     /// static-generic slot replaces the dictionary lookup with a field read and a cache
     /// identity check. The slot is keyed by this cache instance, so containers stay
@@ -234,7 +139,7 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
         // Deliberate: groups is matched allocation-free first and only materialized on a slot miss.
         // ReSharper disable once PossibleMultipleEnumeration
         if (_groupedVoidSlotsByType.TryGetValue(messageType, out var slot)
-            && SlotMatches(groups, slot.Groups, slot.Canonical))
+            && GroupSlotMatch.Matches(groups, slot.Groups, slot.Canonical))
         {
             return slot.Executor;
         }
@@ -278,7 +183,7 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
         // ReSharper disable once PossibleMultipleEnumeration
         if (_groupedResultSlotsByType.TryGetValue(messageType, out var groupedSlot)
             && ReferenceEquals(groupedSlot.ResultType, typeof(TResult))
-            && SlotMatches(groups, groupedSlot.Groups, groupedSlot.Canonical))
+            && GroupSlotMatch.Matches(groups, groupedSlot.Groups, groupedSlot.Canonical))
         {
             // Slot entries are only ever created as IPipelineExecutor<TResult> for their
             // recorded result type; see the group-less slot above.
@@ -330,12 +235,6 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
     private static string[] MaterializeGroups(IEnumerable<string>? groups)
         => groups is null ? EmptyGroups : [.. groups];
 
-    [UnconditionalSuppressMessage("Trimming", "IL2055",
-        Justification = "The executor generic is closed over a live message's runtime type; the message roots its type.")]
-    [UnconditionalSuppressMessage("AOT", "IL3050",
-        Justification = "Generated dispatch roots cover source-generated types; this reflective path is the JIT " +
-                        "fallback for open generics and runtime-only registrations.")]
-    [UnconditionalSuppressMessage("Trimming", "IL2077", Justification = "Executor types are constructed from typeof expressions below; their constructors are rooted.")]
     private IPipelineExecutor CreateVoidExecutor(Type messageType, string[] groups)
     {
         // Staged plan: bespoke code for the whole interceptor-bearing pipeline. Checked
@@ -362,26 +261,16 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
                     plan.DirectHandlerFactory));
         }
 
-        // Generated dispatch roots close the executor generic at compile time; the
-        // reflective path below only serves types without a root.
-        if (GeneratedDispatchRoots.FindMessage(messageType) is { } root)
-        {
-            return root.Accept(
-                VoidExecutorVisitor.Instance,
-                new ExecutorState(dependenciesFactory, groups));
-        }
-
-        var executorType = typeof(VoidPipelineExecutor<>).MakeGenericType(messageType);
-
-        return (IPipelineExecutor)Activator.CreateInstance(executorType, dependenciesFactory, groups)!;
+        // No plan claimed the message: the plain executor, closed over the generated root
+        // when there is one and reflectively when there is not.
+        return DispatchLookup.OverMessage(
+            messageType,
+            VoidExecutorVisitor.Instance,
+            new ExecutorState(dependenciesFactory, groups),
+            typeof(VoidPipelineExecutor<>),
+            [dependenciesFactory, groups]);
     }
 
-    [UnconditionalSuppressMessage("Trimming", "IL2055",
-        Justification = "The executor generic is closed over a live message's runtime type; the message roots its type.")]
-    [UnconditionalSuppressMessage("AOT", "IL3050",
-        Justification = "Generated dispatch roots cover source-generated types; this reflective path is the JIT " +
-                        "fallback for open generics and runtime-only registrations.")]
-    [UnconditionalSuppressMessage("Trimming", "IL2077", Justification = "Executor types are constructed from typeof expressions below; their constructors are rooted.")]
     private object CreateResultExecutor(Type messageType, Type resultType, string[] groups)
     {
         // Staged plan first, mirroring the void side.
@@ -404,16 +293,13 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
                     plan.DirectHandlerFactory));
         }
 
-        if (GeneratedDispatchRoots.FindResult(messageType, resultType) is { } root)
-        {
-            return root.Accept(
-                ResultExecutorVisitor.Instance,
-                new ExecutorState(dependenciesFactory, groups));
-        }
-
-        var executorType = typeof(ResultPipelineExecutor<,>).MakeGenericType(messageType, resultType);
-
-        return Activator.CreateInstance(executorType, dependenciesFactory, groups)!;
+        return DispatchLookup.OverResult(
+            messageType,
+            resultType,
+            ResultExecutorVisitor.Instance,
+            new ExecutorState(dependenciesFactory, groups),
+            typeof(ResultPipelineExecutor<,>),
+            [dependenciesFactory, groups]);
     }
 
     /// <summary>

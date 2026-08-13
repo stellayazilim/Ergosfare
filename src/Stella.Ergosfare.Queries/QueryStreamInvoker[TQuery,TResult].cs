@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Core;
+using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Internal.Factories;
@@ -96,7 +96,7 @@ internal sealed class QueryStreamInvoker<TQuery, TResult> : IQueryStreamInvoker<
             // ReSharper disable once PossibleMultipleEnumeration
             if (slot is not null
                 && ReferenceEquals(slot.Factory, typedFactory)
-                && Core.Internal.Mediator.PipelineExecutorCache.SlotMatches(groups, slot.Groups, slot.Canonical))
+                && Core.Abstractions.GroupSlotMatch.Matches(groups, slot.Groups, slot.Canonical))
             {
                 return slot.Dependencies;
             }

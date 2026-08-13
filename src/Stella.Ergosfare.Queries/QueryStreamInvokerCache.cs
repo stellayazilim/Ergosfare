@@ -13,23 +13,17 @@ internal static class QueryStreamInvokerCache
 {
     private static readonly ConcurrentDictionary<(Type QueryType, Type ResultType), object> Invokers = new();
 
-    [UnconditionalSuppressMessage("Trimming", "IL2055",
-        Justification = "The invoker generic is closed over a live query's runtime type; the query roots its type.")]
-    [UnconditionalSuppressMessage("AOT", "IL3050",
-        Justification = "Generated dispatch roots cover source-generated query types; this reflective path is the " +
-                        "JIT fallback for runtime-only registrations.")]
     public static IQueryStreamInvoker<TResult> Get<TResult>(Type queryType)
     {
         var key = (queryType, typeof(TResult));
 
         if (!Invokers.TryGetValue(key, out var invoker))
         {
-            // Generated dispatch roots close the invoker generic at compile time; the
-            // reflective path below only serves query types without a root.
-            invoker = GeneratedDispatchRoots.FindStream(queryType, typeof(TResult)) is { } root
-                ? Invokers.GetOrAdd(key, root.Accept(InvokerVisitor.Instance, state: false))
-                : Invokers.GetOrAdd(key,
-                    static k => Activator.CreateInstance(typeof(QueryStreamInvoker<,>).MakeGenericType(k.QueryType, k.ResultType))!);
+            invoker = Invokers.GetOrAdd(
+                key,
+                DispatchLookup.OverStream(
+                    queryType, typeof(TResult), InvokerVisitor.Instance, state: false,
+                    typeof(QueryStreamInvoker<,>)));
         }
 
         return (IQueryStreamInvoker<TResult>)invoker;
