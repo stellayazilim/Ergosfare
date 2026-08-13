@@ -7,6 +7,7 @@ using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Events.Abstractions;
 using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
@@ -134,6 +135,108 @@ public sealed class InterceptedIntQueryPostInterceptor : IQueryPostInterceptor<I
 {
     public ValueTask<int> HandleAsync(InterceptedIntQuery query, int queryResult, ErgosfareContext context)
         => ValueTask.FromResult(queryResult);
+}
+
+// The intercepted-event pair. Both carry the same pipeline shape — two handlers, one
+// pass-through pre- and one pass-through post-interceptor — and differ in exactly one
+// thing: the twin's handlers are nested types, which disqualifies a broadcast plan (the
+// runtime orders pipeline segments by Type.FullName, whose '+' nesting separator sorts
+// differently from the display name's dot, so the generator refuses to bake an order it
+// cannot guarantee). Published through the same generated provider in the same process,
+// the two rows are the plan/runtime A/B in one table — the shape that makes run-to-run
+// drift structurally unable to separate them.
+
+/// <summary>Shared no-op sink for the broadcast participants. Not optional: a plan bakes
+/// its handler calls straight-line and devirtualized, so empty bodies would inline away and
+/// the plan row would measure an empty publish. Both twins pay the same four increments.</summary>
+public static class BroadcastTouch
+{
+    public static long Count;
+}
+
+public sealed class InterceptedPingEvent : IEvent { }
+
+public sealed class FirstInterceptedPingEventHandler : IEventHandler<InterceptedPingEvent>
+{
+    public ValueTask HandleAsync(InterceptedPingEvent @event, ErgosfareContext context)
+    {
+        BroadcastTouch.Count++;
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class SecondInterceptedPingEventHandler : IEventHandler<InterceptedPingEvent>
+{
+    public ValueTask HandleAsync(InterceptedPingEvent @event, ErgosfareContext context)
+    {
+        BroadcastTouch.Count++;
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class InterceptedPingEventPreInterceptor : IEventPreInterceptor<InterceptedPingEvent>
+{
+    public ValueTask<InterceptedPingEvent> HandleAsync(InterceptedPingEvent @event, ErgosfareContext context)
+    {
+        BroadcastTouch.Count++;
+        return ValueTask.FromResult(@event);
+    }
+}
+
+public sealed class InterceptedPingEventPostInterceptor : IEventPostInterceptor<InterceptedPingEvent>
+{
+    public ValueTask HandleAsync(InterceptedPingEvent @event, ValueTask result, ErgosfareContext executionContext)
+    {
+        BroadcastTouch.Count++;
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class UnplannedPingEvent : IEvent { }
+
+/// <summary>
+/// The twin's handlers, nested for one reason: nesting is the cheapest disqualification
+/// that leaves the pipeline itself identical. Everything else about this event matches
+/// <see cref="InterceptedPingEvent"/>, so the two rows differ in which lane runs them and
+/// nothing else.
+/// </summary>
+public static class UnplannedPingEventHandlers
+{
+    public sealed class First : IEventHandler<UnplannedPingEvent>
+    {
+        public ValueTask HandleAsync(UnplannedPingEvent @event, ErgosfareContext context)
+        {
+            BroadcastTouch.Count++;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    public sealed class Second : IEventHandler<UnplannedPingEvent>
+    {
+        public ValueTask HandleAsync(UnplannedPingEvent @event, ErgosfareContext context)
+        {
+            BroadcastTouch.Count++;
+            return ValueTask.CompletedTask;
+        }
+    }
+}
+
+public sealed class UnplannedPingEventPreInterceptor : IEventPreInterceptor<UnplannedPingEvent>
+{
+    public ValueTask<UnplannedPingEvent> HandleAsync(UnplannedPingEvent @event, ErgosfareContext context)
+    {
+        BroadcastTouch.Count++;
+        return ValueTask.FromResult(@event);
+    }
+}
+
+public sealed class UnplannedPingEventPostInterceptor : IEventPostInterceptor<UnplannedPingEvent>
+{
+    public ValueTask HandleAsync(UnplannedPingEvent @event, ValueTask result, ErgosfareContext executionContext)
+    {
+        BroadcastTouch.Count++;
+        return ValueTask.CompletedTask;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -440,6 +543,7 @@ public class MediationBenchmark
     private IQueryMediator _queries = null!;
     private IQueryMediator _generatedQueries = null!;
     private IEventMediator _events = null!;
+    private IEventMediator _generatedEvents = null!;
     private IMediator _mediator = null!;
     private Mediator.IMediator _martinMediator = null!;
 
@@ -450,6 +554,8 @@ public class MediationBenchmark
     private readonly GroupedPingEvent _groupedPingEvent = new();
     private readonly InterceptedCommand _interceptedCommand = new();
     private readonly InterceptedIntQuery _interceptedIntQuery = new();
+    private readonly InterceptedPingEvent _interceptedPingEvent = new();
+    private readonly UnplannedPingEvent _unplannedPingEvent = new();
     private readonly PipelineIntQuery _pipelineIntQuery = new();
     private readonly MediatrPipelineIntRequest _mediatrPipelineInt = new();
     private readonly MediatorSgPipelineIntQuery _mediatorSgPipelineInt = new();
@@ -499,6 +605,10 @@ public class MediationBenchmark
                     events.Register<SecondPingEventHandler>();
                     events.Register<FirstGroupedPingEventHandler>();
                     events.Register<SecondGroupedPingEventHandler>();
+                    events.Register<FirstInterceptedPingEventHandler>();
+                    events.Register<SecondInterceptedPingEventHandler>();
+                    events.Register<InterceptedPingEventPreInterceptor>();
+                    events.Register<InterceptedPingEventPostInterceptor>();
                 });
             })
             .BuildServiceProvider();
@@ -540,6 +650,8 @@ public class MediationBenchmark
         AssertPipelineScenario(() => _queries.QueryAsync(_pipelineIntQuery).AsTask().GetAwaiter().GetResult(), "Ergosfare");
         AssertPipelineScenario(() => _mediator.Send(_mediatrPipelineInt).GetAwaiter().GetResult(), "MediatR");
         AssertPipelineScenario(() => _martinMediator.Send(_mediatorSgPipelineInt).AsTask().GetAwaiter().GetResult(), "Mediator");
+
+        AssertBroadcastScenario(() => _events.PublishAsync(_interceptedPingEvent), "Event_Publish_Intercepted");
     }
 
     private static void AssertPipelineScenario(Func<int> dispatch, string library)
@@ -550,6 +662,21 @@ public class MediationBenchmark
             throw new InvalidOperationException($"{library} five-participant pipeline returned {result}, expected 8 — a participant did not run.");
         if (PipelineTouch.Count != touchesBefore + 1)
             throw new InvalidOperationException($"{library} five-participant pipeline did not run its final participant.");
+    }
+
+    /// <summary>
+    /// The intercepted-broadcast rows only mean anything if all four participants ran: a
+    /// pre-interceptor, both handlers and a post-interceptor. A twin that silently lost a
+    /// handler — a nested type the registration skipped, say — would publish to a shorter
+    /// pipeline and read as a win that never happened.
+    /// </summary>
+    private static void AssertBroadcastScenario(Func<ValueTask> publish, string row)
+    {
+        var touchesBefore = BroadcastTouch.Count;
+        publish().AsTask().GetAwaiter().GetResult();
+        var touches = BroadcastTouch.Count - touchesBefore;
+        if (touches != 4)
+            throw new InvalidOperationException($"{row} touched {touches} participants, expected 4 — the pipeline is not the shape this row claims to measure.");
     }
 
     [GlobalCleanup]
@@ -568,7 +695,8 @@ public class MediationBenchmark
     /// </summary>
     [GlobalSetup(Targets = [nameof(Command_Void_Generated), nameof(Query_Result_Generated),
         nameof(Command_Void_Intercepted_Generated), nameof(Query_Result_Intercepted_Generated),
-        nameof(Query_Result_Pipeline5_Generated)])]
+        nameof(Query_Result_Pipeline5_Generated), nameof(Event_Publish_Intercepted_Generated),
+        nameof(Event_Publish_Intercepted_Unplanned)])]
     public void SetupGenerated()
     {
         _ergosfareGenerated = new ServiceCollection()
@@ -576,20 +704,38 @@ public class MediationBenchmark
             {
                 options.AddCommandModule(commands => commands.RegisterGenerated());
                 options.AddQueryModule(queries => queries.RegisterGenerated());
+                options.AddEventModule(events => events.RegisterGenerated());
             })
             .BuildServiceProvider();
 
         _generatedCommands = _ergosfareGenerated.GetRequiredService<ICommandMediator>();
         _generatedQueries = _ergosfareGenerated.GetRequiredService<IQueryMediator>();
+        _generatedEvents = _ergosfareGenerated.GetRequiredService<IEventMediator>();
 
         AssertPipelineScenario(
             () => _generatedQueries.QueryAsync(_pipelineIntQuery).AsTask().GetAwaiter().GetResult(),
             "Ergosfare (generated)");
+
+        // The A/B's premise, asserted rather than assumed: one twin has a compiled
+        // broadcast plan and the other does not. Without this the pair degrades silently
+        // into two rows measuring the same lane — the failure mode that makes an A/B
+        // table read as "the plan bought nothing".
+        if (GeneratedDispatchRoots.FindBroadcastPlan(typeof(InterceptedPingEvent)) is null)
+            throw new InvalidOperationException(
+                $"{nameof(Event_Publish_Intercepted_Generated)} lost its plan arm: no broadcast plan was emitted for {nameof(InterceptedPingEvent)}.");
+
+        if (GeneratedDispatchRoots.FindBroadcastPlan(typeof(UnplannedPingEvent)) is not null)
+            throw new InvalidOperationException(
+                $"{nameof(Event_Publish_Intercepted_Unplanned)} lost its runtime arm: {nameof(UnplannedPingEvent)} got a broadcast plan, so both A/B rows measure the plan.");
+
+        AssertBroadcastScenario(() => _generatedEvents.PublishAsync(_interceptedPingEvent), nameof(Event_Publish_Intercepted_Generated));
+        AssertBroadcastScenario(() => _generatedEvents.PublishAsync(_unplannedPingEvent), nameof(Event_Publish_Intercepted_Unplanned));
     }
 
     [GlobalCleanup(Targets = [nameof(Command_Void_Generated), nameof(Query_Result_Generated),
         nameof(Command_Void_Intercepted_Generated), nameof(Query_Result_Intercepted_Generated),
-        nameof(Query_Result_Pipeline5_Generated)])]
+        nameof(Query_Result_Pipeline5_Generated), nameof(Event_Publish_Intercepted_Generated),
+        nameof(Event_Publish_Intercepted_Unplanned)])]
     public void CleanupGenerated()
     {
         _ergosfareGenerated.Dispose();
@@ -732,6 +878,30 @@ public class MediationBenchmark
 
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask Event_Publish() => _events.PublishAsync(_pingEvent);
+
+    /// <summary>
+    /// The interceptor-bearing publish on the runtime strategy — today's shape for an
+    /// intercepted event, and the number the broadcast plan has to beat. The plain
+    /// <see cref="Event_Publish"/> row above never reaches this lane: with no interceptor
+    /// it takes the straight-through publish instead.
+    /// </summary>
+    [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask Event_Publish_Intercepted() => _events.PublishAsync(_interceptedPingEvent);
+
+    /// <summary>
+    /// The A/B's plan arm: the same intercepted publish through the generated provider,
+    /// where a compiled broadcast plan serves it.
+    /// </summary>
+    [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask Event_Publish_Intercepted_Generated() => _generatedEvents.PublishAsync(_interceptedPingEvent);
+
+    /// <summary>
+    /// The A/B's runtime arm: the identical pipeline whose nested handlers disqualified a
+    /// plan, dispatched through the very same provider in the very same process. The pair
+    /// is read as a ratio within one table — never across runs.
+    /// </summary>
+    [Benchmark, BenchmarkCategory("Root")]
+    public ValueTask Event_Publish_Intercepted_Unplanned() => _generatedEvents.PublishAsync(_unplannedPingEvent);
 
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask Event_Publish_Grouped() => _events.PublishAsync(_groupedPingEvent, BenchGroups);
