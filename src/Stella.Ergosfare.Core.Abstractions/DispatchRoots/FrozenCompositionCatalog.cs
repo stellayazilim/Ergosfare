@@ -61,6 +61,19 @@ public sealed class FrozenCompositionCatalog
     }
 
     /// <summary>
+    /// Whether this container registered a participant. Selecting an open generic definition
+    /// selects the closed forms the generator monomorphized from it: the caller writes
+    /// <c>Register(typeof(ValidateCommands&lt;&gt;))</c> because that is the only name the
+    /// definition has, while the composition rows name <c>ValidateCommands&lt;RegisterUser&gt;</c>
+    /// and its siblings. Matching only by exact type would let a registration select nothing.
+    /// </summary>
+    private bool IsSelected(Type handlerType)
+        => _selected.Contains(handlerType)
+           || (handlerType.IsGenericType
+               && !handlerType.IsGenericTypeDefinition
+               && _selected.Contains(handlerType.GetGenericTypeDefinition()));
+
+    /// <summary>
     /// Records that this container registered <paramref name="participantType"/>. Repeated
     /// and overlapping calls are safe — selection is a union.
     /// </summary>
@@ -163,7 +176,7 @@ public sealed class FrozenCompositionCatalog
         {
             foreach (var participant in segment)
             {
-                if (!narrow || _selected.Contains(participant.HandlerType))
+                if (!narrow || IsSelected(participant.HandlerType))
                 {
                     into.Add(participant.HandlerType);
                 }
@@ -258,7 +271,7 @@ public sealed class FrozenCompositionCatalog
 
         foreach (var participant in segment)
         {
-            if (_selected.Contains(participant.HandlerType))
+            if (IsSelected(participant.HandlerType))
             {
                 count++;
             }
@@ -279,7 +292,7 @@ public sealed class FrozenCompositionCatalog
 
         foreach (var participant in segment)
         {
-            if (_selected.Contains(participant.HandlerType))
+            if (IsSelected(participant.HandlerType))
             {
                 selected[index++] = participant;
             }
