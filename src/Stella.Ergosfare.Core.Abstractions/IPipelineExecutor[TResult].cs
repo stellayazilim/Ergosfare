@@ -8,5 +8,6 @@ namespace Stella.Ergosfare.Core.Abstractions;
 public interface IPipelineExecutor<TResult>
 {
     /// <inheritdoc cref="IPipelineExecutor.Execute"/>
-    ValueTask<TResult> Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider);
+    ValueTask<TResult> Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider,
+        IEnumerable<string>? groups);
 }

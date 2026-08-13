@@ -15,11 +15,19 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// </summary>
 #pragma warning disable CS8714 // TResult is used as a pattern type argument; handler contracts declare notnull results
 internal sealed class ResultPipelineExecutor<TMessage, TResult>(
-    IMessageDependenciesFactory dependenciesFactory,
-    string[] groups) : IPipelineExecutor<TResult>
+    IMessageDependenciesFactory dependenciesFactory) : IPipelineExecutor<TResult>
     where TMessage : notnull
 {
+    private static readonly string[] EmptyGroups = [];
+
     private readonly SingleAsyncHandlerMediationStrategy<TMessage, TResult> _strategy = new();
+
+    /// <summary>
+    /// The grouped compositions of this pipeline; see
+    /// <see cref="VoidPipelineExecutor{TMessage}"/> for why the filter is a dispatch
+    /// argument rather than part of this executor's identity.
+    /// </summary>
+    private readonly GroupedCompositions _grouped = new(dependenciesFactory, typeof(TMessage));
 
     // Whether the pipeline's result slot has an effective adapter — the attribute tiers
     // plus the container's default, resolved once on the first dispatch, so the fast
@@ -34,7 +42,8 @@ internal sealed class ResultPipelineExecutor<TMessage, TResult>(
     private IMessageDependencies? _cachedDependencies;
     private MessageDependencies? _cachedFastDependencies;
 
-    public ValueTask<TResult> Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider)
+    public ValueTask<TResult> Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider,
+        IEnumerable<string>? groups)
     {
         if (!_resultAdapterResolved)
         {
@@ -43,7 +52,15 @@ internal sealed class ResultPipelineExecutor<TMessage, TResult>(
             _resultAdapterResolved = true;
         }
 
-        var dependencies = GetDependencies();
+        // The filtered shape is its own method so the default pipeline keeps reading one
+        // field and nothing else; see the void executor.
+        if (groups is not null)
+        {
+            return ExecuteGrouped(message, context, serviceProvider, groups);
+        }
+
+        // Resolved once and then read as a field; see VoidPipelineExecutor.
+        var dependencies = _cachedDependencies ?? GetDependencies();
 
         // Zero-interceptor, single-handler, no-adapter dispatch: invoke the handler's typed
         // member directly and hand its ValueTask straight back — no async state machine,
@@ -73,6 +90,39 @@ internal sealed class ResultPipelineExecutor<TMessage, TResult>(
         return _strategy.Mediate((TMessage)message, dependencies, context, serviceProvider);
     }
 
+    /// <summary>
+    /// The group-filtered dispatch: the same two arms as the default pipeline above, over
+    /// the composition the filter selects. Plan-hosting result executors delegate their
+    /// filtered dispatches to one of these — a plan is baked against the unfiltered
+    /// composition and has nothing to say about a filtered one.
+    /// </summary>
+    private ValueTask<TResult> ExecuteGrouped(object message, ErgosfareContext context,
+        IServiceProvider serviceProvider, IEnumerable<string> groups)
+    {
+        var composition = _grouped.Resolve(groups);
+
+        if (composition.Fast?.FastSingleHandler is { } handlerReference
+            && !_hasResultAdapter)
+        {
+            var handler = handlerReference.Resolve(serviceProvider);
+
+            switch (handler)
+            {
+                case IAsyncHandler<TMessage, TResult> asyncHandler:
+                    return asyncHandler.HandleAsync((TMessage)message, context);
+                case IHandler<TMessage, ValueTask<TResult>> valueTaskShaped:
+                    return valueTaskShaped.Handle((TMessage)message, context);
+                case IHandler<TMessage, TResult> syncHandler:
+                    return ValueTask.FromResult(syncHandler.Handle((TMessage)message, context));
+            }
+
+            // Unsupported handler contract: fall through so the strategy raises its
+            // canonical NotSupportedException.
+        }
+
+        return _strategy.Mediate((TMessage)message, composition.Dependencies, context, serviceProvider);
+    }
+
     private IMessageDependencies GetDependencies()
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
@@ -87,14 +137,14 @@ internal sealed class ResultPipelineExecutor<TMessage, TResult>(
             }
 
             // Races are benign: both writers publish equivalent, idempotent state.
-            var dependencies = typedFactory.Create(typeof(TMessage), groups);
+            var dependencies = typedFactory.Create(typeof(TMessage), EmptyGroups);
             _cachedFastDependencies = dependencies as MessageDependencies;
             _cachedDependencies = dependencies;
             return dependencies;
         }
 
         // Foreign factory implementations keep the original per-dispatch behavior.
-        return dependenciesFactory.Create(typeof(TMessage), groups);
+        return dependenciesFactory.Create(typeof(TMessage), EmptyGroups);
     }
 }
 

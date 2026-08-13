@@ -190,13 +190,13 @@ public sealed class MessageDispatchEngine
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        var executor = _executorCache.GetVoidExecutor(message.GetType(), groups);
+        var executor = _executorCache.GetVoidExecutor(message.GetType());
         var context = ErgosfareContextPool.Rent(null, cancellationToken);
         ValueTask task;
 
         try
         {
-            task = executor.Execute(message, context, serviceProvider);
+            task = executor.Execute(message, context, serviceProvider, groups);
         }
         catch
         {
@@ -266,7 +266,7 @@ public sealed class MessageDispatchEngine
 
         try
         {
-            task = executor.Execute(message, context, serviceProvider);
+            task = executor.Execute(message, context, serviceProvider, null);
         }
         catch
         {
@@ -307,13 +307,13 @@ public sealed class MessageDispatchEngine
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        var executor = _executorCache.GetExecutor<TResult>(message.GetType(), groups);
+        var executor = _executorCache.GetExecutor<TResult>(message.GetType());
         var context = ErgosfareContextPool.Rent(null, cancellationToken);
         ValueTask<TResult> task;
 
         try
         {
-            task = executor.Execute(message, context, serviceProvider);
+            task = executor.Execute(message, context, serviceProvider, groups);
         }
         catch
         {
@@ -364,11 +364,13 @@ public sealed class MessageDispatchEngine
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        var executor = groups is null && message.GetType() == typeof(TMessage)
+        // The filter no longer selects the executor, so the typed slot serves a filtered
+        // dispatch too — only the runtime-type guard stands between a call and the field read.
+        var executor = message.GetType() == typeof(TMessage)
             ? _executorCache.GetVoidExecutor<TMessage>()
-            : _executorCache.GetVoidExecutor(message.GetType(), groups);
+            : _executorCache.GetVoidExecutor(message.GetType());
 
-        return executor.Execute(message, context, serviceProvider);
+        return executor.Execute(message, context, serviceProvider, groups);
     }
 
     public ValueTask DispatchAsync(object message, ErgosfareContext context, IServiceProvider serviceProvider,
@@ -377,9 +379,9 @@ public sealed class MessageDispatchEngine
         ArgumentNullException.ThrowIfNull(message);
         ArgumentNullException.ThrowIfNull(context);
 
-        var executor = _executorCache.GetVoidExecutor(message.GetType(), groups);
+        var executor = _executorCache.GetVoidExecutor(message.GetType());
 
-        return executor.Execute(message, context, serviceProvider);
+        return executor.Execute(message, context, serviceProvider, groups);
     }
 
     /// <summary>
@@ -393,8 +395,8 @@ public sealed class MessageDispatchEngine
         ArgumentNullException.ThrowIfNull(message);
         ArgumentNullException.ThrowIfNull(context);
 
-        var executor = _executorCache.GetExecutor<TResult>(message.GetType(), groups);
+        var executor = _executorCache.GetExecutor<TResult>(message.GetType());
 
-        return executor.Execute(message, context, serviceProvider);
+        return executor.Execute(message, context, serviceProvider, groups);
     }
 }

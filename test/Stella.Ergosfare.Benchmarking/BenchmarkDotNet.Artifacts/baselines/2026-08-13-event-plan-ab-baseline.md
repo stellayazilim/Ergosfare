@@ -83,3 +83,29 @@ the run's own report for them.
 * Separate BDN runs carry a ±2.7 ns systematic drift on this host (2026-08-09 methodology
   note). Nothing above should be compared across runs; the A/B is deliberately built so it
   never has to be.
+
+## Addendum — what later runs in the same session showed about drift
+
+Three more full runs followed on the same host that day, after the dispatch-table work. They
+are not recorded as baselines, because they established something else: **the drift across
+runs in that session was far larger than ±2.7 ns, and large enough to make sub-10% findings
+unresolvable.**
+
+`Event_Publish` — a row no change in the session touched — read **70.55 → 63.07 → 57.27 ns**
+across the three runs. A monotonic 19% move on untouched code. Ratios do not rescue the
+comparison either: the `Command_Void` row the ratios are computed against drifts too, and not
+in step.
+
+Two consequences, both worth keeping:
+
+* A ~5% shift seen on the planned rows after the dispatch-table work could be neither
+  confirmed nor refuted. It is recorded as an open question, not as a regression. A separately
+  suspected grouped-lane regression *was* refuted: across runs the penalty simply moved
+  between `Command_Void_Grouped` and `Command_Void_Grouped_GroupSet`, which is what noise
+  looks like when two near-identical paths trade places.
+* The A/B above survives all of it — 2.66× is 166%, an order of magnitude above the drift.
+  That is the whole argument for building the pair into one table rather than comparing runs.
+
+The methodology rule earns its place here: **run the two states in one script and carry an
+untouched control row.** Comparing four separate runs, as was attempted, cannot resolve
+anything smaller than the drift — and the drift is not a constant to subtract.

@@ -9,6 +9,14 @@ namespace Stella.Ergosfare.Core.Abstractions;
 /// of the handler's <see cref="ValueTask"/>.
 /// </summary>
 /// <remarks>
+/// The group filter is a dispatch argument, not part of the executor's identity: one
+/// executor per message type serves every filter, choosing its composition per call. The
+/// filter used to be baked in at construction, which meant the lookup in front of this
+/// interface had to carry the group set in its key — a second dictionary and a joined
+/// string key on a path that already knew the message type. The publishing and streaming
+/// tables never keyed that way; this is the same shape.
+/// </remarks>
+/// <remarks>
 /// This is the dispatch seam source-generated code will eventually implement directly;
 /// the runtime builds executors reflectively (one generic instantiation per message type)
 /// as the fallback.
@@ -21,5 +29,9 @@ public interface IPipelineExecutor
     /// <param name="message">The message instance; its runtime type is the executor's closed message type (or derived).</param>
     /// <param name="context">The execution context for this dispatch.</param>
     /// <param name="serviceProvider">The provider of the scope the dispatch runs in.</param>
-    ValueTask Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider);
+    /// <param name="groups">
+    ///     The group filter for this dispatch, or <c>null</c> for the default pipeline.
+    /// </param>
+    ValueTask Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider,
+        IEnumerable<string>? groups);
 }

@@ -40,8 +40,15 @@ internal sealed class BroadcastDispatch<TEvent>(IMessageDependenciesFactory depe
     /// — because the gate asks a question about the composition, and that is frozen by the
     /// first dispatch.
     /// </summary>
-    private bool _usePlan;
-    private bool _usePlanDirect;
+    /// <remarks>
+    /// One field rather than two flags: the two facts have to be seen together, and a single
+    /// field cannot be observed half-decided. See <c>StagedVoidPipelineExecutor</c>.
+    /// </remarks>
+    private int _verdict;
+
+    private const int UseStrategy = 1;
+    private const int UsePlan = 2;
+    private const int UsePlanDirect = 3;
 
     private GroupedSlot? _cachedGroupedSlot;
 
@@ -54,18 +61,41 @@ internal sealed class BroadcastDispatch<TEvent>(IMessageDependenciesFactory depe
         bool throwIfNoHandlerFound)
     {
         var groupless = groups is null or List<string> { Count: 0 } or string[] { Length: 0 } or GroupSet { Count: 0 };
-        var dependencies = groupless ? GetDependencies() : GetGroupedDependencies(groups!);
 
         // Compiled plan first: the whole pipeline as straight-line calls. Ahead of the runtime
         // delivery because a plan can exist for an interceptorless broadcast too — a plugin's
         // observers live in the plan body, and the delivery below would reach every handler
         // without ever running them.
-        return groupless && _usePlan
-            ? _usePlanDirect
+        //
+        // And ahead of resolving the composition, not after: the plan does not read it, and
+        // the composition is settled by the first publish, so every publish that takes this
+        // arm has nothing to look up.
+        var verdict = _verdict;
+
+        if (groupless && verdict >= UsePlan)
+        {
+            return verdict == UsePlanDirect
                 ? Plan!.ExecuteDirect((TEvent)message, context, serviceProvider)
-                : Plan!.Execute((TEvent)message, context, serviceProvider)
-            : BroadcastMediation<TEvent>.Deliver(
-                (TEvent)message, dependencies, context, serviceProvider, throwIfNoHandlerFound);
+                : Plan!.Execute((TEvent)message, context, serviceProvider);
+        }
+
+        var dependencies = groupless ? GetDependencies() : GetGroupedDependencies(groups!);
+
+        // The gate is decided inside GetDependencies, so the very first publish arrives here
+        // still undecided and has to be offered the plan arm again. Skipping this costs
+        // exactly one dispatch — the first — which for a plugin observer is the one that
+        // would have proved it runs at all.
+        verdict = _verdict;
+
+        if (groupless && verdict >= UsePlan)
+        {
+            return verdict == UsePlanDirect
+                ? Plan!.ExecuteDirect((TEvent)message, context, serviceProvider)
+                : Plan!.Execute((TEvent)message, context, serviceProvider);
+        }
+
+        return BroadcastMediation<TEvent>.Deliver(
+            (TEvent)message, dependencies, context, serviceProvider, throwIfNoHandlerFound);
     }
 
     private IMessageDependencies? GetDependencies()
@@ -93,14 +123,18 @@ internal sealed class BroadcastDispatch<TEvent>(IMessageDependenciesFactory depe
             return null;
         }
 
-        _usePlan = Plan is not null
-                   && dependencies is MessageDependencies { MemoizedInstances: false } fast
-                   && StagedPlanGate.Matches(fast, Plan.Composition);
-        _usePlanDirect = _usePlan
-                         && Plan!.SupportsDirectConstruction
-                         && StagedPlanGate.AllPlainTransient(typedFactory, Plan.Composition);
+        var usePlan = Plan is not null
+                      && dependencies is MessageDependencies { MemoizedInstances: false } fast
+                      && StagedPlanGate.Matches(fast, Plan.Composition);
 
         _cachedDependencies = dependencies;
+        _verdict = usePlan
+            ? Plan!.SupportsDirectConstruction
+              && StagedPlanGate.AllPlainTransient(typedFactory, Plan.Composition)
+                ? UsePlanDirect
+                : UsePlan
+            : UseStrategy;
+
         return dependencies;
     }
 
