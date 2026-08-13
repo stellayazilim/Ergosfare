@@ -293,13 +293,13 @@ internal static class GeneratorDiagnostics
     /// </remarks>
     internal static readonly DiagnosticDescriptor GenericParticipantNeverBinds = new(
         id: "ERGOSG016",
-        title: "Generic participant over an open message type binds to nothing and never executes",
+        title: "Generic participant closes over no message and never executes",
         messageFormat:
-            "'{0}' takes its message as a type parameter, so no pipeline can bind it: participants are matched to " +
-            "messages by concrete type, and a concrete message carries no generic arguments to close this one over. " +
-            "It is registered but never runs. Declare the participant over the message type (or a base contract such " +
-            "as ICommand) instead. A generic participant for a generic message — one whose contract is built from its " +
-            "own type parameters — is unaffected and binds normally.",
+            "'{0}' takes its message as a type parameter and no compiled message satisfies its constraint, so it " +
+            "closes over nothing and no pipeline contains it — it is registered but never runs. Give the constraint a " +
+            "message that implements it, or declare the participant over the message type (or a base contract such as " +
+            "ICommand) instead. A participant whose constraint some message does satisfy is closed over each of them " +
+            "automatically, and a generic participant for a generic message binds on its own.",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
