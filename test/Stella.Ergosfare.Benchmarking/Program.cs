@@ -459,7 +459,6 @@ public class MediationBenchmark
 
     // Reused across dispatches, mirroring a caller that keeps its settings: the grouped
     // rows measure the grouped lane itself, not per-call settings construction.
-    private readonly CommandMediationSettings _groupedCommandSettings = new() { Filters = { Groups = BenchGroups } };
     private readonly MediatrVoidRequest _mediatrVoid = new();
     private readonly MediatrIntRequest _mediatrInt = new();
     private readonly MediatrPingNotification _mediatrPing = new();
@@ -722,7 +721,7 @@ public class MediationBenchmark
     public ValueTask<int> Query_Result_Pipeline5_Memoized() => _memoizedQueries.QueryAsync(_pipelineIntQuery);
 
     [Benchmark, BenchmarkCategory("Root")]
-    public ValueTask Command_Void_Grouped() => _commands.SendAsync(_groupedCommand, _groupedCommandSettings);
+    public ValueTask Command_Void_Grouped() => _commands.SendAsync(_groupedCommand, BenchGroups);
 
     /// <summary>
     /// The canonical-filter overload: no settings object, and the grouped executor

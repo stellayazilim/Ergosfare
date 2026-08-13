@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Commands.Abstractions;
+using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
@@ -49,12 +49,12 @@ public class GeneratedResultPlanExecutionTests
         await using var _ = provider;
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
-        var settings = new CommandMediationSettings();
+        var settings = new Dictionary<object, object?>();
 
         var result = await mediator.SendAsync(new PlannedEcho { Payload = "hi" }, settings);
 
         Assert.Equal("hi!", result);
-        Assert.Equal(true, settings.Items["viaPlanFactory"]);
+        Assert.Equal(true, settings["viaPlanFactory"]);
     }
 
     [ExcludeFromDiscovery]

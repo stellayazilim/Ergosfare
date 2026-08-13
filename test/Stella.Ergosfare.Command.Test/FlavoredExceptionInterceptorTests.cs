@@ -52,13 +52,13 @@ public class FlavoredExceptionInterceptorTests
             .BuildServiceProvider();
         await using var _ = provider;
 
-        var settings = new CommandMediationSettings();
+        var settings = new Dictionary<object, object?>();
 
         // Before the contract fix this dispatch failed with NotSupportedException from
         // the exception invoker itself; now the interceptor observes the handler's
         // exception and the pipeline swallows it.
         await provider.GetRequiredService<ICommandMediator>().SendAsync(new VoidFailingCommand(), settings);
 
-        Assert.Equal("boom", settings.Items["observed"]);
+        Assert.Equal("boom", settings["observed"]);
     }
 }

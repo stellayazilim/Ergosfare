@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Commands.Abstractions;
+using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
@@ -45,13 +45,13 @@ public class GeneratedVoidPlanExecutionTests
         await using var _ = provider;
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
-        var settings = new CommandMediationSettings();
-        settings.Items["keep"] = "me";
+        var settings = new Dictionary<object, object?>();
+        settings["keep"] = "me";
 
         await mediator.SendAsync(new PlannedCommand(), settings);
 
-        Assert.Equal("me", settings.Items["keep"]);
-        Assert.Equal(true, settings.Items["plannedRan"]);
+        Assert.Equal("me", settings["keep"]);
+        Assert.Equal(true, settings["plannedRan"]);
     }
 
     [ExcludeFromDiscovery]
@@ -109,10 +109,10 @@ public class GeneratedVoidPlanExecutionTests
         await using var _ = provider;
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
-        var settings = new CommandMediationSettings();
+        var settings = new Dictionary<object, object?>();
 
         await mediator.SendAsync(new MismatchedCommand(), settings);
 
-        Assert.Equal(true, settings.Items["actualRan"]);
+        Assert.Equal(true, settings["actualRan"]);
     }
 }

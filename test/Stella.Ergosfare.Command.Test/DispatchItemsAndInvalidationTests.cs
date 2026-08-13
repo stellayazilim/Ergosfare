@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Commands.Abstractions;
+using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
@@ -37,13 +37,13 @@ public class DispatchItemsAndInvalidationTests
         await using var _ = provider;
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
-        var settings = new CommandMediationSettings();
-        settings.Items["keep"] = "me";
+        var settings = new Dictionary<object, object?>();
+        settings["keep"] = "me";
 
         await mediator.SendAsync(new ItemsCommand(), settings);
 
-        Assert.Equal("me", settings.Items["keep"]);
-        Assert.Equal("yes", settings.Items["writtenByHandler"]);
+        Assert.Equal("me", settings["keep"]);
+        Assert.Equal("yes", settings["writtenByHandler"]);
     }
 
     [Fact]
@@ -58,17 +58,17 @@ public class DispatchItemsAndInvalidationTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        var first = new CommandMediationSettings();
-        first.Items["secret"] = "data";
+        var first = new Dictionary<object, object?>();
+        first["secret"] = "data";
         await mediator.SendAsync(new ItemsCommand(), first);
 
-        var second = new CommandMediationSettings();
+        var second = new Dictionary<object, object?>();
         await mediator.SendAsync(new ItemsCommand(), second);
 
         // The second dispatch's pooled context must not surface the first caller's items,
         // and writing during the second dispatch must not reach the first caller.
-        Assert.False(second.Items.ContainsKey("secret"));
-        Assert.Equal("data", first.Items["secret"]);
+        Assert.False(second.ContainsKey("secret"));
+        Assert.Equal("data", first["secret"]);
     }
 
     public sealed class LateInterceptedCommand : ICommand { }

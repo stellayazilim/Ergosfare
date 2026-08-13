@@ -21,9 +21,9 @@ namespace Stella.Ergosfare.Queries.Abstractions;
 /// mid-sequence — are not settled the way the single-result ones are.
 /// </para>
 /// </remarks>
-internal static class StreamRevision
+public static class StreamRevision
 {
-    internal const string Notice =
+    public const string Notice =
         "Stream messaging is being revised and its shape will not survive the revision source-compatible. " +
         "It keeps working as-is meanwhile; suppress this warning to opt in until the revision lands.";
 }

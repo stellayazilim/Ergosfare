@@ -96,7 +96,7 @@ public sealed class ExecutionContextDataFlowTests
         var command = new Carrier();
 
         await provider.GetRequiredService<ICommandMediator>()
-            .SendAsync(command, commandMediationSettings: null, cancellation.Token);
+            .SendAsync(command, cancellation.Token);
 
         Assert.Equal(cancellation.Token, command.SeenToken);
     }
@@ -120,16 +120,16 @@ public sealed class ExecutionContextDataFlowTests
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task The_callers_settings_items_survive_the_dispatch_and_expose_what_stages_wrote()
+    public async Task The_callers_items_survive_the_dispatch_and_expose_what_stages_wrote()
     {
         await using var provider = CreateProvider();
-        var settings = new CommandMediationSettings();
-        settings.Items["caller-owned"] = "kept";
+        var settings = new Dictionary<object, object?>();
+        settings["caller-owned"] = "kept";
 
         await provider.GetRequiredService<ICommandMediator>().SendAsync(new Carrier(), settings);
 
-        Assert.Equal("kept", settings.Items["caller-owned"]);
-        Assert.Equal("yes", settings.Items[WrittenByHandler]);
+        Assert.Equal("kept", settings["caller-owned"]);
+        Assert.Equal("yes", settings[WrittenByHandler]);
     }
 
     [Fact]
@@ -139,15 +139,15 @@ public sealed class ExecutionContextDataFlowTests
         await using var provider = CreateProvider();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        var first = new CommandMediationSettings();
-        first.Items["secret"] = "data";
+        var first = new Dictionary<object, object?>();
+        first["secret"] = "data";
         await mediator.SendAsync(new Carrier(), first);
 
-        var second = new CommandMediationSettings();
+        var second = new Dictionary<object, object?>();
         await mediator.SendAsync(new Carrier(), second);
 
-        Assert.False(second.Items.ContainsKey("secret"));
-        Assert.Equal("data", first.Items["secret"]);
+        Assert.False(second.ContainsKey("secret"));
+        Assert.Equal("data", first["secret"]);
     }
 
     // --- a nested dispatch that aborts ------------------------------------------

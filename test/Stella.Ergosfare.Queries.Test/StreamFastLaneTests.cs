@@ -53,16 +53,16 @@ public class StreamFastLaneTests
         // yield the full sequence and surface handler writes through the settings items.
         for (var i = 0; i < 2; i++)
         {
-            var settings = new QueryMediationSettings();
+            var settings = new Dictionary<object, object?>();
             var items = new List<int>();
 
-            await foreach (var item in mediator.StreamAsync(new NumberStream(), settings))
+            await foreach (var item in mediator.StreamAsync(new NumberStream(), null, settings, CancellationToken.None))
             {
                 items.Add(item);
             }
 
             Assert.Equal([1, 2, 3], items);
-            Assert.Equal(true, settings.Items["streamRan"]);
+            Assert.Equal(true, settings["streamRan"]);
         }
     }
 
@@ -112,7 +112,7 @@ public class StreamFastLaneTests
 
         static async Task<string> StreamOne(IQueryMediator mediator, params string[] groups)
         {
-            var settings = new QueryMediationSettings { Filters = { Groups = groups } };
+            var settings = groups;
 
             await foreach (var item in mediator.StreamAsync(new RoutedStream(), settings))
             {

@@ -12,13 +12,13 @@ namespace Stella.Ergosfare.Contract.Test.Harness;
 /// </summary>
 public static class Recording
 {
-    /// <summary>Settings that carry <paramref name="recorder"/> into a command dispatch.</summary>
-    public static CommandMediationSettings Commands(this PipelineRecorder recorder)
-        => new() { Items = { [PipelineRecorder.ItemsKey] = recorder } };
+    /// <summary>Contextual items that carry <paramref name="recorder"/> into a command dispatch.</summary>
+    public static Dictionary<object, object?> Commands(this PipelineRecorder recorder)
+        => new() { [PipelineRecorder.ItemsKey] = recorder };
 
-    /// <summary>Settings that carry <paramref name="recorder"/> into a query dispatch.</summary>
-    public static QueryMediationSettings Queries(this PipelineRecorder recorder)
-        => new() { Items = { [PipelineRecorder.ItemsKey] = recorder } };
+    /// <summary>Contextual items that carry <paramref name="recorder"/> into a query dispatch.</summary>
+    public static Dictionary<object, object?> Queries(this PipelineRecorder recorder)
+        => new() { [PipelineRecorder.ItemsKey] = recorder };
 
     /// <summary>Contextual items that carry <paramref name="recorder"/> into a publish.</summary>
     public static Dictionary<object, object?> Events(this PipelineRecorder recorder)

@@ -53,14 +53,14 @@ public class FlavoredQueryInterceptorTests
             .BuildServiceProvider();
         await using var _ = provider;
 
-        var settings = new QueryMediationSettings();
+        var settings = new Dictionary<object, object?>();
 
         // Before the contract fix the final stage itself threw NotSupportedException for
         // value-typed results; now it observes the outcome like any final interceptor.
         var result = await provider.GetRequiredService<IQueryMediator>().QueryAsync(new FinalizedIntQuery(), settings);
 
         Assert.Equal(7, result);
-        Assert.Equal(true, settings.Items["finalRan"]);
+        Assert.Equal(true, settings["finalRan"]);
     }
 
     [ExcludeFromDiscovery]
@@ -112,12 +112,12 @@ public class FlavoredQueryInterceptorTests
 
         // Before the contract fix the interceptor's base closed over IQuery, so it ran
         // for every query in the application — including this untargeted one.
-        var untargetedSettings = new QueryMediationSettings();
+        var untargetedSettings = new Dictionary<object, object?>();
         await queries.QueryAsync(new UntargetedQuery(), untargetedSettings);
-        Assert.False(untargetedSettings.Items.ContainsKey("postRan"));
+        Assert.False(untargetedSettings.ContainsKey("postRan"));
 
-        var targetedSettings = new QueryMediationSettings();
+        var targetedSettings = new Dictionary<object, object?>();
         await queries.QueryAsync(new TargetedQuery(), targetedSettings);
-        Assert.Equal(true, targetedSettings.Items["postRan"]);
+        Assert.Equal(true, targetedSettings["postRan"]);
     }
 }

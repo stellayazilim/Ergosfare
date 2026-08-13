@@ -107,10 +107,8 @@ public sealed class GroupFilteringTests
     {
         await using var provider = CreateProvider();
         var recorder = new PipelineRecorder();
-        var settings = recorder.Commands();
-        settings.Filters.Groups = [Reporting];
-
-        await provider.GetRequiredService<ICommandMediator>().SendAsync(new ReportingOnly(), settings);
+        await provider.GetRequiredService<ICommandMediator>().SendAsync(
+            new ReportingOnly(), [Reporting], recorder.Commands(), CancellationToken.None);
 
         recorder.AssertStages("handler:reporting");
     }
@@ -121,10 +119,9 @@ public sealed class GroupFilteringTests
     {
         await using var provider = CreateProvider();
         var mediator = provider.GetRequiredService<ICommandMediator>();
-        var settings = new CommandMediationSettings { Filters = { Groups = new[] { Reporting } } };
-
         await Assert.ThrowsAsync<NoHandlerFoundException>(
-            async () => await mediator.SendAsync(new Mixed(), settings));
+            async () => await mediator.SendAsync(
+                new Mixed(), new[] { Reporting }, null, CancellationToken.None));
     }
 
     [Fact]
@@ -135,14 +132,12 @@ public sealed class GroupFilteringTests
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
         var viaSequence = new PipelineRecorder();
-        var sequenceSettings = viaSequence.Commands();
-        sequenceSettings.Filters.Groups = new[] { Reporting };
-        await mediator.SendAsync(new ReportingOnly(), sequenceSettings);
+        await mediator.SendAsync(
+            new ReportingOnly(), new[] { Reporting }, viaSequence.Commands(), CancellationToken.None);
 
         var viaGroupSet = new PipelineRecorder();
-        var groupSetSettings = viaGroupSet.Commands();
-        groupSetSettings.Filters.Groups = ReportingSet;
-        await mediator.SendAsync(new ReportingOnly(), groupSetSettings);
+        await mediator.SendAsync(
+            new ReportingOnly(), ReportingSet, viaGroupSet.Commands(), CancellationToken.None);
 
         Assert.Equal(viaSequence.Stages, viaGroupSet.Stages);
         viaGroupSet.AssertStages("handler:reporting");

@@ -349,18 +349,18 @@ public class ResultCarrierPlanParityTests
 
     /// <summary>
     /// Dispatches an <c>ICommand&lt;TResult&gt;</c> whose result type lives in the emitted
-    /// assembly, closing the settings-taking <c>SendAsync</c> overload reflectively and
-    /// unwrapping the boxed <c>ValueTask&lt;TResult&gt;</c>.
+    /// assembly, closing the full <c>SendAsync</c> overload reflectively and unwrapping the
+    /// boxed <c>ValueTask&lt;TResult&gt;</c>.
     /// </summary>
     private static async Task<object?> SendReflective(ICommandMediator mediator, object command, Type resultType)
     {
         var send = typeof(ICommandMediator).GetMethods()
             .Single(m => m.Name == "SendAsync" && m.IsGenericMethodDefinition
-                && m.GetParameters() is { Length: 3 } parameters
-                && parameters[1].ParameterType == typeof(CommandMediationSettings))
+                && m.GetParameters() is { Length: 4 } parameters
+                && parameters[1].ParameterType == typeof(IEnumerable<string>))
             .MakeGenericMethod(resultType);
 
-        var valueTask = send.Invoke(mediator, [command, null, default(CancellationToken)])!;
+        var valueTask = send.Invoke(mediator, [command, null, null, default(CancellationToken)])!;
         var task = (Task)valueTask.GetType().GetMethod("AsTask")!.Invoke(valueTask, null)!;
         await task;
         return task.GetType().GetProperty("Result")!.GetValue(task);

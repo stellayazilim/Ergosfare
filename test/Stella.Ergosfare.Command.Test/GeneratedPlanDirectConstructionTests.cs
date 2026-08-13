@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Commands.Abstractions;
+using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
@@ -39,10 +39,10 @@ public class GeneratedPlanDirectConstructionTests
 
     private static async Task<(Guid Id, bool ViaPlanFactory)> DispatchAndProbe(ICommandMediator mediator)
     {
-        var settings = new CommandMediationSettings();
+        var settings = new Dictionary<object, object?>();
         await mediator.SendAsync(new ConstructedCommand(), settings);
-        return (Assert.IsType<Guid>(settings.Items["handlerId"]),
-            Assert.IsType<bool>(settings.Items["viaPlanFactory"]));
+        return (Assert.IsType<Guid>(settings["handlerId"]),
+            Assert.IsType<bool>(settings["viaPlanFactory"]));
     }
 
     [Fact]
@@ -103,10 +103,10 @@ public class GeneratedPlanDirectConstructionTests
         await using var _ = provider;
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
-        var settings = new CommandMediationSettings();
+        var settings = new Dictionary<object, object?>();
         await mediator.SendAsync(new UserFactoryCommand(), settings);
 
-        Assert.Equal(true, settings.Items["viaUserFactory"]);
+        Assert.Equal(true, settings["viaUserFactory"]);
     }
 
     [ExcludeFromDiscovery]
@@ -143,10 +143,10 @@ public class GeneratedPlanDirectConstructionTests
         await using var provider = services.BuildServiceProvider();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        var settings = new CommandMediationSettings();
+        var settings = new Dictionary<object, object?>();
         await mediator.SendAsync(new LateOverrideCommand(), settings);
 
-        Assert.Equal(true, settings.Items["viaUser"]);
+        Assert.Equal(true, settings["viaUser"]);
     }
 
     [ExcludeFromDiscovery]
@@ -182,12 +182,12 @@ public class GeneratedPlanDirectConstructionTests
 
         // A plan-factory construction would hand out fresh instances; the user's
         // singleton override must keep sharing one.
-        var first = new CommandMediationSettings();
+        var first = new Dictionary<object, object?>();
         await mediator.SendAsync(new SingletonCommand(), first);
-        var second = new CommandMediationSettings();
+        var second = new Dictionary<object, object?>();
         await mediator.SendAsync(new SingletonCommand(), second);
 
-        Assert.Equal(first.Items["handlerId"], second.Items["handlerId"]);
+        Assert.Equal(first["handlerId"], second["handlerId"]);
     }
 
     [ExcludeFromDiscovery]
@@ -224,11 +224,11 @@ public class GeneratedPlanDirectConstructionTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        var first = new CommandMediationSettings();
+        var first = new Dictionary<object, object?>();
         await mediator.SendAsync(new MemoizedPlanCommand(), first);
-        var second = new CommandMediationSettings();
+        var second = new Dictionary<object, object?>();
         await mediator.SendAsync(new MemoizedPlanCommand(), second);
 
-        Assert.Equal(first.Items["handlerId"], second.Items["handlerId"]);
+        Assert.Equal(first["handlerId"], second["handlerId"]);
     }
 }

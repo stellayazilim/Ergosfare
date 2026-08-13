@@ -81,22 +81,22 @@ public class EngineBackedFacadeTests
         {
             var mediator = scope.ServiceProvider.GetRequiredService<ICommandMediator>();
 
-            var firstSettings = new CommandMediationSettings();
+            var firstSettings = new Dictionary<object, object?>();
             await mediator.SendAsync(new ProbeCommand(), firstSettings);
-            first = Assert.IsType<Guid>(firstSettings.Items["probeId"]);
+            first = Assert.IsType<Guid>(firstSettings["probeId"]);
 
-            var secondSettings = new CommandMediationSettings();
+            var secondSettings = new Dictionary<object, object?>();
             await mediator.SendAsync(new ProbeCommand(), secondSettings);
-            second = Assert.IsType<Guid>(secondSettings.Items["probeId"]);
+            second = Assert.IsType<Guid>(secondSettings["probeId"]);
         }
 
         using (var scope = provider.CreateScope())
         {
             var mediator = scope.ServiceProvider.GetRequiredService<ICommandMediator>();
 
-            var thirdSettings = new CommandMediationSettings();
+            var thirdSettings = new Dictionary<object, object?>();
             await mediator.SendAsync(new ProbeCommand(), thirdSettings);
-            third = Assert.IsType<Guid>(thirdSettings.Items["probeId"]);
+            third = Assert.IsType<Guid>(thirdSettings["probeId"]);
         }
 
         // Within one scope the scoped dependency is one instance; a fresh scope gets its own.
@@ -121,13 +121,13 @@ public class EngineBackedFacadeTests
 
         foreach (var mediator in new[] { engineBacked, mediatorBacked })
         {
-            var settings = new CommandMediationSettings();
+            var settings = new Dictionary<object, object?>();
 
             var result = await mediator.SendAsync(
                 new EchoCommand { Payload = "hi" }, settings);
 
             Assert.Equal("hi!", result);
-            Assert.Equal("hi", settings.Items["sawPayload"]);
+            Assert.Equal("hi", settings["sawPayload"]);
         }
     }
 }
