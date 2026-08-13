@@ -13,7 +13,7 @@ namespace Stella.Ergosfare.Events.Test;
 public class EventMediatorTests
 {
     /// <summary>
-    /// Tests that <see cref="IEventMediator.PublishAsync(IEvent, EventMediationSettings?, CancellationToken)"/> correctly publishes a <see cref="StubNonGenericEvent"/>
+    /// Tests that <see cref="IEventMediator.PublishAsync(IEvent, IEnumerable{string}, bool, CancellationToken)"/> correctly publishes a <see cref="StubNonGenericEvent"/>
     /// both with default and custom group settings.
     /// </summary>
     [Fact]

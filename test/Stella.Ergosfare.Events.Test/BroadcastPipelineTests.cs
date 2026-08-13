@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Internal.Factories;
@@ -11,10 +11,10 @@ using Xunit.Abstractions;
 namespace Stella.Ergosfare.Events.Test;
 
 /// <summary>
-/// Contains unit tests for <see cref="EventMediator"/> using <c>AsyncBroadcastMediationStrategy</c>,
+/// Contains unit tests for <see cref="EventMediator"/>'s interceptor-bearing broadcast lane,
 /// validating handler execution and exception handling behavior.
 /// </summary>
-public class AsyncBroadcastMediationStrategyTests
+public class BroadcastPipelineTests
 (ITestOutputHelper  testOutputHelper)
 {
     /// <summary>
@@ -29,7 +29,7 @@ public class AsyncBroadcastMediationStrategyTests
     }
 
     /// <summary>
-    /// Tests that <see cref="EventMediator.PublishAsync(IEvent, EventMediationSettings?, CancellationToken)"/> throws an exception
+    /// Tests that <see cref="EventMediator.PublishAsync(IEvent, IEnumerable{string}, bool, CancellationToken)"/> throws an exception
     /// when <c>ThrowIfNoHandlerFound</c> is set to true and no handler is found.
     /// </summary>
     [Fact]
@@ -44,10 +44,7 @@ public class AsyncBroadcastMediationStrategyTests
         Exception? exception = null;
         try
         {
-           await mediator.PublishAsync(new StubNonGenericEvent(), new EventMediationSettings()
-           {
-               ThrowIfNoHandlerFound = true
-           });
+           await mediator.PublishAsync(new StubNonGenericEvent(), null, true, CancellationToken.None);
 
         }
         catch (Exception ex)
@@ -60,7 +57,7 @@ public class AsyncBroadcastMediationStrategyTests
     }
     
     /// <summary>
-    /// Tests that <see cref="EventMediator.PublishAsync(IEvent, EventMediationSettings?, CancellationToken)"/> does not throw an exception
+    /// Tests that <see cref="EventMediator.PublishAsync(IEvent, IEnumerable{string}, bool, CancellationToken)"/> does not throw an exception
     /// when <c>ThrowIfNoHandlerFound</c> is false and no handler is found.
     /// </summary>
     [Fact]
@@ -73,10 +70,7 @@ public class AsyncBroadcastMediationStrategyTests
         Exception? exception = null;
         try
         {
-            await mediator.PublishAsync(new StubNonGenericEvent(), new EventMediationSettings()
-            {
-                ThrowIfNoHandlerFound = false
-            });
+            await mediator.PublishAsync(new StubNonGenericEvent(), null, false, CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -87,7 +81,7 @@ public class AsyncBroadcastMediationStrategyTests
     }
 
     /// <summary>
-    /// Tests that <see cref="EventMediator.PublishAsync(IEvent, EventMediationSettings?, CancellationToken)"/> correctly runs registered handlers.
+    /// Tests that <see cref="EventMediator.PublishAsync(IEvent, IEnumerable{string}, bool, CancellationToken)"/> correctly runs registered handlers.
     /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
@@ -105,7 +99,7 @@ public class AsyncBroadcastMediationStrategyTests
     }
 
     /// <summary>
-    /// Tests that exceptions are correctly intercepted when a handler throws during <see cref="EventMediator.PublishAsync(IEvent, EventMediationSettings?, CancellationToken)"/>.
+    /// Tests that exceptions are correctly intercepted when a handler throws during <see cref="EventMediator.PublishAsync(IEvent, IEnumerable{string}, bool, CancellationToken)"/>.
     /// </summary>
     [Fact]
     [Trait("Category", "Unit")]

@@ -96,7 +96,7 @@ public sealed class ExecutionContextDataFlowTests
         var command = new Carrier();
 
         await provider.GetRequiredService<ICommandMediator>()
-            .SendAsync(command, commandMediationSettings: null, cancellation.Token);
+            .SendAsync(command, cancellation.Token);
 
         Assert.Equal(cancellation.Token, command.SeenToken);
     }
@@ -120,10 +120,10 @@ public sealed class ExecutionContextDataFlowTests
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task The_callers_settings_items_survive_the_dispatch_and_expose_what_stages_wrote()
+    public async Task The_callers_items_survive_the_dispatch_and_expose_what_stages_wrote()
     {
         await using var provider = CreateProvider();
-        var settings = new CommandMediationSettings();
+        var settings = new ErgosfareContext();
         settings.Items["caller-owned"] = "kept";
 
         await provider.GetRequiredService<ICommandMediator>().SendAsync(new Carrier(), settings);
@@ -139,11 +139,11 @@ public sealed class ExecutionContextDataFlowTests
         await using var provider = CreateProvider();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        var first = new CommandMediationSettings();
+        var first = new ErgosfareContext();
         first.Items["secret"] = "data";
         await mediator.SendAsync(new Carrier(), first);
 
-        var second = new CommandMediationSettings();
+        var second = new ErgosfareContext();
         await mediator.SendAsync(new Carrier(), second);
 
         Assert.False(second.Items.ContainsKey("secret"));

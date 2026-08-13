@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Commands.Abstractions;
+using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
@@ -49,7 +49,7 @@ public class GeneratedResultPlanExecutionTests
         await using var _ = provider;
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
-        var settings = new CommandMediationSettings();
+        var settings = new ErgosfareContext();
 
         var result = await mediator.SendAsync(new PlannedEcho { Payload = "hi" }, settings);
 

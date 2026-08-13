@@ -254,4 +254,23 @@ internal static class GeneratorDiagnostics
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    /// <summary>
+    ///     A referenced assembly carries <c>[PipelineInvokable]</c> methods but matches the
+    ///     reserved <c>Stella.Ergosfare</c> name prefix, which excludes it from reference
+    ///     scanning — so its plugin never reaches a single plan. The exclusion is correct
+    ///     for the library's own assemblies; for a plugin package named under the prefix it
+    ///     is a silent no-op, which is the worst failure mode a plugin ecosystem can have.
+    /// </summary>
+    public static readonly DiagnosticDescriptor PluginUnderReservedPrefix = new(
+        id: "ERGOSG015",
+        title: "Plugin assembly is excluded from reference scanning by the reserved name prefix",
+        messageFormat:
+            "Assembly '{0}' declares Ergosfare plugin methods but its name matches the reserved 'Stella.Ergosfare' " +
+            "prefix, so reference scanning skipped it and none of its plugin methods are emitted into any pipeline. " +
+            "Add [assembly: AssemblyMetadata(\"ErgosfareSourceGeneratorForceScanReferences\", \"true\")] to that " +
+            "assembly (or set the same-named MSBuild property in it), or rename it outside the reserved prefix.",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 }

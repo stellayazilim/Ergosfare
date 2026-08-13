@@ -16,6 +16,7 @@
     <Project Path="src\Stella.Ergosfare.Events.Abstractions\Stella.Ergosfare.Events.Abstractions.csproj" />
     <Project Path="src\Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj" />
     <Project Path="src\Stella.Ergosfare.Events\Stella.Ergosfare.Events.csproj" />
+    <Project Path="src\Stella.Ergosfare.Plugins.Abstractions\Stella.Ergosfare.Plugins.Abstractions.csproj" />
     <Project Path="src\Stella.Ergosfare.Queries.Abstractions\Stella.Ergosfare.Queries.Abstractions.csproj" />
     <Project Path="src\Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.csproj" />
     <Project Path="src\Stella.Ergosfare.Queries\Stella.Ergosfare.Queries.csproj" />

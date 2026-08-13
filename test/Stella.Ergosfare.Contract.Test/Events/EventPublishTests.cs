@@ -110,10 +110,9 @@ public sealed class EventPublishTests
     {
         await using var provider = CreateProvider();
         var mediator = provider.GetRequiredService<IEventMediator>();
-        var settings = new EventMediationSettings { ThrowIfNoHandlerFound = true };
-
         await Assert.ThrowsAsync<NoHandlerFoundException>(
-            async () => await mediator.PublishAsync(new NobodyListens(), settings));
+            async () => await mediator.PublishAsync(
+                new NobodyListens(), null, true, CancellationToken.None));
     }
 
     [Fact]
@@ -149,10 +148,8 @@ public sealed class EventPublishTests
     {
         await using var provider = CreateProvider();
         var recorder = new PipelineRecorder();
-        var settings = recorder.Events();
-        settings.Filters.Groups = [Reporting];
-
-        await provider.GetRequiredService<IEventMediator>().PublishAsync(new StockChanged(), settings);
+        await provider.GetRequiredService<IEventMediator>().PublishAsync(
+            new StockChanged(), recorder.Events(), [Reporting]);
 
         recorder.AssertStages("reporting");
     }
@@ -163,14 +160,13 @@ public sealed class EventPublishTests
     {
         await using var provider = CreateProvider();
         var mediator = provider.GetRequiredService<IEventMediator>();
-        var settings = new EventMediationSettings { ThrowIfNoHandlerFound = true };
-
         // The other half of the flag's new reach: what the unregistered case used to do
         // unconditionally, it now does on request — the same as the registered-but-unhandled
         // case two scenarios up. Appended rather than placed beside its sibling: a member
         // inserted above renumbers the state machines below it and churns the lane map.
         await Assert.ThrowsAsync<NoHandlerFoundException>(
-            async () => await mediator.PublishAsync(new UnknownEvent(), settings));
+            async () => await mediator.PublishAsync(
+                new UnknownEvent(), null, true, CancellationToken.None));
     }
 
     // -----------------------------------------------------------------------

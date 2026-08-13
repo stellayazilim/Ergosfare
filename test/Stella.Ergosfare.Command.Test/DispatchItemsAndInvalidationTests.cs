@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Commands.Abstractions;
+using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
@@ -37,7 +37,7 @@ public class DispatchItemsAndInvalidationTests
         await using var _ = provider;
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
-        var settings = new CommandMediationSettings();
+        var settings = new ErgosfareContext();
         settings.Items["keep"] = "me";
 
         await mediator.SendAsync(new ItemsCommand(), settings);
@@ -58,11 +58,11 @@ public class DispatchItemsAndInvalidationTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        var first = new CommandMediationSettings();
+        var first = new ErgosfareContext();
         first.Items["secret"] = "data";
         await mediator.SendAsync(new ItemsCommand(), first);
 
-        var second = new CommandMediationSettings();
+        var second = new ErgosfareContext();
         await mediator.SendAsync(new ItemsCommand(), second);
 
         // The second dispatch's pooled context must not surface the first caller's items,

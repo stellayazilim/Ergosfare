@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Core;
+using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Strategies;
@@ -65,7 +65,7 @@ public class EngineBackedEventFacadeTests
         Assert.IsAssignableFrom<EventMediator>(mediator);
         Assert.NotEqual(typeof(EventMediator), mediator.GetType());
 
-        var settings = new EventMediationSettings();
+        var settings = new ErgosfareContext();
         await mediator.PublishAsync(new GroupedEvent(), settings);
 
         // A group-less publish serves the default group only.
@@ -83,20 +83,15 @@ public class EngineBackedEventFacadeTests
 
         var mediator = provider.GetRequiredService<IEventMediator>();
 
-        var settings = new EventMediationSettings
-        {
-            Filters =
-            {
-                Groups = ["audit"]
-            }
-        };
+        var items = new ErgosfareContext();
+        string[] groupFilter = ["audit"];
 
-        await mediator.PublishAsync(new GroupedEvent(), settings);
+        await mediator.PublishAsync(new GroupedEvent(), items, groupFilter);
 
         // The grouped publish runs the group-filtered plan; only the requested group's
         // handler runs.
-        Assert.Equal(true, settings.Items["auditRan"]);
-        Assert.False(settings.Items.ContainsKey("defaultRan"));
+        Assert.Equal(true, items.Items["auditRan"]);
+        Assert.False(items.Items.ContainsKey("defaultRan"));
     }
 
     [Fact]
@@ -111,7 +106,7 @@ public class EngineBackedEventFacadeTests
 
         foreach (var mediator in new [] { constructed, (EventMediator)provider.GetRequiredService<IEventMediator>() })
         {
-            var settings = new EventMediationSettings();
+            var settings = new ErgosfareContext();
 
             await mediator.PublishAsync(new GroupedEvent(), settings);
 

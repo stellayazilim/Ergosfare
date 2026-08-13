@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Commands.Abstractions;
+using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
@@ -45,7 +45,7 @@ public class GeneratedVoidPlanExecutionTests
         await using var _ = provider;
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
-        var settings = new CommandMediationSettings();
+        var settings = new ErgosfareContext();
         settings.Items["keep"] = "me";
 
         await mediator.SendAsync(new PlannedCommand(), settings);
@@ -109,7 +109,7 @@ public class GeneratedVoidPlanExecutionTests
         await using var _ = provider;
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
-        var settings = new CommandMediationSettings();
+        var settings = new ErgosfareContext();
 
         await mediator.SendAsync(new MismatchedCommand(), settings);
 

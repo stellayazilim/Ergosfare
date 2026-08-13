@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Core;
+using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Events.Abstractions;
 
@@ -8,7 +8,7 @@ namespace Stella.Ergosfare.Events;
 /// <summary>
 /// Mediates events through broadcast pipelines closed over each event's runtime type, so
 /// handlers are always invoked through their typed members — including for the
-/// interface-erased <see cref="PublishAsync(IEvent, EventMediationSettings?, CancellationToken)"/> overload.
+/// interface-erased <see cref="PublishAsync(IEvent, IEnumerable{string}, bool, CancellationToken)"/> overload.
 /// </summary>
 /// <remarks>
 /// Unsealed so the DI registration can bind the engine-backed constructor through a
@@ -46,101 +46,54 @@ public class EventMediator : IPublisher
         _serviceProvider = serviceProvider;
     }
 
-    /// <summary>
-    /// Publishes a non-generic event asynchronously through the mediation pipeline.
-    /// </summary>
-    /// <param name="event">The event message to publish.</param>
-    /// <param name="eventMediationSettings">Optional settings for pipeline execution, e.g., filters, items, and exception behavior.</param>
-    /// <param name="cancellationToken">Cancellation token for async execution.</param>
-    /// <returns>A <see cref="ValueTask"/> representing the asynchronous publish operation.</returns>
-    public ValueTask PublishAsync(IEvent @event,
-                             EventMediationSettings? eventMediationSettings = null,
-                             CancellationToken cancellationToken = default)
-    {
-        return EventBroadcastInvokerCache.Get(@event.GetType()).Publish(
-            @event, eventMediationSettings, cancellationToken,
-            _engine, _serviceProvider);
-    }
+    /// <inheritdoc />
+    public ValueTask PublishAsync(IEvent @event, IEnumerable<string>? groups, bool throwIfNoHandlerFound,
+        CancellationToken cancellationToken)
+        => _engine.BroadcastAsync(
+            @event, _serviceProvider, cancellationToken, groups, throwIfNoHandlerFound);
 
-    /// <summary>
-    /// Publishes a strongly-typed event asynchronously through the mediation pipeline.
-    /// </summary>
-    /// <typeparam name="TEvent">The event type being published.</typeparam>
-    /// <param name="event">The event message to publish.</param>
-    /// <param name="eventMediationSettings">Optional settings for pipeline execution.</param>
-    /// <param name="cancellationToken">Cancellation token for async execution.</param>
-    /// <returns>A <see cref="ValueTask"/> representing the asynchronous publish operation.</returns>
-    public ValueTask PublishAsync<TEvent>(TEvent @event,
-                                     EventMediationSettings? eventMediationSettings = null,
-                                     CancellationToken cancellationToken = default) where TEvent : notnull
-    {
-        // When the runtime type is exactly TEvent (the overwhelmingly common typed
-        // publish), the static-generic holder hands back the invoker without a dictionary
-        // lookup. A base-typed generic call keeps resolving by the runtime type — the
-        // holder for a base TEvent would dispatch the wrong closed pipeline.
-        var invoker = @event.GetType() == typeof(TEvent)
-            ? EventBroadcastInvokerCache.Holder<TEvent>.Instance
-            : EventBroadcastInvokerCache.Get(@event.GetType());
+    /// <inheritdoc />
+    public ValueTask PublishAsync<TEvent>(TEvent @event, IEnumerable<string>? groups, bool throwIfNoHandlerFound,
+        CancellationToken cancellationToken)
+        where TEvent : notnull
+        // The typed entry: when the runtime type is exactly TEvent (the overwhelmingly common
+        // typed publish) the pipeline comes from a static-generic slot instead of the
+        // type-keyed dictionary. The engine applies that guard itself.
+        => _engine.BroadcastAsync<TEvent>(
+            @event, _serviceProvider, cancellationToken, groups, throwIfNoHandlerFound);
 
-        return invoker.Publish(
-            @event, eventMediationSettings, cancellationToken,
-            _engine, _serviceProvider);
-    }
+    /// <inheritdoc />
+    public ValueTask PublishAsync(IEvent @event, ErgosfareContext context, IEnumerable<string>? groups = null,
+        bool throwIfNoHandlerFound = false)
+        => _engine.BroadcastAsync(@event, context, _serviceProvider, groups, throwIfNoHandlerFound);
 
-    /// <summary>
-    /// Publishes an event under a canonical group filter — no settings object, and with a
-    /// reused <see cref="GroupSet"/> the grouped broadcast plan matches on a single
-    /// reference check. An empty set publishes the default pipeline.
-    /// </summary>
+    /// <summary>Publishes an event through its default pipeline.</summary>
+    /// <remarks>
+    /// The conveniences are declared here as well as on the interface. They used to be
+    /// extension methods, which a concrete-typed receiver finds; a default interface method is
+    /// not, so carrying them only on the interface would have broken every call made through
+    /// this class.
+    /// </remarks>
+    public ValueTask PublishAsync(IEvent @event, CancellationToken cancellationToken = default)
+        => PublishAsync(@event, (IEnumerable<string>?)null, false, cancellationToken);
+
+
+    /// <summary>Publishes under a canonical group filter.</summary>
     public ValueTask PublishAsync(IEvent @event, GroupSet groups, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(groups);
+        => PublishAsync(@event, groups.Count == 0 ? null : (IEnumerable<string>?)groups, false, cancellationToken);
 
-        IEnumerable<string>? effectiveGroups = groups.Count == 0 ? null : groups;
-        var invoker = EventBroadcastInvokerCache.Get(@event.GetType());
+    /// <summary>Publishes under a group filter given as a plain array.</summary>
+    public ValueTask PublishAsync(IEvent @event, string[] groups, CancellationToken cancellationToken = default)
+        => PublishAsync(@event, (IEnumerable<string>?)groups, false, cancellationToken);
 
-        return invoker.Publish(
-            @event, null, cancellationToken,
-            _engine, _serviceProvider,
-            groupsOverride: effectiveGroups);
-    }
+    /// <summary>Typed counterpart of <see cref="PublishAsync(IEvent, CancellationToken)"/>.</summary>
+    public ValueTask PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
+        where TEvent : notnull
+        => PublishAsync(@event, (IEnumerable<string>?)null, false, cancellationToken);
 
-    /// <summary>
-    /// Strongly-typed counterpart of
-    /// <see cref="PublishAsync(IEvent, GroupSet, CancellationToken)"/>; the invoker comes
-    /// from the static-generic holder when the runtime type is exactly
-    /// <typeparamref name="TEvent"/>.
-    /// </summary>
+
+    /// <summary>Typed counterpart of the canonical group-filter overload.</summary>
     public ValueTask PublishAsync<TEvent>(TEvent @event, GroupSet groups, CancellationToken cancellationToken = default)
         where TEvent : notnull
-    {
-        ArgumentNullException.ThrowIfNull(groups);
-
-        IEnumerable<string>? effectiveGroups = groups.Count == 0 ? null : groups;
-        var invoker = @event.GetType() == typeof(TEvent)
-            ? EventBroadcastInvokerCache.Holder<TEvent>.Instance
-            : EventBroadcastInvokerCache.Get(@event.GetType());
-
-        return invoker.Publish(
-            @event, null, cancellationToken,
-            _engine, _serviceProvider,
-            groupsOverride: effectiveGroups);
-    }
-
-    /// <summary>
-    /// Publishes an event under an externally owned execution context — the
-    /// nested-dispatch path: a handler opens a scope on its own context and passes the
-    /// child here. The caller owns the context's lifetime; cancellation flows from the
-    /// context.
-    /// </summary>
-    /// <param name="event">The event message to publish.</param>
-    /// <param name="context">The externally owned execution context to publish under.</param>
-    /// <param name="eventMediationSettings">Optional settings for pipeline execution.</param>
-    public ValueTask PublishAsync(IEvent @event, ErgosfareContext context,
-                             EventMediationSettings? eventMediationSettings = null)
-    {
-        return EventBroadcastInvokerCache.Get(@event.GetType()).Publish(
-            @event, eventMediationSettings, context.CancellationToken,
-            _engine, _serviceProvider, context);
-    }
+        => PublishAsync(@event, groups.Count == 0 ? null : (IEnumerable<string>?)groups, false, cancellationToken);
 }

@@ -62,11 +62,11 @@ public class TypedEngineDispatchTests
         // both must run the full pipeline.
         for (var i = 0; i < 2; i++)
         {
-            var items = new Dictionary<object, object?>();
+            var items = new ErgosfareContext();
 
-            await engine.DispatchVoidAsync(new TypedProbeCommand(), provider, items);
+            await engine.DispatchVoidAsync(new TypedProbeCommand(), items, provider);
 
-            Assert.Equal(true, items["typedProbe"]);
+            Assert.Equal(true, items.Items["typedProbe"]);
         }
     }
 
@@ -81,11 +81,11 @@ public class TypedEngineDispatchTests
         // TMessage closes over ICommand here, so the holder guard must reject the slot
         // and resolve the executor by the runtime type — the concrete pipeline still runs.
         ICommand baseTyped = new TypedProbeCommand();
-        var items = new Dictionary<object, object?>();
+        var items = new ErgosfareContext();
 
-        await engine.DispatchVoidAsync(baseTyped, provider, items);
+        await engine.DispatchVoidAsync(baseTyped, items, provider);
 
-        Assert.Equal(true, items["typedProbe"]);
+        Assert.Equal(true, items.Items["typedProbe"]);
     }
 
     [Fact]
@@ -130,9 +130,9 @@ public class TypedEngineDispatchTests
 
         static async Task<Guid> DispatchAndReadId(MessageDispatchEngine engine, IServiceProvider provider)
         {
-            var items = new Dictionary<object, object?>();
-            await engine.DispatchVoidAsync(new IdentityProbeCommand(), provider, items);
-            return Assert.IsType<Guid>(items["handlerId"]);
+            var items = new ErgosfareContext();
+            await engine.DispatchVoidAsync(new IdentityProbeCommand(), items, provider);
+            return Assert.IsType<Guid>(items.Items["handlerId"]);
         }
     }
 
