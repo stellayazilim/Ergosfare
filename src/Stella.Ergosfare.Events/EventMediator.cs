@@ -8,7 +8,7 @@ namespace Stella.Ergosfare.Events;
 /// <summary>
 /// Mediates events through broadcast pipelines closed over each event's runtime type, so
 /// handlers are always invoked through their typed members — including for the
-/// interface-erased <see cref="PublishAsync(IEvent, EventMediationSettings?, CancellationToken)"/> overload.
+/// interface-erased <see cref="PublishAsync(IEvent, IEnumerable{string}, bool, CancellationToken)"/> overload.
 /// </summary>
 /// <remarks>
 /// Unsealed so the DI registration can bind the engine-backed constructor through a

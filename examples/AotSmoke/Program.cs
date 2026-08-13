@@ -27,10 +27,13 @@ await using var _ = provider;
 var failures = new List<string>();
 
 // Void command — the generated void plan's devirtualized, directly-constructed path.
+// The execution context is the items channel now: a caller that wants to read back what
+// the pipeline wrote constructs one and uses the context overload. A directly constructed
+// context is never pooled, so what handlers wrote is still there once the call returns.
 var commands = provider.GetRequiredService<ICommandMediator>();
-var voidSettings = new CommandMediationSettings();
-await commands.SendAsync(new Ergosfare.AotSmoke.CreateNote(), voidSettings);
-if (!Equals(voidSettings.Items["noteCreated"], true))
+var voidContext = new ErgosfareContext();
+await commands.SendAsync(new Ergosfare.AotSmoke.CreateNote(), voidContext);
+if (!voidContext.TryGet<bool>("noteCreated", out var noteCreated) || !noteCreated)
 {
     failures.Add("void command handler did not run");
 }
@@ -52,18 +55,21 @@ if (answer != 42)
 
 // Class event broadcast with two handlers.
 var events = provider.GetRequiredService<IEventMediator>();
-var publishSettings = new EventMediationSettings();
-await events.PublishAsync(new Ergosfare.AotSmoke.NotePublished(), publishSettings);
-if (!Equals(publishSettings.Items["firstSubscriber"], true) || !Equals(publishSettings.Items["secondSubscriber"], true))
+var publishContext = new ErgosfareContext();
+await events.PublishAsync(new Ergosfare.AotSmoke.NotePublished(), publishContext);
+if (!publishContext.TryGet<bool>("firstSubscriber", out var firstSubscriber) || !firstSubscriber
+    || !publishContext.TryGet<bool>("secondSubscriber", out var secondSubscriber) || !secondSubscriber)
 {
     failures.Add("event broadcast did not reach both handlers");
 }
 
-// Struct event — the value-type generic instantiations only generated roots anchor
-// under AOT (shared generic code cannot cover them).
-var structSettings = new EventMediationSettings();
-await events.PublishAsync(new Ergosfare.AotSmoke.StructPing(7), structSettings);
-if (!Equals(structSettings.Items["structPayload"], 7))
+// Struct event — the value-type generic instantiations only generated roots anchor under
+// AOT (shared generic code cannot cover them). This row deliberately takes the *typed*
+// publish, which resolves its pipeline from a static-generic slot rather than a runtime-type
+// lookup: that slot is the instantiation AOT has to have compiled. The typed publish has no
+// context overload, so this handler reports through a static sink instead of context items.
+await events.PublishAsync(new Ergosfare.AotSmoke.StructPing(7));
+if (Ergosfare.AotSmoke.StructPingSink.Payload != 7)
 {
     failures.Add("struct event handler did not observe the payload");
 }
@@ -138,11 +144,18 @@ namespace Ergosfare.AotSmoke
         public int Payload { get; } = payload;
     }
 
+    /// <summary>Where the struct event's handler reports, the typed publish having no
+    /// context overload to read items back from.</summary>
+    public static class StructPingSink
+    {
+        public static int Payload = -1;
+    }
+
     public sealed class StructPingHandler : IEventHandler<StructPing>
     {
         public ValueTask HandleAsync(StructPing @event, ErgosfareContext context)
         {
-            context.Set("structPayload", @event.Payload);
+            StructPingSink.Payload = @event.Payload;
             return ValueTask.CompletedTask;
         }
     }
