@@ -19,13 +19,20 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 #pragma warning disable CS8714 // TResult is used as a pattern type argument; handler contracts declare notnull results
 internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandler>(
     IMessageDependenciesFactory dependenciesFactory,
-    string[] groups,
     Func<THandler>? directHandlerFactory = null,
     Func<IServiceProvider, THandler>? providerHandlerFactory = null) : IPipelineExecutor<TResult>
     where TMessage : IMessage
     where THandler : class, IAsyncHandler<TMessage, TResult>
 {
+    private static readonly string[] EmptyGroups = [];
+
     private readonly SingleAsyncHandlerMediationStrategy<TMessage, TResult> _strategy = new();
+
+    /// <summary>
+    /// The plain pipeline this executor becomes under a group filter; see
+    /// <see cref="GeneratedVoidPipelineExecutor{TMessage, THandler}"/>.
+    /// </summary>
+    private readonly ResultPipelineExecutor<TMessage, TResult> _filtered = new(dependenciesFactory);
 
     // Whether the pipeline's result slot has an effective adapter — the attribute tiers
     // plus the container's default, resolved once on the first dispatch, so the fast
@@ -48,8 +55,14 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
     // constructed and invoked without touching dependencies at all.
     private bool _fastDirect;
 
-    public ValueTask<TResult> Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider)
+    public ValueTask<TResult> Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider,
+        IEnumerable<string>? groups)
     {
+        if (groups is not null)
+        {
+            return _filtered.Execute(message, context, serviceProvider, groups);
+        }
+
         if (_fastDirect)
         {
             var direct = _directHandlerFactory is not null ? _directHandlerFactory() : _providerHandlerFactory!(serviceProvider);
@@ -107,7 +120,7 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
                 return cached;
             }
 
-            var dependencies = typedFactory.Create(typeof(TMessage), groups);
+            var dependencies = typedFactory.Create(typeof(TMessage), EmptyGroups);
             var fastDependencies = dependencies as MessageDependencies;
             _cachedFastDependencies = fastDependencies;
             _cachedDependencies = dependencies;
@@ -122,7 +135,7 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
         }
 
         _useDirectConstruction = false;
-        return dependenciesFactory.Create(typeof(TMessage), groups);
+        return dependenciesFactory.Create(typeof(TMessage), EmptyGroups);
     }
 }
 #pragma warning restore CS8714

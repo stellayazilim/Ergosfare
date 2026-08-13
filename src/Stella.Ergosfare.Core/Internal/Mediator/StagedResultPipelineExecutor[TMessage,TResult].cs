@@ -12,11 +12,18 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// </summary>
 internal sealed class StagedResultPipelineExecutor<TMessage, TResult>(
     IMessageDependenciesFactory dependenciesFactory,
-    string[] groups,
     StagedResultPlan<TMessage, TResult> plan) : IPipelineExecutor<TResult>
     where TMessage : IMessage
 {
+    private static readonly string[] EmptyGroups = [];
+
     private readonly SingleAsyncHandlerMediationStrategy<TMessage, TResult> _strategy = new();
+
+    /// <summary>
+    /// The plain pipeline this executor becomes under a group filter; see
+    /// <see cref="StagedVoidPipelineExecutor{TMessage}"/>.
+    /// </summary>
+    private readonly ResultPipelineExecutor<TMessage, TResult> _filtered = new(dependenciesFactory);
 
     // The identity of the result slot's effective adapter — the attribute tiers plus the
     // container's default, resolved once on the first dispatch (the default tier needs
@@ -29,10 +36,43 @@ internal sealed class StagedResultPipelineExecutor<TMessage, TResult>(
     private volatile bool _resultAdapterResolved;
 
     private IMessageDependencies? _cachedDependencies;
-    private bool _useStagedPlan;
-    private bool _useDirectConstruction;
 
-    public ValueTask<TResult> Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider)
+    /// <summary>
+    /// The gate's verdict as one field; see <see cref="StagedVoidPipelineExecutor{TMessage}"/>
+    /// for why the two facts share one.
+    /// </summary>
+    private int _verdict;
+
+    private const int UseStrategy = 1;
+    private const int UsePlan = 2;
+    private const int UsePlanDirect = 3;
+
+    public ValueTask<TResult> Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider,
+        IEnumerable<string>? groups)
+    {
+        if (groups is not null)
+        {
+            return _filtered.Execute(message, context, serviceProvider, groups);
+        }
+
+        // The steady state of a planned pipeline: one field read, then the plan; see
+        // StagedVoidPipelineExecutor for why the composition is not consulted here.
+        var verdict = _verdict;
+
+        if (verdict >= UsePlan)
+        {
+            return verdict == UsePlanDirect
+                ? plan.ExecuteDirect((TMessage)message, context, serviceProvider)
+                : plan.Execute((TMessage)message, context, serviceProvider);
+        }
+
+        return ExecuteUngated(message, context, serviceProvider);
+    }
+
+    /// <summary>
+    /// The first dispatch, and every dispatch of a pipeline whose gate said no.
+    /// </summary>
+    private ValueTask<TResult> ExecuteUngated(object message, ErgosfareContext context, IServiceProvider serviceProvider)
     {
         if (!_resultAdapterResolved)
         {
@@ -42,10 +82,11 @@ internal sealed class StagedResultPipelineExecutor<TMessage, TResult>(
         }
 
         var dependencies = GetDependencies();
+        var verdict = _verdict;
 
-        if (_useStagedPlan)
+        if (verdict >= UsePlan)
         {
-            return _useDirectConstruction
+            return verdict == UsePlanDirect
                 ? plan.ExecuteDirect((TMessage)message, context, serviceProvider)
                 : plan.Execute((TMessage)message, context, serviceProvider);
         }
@@ -66,19 +107,25 @@ internal sealed class StagedResultPipelineExecutor<TMessage, TResult>(
                 return cached;
             }
 
-            var dependencies = typedFactory.Create(typeof(TMessage), groups);
+            var dependencies = typedFactory.Create(typeof(TMessage), EmptyGroups);
             _cachedDependencies = dependencies;
-            _useStagedPlan = plan.Composition.ResultAdapterType == _effectiveResultAdapterType
+
+            var useStagedPlan = plan.Composition.ResultAdapterType == _effectiveResultAdapterType
                 && dependencies is MessageDependencies { MemoizedInstances: false } fastDependencies
                 && StagedPlanGate.Matches(fastDependencies, plan.Composition);
-            _useDirectConstruction = _useStagedPlan
-                && plan.SupportsDirectConstruction
-                && StagedPlanGate.AllPlainTransient(typedFactory, plan.Composition);
+
+            _verdict = useStagedPlan
+                ? plan.SupportsDirectConstruction
+                  && StagedPlanGate.AllPlainTransient(typedFactory, plan.Composition)
+                    ? UsePlanDirect
+                    : UsePlan
+                : UseStrategy;
+
             return dependencies;
         }
 
-        _useStagedPlan = false;
-        _useDirectConstruction = false;
-        return dependenciesFactory.Create(typeof(TMessage), groups);
+        // A foreign factory answers per dispatch; see StagedVoidPipelineExecutor.
+        _verdict = UseStrategy;
+        return dependenciesFactory.Create(typeof(TMessage), EmptyGroups);
     }
 }

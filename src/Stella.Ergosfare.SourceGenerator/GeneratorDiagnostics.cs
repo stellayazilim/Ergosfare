@@ -273,4 +273,34 @@ internal static class GeneratorDiagnostics
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    /// <summary>
+    ///     A generic handler or interceptor whose contract names a bare type parameter as
+    ///     its message. It registers like any other participant and then binds to nothing:
+    ///     participants are matched to messages by concrete type, and a concrete message
+    ///     carries no generic arguments to close this participant over.
+    /// </summary>
+    /// <remarks>
+    ///     Deliberately narrow. A generic participant whose contract's message type is built
+    ///     from its own type parameters — a handler for a generic message — binds fine and
+    ///     draws nothing: the table keys that message by its definition and the dispatch
+    ///     closes the participant over the message's own arguments.
+    ///     <para>
+    ///     A warning rather than an error because the type is legal and may serve some other
+    ///     purpose; but a validation or authorization interceptor that silently never runs is
+    ///     the worst shape this takes, which is why it is not merely informational.
+    ///     </para>
+    /// </remarks>
+    internal static readonly DiagnosticDescriptor GenericParticipantNeverBinds = new(
+        id: "ERGOSG016",
+        title: "Generic participant over an open message type binds to nothing and never executes",
+        messageFormat:
+            "'{0}' takes its message as a type parameter, so no pipeline can bind it: participants are matched to " +
+            "messages by concrete type, and a concrete message carries no generic arguments to close this one over. " +
+            "It is registered but never runs. Declare the participant over the message type (or a base contract such " +
+            "as ICommand) instead. A generic participant for a generic message — one whose contract is built from its " +
+            "own type parameters — is unaffected and binds normally.",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 }

@@ -680,6 +680,7 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
             ExcludedInterceptorGroups = GetPipelineExclusionGroups(symbol),
             IsValueType = symbol.IsValueType,
             IsNestedType = symbol.ContainingType is not null,
+            IsGenericParticipant = IsUnbindableGenericParticipant(symbol),
             AssignableKeys = isMessageShape ? GetAssignableKeys(symbol) : ImmutableArray<string>.Empty,
             ContractShapes = isAccessible ? BuildContractShapes(symbol) : ImmutableArray<ContractShapeModel>.Empty,
             StagedConstructionExpression = stagedConstruction,
@@ -750,6 +751,7 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
             ExcludedInterceptorGroups = GetPipelineExclusionGroups(symbol),
             IsValueType = symbol.IsValueType,
             IsNestedType = symbol.ContainingType is not null,
+            IsGenericParticipant = IsUnbindableGenericParticipant(symbol),
             AssignableKeys = isMessageShape ? GetAssignableKeys(symbol) : ImmutableArray<string>.Empty,
             ContractShapes = ImmutableArray<ContractShapeModel>.Empty,
             StagedConstructionExpression = null,
@@ -1967,6 +1969,7 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
             ExcludedInterceptorGroups = GetPipelineExclusionGroups(symbol),
             IsValueType = symbol.IsValueType,
             IsNestedType = symbol.ContainingType is not null,
+            IsGenericParticipant = IsUnbindableGenericParticipant(symbol),
             AssignableKeys = isMessageShape ? GetAssignableKeys(symbol) : ImmutableArray<string>.Empty,
             ContractShapes = isAccessible ? BuildContractShapes(symbol) : ImmutableArray<ContractShapeModel>.Empty,
             StagedConstructionExpression = referencedStagedConstruction,
@@ -3350,6 +3353,16 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 continue;
             }
 
+            // Ahead of the informational ones: a participant that never runs makes every
+            // finding about how it would be constructed moot.
+            if (model.IsGenericParticipant)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    GeneratorDiagnostics.GenericParticipantNeverBinds,
+                    model.InfoLocation?.ToLocation(),
+                    model.DisplayName));
+            }
+
             if (model.HasMultiplePublicConstructors)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
@@ -3730,6 +3743,49 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
     ///     reference the type. Private/protected members of other types and file-local
     ///     types cannot be named from the generated file.
     /// </summary>
+    /// <summary>
+    ///     Whether a generic participant is one no message can bind.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///     A generic participant binds when its contract's message type is built from its
+    ///     own type parameters — <c>WrapHandler&lt;T&gt; : ICommandHandler&lt;Wrap&lt;T&gt;&gt;</c>.
+    ///     The table then keys the message by its definition and names the participant by
+    ///     its unbound <c>typeof</c>, and the dispatch closes the participant over the
+    ///     dispatched message's own generic arguments (<c>FrozenComposition.Close</c>). One
+    ///     baked entry serves every instantiation.
+    ///     </para>
+    ///     <para>
+    ///     It binds to nothing when the contract's message type is the type parameter
+    ///     itself — <c>ValidateCommands&lt;TCommand&gt; : ICommandPreInterceptor&lt;TCommand&gt;</c>.
+    ///     The message is then any concrete command, which carries no generic arguments to
+    ///     close the participant over, and participants are matched to messages by concrete
+    ///     type, so no message's stage arrays ever contain it.
+    ///     </para>
+    /// </remarks>
+    private static bool IsUnbindableGenericParticipant(INamedTypeSymbol symbol)
+    {
+        if (symbol.Arity == 0)
+        {
+            return false;
+        }
+
+        foreach (var iface in symbol.AllInterfaces)
+        {
+            if (iface.Arity is not (1 or 2) || !IsInNamespace(iface, HandlerContractNamespace))
+            {
+                continue;
+            }
+
+            if (iface.TypeArguments[0] is ITypeParameterSymbol)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static bool IsAccessibleFromGeneratedCode(INamedTypeSymbol symbol)
     {
         for (var current = symbol; current is not null; current = current.ContainingType)

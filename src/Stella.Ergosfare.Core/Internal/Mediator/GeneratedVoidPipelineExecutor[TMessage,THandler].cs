@@ -20,13 +20,21 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// </summary>
 internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
     IMessageDependenciesFactory dependenciesFactory,
-    string[] groups,
     Func<THandler>? directHandlerFactory = null,
     Func<IServiceProvider, THandler>? providerHandlerFactory = null) : IPipelineExecutor
     where TMessage : IMessage
     where THandler : class, IAsyncHandler<TMessage>
 {
+    private static readonly string[] EmptyGroups = [];
+
     private readonly SingleAsyncHandlerMediationStrategy<TMessage> _strategy = new();
+
+    /// <summary>
+    /// The plain pipeline this executor becomes under a group filter. The plan names one
+    /// handler as the whole pipeline; a filter may exclude that handler or admit another,
+    /// so a filtered dispatch wants the runtime shape and its resolution ladder.
+    /// </summary>
+    private readonly VoidPipelineExecutor<TMessage> _filtered = new(dependenciesFactory);
 
     // Whether the pipeline's Unit slot has an effective adapter — the attribute tiers
     // plus the container's default, resolved once on the first dispatch, so the fast
@@ -59,8 +67,14 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
     // constructed and invoked without touching dependencies at all.
     private bool _fastDirect;
 
-    public ValueTask Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider)
+    public ValueTask Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider,
+        IEnumerable<string>? groups)
     {
+        if (groups is not null)
+        {
+            return _filtered.Execute(message, context, serviceProvider, groups);
+        }
+
         if (_fastDirect)
         {
             var direct = _directHandlerFactory is not null ? _directHandlerFactory() : _providerHandlerFactory!(serviceProvider);
@@ -126,7 +140,7 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
                 return cached;
             }
 
-            var dependencies = typedFactory.Create(typeof(TMessage), groups);
+            var dependencies = typedFactory.Create(typeof(TMessage), EmptyGroups);
             var fastDependencies = dependencies as MessageDependencies;
             _cachedFastDependencies = fastDependencies;
             _cachedDependencies = dependencies;
@@ -141,6 +155,6 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
         }
 
         _useDirectConstruction = false;
-        return dependenciesFactory.Create(typeof(TMessage), groups);
+        return dependenciesFactory.Create(typeof(TMessage), EmptyGroups);
     }
 }

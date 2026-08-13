@@ -1,31 +1,34 @@
 using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
-using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.StagedPlans;
-using Stella.Ergosfare.Core.Abstractions.Strategies;
 
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 /// <summary>
-/// Process-wide cache of pipeline executors, one per (message runtime type, result type,
-/// group set). Executor construction closes the generic executor over the message's runtime
-/// type — one <see cref="Type.MakeGenericType"/> per message type, consistent with the
-/// pipeline plan premise that all dispatch-shape work happens once per message type.
+/// One container's table of message pipelines, keyed by message type and — for the
+/// result-producing ones — result type. The sending counterpart of the broadcast and stream
+/// tables, and the same shape as both.
 /// </summary>
+/// <remarks>
+/// <para>
+/// The group filter is deliberately absent from every key here. It used to be part of an
+/// executor's identity, which cost two extra dictionaries (one per shape, keyed by a joined
+/// group string) and made a plan a construction-time decision — a plan could only be given
+/// to an executor that had been built for the unfiltered pipeline. The filter is a dispatch
+/// argument now: one executor per message type serves every filter and chooses its
+/// composition per call, exactly as the publishing table's dispatches always have.
+/// </para>
+/// <para>
+/// What is left is the lookup itself: one dictionary per shape, plus the last-used result
+/// slot and the static-generic holder that skip even that.
+/// </para>
+/// </remarks>
 internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependenciesFactory)
 {
-    internal static readonly string[] EmptyGroups = [];
-
-    private readonly ConcurrentDictionary<(Type MessageType, string GroupsKey), IPipelineExecutor> _voidExecutors = new();
-    private readonly ConcurrentDictionary<(Type MessageType, Type ResultType, string GroupsKey), object> _resultExecutors = new();
-
-    // Group-less dispatch (the overwhelmingly common case) is keyed by message type alone:
-    // no group materialization, no composite-key hashing on the hot path.
     private readonly ConcurrentDictionary<Type, IPipelineExecutor> _voidExecutorsByType = new();
     private readonly ConcurrentDictionary<(Type MessageType, Type ResultType), object> _resultExecutorsByType = new();
 
@@ -46,41 +49,19 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
         public readonly object Executor = executor;
     }
 
-    // Last-used grouped executor per message type: an ordinal element-wise compare of the
-    // caller's group sequence against the slot's snapshot replaces the per-dispatch group
-    // materialization and joined-string key of the composite stores — the overwhelmingly
-    // common grouped caller dispatches one message type with one stable group set. A slot
-    // miss falls back to the composite store, which stays authoritative so executor
-    // identity (and its dependency cache) is preserved when group sets alternate.
-    private readonly ConcurrentDictionary<Type, GroupedVoidExecutorSlot> _groupedVoidSlotsByType = new();
-    private readonly ConcurrentDictionary<Type, GroupedResultExecutorSlot> _groupedResultSlotsByType = new();
-
-    /// <summary>Immutable (groups, executor) pair; see <see cref="ResultExecutorSlot"/> for the refresh contract.</summary>
-    private sealed class GroupedVoidExecutorSlot(string[] groups, GroupSet? canonical, IPipelineExecutor executor)
-    {
-        public readonly string[] Groups = groups;
-        public readonly GroupSet? Canonical = canonical;
-        public readonly IPipelineExecutor Executor = executor;
-    }
-
-    /// <summary>Immutable (groups, result type, executor) triple; see <see cref="ResultExecutorSlot"/>.</summary>
-    private sealed class GroupedResultExecutorSlot(string[] groups, GroupSet? canonical, Type resultType, object executor)
-    {
-        public readonly string[] Groups = groups;
-        public readonly GroupSet? Canonical = canonical;
-        public readonly Type ResultType = resultType;
-        public readonly object Executor = executor;
-    }
-
     /// <summary>
-    /// Group-less void executor lookup for a compile-time-known message type: a
-    /// static-generic slot replaces the dictionary lookup with a field read and a cache
-    /// identity check. The slot is keyed by this cache instance, so containers stay
-    /// isolated — a foreign cache's executor is never served, and the authoritative
-    /// per-type dictionary below preserves executor identity across slot refreshes.
-    /// Callers must guard with <c>message.GetType() == typeof(TMessage)</c>; a base-typed
-    /// generic call must keep resolving by the runtime type.
+    /// Void executor lookup for a compile-time-known message type: a static-generic slot
+    /// replaces the dictionary lookup with a field read and a table identity check. The
+    /// slot is keyed by this table instance, so containers stay isolated — a foreign
+    /// table's executor is never served, and the authoritative per-type dictionary below
+    /// preserves executor identity across slot refreshes. Callers must guard with
+    /// <c>message.GetType() == typeof(TMessage)</c>; a base-typed generic call must keep
+    /// resolving by the runtime type.
     /// </summary>
+    /// <remarks>
+    /// Group-filtered dispatches reach this too, now that the filter is not part of an
+    /// executor's identity — the slot answers for every filter because the executor does.
+    /// </remarks>
     public IPipelineExecutor GetVoidExecutor<TMessage>() where TMessage : IMessage
     {
         var slot = VoidExecutorHolder<TMessage>.Slot;
@@ -123,93 +104,29 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
         public static VoidExecutorSlot? Slot;
     }
 
-    public IPipelineExecutor GetVoidExecutor(Type messageType, IEnumerable<string>? groups = null)
+    public IPipelineExecutor GetVoidExecutor(Type messageType)
+        => _voidExecutorsByType.TryGetValue(messageType, out var executor)
+            ? executor
+            : _voidExecutorsByType.GetOrAdd(messageType,
+                static (t, cache) => cache.CreateVoidExecutor(t), this);
+
+    public IPipelineExecutor<TResult> GetExecutor<TResult>(Type messageType)
     {
-        if (groups is null)
-        {
-            if (_voidExecutorsByType.TryGetValue(messageType, out var fast))
-            {
-                return fast;
-            }
-
-            return _voidExecutorsByType.GetOrAdd(messageType,
-                static (t, cache) => cache.CreateVoidExecutor(t, EmptyGroups), this);
-        }
-
-        // Deliberate: groups is matched allocation-free first and only materialized on a slot miss.
-        // ReSharper disable once PossibleMultipleEnumeration
-        if (_groupedVoidSlotsByType.TryGetValue(messageType, out var slot)
-            && GroupSlotMatch.Matches(groups, slot.Groups, slot.Canonical))
-        {
-            return slot.Executor;
-        }
-
-        // A canonical set contributes its immutable name array and precomputed key
-        // directly — the refresh allocates nothing for it.
-        var canonical = groups as GroupSet;
-        // ReSharper disable once PossibleMultipleEnumeration
-        var materializedGroups = canonical?.Names ?? MaterializeGroups(groups);
-        var key = (messageType, canonical?.JoinedKey ?? GroupsKey(materializedGroups));
-
-        if (!_voidExecutors.TryGetValue(key, out var executor))
-        {
-            executor = _voidExecutors.GetOrAdd(key,
-                static (k, state) => state.Cache.CreateVoidExecutor(k.MessageType, state.Groups),
-                (Cache: this, Groups: materializedGroups));
-        }
-
-        _groupedVoidSlotsByType[messageType] = new GroupedVoidExecutorSlot(materializedGroups, canonical, executor);
-
-        return executor;
-    }
-
-    public IPipelineExecutor<TResult> GetExecutor<TResult>(Type messageType, IEnumerable<string>? groups = null)
-    {
-        if (groups is null)
-        {
-            if (_resultSlotsByType.TryGetValue(messageType, out var slot)
-                && ReferenceEquals(slot.ResultType, typeof(TResult)))
-            {
-                // Slot entries are only ever created as IPipelineExecutor<TResult> for
-                // their recorded result type, so the interface cast can skip the runtime
-                // covariance check — a measurable cost on the hot path.
-                return Unsafe.As<IPipelineExecutor<TResult>>(slot.Executor);
-            }
-
-            return GetExecutorSlow<TResult>(messageType);
-        }
-
-        // Deliberate: groups is matched allocation-free first and only materialized on a slot miss.
-        // ReSharper disable once PossibleMultipleEnumeration
-        if (_groupedResultSlotsByType.TryGetValue(messageType, out var groupedSlot)
-            && ReferenceEquals(groupedSlot.ResultType, typeof(TResult))
-            && GroupSlotMatch.Matches(groups, groupedSlot.Groups, groupedSlot.Canonical))
+        if (_resultSlotsByType.TryGetValue(messageType, out var slot)
+            && ReferenceEquals(slot.ResultType, typeof(TResult)))
         {
             // Slot entries are only ever created as IPipelineExecutor<TResult> for their
-            // recorded result type; see the group-less slot above.
-            return Unsafe.As<IPipelineExecutor<TResult>>(groupedSlot.Executor);
+            // recorded result type, so the interface cast can skip the runtime covariance
+            // check — a measurable cost on the hot path.
+            return Unsafe.As<IPipelineExecutor<TResult>>(slot.Executor);
         }
 
-        var canonical = groups as GroupSet;
-        // ReSharper disable once PossibleMultipleEnumeration
-        var materializedGroups = canonical?.Names ?? MaterializeGroups(groups);
-        var key = (messageType, typeof(TResult), canonical?.JoinedKey ?? GroupsKey(materializedGroups));
-
-        if (!_resultExecutors.TryGetValue(key, out var executor))
-        {
-            executor = _resultExecutors.GetOrAdd(key,
-                static (k, state) => state.Cache.CreateResultExecutor(k.MessageType, k.ResultType, state.Groups),
-                (Cache: this, Groups: materializedGroups));
-        }
-
-        _groupedResultSlotsByType[messageType] = new GroupedResultExecutorSlot(materializedGroups, canonical, typeof(TResult), executor);
-
-        return (IPipelineExecutor<TResult>)executor;
+        return GetExecutorSlow<TResult>(messageType);
     }
 
     /// <summary>
-    /// Slot miss for the group-less result dispatch: resolve (or create) the executor in
-    /// the authoritative composite store, then refresh the message type's last-used slot.
+    /// Slot miss for the result dispatch: resolve (or create) the executor in the
+    /// authoritative composite store, then refresh the message type's last-used slot.
     /// Rare by construction — first dispatch per message type, or alternating result
     /// types on one message type.
     /// </summary>
@@ -217,48 +134,34 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
     {
         var executor = (IPipelineExecutor<TResult>)_resultExecutorsByType.GetOrAdd(
             (messageType, typeof(TResult)),
-            static (k, cache) => cache.CreateResultExecutor(k.MessageType, k.ResultType, EmptyGroups), this);
+            static (k, cache) => cache.CreateResultExecutor(k.MessageType, k.ResultType), this);
 
         _resultSlotsByType[messageType] = new ResultExecutorSlot(typeof(TResult), executor);
 
         return executor;
     }
 
-    private static string GroupsKey(string[] groups)
-        => groups.Length == 0 ? string.Empty : string.Join('\x1f', groups);
-
-    /// <summary>
-    /// Snapshots the caller's group sequence exactly once: the same array both builds the
-    /// cache key and flows into the executor, so a lazy or unstable enumerable can never
-    /// produce a key that disagrees with the groups the cached executor was built with.
-    /// </summary>
-    private static string[] MaterializeGroups(IEnumerable<string>? groups)
-        => groups is null ? EmptyGroups : [.. groups];
-
-    private IPipelineExecutor CreateVoidExecutor(Type messageType, string[] groups)
+    private IPipelineExecutor CreateVoidExecutor(Type messageType)
     {
         // Staged plan: bespoke code for the whole interceptor-bearing pipeline. Checked
         // before the single-handler plan — generation emits at most one plan kind per
-        // message, and the staged one is the more specific claim. Group-less pipelines
-        // only, like every plan below.
-        if (groups.Length == 0 && GeneratedDispatchRoots.FindStagedVoidPlan(messageType) is { } stagedPlan)
+        // message, and the staged one is the more specific claim. A plan is baked against
+        // the unfiltered composition; the executor it hosts falls back to the plain shape
+        // for a filtered dispatch rather than the table having to hand out a different one.
+        if (GeneratedDispatchRoots.FindStagedVoidPlan(messageType) is { } stagedPlan)
         {
             return stagedPlan.Accept(
                 StagedVoidExecutorVisitor.Instance,
-                new ExecutorState(dependenciesFactory, groups,
-                    StagedPlan: stagedPlan));
+                new ExecutorState(dependenciesFactory, StagedPlan: stagedPlan));
         }
 
         // Generated void plan: closed over (message, handler) at compile time, so the
-        // fast path calls the handler devirtualized. Group-less pipelines only — a
-        // grouped pipeline may exclude the planned handler, and the plain executor
-        // serves that shape without the plan's permanently-missing fast check.
-        if (groups.Length == 0 && GeneratedDispatchRoots.FindVoidPlan(messageType) is { } plan)
+        // fast path calls the handler devirtualized.
+        if (GeneratedDispatchRoots.FindVoidPlan(messageType) is { } plan)
         {
             return plan.Accept(
                 GeneratedVoidExecutorVisitor.Instance,
-                new ExecutorState(dependenciesFactory, groups,
-                    plan.DirectHandlerFactory));
+                new ExecutorState(dependenciesFactory, plan.DirectHandlerFactory));
         }
 
         // No plan claimed the message: the plain executor, closed over the generated root
@@ -266,40 +169,37 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
         return DispatchLookup.OverMessage(
             messageType,
             VoidExecutorVisitor.Instance,
-            new ExecutorState(dependenciesFactory, groups),
+            new ExecutorState(dependenciesFactory),
             typeof(VoidPipelineExecutor<>),
-            [dependenciesFactory, groups]);
+            [dependenciesFactory]);
     }
 
-    private object CreateResultExecutor(Type messageType, Type resultType, string[] groups)
+    private object CreateResultExecutor(Type messageType, Type resultType)
     {
         // Staged plan first, mirroring the void side.
-        if (groups.Length == 0 && GeneratedDispatchRoots.FindStagedResultPlan(messageType, resultType) is { } stagedPlan)
+        if (GeneratedDispatchRoots.FindStagedResultPlan(messageType, resultType) is { } stagedPlan)
         {
             return stagedPlan.Accept(
                 StagedResultExecutorVisitor.Instance,
-                new ExecutorState(dependenciesFactory, groups,
-                    StagedPlan: stagedPlan));
+                new ExecutorState(dependenciesFactory, StagedPlan: stagedPlan));
         }
 
         // Generated result plan: closed over (message, result, handler) at compile time,
-        // so the fast path calls the handler devirtualized. Group-less pipelines only,
-        // mirroring the void plan above.
-        if (groups.Length == 0 && GeneratedDispatchRoots.FindResultPlan(messageType, resultType) is { } plan)
+        // so the fast path calls the handler devirtualized.
+        if (GeneratedDispatchRoots.FindResultPlan(messageType, resultType) is { } plan)
         {
             return plan.Accept(
                 GeneratedResultExecutorVisitor.Instance,
-                new ExecutorState(dependenciesFactory, groups,
-                    plan.DirectHandlerFactory));
+                new ExecutorState(dependenciesFactory, plan.DirectHandlerFactory));
         }
 
         return DispatchLookup.OverResult(
             messageType,
             resultType,
             ResultExecutorVisitor.Instance,
-            new ExecutorState(dependenciesFactory, groups),
+            new ExecutorState(dependenciesFactory),
             typeof(ResultPipelineExecutor<,>),
-            [dependenciesFactory, groups]);
+            [dependenciesFactory]);
     }
 
     /// <summary>
@@ -312,7 +212,6 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
     /// </summary>
     private readonly record struct ExecutorState(
         IMessageDependenciesFactory DependenciesFactory,
-        string[] Groups,
         object? DirectHandlerFactory = null,
         object? StagedPlan = null);
 
@@ -325,8 +224,7 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
         public static readonly VoidExecutorVisitor Instance = new();
 
         public IPipelineExecutor Visit<TMessage>(ExecutorState state) where TMessage : IMessage
-            => new VoidPipelineExecutor<TMessage>(
-                state.DependenciesFactory, state.Groups);
+            => new VoidPipelineExecutor<TMessage>(state.DependenciesFactory);
     }
 
     /// <summary>Result-executor counterpart of <see cref="VoidExecutorVisitor"/>.</summary>
@@ -335,8 +233,7 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
         public static readonly ResultExecutorVisitor Instance = new();
 
         public object Visit<TMessage, TResult>(ExecutorState state) where TMessage : IMessage
-            => new ResultPipelineExecutor<TMessage, TResult>(
-                state.DependenciesFactory, state.Groups);
+            => new ResultPipelineExecutor<TMessage, TResult>(state.DependenciesFactory);
     }
 
     /// <summary>
@@ -352,7 +249,7 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
             where TMessage : IMessage
             where THandler : class, IAsyncHandler<TMessage>
             => new GeneratedVoidPipelineExecutor<TMessage, THandler>(
-                state.DependenciesFactory, state.Groups,
+                state.DependenciesFactory,
                 state.DirectHandlerFactory as Func<THandler>,
                 state.DirectHandlerFactory as Func<IServiceProvider, THandler>);
     }
@@ -370,7 +267,7 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
             where TMessage : IMessage
             where THandler : class, IAsyncHandler<TMessage, TResult>
             => new GeneratedResultPipelineExecutor<TMessage, TResult, THandler>(
-                state.DependenciesFactory, state.Groups,
+                state.DependenciesFactory,
                 state.DirectHandlerFactory as Func<THandler>,
                 state.DirectHandlerFactory as Func<IServiceProvider, THandler>);
     }
@@ -386,7 +283,7 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
         public IPipelineExecutor Visit<TMessage>(ExecutorState state)
             where TMessage : IMessage
             => new StagedVoidPipelineExecutor<TMessage>(
-                state.DependenciesFactory, state.Groups,
+                state.DependenciesFactory,
                 (StagedVoidPlan<TMessage>)state.StagedPlan!);
     }
 
@@ -398,8 +295,7 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
         public object Visit<TMessage, TResult>(ExecutorState state)
             where TMessage : IMessage
             => new StagedResultPipelineExecutor<TMessage, TResult>(
-                state.DependenciesFactory, state.Groups,
+                state.DependenciesFactory,
                 (StagedResultPlan<TMessage, TResult>)state.StagedPlan!);
     }
-
 }
