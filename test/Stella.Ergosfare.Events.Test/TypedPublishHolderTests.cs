@@ -86,11 +86,11 @@ public class TypedPublishHolderTests
         // The variable's static type closes the generic overload over BaseEvent; the
         // holder guard must reject it and resolve the DerivedEvent pipeline instead.
         BaseEvent @event = new DerivedEvent();
-        var settings = new Dictionary<object, object?>();
+        var settings = new ErgosfareContext();
 
         await mediator.PublishAsync(@event, settings);
 
-        Assert.Equal(true, settings["derivedRan"]);
+        Assert.Equal(true, settings.Items["derivedRan"]);
     }
 
     [Fact]
@@ -105,10 +105,10 @@ public class TypedPublishHolderTests
 
         var mediator = provider.GetRequiredService<IEventMediator>();
 
-        var settings = new Dictionary<object, object?>();
+        var settings = new ErgosfareContext();
 
         await mediator.PublishAsync(new DerivedEvent(), settings);
 
-        Assert.Equal(true, settings["derivedRan"]);
+        Assert.Equal(true, settings.Items["derivedRan"]);
     }
 }

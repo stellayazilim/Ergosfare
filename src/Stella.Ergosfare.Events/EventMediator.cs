@@ -47,20 +47,20 @@ public class EventMediator : IPublisher
     }
 
     /// <inheritdoc />
-    public ValueTask PublishAsync(IEvent @event, IEnumerable<string>? groups, IDictionary<object, object?>? items,
-        bool throwIfNoHandlerFound, CancellationToken cancellationToken)
+    public ValueTask PublishAsync(IEvent @event, IEnumerable<string>? groups, bool throwIfNoHandlerFound,
+        CancellationToken cancellationToken)
         => _engine.BroadcastAsync(
-            @event, _serviceProvider, items, cancellationToken, groups, throwIfNoHandlerFound);
+            @event, _serviceProvider, cancellationToken, groups, throwIfNoHandlerFound);
 
     /// <inheritdoc />
-    public ValueTask PublishAsync<TEvent>(TEvent @event, IEnumerable<string>? groups, IDictionary<object, object?>? items,
-        bool throwIfNoHandlerFound, CancellationToken cancellationToken)
+    public ValueTask PublishAsync<TEvent>(TEvent @event, IEnumerable<string>? groups, bool throwIfNoHandlerFound,
+        CancellationToken cancellationToken)
         where TEvent : notnull
         // The typed entry: when the runtime type is exactly TEvent (the overwhelmingly common
         // typed publish) the pipeline comes from a static-generic slot instead of the
         // type-keyed dictionary. The engine applies that guard itself.
         => _engine.BroadcastAsync<TEvent>(
-            @event, _serviceProvider, items, cancellationToken, groups, throwIfNoHandlerFound);
+            @event, _serviceProvider, cancellationToken, groups, throwIfNoHandlerFound);
 
     /// <inheritdoc />
     public ValueTask PublishAsync(IEvent @event, ErgosfareContext context, IEnumerable<string>? groups = null,
@@ -75,34 +75,25 @@ public class EventMediator : IPublisher
     /// this class.
     /// </remarks>
     public ValueTask PublishAsync(IEvent @event, CancellationToken cancellationToken = default)
-        => PublishAsync(@event, null, null, false, cancellationToken);
+        => PublishAsync(@event, (IEnumerable<string>?)null, false, cancellationToken);
 
-    /// <summary>Publishes with contextual items the handlers can read and write.</summary>
-    public ValueTask PublishAsync(IEvent @event, IDictionary<object, object?> items,
-        CancellationToken cancellationToken = default)
-        => PublishAsync(@event, null, items, false, cancellationToken);
 
     /// <summary>Publishes under a canonical group filter.</summary>
     public ValueTask PublishAsync(IEvent @event, GroupSet groups, CancellationToken cancellationToken = default)
-        => PublishAsync(@event, groups.Count == 0 ? null : groups, null, false, cancellationToken);
+        => PublishAsync(@event, groups.Count == 0 ? null : (IEnumerable<string>?)groups, false, cancellationToken);
 
     /// <summary>Publishes under a group filter given as a plain array.</summary>
     public ValueTask PublishAsync(IEvent @event, string[] groups, CancellationToken cancellationToken = default)
-        => PublishAsync(@event, groups, null, false, cancellationToken);
+        => PublishAsync(@event, (IEnumerable<string>?)groups, false, cancellationToken);
 
     /// <summary>Typed counterpart of <see cref="PublishAsync(IEvent, CancellationToken)"/>.</summary>
     public ValueTask PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
         where TEvent : notnull
-        => PublishAsync(@event, null, null, false, cancellationToken);
+        => PublishAsync(@event, (IEnumerable<string>?)null, false, cancellationToken);
 
-    /// <summary>Typed counterpart of the contextual-items overload.</summary>
-    public ValueTask PublishAsync<TEvent>(TEvent @event, IDictionary<object, object?> items,
-        CancellationToken cancellationToken = default)
-        where TEvent : notnull
-        => PublishAsync(@event, null, items, false, cancellationToken);
 
     /// <summary>Typed counterpart of the canonical group-filter overload.</summary>
     public ValueTask PublishAsync<TEvent>(TEvent @event, GroupSet groups, CancellationToken cancellationToken = default)
         where TEvent : notnull
-        => PublishAsync(@event, groups.Count == 0 ? null : groups, null, false, cancellationToken);
+        => PublishAsync(@event, groups.Count == 0 ? null : (IEnumerable<string>?)groups, false, cancellationToken);
 }

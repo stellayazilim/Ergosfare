@@ -37,13 +37,13 @@ public class DispatchItemsAndInvalidationTests
         await using var _ = provider;
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
-        var settings = new Dictionary<object, object?>();
-        settings["keep"] = "me";
+        var settings = new ErgosfareContext();
+        settings.Items["keep"] = "me";
 
         await mediator.SendAsync(new ItemsCommand(), settings);
 
-        Assert.Equal("me", settings["keep"]);
-        Assert.Equal("yes", settings["writtenByHandler"]);
+        Assert.Equal("me", settings.Items["keep"]);
+        Assert.Equal("yes", settings.Items["writtenByHandler"]);
     }
 
     [Fact]
@@ -58,17 +58,17 @@ public class DispatchItemsAndInvalidationTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        var first = new Dictionary<object, object?>();
-        first["secret"] = "data";
+        var first = new ErgosfareContext();
+        first.Items["secret"] = "data";
         await mediator.SendAsync(new ItemsCommand(), first);
 
-        var second = new Dictionary<object, object?>();
+        var second = new ErgosfareContext();
         await mediator.SendAsync(new ItemsCommand(), second);
 
         // The second dispatch's pooled context must not surface the first caller's items,
         // and writing during the second dispatch must not reach the first caller.
-        Assert.False(second.ContainsKey("secret"));
-        Assert.Equal("data", first["secret"]);
+        Assert.False(second.Items.ContainsKey("secret"));
+        Assert.Equal("data", first.Items["secret"]);
     }
 
     public sealed class LateInterceptedCommand : ICommand { }

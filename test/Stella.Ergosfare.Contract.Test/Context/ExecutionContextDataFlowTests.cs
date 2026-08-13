@@ -123,13 +123,13 @@ public sealed class ExecutionContextDataFlowTests
     public async Task The_callers_items_survive_the_dispatch_and_expose_what_stages_wrote()
     {
         await using var provider = CreateProvider();
-        var settings = new Dictionary<object, object?>();
-        settings["caller-owned"] = "kept";
+        var settings = new ErgosfareContext();
+        settings.Items["caller-owned"] = "kept";
 
         await provider.GetRequiredService<ICommandMediator>().SendAsync(new Carrier(), settings);
 
-        Assert.Equal("kept", settings["caller-owned"]);
-        Assert.Equal("yes", settings[WrittenByHandler]);
+        Assert.Equal("kept", settings.Items["caller-owned"]);
+        Assert.Equal("yes", settings.Items[WrittenByHandler]);
     }
 
     [Fact]
@@ -139,15 +139,15 @@ public sealed class ExecutionContextDataFlowTests
         await using var provider = CreateProvider();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        var first = new Dictionary<object, object?>();
-        first["secret"] = "data";
+        var first = new ErgosfareContext();
+        first.Items["secret"] = "data";
         await mediator.SendAsync(new Carrier(), first);
 
-        var second = new Dictionary<object, object?>();
+        var second = new ErgosfareContext();
         await mediator.SendAsync(new Carrier(), second);
 
-        Assert.False(second.ContainsKey("secret"));
-        Assert.Equal("data", first["secret"]);
+        Assert.False(second.Items.ContainsKey("secret"));
+        Assert.Equal("data", first.Items["secret"]);
     }
 
     // --- a nested dispatch that aborts ------------------------------------------

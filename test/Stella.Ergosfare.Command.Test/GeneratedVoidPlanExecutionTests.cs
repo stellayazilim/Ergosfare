@@ -45,13 +45,13 @@ public class GeneratedVoidPlanExecutionTests
         await using var _ = provider;
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
-        var settings = new Dictionary<object, object?>();
-        settings["keep"] = "me";
+        var settings = new ErgosfareContext();
+        settings.Items["keep"] = "me";
 
         await mediator.SendAsync(new PlannedCommand(), settings);
 
-        Assert.Equal("me", settings["keep"]);
-        Assert.Equal(true, settings["plannedRan"]);
+        Assert.Equal("me", settings.Items["keep"]);
+        Assert.Equal(true, settings.Items["plannedRan"]);
     }
 
     [ExcludeFromDiscovery]
@@ -109,10 +109,10 @@ public class GeneratedVoidPlanExecutionTests
         await using var _ = provider;
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
-        var settings = new Dictionary<object, object?>();
+        var settings = new ErgosfareContext();
 
         await mediator.SendAsync(new MismatchedCommand(), settings);
 
-        Assert.Equal(true, settings["actualRan"]);
+        Assert.Equal(true, settings.Items["actualRan"]);
     }
 }

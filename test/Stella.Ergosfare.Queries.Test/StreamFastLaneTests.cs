@@ -53,16 +53,16 @@ public class StreamFastLaneTests
         // yield the full sequence and surface handler writes through the settings items.
         for (var i = 0; i < 2; i++)
         {
-            var settings = new Dictionary<object, object?>();
+            var context = new ErgosfareContext();
             var items = new List<int>();
 
-            await foreach (var item in mediator.StreamAsync(new NumberStream(), null, settings, CancellationToken.None))
+            await foreach (var item in mediator.StreamAsync(new NumberStream(), context, null))
             {
                 items.Add(item);
             }
 
             Assert.Equal([1, 2, 3], items);
-            Assert.Equal(true, settings["streamRan"]);
+            Assert.Equal(true, context.Items["streamRan"]);
         }
     }
 

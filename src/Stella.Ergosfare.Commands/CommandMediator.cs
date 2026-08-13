@@ -55,17 +55,17 @@ public class CommandMediator : ICommandMediator
 
     /// <inheritdoc />
     public ValueTask SendAsync(ICommand commandConstruct, IEnumerable<string>? groups,
-        IDictionary<object, object?>? items, CancellationToken cancellationToken)
+        CancellationToken cancellationToken)
         => _engine is not null
-            ? _engine.DispatchAsync(commandConstruct, _serviceProvider!, items, cancellationToken, groups)
-            : _messageMediator!.DispatchAsync(commandConstruct, items, cancellationToken, groups);
+            ? _engine.DispatchAsync(commandConstruct, _serviceProvider!, cancellationToken, groups)
+            : _messageMediator!.DispatchAsync(commandConstruct, null, cancellationToken, groups);
 
     /// <inheritdoc />
     public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct, IEnumerable<string>? groups,
-        IDictionary<object, object?>? items, CancellationToken cancellationToken)
+        CancellationToken cancellationToken)
         => _engine is not null
-            ? _engine.DispatchAsync<TResult>(commandConstruct, _serviceProvider!, items, cancellationToken, groups)
-            : _messageMediator!.DispatchAsync<TResult>(commandConstruct, items, cancellationToken, groups);
+            ? _engine.DispatchAsync<TResult>(commandConstruct, _serviceProvider!, cancellationToken, groups)
+            : _messageMediator!.DispatchAsync<TResult>(commandConstruct, null, cancellationToken, groups);
 
     /// <inheritdoc />
     public ValueTask SendAsync(ICommand commandConstruct, ErgosfareContext context, IEnumerable<string>? groups = null)
@@ -88,29 +88,21 @@ public class CommandMediator : ICommandMediator
     /// this class.
     /// </remarks>
     public ValueTask SendAsync(ICommand commandConstruct, CancellationToken cancellationToken = default)
-        => SendAsync(commandConstruct, null, null, cancellationToken);
+        => SendAsync(commandConstruct, (IEnumerable<string>?)null, cancellationToken);
 
     /// <summary>Result-producing counterpart of the default send.</summary>
     public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct,
         CancellationToken cancellationToken = default)
-        => SendAsync(commandConstruct, null, null, cancellationToken);
+        => SendAsync(commandConstruct, (IEnumerable<string>?)null, cancellationToken);
 
-    /// <summary>Sends with contextual items the pipeline can read and write.</summary>
-    public ValueTask SendAsync(ICommand commandConstruct, IDictionary<object, object?> items,
-        CancellationToken cancellationToken = default)
-        => SendAsync(commandConstruct, null, items, cancellationToken);
 
-    /// <summary>Result-producing counterpart of the contextual-items send.</summary>
-    public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct,
-        IDictionary<object, object?> items, CancellationToken cancellationToken = default)
-        => SendAsync(commandConstruct, null, items, cancellationToken);
 
     /// <summary>Sends under a canonical group filter; an empty set routes to the group-less lane.</summary>
     public ValueTask SendAsync(ICommand commandConstruct, GroupSet groups, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(groups);
 
-        return SendAsync(commandConstruct, groups.Count == 0 ? null : groups, null, cancellationToken);
+        return SendAsync(commandConstruct, groups.Count == 0 ? null : (IEnumerable<string>?)groups, cancellationToken);
     }
 
     /// <summary>Result-producing counterpart of the canonical group-filter send.</summary>
@@ -119,16 +111,16 @@ public class CommandMediator : ICommandMediator
     {
         ArgumentNullException.ThrowIfNull(groups);
 
-        return SendAsync(commandConstruct, groups.Count == 0 ? null : groups, null, cancellationToken);
+        return SendAsync(commandConstruct, groups.Count == 0 ? null : (IEnumerable<string>?)groups, cancellationToken);
     }
 
     /// <summary>Sends under a group filter given as a plain array.</summary>
     public ValueTask SendAsync(ICommand commandConstruct, string[] groups,
         CancellationToken cancellationToken = default)
-        => SendAsync(commandConstruct, groups, null, cancellationToken);
+        => SendAsync(commandConstruct, (IEnumerable<string>?)groups, cancellationToken);
 
     /// <summary>Result-producing counterpart of the array group-filter send.</summary>
     public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct, string[] groups,
         CancellationToken cancellationToken = default)
-        => SendAsync(commandConstruct, groups, null, cancellationToken);
+        => SendAsync(commandConstruct, (IEnumerable<string>?)groups, cancellationToken);
 }

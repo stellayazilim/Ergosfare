@@ -61,18 +61,17 @@ public sealed class MessageDispatchEngine
     /// </summary>
     /// <param name="message">The message to broadcast.</param>
     /// <param name="serviceProvider">The scope provider handlers resolve against.</param>
-    /// <param name="items">Optional contextual items exposed to the pipeline.</param>
     /// <param name="cancellationToken">Cancellation token for the delivery.</param>
     /// <param name="groups">Optional group filters applied to the pipeline.</param>
     /// <param name="throwIfNoHandlerFound">Whether reaching nobody is an error.</param>
     public ValueTask BroadcastAsync(object message, IServiceProvider serviceProvider,
-        IDictionary<object, object?>? items = null, CancellationToken cancellationToken = default,
+        CancellationToken cancellationToken = default,
         IEnumerable<string>? groups = null, bool throwIfNoHandlerFound = false)
     {
         ArgumentNullException.ThrowIfNull(message);
 
         return Rent(
-            _broadcasts.Get(message.GetType()), message, serviceProvider, items, cancellationToken,
+            _broadcasts.Get(message.GetType()), message, serviceProvider, cancellationToken,
             groups, throwIfNoHandlerFound);
     }
 
@@ -83,7 +82,7 @@ public sealed class MessageDispatchEngine
     /// call falls back to resolving by the runtime type.
     /// </summary>
     public ValueTask BroadcastAsync<TMessage>(TMessage message, IServiceProvider serviceProvider,
-        IDictionary<object, object?>? items = null, CancellationToken cancellationToken = default,
+        CancellationToken cancellationToken = default,
         IEnumerable<string>? groups = null, bool throwIfNoHandlerFound = false)
         where TMessage : notnull
     {
@@ -93,7 +92,7 @@ public sealed class MessageDispatchEngine
             ? _broadcasts.Get<TMessage>()
             : _broadcasts.Get(message.GetType());
 
-        return Rent(dispatch, message, serviceProvider, items, cancellationToken, groups, throwIfNoHandlerFound);
+        return Rent(dispatch, message, serviceProvider, cancellationToken, groups, throwIfNoHandlerFound);
     }
 
     /// <summary>
@@ -115,21 +114,34 @@ public sealed class MessageDispatchEngine
     /// observable here and the context cannot go back to the pool.
     /// </summary>
     public IAsyncEnumerable<TResult> StreamAsync<TResult>(object query, IServiceProvider serviceProvider,
-        IDictionary<object, object?>? items = null, CancellationToken cancellationToken = default,
+        CancellationToken cancellationToken = default,
         IEnumerable<string>? groups = null)
     {
         ArgumentNullException.ThrowIfNull(query);
 
         return _streams.Get<TResult>(query.GetType())
-            .Stream(query, items, cancellationToken, serviceProvider, groups);
+            .Stream(query, null, cancellationToken, serviceProvider, groups);
+    }
+
+    /// <summary>
+    /// Streams under a caller-owned context — the shape that lets a caller read back what the
+    /// pipeline wrote. A streaming context is never pooled either way.
+    /// </summary>
+    public IAsyncEnumerable<TResult> StreamAsync<TResult>(object query, ErgosfareContext context,
+        IServiceProvider serviceProvider, IEnumerable<string>? groups = null)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        return _streams.Get<TResult>(query.GetType())
+            .Stream(query, context, context.CancellationToken, serviceProvider, groups);
     }
 
     private static ValueTask Rent(
         BroadcastDispatch dispatch, object message, IServiceProvider serviceProvider,
-        IDictionary<object, object?>? items, CancellationToken cancellationToken,
+        CancellationToken cancellationToken,
         IEnumerable<string>? groups, bool throwIfNoHandlerFound)
     {
-        var context = ErgosfareContextPool.Rent(items, cancellationToken);
+        var context = ErgosfareContextPool.Rent(null, cancellationToken);
         ValueTask task;
 
         try
@@ -170,17 +182,16 @@ public sealed class MessageDispatchEngine
     /// </summary>
     /// <param name="message">The message to dispatch.</param>
     /// <param name="serviceProvider">The scope provider handlers resolve against.</param>
-    /// <param name="items">Optional contextual items exposed to the pipeline.</param>
     /// <param name="cancellationToken">Cancellation token for the dispatch.</param>
     /// <param name="groups">Optional group filters applied to the pipeline.</param>
     public ValueTask DispatchAsync(object message, IServiceProvider serviceProvider,
-        IDictionary<object, object?>? items = null, CancellationToken cancellationToken = default,
+        CancellationToken cancellationToken = default,
         IEnumerable<string>? groups = null)
     {
         ArgumentNullException.ThrowIfNull(message);
 
         var executor = _executorCache.GetVoidExecutor(message.GetType(), groups);
-        var context = ErgosfareContextPool.Rent(items, cancellationToken);
+        var context = ErgosfareContextPool.Rent(null, cancellationToken);
         ValueTask task;
 
         try
@@ -240,10 +251,9 @@ public sealed class MessageDispatchEngine
     /// <typeparam name="TMessage">The compile-time message type.</typeparam>
     /// <param name="message">The message to dispatch.</param>
     /// <param name="serviceProvider">The scope provider handlers resolve against.</param>
-    /// <param name="items">Optional contextual items exposed to the pipeline.</param>
     /// <param name="cancellationToken">Cancellation token for the dispatch.</param>
     public ValueTask DispatchVoidAsync<TMessage>(TMessage message, IServiceProvider serviceProvider,
-        IDictionary<object, object?>? items = null, CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default)
         where TMessage : IMessage
     {
         ArgumentNullException.ThrowIfNull(message);
@@ -251,7 +261,7 @@ public sealed class MessageDispatchEngine
         var executor = message.GetType() == typeof(TMessage)
             ? _executorCache.GetVoidExecutor<TMessage>()
             : _executorCache.GetVoidExecutor(message.GetType());
-        var context = ErgosfareContextPool.Rent(items, cancellationToken);
+        var context = ErgosfareContextPool.Rent(null, cancellationToken);
         ValueTask task;
 
         try
@@ -292,13 +302,13 @@ public sealed class MessageDispatchEngine
     /// </summary>
     /// <typeparam name="TResult">The expected result type of the message.</typeparam>
     public ValueTask<TResult> DispatchAsync<TResult>(object message, IServiceProvider serviceProvider,
-        IDictionary<object, object?>? items = null, CancellationToken cancellationToken = default,
+        CancellationToken cancellationToken = default,
         IEnumerable<string>? groups = null)
     {
         ArgumentNullException.ThrowIfNull(message);
 
         var executor = _executorCache.GetExecutor<TResult>(message.GetType(), groups);
-        var context = ErgosfareContextPool.Rent(items, cancellationToken);
+        var context = ErgosfareContextPool.Rent(null, cancellationToken);
         ValueTask<TResult> task;
 
         try
@@ -343,6 +353,24 @@ public sealed class MessageDispatchEngine
     /// <param name="context">The externally owned execution context.</param>
     /// <param name="serviceProvider">The scope provider handlers resolve against.</param>
     /// <param name="groups">Optional group filters applied to the pipeline.</param>
+    /// <summary>
+    /// Typed counterpart of the context dispatch: the executor comes from the static-generic
+    /// slot when <typeparamref name="TMessage"/> is the message's runtime type. The caller owns
+    /// the context, so nothing is rented and nothing is returned.
+    /// </summary>
+    public ValueTask DispatchVoidAsync<TMessage>(TMessage message, ErgosfareContext context,
+        IServiceProvider serviceProvider, IEnumerable<string>? groups = null)
+        where TMessage : IMessage
+    {
+        ArgumentNullException.ThrowIfNull(message);
+
+        var executor = groups is null && message.GetType() == typeof(TMessage)
+            ? _executorCache.GetVoidExecutor<TMessage>()
+            : _executorCache.GetVoidExecutor(message.GetType(), groups);
+
+        return executor.Execute(message, context, serviceProvider);
+    }
+
     public ValueTask DispatchAsync(object message, ErgosfareContext context, IServiceProvider serviceProvider,
         IEnumerable<string>? groups = null)
     {

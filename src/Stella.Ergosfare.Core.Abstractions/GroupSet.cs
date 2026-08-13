@@ -12,9 +12,9 @@ namespace Stella.Ergosfare.Core.Abstractions;
 /// static readonly GroupSet Reporting = GroupSet.Of("reporting");
 /// await mediator.SendAsync(new BuildDailyReport(), Reporting);
 /// </code>
-/// A <see cref="GroupSet"/> is also an <see cref="IReadOnlyList{T}"/> of its names, so it
-/// can be assigned anywhere a group sequence is accepted
-/// (<c>settings.Filters.Groups = Reporting;</c>) — the caches recognize it there too.
+/// A <see cref="GroupSet"/> is also an <see cref="IReadOnlyList{T}"/> of its names, so it can
+/// be passed anywhere a group sequence is accepted — including the full dispatch overloads
+/// that take one alongside contextual items — and the caches recognize it there too.
 /// </summary>
 /// <remarks>
 /// Interning is bounded: beyond an internal cap, <see cref="Of"/> returns un-interned

@@ -107,8 +107,7 @@ public sealed class GroupFilteringTests
     {
         await using var provider = CreateProvider();
         var recorder = new PipelineRecorder();
-        await provider.GetRequiredService<ICommandMediator>().SendAsync(
-            new ReportingOnly(), [Reporting], recorder.Commands(), CancellationToken.None);
+        await provider.GetRequiredService<ICommandMediator>().SendAsync(new ReportingOnly(), recorder.Commands(), [Reporting]);
 
         recorder.AssertStages("handler:reporting");
     }
@@ -121,7 +120,7 @@ public sealed class GroupFilteringTests
         var mediator = provider.GetRequiredService<ICommandMediator>();
         await Assert.ThrowsAsync<NoHandlerFoundException>(
             async () => await mediator.SendAsync(
-                new Mixed(), new[] { Reporting }, null, CancellationToken.None));
+                new Mixed(), new[] { Reporting }, CancellationToken.None));
     }
 
     [Fact]
@@ -132,12 +131,10 @@ public sealed class GroupFilteringTests
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
         var viaSequence = new PipelineRecorder();
-        await mediator.SendAsync(
-            new ReportingOnly(), new[] { Reporting }, viaSequence.Commands(), CancellationToken.None);
+        await mediator.SendAsync(new ReportingOnly(), viaSequence.Commands(), new[] { Reporting });
 
         var viaGroupSet = new PipelineRecorder();
-        await mediator.SendAsync(
-            new ReportingOnly(), ReportingSet, viaGroupSet.Commands(), CancellationToken.None);
+        await mediator.SendAsync(new ReportingOnly(), viaGroupSet.Commands(), ReportingSet);
 
         Assert.Equal(viaSequence.Stages, viaGroupSet.Stages);
         viaGroupSet.AssertStages("handler:reporting");

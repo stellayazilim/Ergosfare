@@ -65,12 +65,12 @@ public class EngineBackedEventFacadeTests
         Assert.IsAssignableFrom<EventMediator>(mediator);
         Assert.NotEqual(typeof(EventMediator), mediator.GetType());
 
-        var settings = new Dictionary<object, object?>();
+        var settings = new ErgosfareContext();
         await mediator.PublishAsync(new GroupedEvent(), settings);
 
         // A group-less publish serves the default group only.
-        Assert.Equal(true, settings["defaultRan"]);
-        Assert.False(settings.ContainsKey("auditRan"));
+        Assert.Equal(true, settings.Items["defaultRan"]);
+        Assert.False(settings.Items.ContainsKey("auditRan"));
     }
 
     [Fact]
@@ -83,16 +83,15 @@ public class EngineBackedEventFacadeTests
 
         var mediator = provider.GetRequiredService<IEventMediator>();
 
-        var items = new Dictionary<object, object?>();
+        var items = new ErgosfareContext();
         string[] groupFilter = ["audit"];
 
-        await mediator.PublishAsync(
-            new GroupedEvent(), groupFilter, items, false, CancellationToken.None);
+        await mediator.PublishAsync(new GroupedEvent(), items, groupFilter);
 
         // The grouped publish runs the group-filtered plan; only the requested group's
         // handler runs.
-        Assert.Equal(true, items["auditRan"]);
-        Assert.False(items.ContainsKey("defaultRan"));
+        Assert.Equal(true, items.Items["auditRan"]);
+        Assert.False(items.Items.ContainsKey("defaultRan"));
     }
 
     [Fact]
@@ -107,12 +106,12 @@ public class EngineBackedEventFacadeTests
 
         foreach (var mediator in new [] { constructed, (EventMediator)provider.GetRequiredService<IEventMediator>() })
         {
-            var settings = new Dictionary<object, object?>();
+            var settings = new ErgosfareContext();
 
-            await mediator.PublishAsync(new GroupedEvent(), (IDictionary<object, object?>)settings);
+            await mediator.PublishAsync(new GroupedEvent(), settings);
 
-            Assert.Equal(true, settings["defaultRan"]);
-            Assert.False(settings.ContainsKey("auditRan"));
+            Assert.Equal(true, settings.Items["defaultRan"]);
+            Assert.False(settings.Items.ContainsKey("auditRan"));
         }
     }
 }

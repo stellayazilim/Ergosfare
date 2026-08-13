@@ -13,7 +13,7 @@ internal interface IStreamDispatch<out TResult>
 {
     IAsyncEnumerable<TResult> Stream(
         object query,
-        IDictionary<object, object?>? items,
+        ErgosfareContext? context,
         CancellationToken cancellationToken,
         IServiceProvider serviceProvider,
         IEnumerable<string>? groups);
@@ -40,7 +40,7 @@ internal sealed class StreamDispatch<TQuery, TResult>(IMessageDependenciesFactor
     /// <inheritdoc />
     public IAsyncEnumerable<TResult> Stream(
         object query,
-        IDictionary<object, object?>? items,
+        ErgosfareContext? context,
         CancellationToken cancellationToken,
         IServiceProvider serviceProvider,
         IEnumerable<string>? groups)
@@ -49,9 +49,10 @@ internal sealed class StreamDispatch<TQuery, TResult>(IMessageDependenciesFactor
             ? GetDependencies()
             : GetGroupedDependencies(groups);
 
-        // A fresh, unpooled context: enumeration happens after this call returns, so its
-        // completion is not observable here and the context cannot go back to the pool.
-        var context = new ErgosfareContext(items, cancellationToken);
+        // A fresh, unpooled context when the caller supplied none: enumeration happens after
+        // this call returns, so its completion is not observable here and the context cannot go
+        // back to the pool either way.
+        context ??= new ErgosfareContext(cancellationToken: cancellationToken);
         var strategy = new SingleStreamHandlerMediationStrategy<TQuery, TResult>(cancellationToken);
 
         return strategy.Mediate((TQuery)query, dependencies, context, serviceProvider);

@@ -30,17 +30,13 @@ public interface IEventMediator
     ///     The group filter, or <c>null</c> for the default pipeline. A reused
     ///     <see cref="GroupSet"/> matches the cached pipeline on a single reference check.
     /// </param>
-    /// <param name="items">
-    ///     Contextual items exposed to the pipeline. The dictionary is the caller's, and
-    ///     handlers writing into it is how a publish hands anything back.
-    /// </param>
     /// <param name="throwIfNoHandlerFound">
     ///     Whether reaching nobody is an error. Left <c>false</c>, a publish nobody subscribes
     ///     to is a silent no-op — fire-and-forget being the point of an event.
     /// </param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
-    ValueTask PublishAsync(IEvent @event, IEnumerable<string>? groups, IDictionary<object, object?>? items,
-        bool throwIfNoHandlerFound, CancellationToken cancellationToken);
+    ValueTask PublishAsync(IEvent @event, IEnumerable<string>? groups, bool throwIfNoHandlerFound,
+        CancellationToken cancellationToken);
 
     /// <summary>
     ///     Publishes under an externally owned execution context — the nested-dispatch path: a
@@ -53,22 +49,18 @@ public interface IEventMediator
 
     /// <summary>
     ///     Strongly-typed counterpart of
-    ///     <see cref="PublishAsync(IEvent, IEnumerable{string}, IDictionary{object, object}, bool, CancellationToken)"/>:
+    ///     <see cref="PublishAsync(IEvent, IEnumerable{string}, bool, CancellationToken)"/>:
     ///     when the compile-time type is the event's runtime type, the pipeline comes from a
     ///     static-generic slot rather than a dictionary lookup.
     /// </summary>
-    ValueTask PublishAsync<TEvent>(TEvent @event, IEnumerable<string>? groups, IDictionary<object, object?>? items,
-        bool throwIfNoHandlerFound, CancellationToken cancellationToken)
+    ValueTask PublishAsync<TEvent>(TEvent @event, IEnumerable<string>? groups, bool throwIfNoHandlerFound,
+        CancellationToken cancellationToken)
         where TEvent : notnull;
 
     /// <summary>Publishes an event through its default pipeline.</summary>
     ValueTask PublishAsync(IEvent @event, CancellationToken cancellationToken = default)
-        => PublishAsync(@event, null, null, false, cancellationToken);
+        => PublishAsync(@event, (IEnumerable<string>?)null, false, cancellationToken);
 
-    /// <summary>Publishes with contextual items the handlers can read and write.</summary>
-    ValueTask PublishAsync(IEvent @event, IDictionary<object, object?> items,
-        CancellationToken cancellationToken = default)
-        => PublishAsync(@event, null, items, false, cancellationToken);
 
     /// <summary>
     ///     Publishes under a canonical group filter. Define the set once, statically, and the
@@ -76,25 +68,20 @@ public interface IEventMediator
     ///     <see cref="GroupSet.Empty"/> publishes the default pipeline.
     /// </summary>
     ValueTask PublishAsync(IEvent @event, GroupSet groups, CancellationToken cancellationToken = default)
-        => PublishAsync(@event, groups.Count == 0 ? null : groups, null, false, cancellationToken);
+        => PublishAsync(@event, groups.Count == 0 ? null : (IEnumerable<string>?)groups, false, cancellationToken);
 
     /// <summary>Publishes under a group filter given as a plain array.</summary>
     ValueTask PublishAsync(IEvent @event, string[] groups, CancellationToken cancellationToken = default)
-        => PublishAsync(@event, groups, null, false, cancellationToken);
+        => PublishAsync(@event, (IEnumerable<string>?)groups, false, cancellationToken);
 
     /// <summary>Typed counterpart of <see cref="PublishAsync(IEvent, CancellationToken)"/>.</summary>
     ValueTask PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
         where TEvent : notnull
-        => PublishAsync(@event, null, null, false, cancellationToken);
+        => PublishAsync(@event, (IEnumerable<string>?)null, false, cancellationToken);
 
-    /// <summary>Typed counterpart of <see cref="PublishAsync(IEvent, IDictionary{object, object}, CancellationToken)"/>.</summary>
-    ValueTask PublishAsync<TEvent>(TEvent @event, IDictionary<object, object?> items,
-        CancellationToken cancellationToken = default)
-        where TEvent : notnull
-        => PublishAsync(@event, null, items, false, cancellationToken);
 
     /// <summary>Typed counterpart of <see cref="PublishAsync(IEvent, GroupSet, CancellationToken)"/>.</summary>
     ValueTask PublishAsync<TEvent>(TEvent @event, GroupSet groups, CancellationToken cancellationToken = default)
         where TEvent : notnull
-        => PublishAsync(@event, groups.Count == 0 ? null : groups, null, false, cancellationToken);
+        => PublishAsync(@event, groups.Count == 0 ? null : (IEnumerable<string>?)groups, false, cancellationToken);
 }

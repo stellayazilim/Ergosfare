@@ -49,12 +49,12 @@ public class GeneratedResultPlanExecutionTests
         await using var _ = provider;
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
-        var settings = new Dictionary<object, object?>();
+        var settings = new ErgosfareContext();
 
         var result = await mediator.SendAsync(new PlannedEcho { Payload = "hi" }, settings);
 
         Assert.Equal("hi!", result);
-        Assert.Equal(true, settings["viaPlanFactory"]);
+        Assert.Equal(true, settings.Items["viaPlanFactory"]);
     }
 
     [ExcludeFromDiscovery]

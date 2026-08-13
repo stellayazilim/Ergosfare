@@ -112,8 +112,7 @@ public sealed class EventPublishTests
         var mediator = provider.GetRequiredService<IEventMediator>();
         await Assert.ThrowsAsync<NoHandlerFoundException>(
             async () => await mediator.PublishAsync(
-                new NobodyListens(), groups: null, items: null,
-                throwIfNoHandlerFound: true, CancellationToken.None));
+                new NobodyListens(), null, true, CancellationToken.None));
     }
 
     [Fact]
@@ -150,8 +149,7 @@ public sealed class EventPublishTests
         await using var provider = CreateProvider();
         var recorder = new PipelineRecorder();
         await provider.GetRequiredService<IEventMediator>().PublishAsync(
-            new StockChanged(), groups: [Reporting], items: recorder.Events(),
-            throwIfNoHandlerFound: false, CancellationToken.None);
+            new StockChanged(), recorder.Events(), [Reporting]);
 
         recorder.AssertStages("reporting");
     }
@@ -168,8 +166,7 @@ public sealed class EventPublishTests
         // inserted above renumbers the state machines below it and churns the lane map.
         await Assert.ThrowsAsync<NoHandlerFoundException>(
             async () => await mediator.PublishAsync(
-                new UnknownEvent(), groups: null, items: null,
-                throwIfNoHandlerFound: true, CancellationToken.None));
+                new UnknownEvent(), null, true, CancellationToken.None));
     }
 
     // -----------------------------------------------------------------------

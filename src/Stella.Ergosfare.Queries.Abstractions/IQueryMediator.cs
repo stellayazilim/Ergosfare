@@ -23,13 +23,9 @@ public interface IQueryMediator : IMessage
     ///     The group filter, or <c>null</c> for the default pipeline. A reused
     ///     <see cref="GroupSet"/> matches the cached pipeline on a single reference check.
     /// </param>
-    /// <param name="items">
-    ///     Contextual items exposed to the pipeline. The dictionary is the caller's, and
-    ///     participants writing into it is how a dispatch hands anything back besides its result.
-    /// </param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
     ValueTask<TQueryResult> QueryAsync<TQueryResult>(IQuery<TQueryResult> query, IEnumerable<string>? groups,
-        IDictionary<object, object?>? items, CancellationToken cancellationToken);
+        CancellationToken cancellationToken);
 
     /// <summary>
     ///     Executes under an externally owned execution context — the nested-dispatch path: a
@@ -49,17 +45,13 @@ public interface IQueryMediator : IMessage
     /// </remarks>
     [Obsolete(StreamRevision.Notice)]
     IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query,
-        IEnumerable<string>? groups, IDictionary<object, object?>? items, CancellationToken cancellationToken);
+        IEnumerable<string>? groups, CancellationToken cancellationToken);
 
     /// <summary>Executes a query through its default pipeline.</summary>
     ValueTask<TQueryResult> QueryAsync<TQueryResult>(IQuery<TQueryResult> query,
         CancellationToken cancellationToken = default)
-        => QueryAsync(query, null, null, cancellationToken);
+        => QueryAsync(query, (IEnumerable<string>?)null, cancellationToken);
 
-    /// <summary>Executes with contextual items the pipeline can read and write.</summary>
-    ValueTask<TQueryResult> QueryAsync<TQueryResult>(IQuery<TQueryResult> query,
-        IDictionary<object, object?> items, CancellationToken cancellationToken = default)
-        => QueryAsync(query, null, items, cancellationToken);
 
     /// <summary>
     ///     Executes under a canonical group filter. Define the set once, statically, and the
@@ -68,19 +60,24 @@ public interface IQueryMediator : IMessage
     /// </summary>
     ValueTask<TQueryResult> QueryAsync<TQueryResult>(IQuery<TQueryResult> query, GroupSet groups,
         CancellationToken cancellationToken = default)
-        => QueryAsync(query, groups.Count == 0 ? null : groups, null, cancellationToken);
+        => QueryAsync(query, groups.Count == 0 ? null : (IEnumerable<string>?)groups, cancellationToken);
 
     /// <summary>Executes under a group filter given as a plain array.</summary>
     ValueTask<TQueryResult> QueryAsync<TQueryResult>(IQuery<TQueryResult> query, string[] groups,
         CancellationToken cancellationToken = default)
-        => QueryAsync(query, groups, null, cancellationToken);
+        => QueryAsync(query, (IEnumerable<string>?)groups, cancellationToken);
+
+    /// <summary>Streams under a caller-owned context, the way items reach and leave a stream.</summary>
+    [Obsolete(StreamRevision.Notice)]
+    IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query,
+        ErgosfareContext context, IEnumerable<string>? groups = null);
 
     /// <summary>Streams a query through its default pipeline.</summary>
     [Obsolete(StreamRevision.Notice)]
     IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query,
         CancellationToken cancellationToken = default)
 #pragma warning disable CS0618
-        => StreamAsync(query, null, null, cancellationToken);
+        => StreamAsync(query, (IEnumerable<string>?)null, cancellationToken);
 #pragma warning restore CS0618
 
     /// <summary>Streams under a canonical group filter.</summary>
@@ -88,7 +85,7 @@ public interface IQueryMediator : IMessage
     IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query, GroupSet groups,
         CancellationToken cancellationToken = default)
 #pragma warning disable CS0618
-        => StreamAsync(query, groups.Count == 0 ? null : groups, null, cancellationToken);
+        => StreamAsync(query, groups.Count == 0 ? null : (IEnumerable<string>?)groups, cancellationToken);
 #pragma warning restore CS0618
 
     /// <summary>Streams under a group filter given as a plain array.</summary>
@@ -96,6 +93,6 @@ public interface IQueryMediator : IMessage
     IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query, string[] groups,
         CancellationToken cancellationToken = default)
 #pragma warning disable CS0618
-        => StreamAsync(query, groups, null, cancellationToken);
+        => StreamAsync(query, (IEnumerable<string>?)groups, cancellationToken);
 #pragma warning restore CS0618
 }

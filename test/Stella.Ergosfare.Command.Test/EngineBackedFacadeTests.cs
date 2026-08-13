@@ -81,22 +81,22 @@ public class EngineBackedFacadeTests
         {
             var mediator = scope.ServiceProvider.GetRequiredService<ICommandMediator>();
 
-            var firstSettings = new Dictionary<object, object?>();
+            var firstSettings = new ErgosfareContext();
             await mediator.SendAsync(new ProbeCommand(), firstSettings);
-            first = Assert.IsType<Guid>(firstSettings["probeId"]);
+            first = Assert.IsType<Guid>(firstSettings.Items["probeId"]);
 
-            var secondSettings = new Dictionary<object, object?>();
+            var secondSettings = new ErgosfareContext();
             await mediator.SendAsync(new ProbeCommand(), secondSettings);
-            second = Assert.IsType<Guid>(secondSettings["probeId"]);
+            second = Assert.IsType<Guid>(secondSettings.Items["probeId"]);
         }
 
         using (var scope = provider.CreateScope())
         {
             var mediator = scope.ServiceProvider.GetRequiredService<ICommandMediator>();
 
-            var thirdSettings = new Dictionary<object, object?>();
+            var thirdSettings = new ErgosfareContext();
             await mediator.SendAsync(new ProbeCommand(), thirdSettings);
-            third = Assert.IsType<Guid>(thirdSettings["probeId"]);
+            third = Assert.IsType<Guid>(thirdSettings.Items["probeId"]);
         }
 
         // Within one scope the scoped dependency is one instance; a fresh scope gets its own.
@@ -121,13 +121,13 @@ public class EngineBackedFacadeTests
 
         foreach (var mediator in new[] { engineBacked, mediatorBacked })
         {
-            var settings = new Dictionary<object, object?>();
+            var settings = new ErgosfareContext();
 
             var result = await mediator.SendAsync(
                 new EchoCommand { Payload = "hi" }, settings);
 
             Assert.Equal("hi!", result);
-            Assert.Equal("hi", settings["sawPayload"]);
+            Assert.Equal("hi", settings.Items["sawPayload"]);
         }
     }
 }

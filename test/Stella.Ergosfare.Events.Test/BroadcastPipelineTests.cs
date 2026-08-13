@@ -44,7 +44,7 @@ public class BroadcastPipelineTests
         Exception? exception = null;
         try
         {
-           await mediator.PublishAsync(new StubNonGenericEvent(), groups: null, items: null, throwIfNoHandlerFound: true, CancellationToken.None);
+           await mediator.PublishAsync(new StubNonGenericEvent(), null, true, CancellationToken.None);
 
         }
         catch (Exception ex)
@@ -70,7 +70,7 @@ public class BroadcastPipelineTests
         Exception? exception = null;
         try
         {
-            await mediator.PublishAsync(new StubNonGenericEvent(), groups: null, items: null, throwIfNoHandlerFound: false, CancellationToken.None);
+            await mediator.PublishAsync(new StubNonGenericEvent(), null, false, CancellationToken.None);
         }
         catch (Exception ex)
         {

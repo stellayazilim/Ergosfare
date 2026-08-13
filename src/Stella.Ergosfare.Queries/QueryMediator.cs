@@ -42,8 +42,8 @@ public class QueryMediator : IQueryMediator
 
     /// <inheritdoc />
     public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, IEnumerable<string>? groups,
-        IDictionary<object, object?>? items, CancellationToken cancellationToken)
-        => _engine.DispatchAsync<TResult>(query, _serviceProvider, items, cancellationToken, groups);
+        CancellationToken cancellationToken)
+        => _engine.DispatchAsync<TResult>(query, _serviceProvider, cancellationToken, groups);
 
     /// <inheritdoc />
     public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, ErgosfareContext context,
@@ -53,10 +53,16 @@ public class QueryMediator : IQueryMediator
     /// <inheritdoc />
     [Obsolete(StreamRevision.Notice)]
     public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, IEnumerable<string>? groups,
-        IDictionary<object, object?>? items, CancellationToken cancellationToken)
+        CancellationToken cancellationToken)
         // Streams run against this container's cached pipeline — no per-call mediator
         // resolution and no composition lookup.
-        => _engine.StreamAsync<TResult>(query, _serviceProvider, items, cancellationToken, groups);
+        => _engine.StreamAsync<TResult>(query, _serviceProvider, cancellationToken, groups);
+
+    /// <inheritdoc />
+    [Obsolete(StreamRevision.Notice)]
+    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, ErgosfareContext context,
+        IEnumerable<string>? groups = null)
+        => _engine.StreamAsync<TResult>(query, context, _serviceProvider, groups);
 
     /// <summary>Executes a query through its default pipeline.</summary>
     /// <remarks>
@@ -66,12 +72,8 @@ public class QueryMediator : IQueryMediator
     /// this class.
     /// </remarks>
     public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, CancellationToken cancellationToken = default)
-        => QueryAsync(query, null, null, cancellationToken);
+        => QueryAsync(query, (IEnumerable<string>?)null, cancellationToken);
 
-    /// <summary>Executes with contextual items the pipeline can read and write.</summary>
-    public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, IDictionary<object, object?> items,
-        CancellationToken cancellationToken = default)
-        => QueryAsync(query, null, items, cancellationToken);
 
     /// <summary>Executes under a canonical group filter; an empty set routes to the group-less lane.</summary>
     public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, GroupSet groups,
@@ -79,19 +81,19 @@ public class QueryMediator : IQueryMediator
     {
         ArgumentNullException.ThrowIfNull(groups);
 
-        return QueryAsync(query, groups.Count == 0 ? null : groups, null, cancellationToken);
+        return QueryAsync(query, groups.Count == 0 ? null : (IEnumerable<string>?)groups, cancellationToken);
     }
 
     /// <summary>Executes under a group filter given as a plain array.</summary>
     public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, string[] groups,
         CancellationToken cancellationToken = default)
-        => QueryAsync(query, groups, null, cancellationToken);
+        => QueryAsync(query, (IEnumerable<string>?)groups, cancellationToken);
 
     /// <summary>Streams a query through its default pipeline.</summary>
     [Obsolete(StreamRevision.Notice)]
     public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query,
         CancellationToken cancellationToken = default)
-        => StreamAsync(query, null, null, cancellationToken);
+        => StreamAsync(query, (IEnumerable<string>?)null, cancellationToken);
 
     /// <summary>Streams under a canonical group filter.</summary>
     [Obsolete(StreamRevision.Notice)]
@@ -100,12 +102,12 @@ public class QueryMediator : IQueryMediator
     {
         ArgumentNullException.ThrowIfNull(groups);
 
-        return StreamAsync(query, groups.Count == 0 ? null : groups, null, cancellationToken);
+        return StreamAsync(query, groups.Count == 0 ? null : (IEnumerable<string>?)groups, cancellationToken);
     }
 
     /// <summary>Streams under a group filter given as a plain array.</summary>
     [Obsolete(StreamRevision.Notice)]
     public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, string[] groups,
         CancellationToken cancellationToken = default)
-        => StreamAsync(query, groups, null, cancellationToken);
+        => StreamAsync(query, (IEnumerable<string>?)groups, cancellationToken);
 }

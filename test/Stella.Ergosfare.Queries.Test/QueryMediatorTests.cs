@@ -32,7 +32,7 @@ public class QueryMediatorTests
             )).BuildServiceProvider();
         var mediator = new QueryMediator(
             services.GetRequiredService<MessageDispatchEngine>(), services);
-        var result = mediator.QueryAsync(new StubNonGenericStringResultQuery(), null, null, CancellationToken.None);
+        var result = mediator.QueryAsync(new StubNonGenericStringResultQuery(), new ErgosfareContext(null), null);
         Assert.Equal(string.Empty, await result);
     }
     
@@ -52,7 +52,7 @@ public class QueryMediatorTests
         var expected = new []  {"Foo", "Bar", "Baz"};
         var result = new List<string>();
         // act
-        await foreach (var item in mediator.StreamAsync(new StubNonGenericStreamStringResultQuery(), null, null, CancellationToken.None))
+        await foreach (var item in mediator.StreamAsync(new StubNonGenericStreamStringResultQuery(), (IEnumerable<string>?)null, CancellationToken.None))
         {
             result.Add(item);
         }

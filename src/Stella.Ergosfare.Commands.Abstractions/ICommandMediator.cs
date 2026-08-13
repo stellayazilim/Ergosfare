@@ -30,17 +30,12 @@ public interface ICommandMediator
     ///     The group filter, or <c>null</c> for the default pipeline. A reused
     ///     <see cref="GroupSet"/> matches the cached pipeline on a single reference check.
     /// </param>
-    /// <param name="items">
-    ///     Contextual items exposed to the pipeline. The dictionary is the caller's, and
-    ///     participants writing into it is how a dispatch hands anything back besides its result.
-    /// </param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
-    ValueTask SendAsync(ICommand command, IEnumerable<string>? groups, IDictionary<object, object?>? items,
-        CancellationToken cancellationToken);
+    ValueTask SendAsync(ICommand command, IEnumerable<string>? groups, CancellationToken cancellationToken);
 
     /// <summary>Result-producing counterpart of the full void send.</summary>
     ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, IEnumerable<string>? groups,
-        IDictionary<object, object?>? items, CancellationToken cancellationToken);
+        CancellationToken cancellationToken);
 
     /// <summary>
     ///     Sends under an externally owned execution context — the nested-dispatch path: a
@@ -56,21 +51,13 @@ public interface ICommandMediator
 
     /// <summary>Sends a command through its default pipeline.</summary>
     ValueTask SendAsync(ICommand command, CancellationToken cancellationToken = default)
-        => SendAsync(command, null, null, cancellationToken);
+        => SendAsync(command, (IEnumerable<string>?)null, cancellationToken);
 
     /// <summary>Result-producing counterpart of <see cref="SendAsync(ICommand, CancellationToken)"/>.</summary>
     ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, CancellationToken cancellationToken = default)
-        => SendAsync(command, null, null, cancellationToken);
+        => SendAsync(command, (IEnumerable<string>?)null, cancellationToken);
 
-    /// <summary>Sends with contextual items the pipeline can read and write.</summary>
-    ValueTask SendAsync(ICommand command, IDictionary<object, object?> items,
-        CancellationToken cancellationToken = default)
-        => SendAsync(command, null, items, cancellationToken);
 
-    /// <summary>Result-producing counterpart of the contextual-items send.</summary>
-    ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, IDictionary<object, object?> items,
-        CancellationToken cancellationToken = default)
-        => SendAsync(command, null, items, cancellationToken);
 
     /// <summary>
     ///     Sends under a canonical group filter. Define the set once, statically, and the cached
@@ -78,19 +65,19 @@ public interface ICommandMediator
     ///     dispatches the default pipeline.
     /// </summary>
     ValueTask SendAsync(ICommand command, GroupSet groups, CancellationToken cancellationToken = default)
-        => SendAsync(command, groups.Count == 0 ? null : groups, null, cancellationToken);
+        => SendAsync(command, groups.Count == 0 ? null : (IEnumerable<string>?)groups, cancellationToken);
 
     /// <summary>Result-producing counterpart of the canonical group-filter send.</summary>
     ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, GroupSet groups,
         CancellationToken cancellationToken = default)
-        => SendAsync(command, groups.Count == 0 ? null : groups, null, cancellationToken);
+        => SendAsync(command, groups.Count == 0 ? null : (IEnumerable<string>?)groups, cancellationToken);
 
     /// <summary>Sends under a group filter given as a plain array.</summary>
     ValueTask SendAsync(ICommand command, string[] groups, CancellationToken cancellationToken = default)
-        => SendAsync(command, groups, null, cancellationToken);
+        => SendAsync(command, (IEnumerable<string>?)groups, cancellationToken);
 
     /// <summary>Result-producing counterpart of the array group-filter send.</summary>
     ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, string[] groups,
         CancellationToken cancellationToken = default)
-        => SendAsync(command, groups, null, cancellationToken);
+        => SendAsync(command, (IEnumerable<string>?)groups, cancellationToken);
 }

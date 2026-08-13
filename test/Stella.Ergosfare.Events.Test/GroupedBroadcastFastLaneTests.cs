@@ -51,12 +51,12 @@ public class GroupedBroadcastFastLaneTests
             }))
             .BuildServiceProvider();
 
-    private static async Task<IDictionary<object, object?>> Publish(IEventMediator mediator, params string[] groups)
+    private static async Task<ErgosfareContext> Publish(IEventMediator mediator, params string[] groups)
     {
-        var settings = new Dictionary<object, object?>();
+        var settings = new ErgosfareContext();
         var groupFilter = groups;
 
-        await mediator.PublishAsync(new LaneEvent(), groupFilter, settings, false, CancellationToken.None);
+        await mediator.PublishAsync(new LaneEvent(), settings, groupFilter);
 
         return settings;
     }
@@ -74,16 +74,16 @@ public class GroupedBroadcastFastLaneTests
         // alpha populates the slot, beta must not be served alpha's plan, and alpha
         // again must survive the slot having moved on.
         var first = await Publish(mediator, "alpha");
-        Assert.Equal(true, first["alphaRan"]);
-        Assert.False(first.ContainsKey("betaRan"));
+        Assert.Equal(true, first.Items["alphaRan"]);
+        Assert.False(first.Items.ContainsKey("betaRan"));
 
         var second = await Publish(mediator, "beta");
-        Assert.Equal(true, second["betaRan"]);
-        Assert.False(second.ContainsKey("alphaRan"));
+        Assert.Equal(true, second.Items["betaRan"]);
+        Assert.False(second.Items.ContainsKey("alphaRan"));
 
         var third = await Publish(mediator, "alpha");
-        Assert.Equal(true, third["alphaRan"]);
-        Assert.False(third.ContainsKey("betaRan"));
+        Assert.Equal(true, third.Items["alphaRan"]);
+        Assert.False(third.Items.ContainsKey("betaRan"));
     }
 
     [Fact]
@@ -100,19 +100,19 @@ public class GroupedBroadcastFastLaneTests
         // snapshots group contents, so the second publish must re-resolve, not replay
         // alpha's plan.
         var groups = new List<string> { "alpha" };
-        var settings = new Dictionary<object, object?>();
+        var settings = new ErgosfareContext();
         var groupFilter = groups;
 
-        await mediator.PublishAsync(new LaneEvent(), groupFilter, settings, false, CancellationToken.None);
-        Assert.Equal(true, settings["alphaRan"]);
+        await mediator.PublishAsync(new LaneEvent(), settings, groupFilter);
+        Assert.Equal(true, settings.Items["alphaRan"]);
 
         groups.Clear();
         groups.Add("beta");
-        settings.Clear();
+        settings.Items.Clear();
 
-        await mediator.PublishAsync(new LaneEvent(), groupFilter, settings, false, CancellationToken.None);
-        Assert.Equal(true, settings["betaRan"]);
-        Assert.False(settings.ContainsKey("alphaRan"));
+        await mediator.PublishAsync(new LaneEvent(), settings, groupFilter);
+        Assert.Equal(true, settings.Items["betaRan"]);
+        Assert.False(settings.Items.ContainsKey("alphaRan"));
     }
 
     [ExcludeFromDiscovery]
@@ -160,14 +160,14 @@ public class GroupedBroadcastFastLaneTests
 
         var mediator = guarded.GetRequiredService<IEventMediator>();
 
-        var settings = new Dictionary<object, object?>();
+        var settings = new ErgosfareContext();
         string[] groupFilter = ["guarded"];
 
-        await mediator.PublishAsync(new InterceptedLaneEvent(), groupFilter, settings, false, CancellationToken.None);
+        await mediator.PublishAsync(new InterceptedLaneEvent(), settings, groupFilter);
 
         // A grouped pipeline that carries an interceptor must leave the straight-through
         // loop to the strategy, which runs the interceptor before the handler.
-        Assert.Equal(true, settings["guardedInterceptorRan"]);
-        Assert.Equal(true, settings["guardedRan"]);
+        Assert.Equal(true, settings.Items["guardedInterceptorRan"]);
+        Assert.Equal(true, settings.Items["guardedRan"]);
     }
 }

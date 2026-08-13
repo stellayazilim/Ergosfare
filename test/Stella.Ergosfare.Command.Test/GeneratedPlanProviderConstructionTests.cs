@@ -69,18 +69,18 @@ public class GeneratedPlanProviderConstructionTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        var first = new Dictionary<object, object?>();
+        var first = new ErgosfareContext();
         await mediator.SendAsync(new InjectedCommand(), first);
-        var second = new Dictionary<object, object?>();
+        var second = new ErgosfareContext();
         await mediator.SendAsync(new InjectedCommand(), second);
 
         // The factory constructs (transient semantics intact — fresh handler per
         // dispatch), and the dependency is the container's own singleton instance.
-        Assert.Equal(true, first["viaPlanFactory"]);
-        Assert.Equal(true, second["viaPlanFactory"]);
-        Assert.NotEqual(first["handlerId"], second["handlerId"]);
-        Assert.Equal(provider.GetRequiredService<IProbeDependency>().Id, first["dependencyId"]);
-        Assert.Equal(provider.GetRequiredService<IProbeDependency>().Id, second["dependencyId"]);
+        Assert.Equal(true, first.Items["viaPlanFactory"]);
+        Assert.Equal(true, second.Items["viaPlanFactory"]);
+        Assert.NotEqual(first.Items["handlerId"], second.Items["handlerId"]);
+        Assert.Equal(provider.GetRequiredService<IProbeDependency>().Id, first.Items["dependencyId"]);
+        Assert.Equal(provider.GetRequiredService<IProbeDependency>().Id, second.Items["dependencyId"]);
     }
 
     [ExcludeFromDiscovery]
@@ -113,23 +113,23 @@ public class GeneratedPlanProviderConstructionTests
         // Container activation resolves a scoped dependency from the resolving scope;
         // the provider factory must land on the very same instance.
         using var firstScope = provider.CreateScope();
-        var firstSettings = new Dictionary<object, object?>();
+        var firstSettings = new ErgosfareContext();
         await firstScope.ServiceProvider.GetRequiredService<ICommandMediator>()
             .SendAsync(new ScopedInjectedCommand(), firstSettings);
 
         Assert.Equal(
             firstScope.ServiceProvider.GetRequiredService<IProbeDependency>().Id,
-            firstSettings["dependencyId"]);
+            firstSettings.Items["dependencyId"]);
 
         using var secondScope = provider.CreateScope();
-        var secondSettings = new Dictionary<object, object?>();
+        var secondSettings = new ErgosfareContext();
         await secondScope.ServiceProvider.GetRequiredService<ICommandMediator>()
             .SendAsync(new ScopedInjectedCommand(), secondSettings);
 
         Assert.Equal(
             secondScope.ServiceProvider.GetRequiredService<IProbeDependency>().Id,
-            secondSettings["dependencyId"]);
-        Assert.NotEqual(firstSettings["dependencyId"], secondSettings["dependencyId"]);
+            secondSettings.Items["dependencyId"]);
+        Assert.NotEqual(firstSettings.Items["dependencyId"], secondSettings.Items["dependencyId"]);
     }
 
     [ExcludeFromDiscovery]
@@ -168,11 +168,11 @@ public class GeneratedPlanProviderConstructionTests
         // A provider-factory construction would hand out fresh instances; the user's
         // singleton override must keep sharing one — the gate routes back through the
         // container exactly as it does for parameterless factories.
-        var first = new Dictionary<object, object?>();
+        var first = new ErgosfareContext();
         await mediator.SendAsync(new OverriddenInjectedCommand(), first);
-        var second = new Dictionary<object, object?>();
+        var second = new ErgosfareContext();
         await mediator.SendAsync(new OverriddenInjectedCommand(), second);
 
-        Assert.Equal(first["handlerId"], second["handlerId"]);
+        Assert.Equal(first.Items["handlerId"], second.Items["handlerId"]);
     }
 }

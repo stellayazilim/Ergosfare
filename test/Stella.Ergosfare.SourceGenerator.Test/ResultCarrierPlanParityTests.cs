@@ -356,11 +356,11 @@ public class ResultCarrierPlanParityTests
     {
         var send = typeof(ICommandMediator).GetMethods()
             .Single(m => m.Name == "SendAsync" && m.IsGenericMethodDefinition
-                && m.GetParameters() is { Length: 4 } parameters
+                && m.GetParameters() is { Length: 3 } parameters
                 && parameters[1].ParameterType == typeof(IEnumerable<string>))
             .MakeGenericMethod(resultType);
 
-        var valueTask = send.Invoke(mediator, [command, null, null, default(CancellationToken)])!;
+        var valueTask = send.Invoke(mediator, [command, null, default(CancellationToken)])!;
         var task = (Task)valueTask.GetType().GetMethod("AsTask")!.Invoke(valueTask, null)!;
         await task;
         return task.GetType().GetProperty("Result")!.GetValue(task);

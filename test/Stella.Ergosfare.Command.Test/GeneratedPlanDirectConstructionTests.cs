@@ -39,10 +39,10 @@ public class GeneratedPlanDirectConstructionTests
 
     private static async Task<(Guid Id, bool ViaPlanFactory)> DispatchAndProbe(ICommandMediator mediator)
     {
-        var settings = new Dictionary<object, object?>();
+        var settings = new ErgosfareContext();
         await mediator.SendAsync(new ConstructedCommand(), settings);
-        return (Assert.IsType<Guid>(settings["handlerId"]),
-            Assert.IsType<bool>(settings["viaPlanFactory"]));
+        return (Assert.IsType<Guid>(settings.Items["handlerId"]),
+            Assert.IsType<bool>(settings.Items["viaPlanFactory"]));
     }
 
     [Fact]
@@ -103,10 +103,10 @@ public class GeneratedPlanDirectConstructionTests
         await using var _ = provider;
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
-        var settings = new Dictionary<object, object?>();
+        var settings = new ErgosfareContext();
         await mediator.SendAsync(new UserFactoryCommand(), settings);
 
-        Assert.Equal(true, settings["viaUserFactory"]);
+        Assert.Equal(true, settings.Items["viaUserFactory"]);
     }
 
     [ExcludeFromDiscovery]
@@ -143,10 +143,10 @@ public class GeneratedPlanDirectConstructionTests
         await using var provider = services.BuildServiceProvider();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        var settings = new Dictionary<object, object?>();
+        var settings = new ErgosfareContext();
         await mediator.SendAsync(new LateOverrideCommand(), settings);
 
-        Assert.Equal(true, settings["viaUser"]);
+        Assert.Equal(true, settings.Items["viaUser"]);
     }
 
     [ExcludeFromDiscovery]
@@ -182,12 +182,12 @@ public class GeneratedPlanDirectConstructionTests
 
         // A plan-factory construction would hand out fresh instances; the user's
         // singleton override must keep sharing one.
-        var first = new Dictionary<object, object?>();
+        var first = new ErgosfareContext();
         await mediator.SendAsync(new SingletonCommand(), first);
-        var second = new Dictionary<object, object?>();
+        var second = new ErgosfareContext();
         await mediator.SendAsync(new SingletonCommand(), second);
 
-        Assert.Equal(first["handlerId"], second["handlerId"]);
+        Assert.Equal(first.Items["handlerId"], second.Items["handlerId"]);
     }
 
     [ExcludeFromDiscovery]
@@ -224,11 +224,11 @@ public class GeneratedPlanDirectConstructionTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        var first = new Dictionary<object, object?>();
+        var first = new ErgosfareContext();
         await mediator.SendAsync(new MemoizedPlanCommand(), first);
-        var second = new Dictionary<object, object?>();
+        var second = new ErgosfareContext();
         await mediator.SendAsync(new MemoizedPlanCommand(), second);
 
-        Assert.Equal(first["handlerId"], second["handlerId"]);
+        Assert.Equal(first.Items["handlerId"], second.Items["handlerId"]);
     }
 }
