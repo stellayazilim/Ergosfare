@@ -167,12 +167,14 @@ public class BroadcastPlanEmissionTests
     }
 
     /// <summary>
-    ///     An event whose handlers carry no interceptor and no plugin gets no plan: the
-    ///     straight-through publish lane already serves that shape, and emitting a plan for it
-    ///     would be a body nobody needs.
+    ///     An event whose handlers carry no interceptor and no plugin gets a plan too — its
+    ///     bare loop IS the plan. A command in that shape falls back to the single-handler
+    ///     plan family; a publish has no such family, so without this the flagship
+    ///     "hooks cost zero while not attached" lane would be the one lane still resolving
+    ///     its handlers through the container on every dispatch.
     /// </summary>
     [Fact]
-    public void PlainBroadcast_GetsNoPlan()
+    public void PlainBroadcast_GetsABarePlan()
     {
         var result = GeneratorTestHost.Run("""
             using Stella.Ergosfare.Core.Abstractions;
@@ -191,6 +193,13 @@ public class BroadcastPlanEmissionTests
             """);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.DoesNotContain("AddBroadcastPlan<global::TestApp.OrderPlaced>", result.GeneratedSource);
+        Assert.Contains(
+            "AddBroadcastPlan<global::TestApp.OrderPlaced>(new StagedPlan0());",
+            result.GeneratedSource);
+
+        // A publish looks only in the broadcast store, so a single-handler event plan filed
+        // under the sending one would be emitted, validated and never run.
+        Assert.Contains("StagedBroadcastPlan<global::TestApp.OrderPlaced>", result.GeneratedSource);
+        Assert.DoesNotContain("StagedVoidPlan<global::TestApp.OrderPlaced>", result.GeneratedSource);
     }
 }

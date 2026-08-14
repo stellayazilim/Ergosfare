@@ -31,6 +31,8 @@ internal readonly record struct StagedHandlerModel(string TypeExpression, string
 /// </remarks>
 internal sealed record StagedPlanModel(
     string MessageTypeExpression,
+    ImmutableArray<string> Groups,
+    bool IsBroadcast,
     string? ResultTypeExpression,
     bool ResultIsValueType,
     ImmutableArray<StagedHandlerModel> Handlers,
@@ -44,12 +46,6 @@ internal sealed record StagedPlanModel(
     bool ResultAdapterMaterializes,
     ImmutableArray<PluginInvocationModel> PluginCalls)
 {
-    /// <summary>
-    ///     Whether the plan runs a handler list rather than a single one — the broadcast
-    ///     shape, where every matched handler is invoked in sequence.
-    /// </summary>
-    public bool IsBroadcast => Handlers.Length != 1 || IndirectHandlers.Length > 0;
-
     /// <summary>The sole main handler's type; meaningful only when the plan is not a broadcast.</summary>
     public string HandlerTypeExpression => Handlers[0].TypeExpression;
 

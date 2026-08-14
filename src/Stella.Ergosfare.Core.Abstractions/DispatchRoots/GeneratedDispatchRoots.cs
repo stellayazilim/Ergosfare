@@ -22,9 +22,9 @@ public static class GeneratedDispatchRoots
     private static readonly ConcurrentDictionary<(Type MessageType, Type ResultType), MessageResultRoot> Streams = new();
     private static readonly ConcurrentDictionary<Type, VoidHandlerPlan> VoidPlans = new();
     private static readonly ConcurrentDictionary<(Type MessageType, Type ResultType), ResultHandlerPlan> ResultPlans = new();
-    private static readonly ConcurrentDictionary<Type, StagedVoidPlan> StagedVoidPlans = new();
-    private static readonly ConcurrentDictionary<Type, StagedBroadcastPlan> BroadcastPlans = new();
-    private static readonly ConcurrentDictionary<(Type MessageType, Type ResultType), StagedResultPlan> StagedResultPlans = new();
+    private static readonly ConcurrentDictionary<(Type MessageType, string Groups), StagedVoidPlan> StagedVoidPlans = new();
+    private static readonly ConcurrentDictionary<(Type MessageType, string Groups), StagedBroadcastPlan> BroadcastPlans = new();
+    private static readonly ConcurrentDictionary<(Type MessageType, Type ResultType, string Groups), StagedResultPlan> StagedResultPlans = new();
 
     /// <summary>Roots the void dispatch generics of a message type. Idempotent.</summary>
     public static void AddMessage<TMessage>() where TMessage : IMessage
@@ -149,14 +149,28 @@ public static class GeneratedDispatchRoots
     /// </summary>
     public static void AddStagedPlan<TMessage>(StagedVoidPlan<TMessage> plan)
         where TMessage : IMessage
-        => StagedVoidPlans.TryAdd(typeof(TMessage), plan);
+        => StagedVoidPlans.TryAdd((typeof(TMessage), string.Empty), plan);
 
     /// <summary>
-    /// Result-producing counterpart of <see cref="AddStagedPlan{TMessage}"/>. Idempotent.
+    /// Group-keyed counterpart: the plan of the same message under one filter. A dispatch
+    /// names a group set, and the set is part of what decides the pipeline — so it is part
+    /// of what keys the plan, exactly like the message type. Idempotent.
+    /// </summary>
+    public static void AddStagedPlan<TMessage>(StagedVoidPlan<TMessage> plan, string[] groups)
+        where TMessage : IMessage
+        => StagedVoidPlans.TryAdd((typeof(TMessage), GroupKey(groups)), plan);
+
+    /// <summary>
+    /// Result-producing counterpart of <see cref="AddStagedPlan{TMessage}(StagedVoidPlan{TMessage})"/>. Idempotent.
     /// </summary>
     public static void AddStagedPlan<TMessage, TResult>(StagedResultPlan<TMessage, TResult> plan)
         where TMessage : IMessage
-        => StagedResultPlans.TryAdd((typeof(TMessage), typeof(TResult)), plan);
+        => StagedResultPlans.TryAdd((typeof(TMessage), typeof(TResult), string.Empty), plan);
+
+    /// <summary>Group-keyed counterpart of the result plan; see the void overload. Idempotent.</summary>
+    public static void AddStagedPlan<TMessage, TResult>(StagedResultPlan<TMessage, TResult> plan, string[] groups)
+        where TMessage : IMessage
+        => StagedResultPlans.TryAdd((typeof(TMessage), typeof(TResult), GroupKey(groups)), plan);
 
     /// <summary>
     /// Roots a staged pipeline plan for a broadcast. Its own store rather than a shape of the
@@ -166,19 +180,83 @@ public static class GeneratedDispatchRoots
     /// </summary>
     public static void AddBroadcastPlan<TEvent>(StagedBroadcastPlan<TEvent> plan)
         where TEvent : notnull
-        => BroadcastPlans.TryAdd(typeof(TEvent), plan);
+        => BroadcastPlans.TryAdd((typeof(TEvent), string.Empty), plan);
 
-    /// <summary>The staged void plan of the message type, or <c>null</c> when none was generated.</summary>
+    /// <summary>Group-keyed counterpart of the broadcast plan; see the void overload. Idempotent.</summary>
+    public static void AddBroadcastPlan<TEvent>(StagedBroadcastPlan<TEvent> plan, string[] groups)
+        where TEvent : notnull
+        => BroadcastPlans.TryAdd((typeof(TEvent), GroupKey(groups)), plan);
+
+    /// <summary>The staged void plan of the message type's default pipeline, or <c>null</c> when none was generated.</summary>
     public static StagedVoidPlan? FindStagedVoidPlan(Type messageType)
-        => StagedVoidPlans.TryGetValue(messageType, out var plan) ? plan : null;
+        => StagedVoidPlans.TryGetValue((messageType, string.Empty), out var plan) ? plan : null;
 
-    /// <summary>The broadcast plan of the message type, or <c>null</c> when none was generated.</summary>
+    /// <summary>The staged void plan for a filtered dispatch, or <c>null</c> when none was generated.</summary>
+    public static StagedVoidPlan? FindStagedVoidPlan(Type messageType, IReadOnlyList<string> groups)
+        => StagedVoidPlans.TryGetValue((messageType, GroupKey(groups)), out var plan) ? plan : null;
+
+    /// <summary>The broadcast plan of the message type's default pipeline, or <c>null</c> when none was generated.</summary>
     public static StagedBroadcastPlan? FindBroadcastPlan(Type messageType)
-        => BroadcastPlans.TryGetValue(messageType, out var plan) ? plan : null;
+        => BroadcastPlans.TryGetValue((messageType, string.Empty), out var plan) ? plan : null;
+
+    /// <summary>The broadcast plan for a filtered publish, or <c>null</c> when none was generated.</summary>
+    public static StagedBroadcastPlan? FindBroadcastPlan(Type messageType, IReadOnlyList<string> groups)
+        => BroadcastPlans.TryGetValue((messageType, GroupKey(groups)), out var plan) ? plan : null;
 
     /// <summary>The staged result plan of the (message, result) pair, or <c>null</c> when none was generated.</summary>
     public static StagedResultPlan? FindStagedResultPlan(Type messageType, Type resultType)
-        => StagedResultPlans.TryGetValue((messageType, resultType), out var plan) ? plan : null;
+        => StagedResultPlans.TryGetValue((messageType, resultType, string.Empty), out var plan) ? plan : null;
+
+    /// <summary>The staged result plan for a filtered dispatch, or <c>null</c> when none was generated.</summary>
+    public static StagedResultPlan? FindStagedResultPlan(Type messageType, Type resultType, IReadOnlyList<string> groups)
+        => StagedResultPlans.TryGetValue((messageType, resultType, GroupKey(groups)), out var plan) ? plan : null;
+
+    /// <summary>
+    /// The canonical key of a group set: ordinal-sorted, deduplicated and joined, so the
+    /// spelling a dispatch happens to use finds the plan the generator baked. Group
+    /// selection is an any-of test, which makes order and repetition meaningless — a key
+    /// that honored them would miss the plan for no reason.
+    /// </summary>
+    /// <remarks>
+    /// Only ever reached on a lookup that misses a per-message slot, so the sort is paid
+    /// once per (pipeline, group set) rather than per dispatch.
+    /// </remarks>
+    private static string GroupKey(IReadOnlyList<string>? groups)
+    {
+        if (groups is null || groups.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        if (groups.Count == 1)
+        {
+            return groups[0];
+        }
+
+        var names = new string[groups.Count];
+
+        for (var i = 0; i < groups.Count; i++)
+        {
+            names[i] = groups[i];
+        }
+
+        Array.Sort(names, StringComparer.Ordinal);
+
+        var builder = new System.Text.StringBuilder(names[0]);
+
+        for (var i = 1; i < names.Length; i++)
+        {
+            if (string.Equals(names[i], names[i - 1], StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // The unit separator keeps {"ab"} and {"a","b"} distinct.
+            builder.Append('').Append(names[i]);
+        }
+
+        return builder.ToString();
+    }
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, FrozenComposition> FrozenCompositions = new();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, FrozenComposition?> FrozenCompositionLadder = new();

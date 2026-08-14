@@ -1,4 +1,5 @@
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Results;
@@ -66,7 +67,7 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
     {
         _factory = dependenciesFactory;
         _plan = plan;
-        _grouped = new GroupedCompositions(dependenciesFactory, typeof(TMessage));
+        _grouped = new GroupedCompositions(dependenciesFactory, typeof(TMessage), AdmitGroupedPlan);
 
         if (dependenciesFactory is not MessageDependenciesFactory)
         {
@@ -199,7 +200,36 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
 
         var composition = _grouped.Resolve(groups);
 
+        if (composition.Admission.Plan is StagedVoidPlan<TMessage> groupedPlan)
+        {
+            return composition.Admission.Direct
+                ? groupedPlan.ExecuteDirect((TMessage)message, context, serviceProvider)
+                : groupedPlan.Execute((TMessage)message, context, serviceProvider);
+        }
+
         return ExecuteRuntimeLane(message, composition.Dependencies, composition.Fast, context, serviceProvider);
+    }
+
+    /// <summary>
+    /// The compiled plan for one group set, admitted against that set's own composition —
+    /// the same question <see cref="ExecuteUndecided"/> answers for the default set, asked
+    /// once per set when its entry is built rather than per dispatch.
+    /// </summary>
+    private GroupedPlanAdmission AdmitGroupedPlan(string[] groups, IMessageDependencies dependencies)
+    {
+        if (_resultAdapter is not null
+            || GeneratedDispatchRoots.FindStagedVoidPlan(typeof(TMessage), groups) is not StagedVoidPlan<TMessage> plan
+            || dependencies is not MessageDependencies { MemoizedInstances: false } fast
+            || !StagedPlanGate.Matches(fast, plan.Composition))
+        {
+            return default;
+        }
+
+        var direct = plan.SupportsDirectConstruction
+                     && _factory is MessageDependenciesFactory typedFactory
+                     && StagedPlanGate.AllPlainTransient(typedFactory, plan.Composition);
+
+        return new GroupedPlanAdmission(plan, direct);
     }
 
     /// <summary>
