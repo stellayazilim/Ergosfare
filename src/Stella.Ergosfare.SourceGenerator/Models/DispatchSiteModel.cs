@@ -74,6 +74,21 @@ internal readonly struct DispatchSiteModel : IEquatable<DispatchSiteModel>
     /// </summary>
     public required ImmutableArray<string> AssignableKeys { get; init; }
 
+    /// <summary>
+    ///     The group names this site dispatches under, normalized (ordinal-sorted,
+    ///     deduplicated) so two spellings of one set compare equal. Empty means the site
+    ///     names no group and runs the default one — which is also what
+    ///     <see cref="HasUnprovableGroups"/> sites fall back to for keying purposes.
+    /// </summary>
+    public required ImmutableArray<string> Groups { get; init; }
+
+    /// <summary>
+    ///     Whether the site passes a group filter the generator could not read — a variable,
+    ///     a computed set, a non-literal element. Such a site keys no plan; its message keeps
+    ///     the runtime group lane, which filters the live composition per dispatch.
+    /// </summary>
+    public required bool HasUnprovableGroups { get; init; }
+
     /// <summary>Invocation location; <c>null</c> for sites rehydrated from a referenced manifest.</summary>
     public required LocationInfo? Location { get; init; }
 
@@ -92,9 +107,11 @@ internal readonly struct DispatchSiteModel : IEquatable<DispatchSiteModel>
             || IsOpaque != other.IsOpaque
             || IsValueType != other.IsValueType
             || IsGenericMessage != other.IsGenericMessage
+            || HasUnprovableGroups != other.HasUnprovableGroups
             || ReferencedAssemblyName != other.ReferencedAssemblyName
             || !Nullable.Equals(Location, other.Location)
-            || AssignableKeys.Length != other.AssignableKeys.Length)
+            || AssignableKeys.Length != other.AssignableKeys.Length
+            || Groups.Length != other.Groups.Length)
         {
             return false;
         }
@@ -102,6 +119,14 @@ internal readonly struct DispatchSiteModel : IEquatable<DispatchSiteModel>
         for (var i = 0; i < AssignableKeys.Length; i++)
         {
             if (!string.Equals(AssignableKeys[i], other.AssignableKeys[i], StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        for (var i = 0; i < Groups.Length; i++)
+        {
+            if (!string.Equals(Groups[i], other.Groups[i], StringComparison.Ordinal))
             {
                 return false;
             }
@@ -119,6 +144,7 @@ internal readonly struct DispatchSiteModel : IEquatable<DispatchSiteModel>
             var hash = MessageTypeExpression.GetHashCode();
             hash = (hash * 397) ^ (int)Kind;
             hash = (hash * 397) ^ AssignableKeys.Length;
+            hash = (hash * 397) ^ Groups.Length;
             return hash;
         }
     }

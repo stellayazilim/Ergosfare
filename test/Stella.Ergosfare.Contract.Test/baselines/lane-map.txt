@@ -1028,7 +1028,7 @@ GeneratedRegistrationSyncEventHandlerTests — stages: [pre, async, sync:object,
            | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Publish
              | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishCore
                | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishThroughStages
-                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__18.MoveNext
+                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__19.MoveNext
                    | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1.Invoke
                      | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1+<Invoke>d__0.MoveNext
                        | Stella.Ergosfare.Events.Abstractions.IEventPreInterceptor`1.Stella.Ergosfare.Core.Abstractions.Handlers.IAsyncPreInterceptor<TEvent>.HandleAsync
@@ -1042,7 +1042,7 @@ GeneratedRegistrationSyncEventHandlerTests — stages: [pre, async, sync:object,
            | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Publish
              | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishCore
                | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishThroughStages
-                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__18.MoveNext
+                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__19.MoveNext
                    | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Invoke
                      | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+AsyncSiblingHandlerBase`1.HandleAsync
                        | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
@@ -1053,7 +1053,7 @@ GeneratedRegistrationSyncEventHandlerTests — stages: [pre, async, sync:object,
            | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Publish
              | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishCore
                | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishThroughStages
-                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__18.MoveNext
+                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__19.MoveNext
                    | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Invoke
                      | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+BareShapedHandlerBase`1.Handle
                        | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
@@ -1064,7 +1064,7 @@ GeneratedRegistrationSyncEventHandlerTests — stages: [pre, async, sync:object,
            | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Publish
              | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishCore
                | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishThroughStages
-                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__18.MoveNext
+                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__19.MoveNext
                    | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Invoke
                      | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+TaskShapedHandlerBase`1.Handle
                        | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
@@ -2799,7 +2799,7 @@ RuntimeRegistrationSyncEventHandlerTests — stages: [pre, async, sync:object, s
            | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Publish
              | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishCore
                | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishThroughStages
-                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__18.MoveNext
+                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__19.MoveNext
                    | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1.Invoke
                      | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PreInterceptorInvocationStrategy`1+<Invoke>d__0.MoveNext
                        | Stella.Ergosfare.Events.Abstractions.IEventPreInterceptor`1.Stella.Ergosfare.Core.Abstractions.Handlers.IAsyncPreInterceptor<TEvent>.HandleAsync
@@ -2813,7 +2813,7 @@ RuntimeRegistrationSyncEventHandlerTests — stages: [pre, async, sync:object, s
            | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Publish
              | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishCore
                | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishThroughStages
-                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__18.MoveNext
+                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__19.MoveNext
                    | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Invoke
                      | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+AsyncSiblingHandlerBase`1.HandleAsync
                        | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
@@ -2824,7 +2824,7 @@ RuntimeRegistrationSyncEventHandlerTests — stages: [pre, async, sync:object, s
            | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Publish
              | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishCore
                | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishThroughStages
-                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__18.MoveNext
+                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__19.MoveNext
                    | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Invoke
                      | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+BareShapedHandlerBase`1.Handle
                        | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
@@ -2835,7 +2835,7 @@ RuntimeRegistrationSyncEventHandlerTests — stages: [pre, async, sync:object, s
            | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Publish
              | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishCore
                | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishThroughStages
-                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__18.MoveNext
+                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__19.MoveNext
                    | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Invoke
                      | Stella.Ergosfare.Contract.Test.Events.SyncEventHandlerContract+TaskShapedHandlerBase`1.Handle
                        | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
@@ -3478,7 +3478,7 @@ stages: [handler, exception, final]
            | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Publish
              | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishCore
                | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishThroughStages
-                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__18.MoveNext
+                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__19.MoveNext
                    | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Invoke
                      | Stella.Ergosfare.Contract.Test.Events.EventPublishTests+AnnouncedHandler.HandleAsync
                        | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
@@ -3489,7 +3489,7 @@ stages: [handler, exception, final]
            | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Publish
              | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishCore
                | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishThroughStages
-                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__18.MoveNext
+                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__19.MoveNext
                    | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.ExceptionInterceptorInvocationStrategy`2.Invoke
                      | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.ExceptionInterceptorInvocationStrategy`2+<Invoke>d__0.MoveNext
                        | Stella.Ergosfare.Contract.Test.Events.EventPublishTests+AnnouncedException.HandleAsync
@@ -3501,7 +3501,7 @@ stages: [handler, exception, final]
            | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Publish
              | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishCore
                | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishThroughStages
-                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__18.MoveNext
+                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__19.MoveNext
                    | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.FinalInterceptorInvocationStrategy`2.Invoke
                      | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.FinalInterceptorInvocationStrategy`2+<Invoke>d__0.MoveNext
                        | Stella.Ergosfare.Contract.Test.Events.EventPublishTests+AnnouncedFinal.HandleAsync
@@ -3515,7 +3515,7 @@ stages: [handler, post, final]
            | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Publish
              | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishCore
                | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishThroughStages
-                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__18.MoveNext
+                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__19.MoveNext
                    | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Invoke
                      | Stella.Ergosfare.Contract.Test.Events.EventPublishTests+AnnouncedHandler.HandleAsync
                        | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
@@ -3526,7 +3526,7 @@ stages: [handler, post, final]
            | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Publish
              | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishCore
                | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishThroughStages
-                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__18.MoveNext
+                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__19.MoveNext
                    | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PostInterceptorInvocationStrategy`2.Invoke
                      | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PostInterceptorInvocationStrategy`2+<Invoke>d__0.MoveNext
                        | Stella.Ergosfare.Contract.Test.Events.EventPublishTests+AnnouncedPost.HandleAsync
@@ -3538,7 +3538,7 @@ stages: [handler, post, final]
            | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Publish
              | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishCore
                | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishThroughStages
-                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__18.MoveNext
+                 | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__19.MoveNext
                    | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.FinalInterceptorInvocationStrategy`2.Invoke
                      | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.FinalInterceptorInvocationStrategy`2+<Invoke>d__0.MoveNext
                        | Stella.Ergosfare.Contract.Test.Events.EventPublishTests+AnnouncedFinal.HandleAsync
@@ -3554,7 +3554,7 @@ stages: [handler, post:abort]
                | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Publish
                  | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishCore
                    | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishThroughStages
-                     | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__18.MoveNext
+                     | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__19.MoveNext
                        | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Invoke
                          | Stella.Ergosfare.Contract.Test.Events.EventPublishTests+RecalledHandler.HandleAsync
                            | Stella.Ergosfare.Contract.Test.Harness.Recording.Mark
@@ -3567,7 +3567,7 @@ stages: [handler, post:abort]
                | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.Publish
                  | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishCore
                    | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1.PublishThroughStages
-                     | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__18.MoveNext
+                     | Stella.Ergosfare.Core.Internal.Mediator.FrozenBroadcastDispatch`1+<PublishThroughStages>d__19.MoveNext
                        | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PostInterceptorInvocationStrategy`2.Invoke
                          | Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies.PostInterceptorInvocationStrategy`2+<Invoke>d__0.MoveNext
                            | Stella.Ergosfare.Contract.Test.Events.EventPublishTests+RecalledAbortingPost.HandleAsync

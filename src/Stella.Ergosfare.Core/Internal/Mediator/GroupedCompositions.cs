@@ -5,6 +5,17 @@ using Stella.Ergosfare.Core.Internal.Factories;
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 /// <summary>
+/// The outcome of asking whether a compiled plan serves one group set: the plan carried
+/// erased (the hosting dispatch knows its closed type) and whether the container qualifies
+/// for its direct-construction variant. The default value means "no plan serves this set".
+/// </summary>
+internal readonly struct GroupedPlanAdmission(object? plan, bool direct)
+{
+    public readonly object? Plan = plan;
+    public readonly bool Direct = direct;
+}
+
+/// <summary>
 /// One message type's grouped compositions, behind a single last-used slot.
 /// </summary>
 /// <remarks>
@@ -22,7 +33,14 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// dictionary hit there rather than a rebuilt graph.
 /// </para>
 /// </remarks>
-internal sealed class GroupedCompositions(IMessageDependenciesFactory dependenciesFactory, Type messageType)
+/// <param name="admitPlan">
+/// Asks the hosting dispatch whether a compiled plan serves a group set, called once per
+/// set while its entry is being built. Null when the host has no plan family to offer.
+/// </param>
+internal sealed class GroupedCompositions(
+    IMessageDependenciesFactory dependenciesFactory,
+    Type messageType,
+    Func<string[], IMessageDependencies, GroupedPlanAdmission>? admitPlan = null)
 {
     private Entry? _slot;
 
@@ -40,7 +58,7 @@ internal sealed class GroupedCompositions(IMessageDependenciesFactory dependenci
             var materializedForeign = Materialize(groups);
 
             return new Entry(materializedForeign, null,
-                dependenciesFactory.Create(messageType, materializedForeign), null);
+                dependenciesFactory.Create(messageType, materializedForeign), null, default);
         }
 
         var slot = _slot;
@@ -64,9 +82,13 @@ internal sealed class GroupedCompositions(IMessageDependenciesFactory dependenci
         var materialized = canonical?.Names ?? Materialize(groups);
         var dependencies = dependenciesFactory.Create(messageType, materialized);
 
+        // Plan admission happens here, before publication: one (group set → composition →
+        // plan) decision per set, so the dispatch path reads a decided entry.
+        var admission = admitPlan is null ? default : admitPlan(materialized, dependencies);
+
         // Races are benign: both writers publish equivalent, idempotent state, and the
         // entry is immutable so a reader that observes the reference sees every field.
-        var entry = new Entry(materialized, canonical, dependencies, dependencies as MessageDependencies);
+        var entry = new Entry(materialized, canonical, dependencies, dependencies as MessageDependencies, admission);
         _slot = entry;
 
         return entry;
@@ -88,11 +110,19 @@ internal sealed class GroupedCompositions(IMessageDependenciesFactory dependenci
         string[] groups,
         GroupSet? canonical,
         IMessageDependencies dependencies,
-        MessageDependencies? fast)
+        MessageDependencies? fast,
+        GroupedPlanAdmission admission)
     {
         public readonly string[] Groups = groups;
         public readonly GroupSet? Canonical = canonical;
         public readonly IMessageDependencies Dependencies = dependencies;
         public readonly MessageDependencies? Fast = fast;
+
+        /// <summary>
+        /// The compiled plan serving this group set and whether its direct-construction
+        /// variant qualifies — decided with the composition, carried with it, so the
+        /// dispatch path reads a plan that provably belongs to the entry it came from.
+        /// </summary>
+        public readonly GroupedPlanAdmission Admission = admission;
     }
 }

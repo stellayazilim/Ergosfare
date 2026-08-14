@@ -222,13 +222,45 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
                 return NoPipeline(throwIfNoHandlerFound);
             }
 
-            slot = new GroupedSlot(materialized, canonical, dependencies);
+            var admitted = AdmitGroupedPlan(materialized, dependencies, out var planDirect);
+            slot = new GroupedSlot(materialized, canonical, dependencies, admitted, planDirect);
             _cachedGroupedSlot = slot;
+        }
+
+        if (slot.Plan is { } plan)
+        {
+            return slot.PlanDirect
+                ? plan.ExecuteDirect((TEvent)message, context, serviceProvider)
+                : plan.Execute((TEvent)message, context, serviceProvider);
         }
 
         return slot.Fast is { HasNoInterceptors: true } fast
             ? PublishStraightThrough((TEvent)message, fast, context, serviceProvider, throwIfNoHandlerFound)
             : PublishThroughStages((TEvent)message, slot.Dependencies, context, serviceProvider, throwIfNoHandlerFound);
+    }
+
+    /// <summary>
+    /// The compiled plan for one group set, admitted against that set's own composition —
+    /// the same question the group-less arm answers in the constructor, asked once per set
+    /// when its slot is first filled rather than per publish.
+    /// </summary>
+    private StagedBroadcastPlan<TEvent>? AdmitGroupedPlan(
+        string[] groups, IMessageDependencies dependencies, out bool direct)
+    {
+        direct = false;
+
+        if (GeneratedDispatchRoots.FindBroadcastPlan(typeof(TEvent), groups) is not StagedBroadcastPlan<TEvent> plan
+            || dependencies is not MessageDependencies { MemoizedInstances: false } fast
+            || !StagedPlanGate.Matches(fast, plan.Composition))
+        {
+            return null;
+        }
+
+        direct = plan.SupportsDirectConstruction
+                 && _factory is MessageDependenciesFactory typedFactory
+                 && StagedPlanGate.AllPlainTransient(typedFactory, plan.Composition);
+
+        return plan;
     }
 
     /// <summary>
@@ -440,11 +472,22 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
             ? ValueTask.FromException(new NoHandlerFoundException(typeof(TEvent)))
             : default;
 
-    private sealed class GroupedSlot(string[] groups, GroupSet? canonical, IMessageDependencies dependencies)
+    private sealed class GroupedSlot(
+        string[] groups,
+        GroupSet? canonical,
+        IMessageDependencies dependencies,
+        StagedBroadcastPlan<TEvent>? plan,
+        bool planDirect)
     {
         public readonly string[] Groups = groups;
         public readonly GroupSet? Canonical = canonical;
         public readonly IMessageDependencies Dependencies = dependencies;
         public readonly MessageDependencies? Fast = dependencies as MessageDependencies;
+
+        /// <summary>The compiled plan of this group set, or <c>null</c> when none serves it.</summary>
+        public readonly StagedBroadcastPlan<TEvent>? Plan = plan;
+
+        /// <summary>Whether the plan's direct-construction variant qualifies for this container.</summary>
+        public readonly bool PlanDirect = planDirect;
     }
 }

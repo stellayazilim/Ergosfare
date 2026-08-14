@@ -1,4 +1,5 @@
 ﻿
+using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis.CSharp;
 using Stella.Ergosfare.SourceGenerator.Models;
@@ -188,16 +189,19 @@ internal static class RegistrationEmitter
 
         if (dispatchSites.Count > 0)
         {
-            var entries = new List<(string MetadataName, DispatchSiteKind Kind, bool Opaque)>(dispatchSites.Count);
-            var seen = new HashSet<(string, DispatchSiteKind, bool)>();
+            var entries = new List<(string MetadataName, DispatchSiteKind Kind, bool Opaque, string GroupKey, ImmutableArray<string> Groups)>(dispatchSites.Count);
+            var seen = new HashSet<(string, DispatchSiteKind, bool, string)>();
 
             foreach (var site in dispatchSites)
             {
-                var entry = (site.MessageTypeMetadataName, site.Kind, site.IsOpaque);
+                // A site whose filter could not be read carries no group payload: the
+                // reading assembly must not mistake "unreadable" for "the default group".
+                var groups = site.HasUnprovableGroups ? ImmutableArray<string>.Empty : site.Groups;
+                var entry = (site.MessageTypeMetadataName, site.Kind, site.IsOpaque, GroupKey: JoinGroups(groups));
 
                 if (seen.Add(entry))
                 {
-                    entries.Add(entry);
+                    entries.Add((entry.MessageTypeMetadataName, entry.Kind, entry.IsOpaque, entry.GroupKey, groups));
                 }
             }
 
@@ -211,17 +215,39 @@ internal static class RegistrationEmitter
                     return byName;
                 }
 
+                var byGroups = string.CompareOrdinal(x.GroupKey, y.GroupKey);
+
+                if (byGroups != 0)
+                {
+                    return byGroups;
+                }
+
                 var byKind = x.Kind.CompareTo(y.Kind);
 
                 return byKind != 0 ? byKind : x.Opaque.CompareTo(y.Opaque);
             });
 
-            foreach (var (metadataName, kind, opaque) in entries)
+            foreach (var (metadataName, kind, opaque, _, groups) in entries)
             {
                 sb.Append("[assembly: ").Append(DispatchSiteAttributeFullName).Append('(')
                   .Append(SymbolDisplay.FormatLiteral(metadataName, quote: true)).Append(", ")
                   .Append(DispatchKindFullName).Append('.').Append(DispatchKindMemberName(kind)).Append(", ")
-                  .Append(opaque ? "true" : "false").AppendLine(")]");
+                  .Append(opaque ? "true" : "false");
+
+                if (!groups.IsEmpty)
+                {
+                    sb.Append(", Groups = new string[] { ");
+
+                    for (var i = 0; i < groups.Length; i++)
+                    {
+                        sb.Append(i == 0 ? string.Empty : ", ")
+                          .Append(SymbolDisplay.FormatLiteral(groups[i], quote: true));
+                    }
+
+                    sb.Append(" }");
+                }
+
+                sb.AppendLine(")]");
             }
         }
 
@@ -248,6 +274,30 @@ internal static class RegistrationEmitter
         }
 
         sb.AppendLine();
+    }
+
+    /// <summary>
+    ///     Flattens a normalized group set into one comparable string — deduplication and
+    ///     sorting already happened, so joining is enough to make two spellings of one set
+    ///     compare equal.
+    /// </summary>
+    private static string JoinGroups(ImmutableArray<string> groups)
+    {
+        if (groups.IsEmpty)
+        {
+            return string.Empty;
+        }
+
+        var sb = new StringBuilder();
+
+        for (var i = 0; i < groups.Length; i++)
+        {
+            // The unit separator keeps {"ab"} and {"a","b"} distinct; a group name
+            // carrying a control character is not a name anyone writes.
+            sb.Append(i == 0 ? string.Empty : "").Append(groups[i]);
+        }
+
+        return sb.ToString();
     }
 
     private static string DispatchKindMemberName(DispatchSiteKind kind)
@@ -487,7 +537,24 @@ internal static class RegistrationEmitter
                 sb.Append(", ").Append(plan.ResultTypeExpression);
             }
 
-            sb.Append(">(new StagedPlan").Append(i).AppendLine("());");
+            sb.Append(">(new StagedPlan").Append(i).Append("()");
+
+            // The group set is part of the key, so it travels with the plan. The default
+            // set is the absent argument — the overload without it.
+            if (!plan.Groups.IsEmpty)
+            {
+                sb.Append(", new string[] { ");
+
+                for (var g = 0; g < plan.Groups.Length; g++)
+                {
+                    sb.Append(g == 0 ? string.Empty : ", ")
+                      .Append(SymbolDisplay.FormatLiteral(plan.Groups[g], quote: true));
+                }
+
+                sb.Append(" }");
+            }
+
+            sb.AppendLine(");");
         }
 
         sb.AppendLine("        }");

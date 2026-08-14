@@ -1,4 +1,5 @@
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Results;
@@ -51,7 +52,7 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
     {
         _factory = dependenciesFactory;
         _plan = plan;
-        _grouped = new GroupedCompositions(dependenciesFactory, typeof(TMessage));
+        _grouped = new GroupedCompositions(dependenciesFactory, typeof(TMessage), AdmitGroupedPlan);
 
         if (dependenciesFactory is not MessageDependenciesFactory)
         {
@@ -168,7 +169,37 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
 
         var composition = _grouped.Resolve(groups);
 
+        if (composition.Admission.Plan is StagedResultPlan<TMessage, TResult> groupedPlan)
+        {
+            return composition.Admission.Direct
+                ? groupedPlan.ExecuteDirect((TMessage)message, context, serviceProvider)
+                : groupedPlan.Execute((TMessage)message, context, serviceProvider);
+        }
+
         return ExecuteRuntimeLane(message, composition.Dependencies, composition.Fast, context, serviceProvider);
+    }
+
+    /// <summary>
+    /// The compiled plan for one group set; see
+    /// <see cref="FrozenVoidDispatch{TMessage}.AdmitGroupedPlan"/>. The result slot adds the
+    /// adapter-identity condition the default arm applies.
+    /// </summary>
+    private GroupedPlanAdmission AdmitGroupedPlan(string[] groups, IMessageDependencies dependencies)
+    {
+        if (GeneratedDispatchRoots.FindStagedResultPlan(typeof(TMessage), typeof(TResult), groups)
+                is not StagedResultPlan<TMessage, TResult> plan
+            || plan.Composition.ResultAdapterType != _resultAdapter?.GetType()
+            || dependencies is not MessageDependencies { MemoizedInstances: false } fast
+            || !StagedPlanGate.Matches(fast, plan.Composition))
+        {
+            return default;
+        }
+
+        var direct = plan.SupportsDirectConstruction
+                     && _factory is MessageDependenciesFactory typedFactory
+                     && StagedPlanGate.AllPlainTransient(typedFactory, plan.Composition);
+
+        return new GroupedPlanAdmission(plan, direct);
     }
 
     /// <inheritdoc cref="FrozenVoidDispatch{TMessage}.EnsureResultAdapter"/>

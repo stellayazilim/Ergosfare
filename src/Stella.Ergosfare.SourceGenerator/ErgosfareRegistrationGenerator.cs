@@ -2111,7 +2111,8 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
         var stagedPlans = availability.DispatchRootsHasStagedPlans
             ? ComputeStagedPlans(types, availability.HasKeyedServiceExtensions,
                 defaultResultAdapter is { IsBakeable: true } ? defaultResultAdapter : null,
-                pluginInvocations)
+                pluginInvocations,
+                CollectGroupSets(dispatchSites, referencedSites.Sites))
             : (IReadOnlyList<StagedPlanModel>)Array.Empty<StagedPlanModel>();
 
         // A message a plugin pulled into the staged family leaves the single-handler one:
@@ -2374,15 +2375,197 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
     ///     advisory regardless: the hosting executor validates it against the container's
     ///     selected frozen composition.
     /// </summary>
+    /// <summary>
+    ///     The group sets each dispatch site names, indexed by the static message key the
+    ///     site dispatches through. A message's own key and every key it is assignable to
+    ///     both count: a site typed as a base (or a marker) delivers the subtype too, so its
+    ///     filter is one the subtype's pipeline can be asked for.
+    /// </summary>
+    /// <remarks>
+    ///     Only readable filters land here. A site whose set the scan could not fold names
+    ///     no key — its message keeps the runtime group lane, which filters the live
+    ///     composition per dispatch and is always correct, merely not straight-line.
+    /// </remarks>
+    private static Dictionary<string, List<ImmutableArray<string>>> CollectGroupSets(
+        ImmutableArray<DispatchSiteModel> sourceSites,
+        ImmutableArray<DispatchSiteModel> referencedSites)
+    {
+        var byKey = new Dictionary<string, List<ImmutableArray<string>>>(StringComparer.Ordinal);
+
+        Add(sourceSites);
+        Add(referencedSites);
+
+        return byKey;
+
+        void Add(ImmutableArray<DispatchSiteModel> sites)
+        {
+            foreach (var site in sites)
+            {
+                // The default set needs no site to prove it: every message gets that plan
+                // attempt anyway, so recording it here would only duplicate work.
+                if (site.HasUnprovableGroups || site.Groups.IsEmpty)
+                {
+                    continue;
+                }
+
+                var key = DefinitionKey(site.MessageTypeExpression);
+
+                if (!byKey.TryGetValue(key, out var sets))
+                {
+                    byKey.Add(key, sets = []);
+                }
+
+                var duplicate = false;
+
+                foreach (var existing in sets)
+                {
+                    if (GroupSetsEqual(existing, site.Groups))
+                    {
+                        duplicate = true;
+                        break;
+                    }
+                }
+
+                if (!duplicate)
+                {
+                    sets.Add(site.Groups);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Every group set a dispatch could ask this message's pipeline for: the sets sites
+    ///     named for the message itself, plus the ones named for a type it is assignable to
+    ///     — a publish typed as a base reaches the subtype, and reaches it under that
+    ///     filter.
+    /// </summary>
+    private static void CollectTargetSets(
+        RegistrableTypeModel type,
+        Dictionary<string, List<ImmutableArray<string>>> groupSetsByKey,
+        List<ImmutableArray<string>> into)
+    {
+        if (groupSetsByKey.Count == 0)
+        {
+            return;
+        }
+
+        AddFrom(DefinitionKey(type.TypeofExpression));
+
+        foreach (var assignableKey in type.AssignableKeys)
+        {
+            AddFrom(DefinitionKey(assignableKey));
+        }
+
+        void AddFrom(string key)
+        {
+            if (!groupSetsByKey.TryGetValue(key, out var sets))
+            {
+                return;
+            }
+
+            foreach (var candidate in sets)
+            {
+                var duplicate = false;
+
+                foreach (var existing in into)
+                {
+                    if (GroupSetsEqual(existing, candidate))
+                    {
+                        duplicate = true;
+                        break;
+                    }
+                }
+
+                if (!duplicate)
+                {
+                    into.Add(candidate);
+                }
+            }
+        }
+    }
+
+    private static bool GroupSetsEqual(ImmutableArray<string> left, ImmutableArray<string> right)
+    {
+        if (left.Length != right.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < left.Length; i++)
+        {
+            if (!string.Equals(left[i], right[i], StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    ///     Whether a participant runs under a target group set, mirroring the runtime's
+    ///     any-of × any-of test: a participant declaring no <c>[Group]</c> belongs to the
+    ///     default group, and an empty target set IS the default group.
+    /// </summary>
+    private static bool ParticipatesInGroups(RegistrableTypeModel participant, ImmutableArray<string> targetGroups)
+    {
+        if (participant.GroupNames.IsEmpty)
+        {
+            if (targetGroups.IsEmpty)
+            {
+                return true;
+            }
+
+            foreach (var target in targetGroups)
+            {
+                if (string.Equals(target, DefaultGroupName, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        if (targetGroups.IsEmpty)
+        {
+            foreach (var declared in participant.GroupNames)
+            {
+                if (string.Equals(declared, DefaultGroupName, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        foreach (var declared in participant.GroupNames)
+        {
+            foreach (var target in targetGroups)
+            {
+                if (string.Equals(declared, target, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     private static List<StagedPlanModel> ComputeStagedPlans(
         List<RegistrableTypeModel> types,
         bool hasKeyedServiceExtensions,
         DefaultResultAdapterSiteModel? defaultResultAdapter,
-        ImmutableArray<PluginInvocationModel> pluginInvocations)
+        ImmutableArray<PluginInvocationModel> pluginInvocations,
+        Dictionary<string, List<ImmutableArray<string>>> groupSetsByKey)
     {
         CollectPipelineFacts(types, out var handlerCounts, out var soleHandlers, out _);
 
         var plans = new List<StagedPlanModel>();
+        var targetSets = new List<ImmutableArray<string>>();
 
         foreach (var type in types)
         {
@@ -2390,6 +2573,23 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
             {
                 continue;
             }
+
+            // The default set always, then every filter a call site proved for this message
+            // — through its own type or through a base the site was typed as.
+            targetSets.Clear();
+            targetSets.Add(ImmutableArray<string>.Empty);
+            CollectTargetSets(type, groupSetsByKey, targetSets);
+
+            foreach (var targetGroups in targetSets)
+            {
+                AddStagedPlan(type, targetGroups);
+            }
+        }
+
+        return plans;
+
+        void AddStagedPlan(RegistrableTypeModel type, ImmutableArray<string> targetGroups)
+        {
 
             string? resultTypeExpression = null;
             var resultIsValueType = false;
@@ -2414,7 +2614,7 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
             }
             else
             {
-                continue;
+                return;
             }
 
             ImmutableArray<StagedHandlerModel> handlers;
@@ -2425,10 +2625,10 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 // No sole-handler gate and no covariant disqualification: a broadcast is
                 // where a covariant handler is a legitimate participant rather than a
                 // competing claim on the message.
-                if (!TryAssembleBroadcastHandlers(type, types, hasKeyedServiceExtensions,
+                if (!TryAssembleBroadcastHandlers(type, types, hasKeyedServiceExtensions, targetGroups,
                         out handlers, out indirectHandlers))
                 {
-                    continue;
+                    return;
                 }
             }
             else
@@ -2437,19 +2637,27 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 // interceptor suppression (interceptors are the whole point here).
                 if (!handlerCounts.TryGetValue(type.TypeofExpression, out var count) || count != 1)
                 {
-                    continue;
+                    return;
                 }
 
                 if (HasCovariantMainHandler(type, handlerCounts))
                 {
-                    continue;
+                    return;
                 }
 
                 var (handler, handlerDescriptor) = soleHandlers[type.TypeofExpression];
 
-                if (!handler.IsAccessible || !handler.DiscoveryKeys.IsEmpty || handler.GroupsExpression is not null)
+                if (!handler.IsAccessible || !handler.DiscoveryKeys.IsEmpty)
                 {
-                    continue;
+                    return;
+                }
+
+                // A send delivers to one handler; under a filter that excludes it, the
+                // pipeline has no handler at all and there is nothing to bake — the runtime
+                // lane raises the no-handler outcome the caller asked for.
+                if (!ParticipatesInGroups(handler, targetGroups))
+                {
+                    return;
                 }
 
                 var expectedHandlerResult = resultTypeExpression is null
@@ -2459,7 +2667,7 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 if (handlerDescriptor.ResultTypeExpression != expectedHandlerResult
                     || handlerDescriptor.MessageTypeExpression != type.TypeofExpression)
                 {
-                    continue;
+                    return;
                 }
 
                 handlers = ImmutableArray.Create(new StagedHandlerModel(
@@ -2468,16 +2676,17 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
             }
 
             if (!TryAssembleStagedStages(type, types, resultTypeExpression, resultIsValueType, hasKeyedServiceExtensions,
-                    out var pre, out var post, out var exceptionCalls, out var finalCalls))
+                    targetGroups, out var pre, out var post, out var exceptionCalls, out var finalCalls))
             {
-                continue;
+                return;
             }
 
             var pluginCalls = SelectPluginCalls(pluginInvocations, type, resultTypeExpression is null);
 
             if (pre.Length + post.Length + exceptionCalls.Length + finalCalls.Length == 0
                 && pluginCalls.IsEmpty
-                && !isBroadcast)
+                && !isBroadcast
+                && targetGroups.IsEmpty)
             {
                 // No interceptors and no plugin: the single-handler plans already cover this
                 // shape. A plugin is what pulls an interceptorless pipeline in here — its
@@ -2492,7 +2701,12 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 // that the interceptorless command already enjoys. Without this arm the
                 // flagship "hooks cost zero while not attached" lane is the only lane left
                 // resolving its participants through the container per publish.
-                continue;
+                //
+                // A filtered dispatch has no such family either: the single-handler plans
+                // are keyed by message alone and answer only the default set, so leaving a
+                // grouped pipeline out here would leave every grouped dispatch — however
+                // simple — resolving through the container.
+                return;
             }
 
             // The runtime binding's compile-time mirror: the opt-out suppresses every
@@ -2518,7 +2732,7 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 {
                     if (!annotation.IsBakeable)
                     {
-                        continue;
+                        return;
                     }
 
                     adapterKind = StagedResultAdapterKind.Custom;
@@ -2541,18 +2755,20 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
             {
                 // A Unit-fitting annotation binds the void lane at runtime; void plans do
                 // not model adapters, so the plan is disqualified rather than diverging.
-                continue;
+                return;
             }
             else if (!type.HasIgnoredResultAdapter
                      && defaultResultAdapter is not null
                      && TryBindDefaultAdapter(defaultResultAdapter, UnitExpression, out _, out _))
             {
                 // A Unit-serving default binds every void lane at runtime; same posture.
-                continue;
+                return;
             }
 
             plans.Add(new StagedPlanModel(
                 type.TypeofExpression,
+                targetGroups,
+                isBroadcast,
                 resultTypeExpression,
                 resultIsValueType,
                 handlers,
@@ -2561,8 +2777,6 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 adapterKind, adapterTypeExpression, adapterMaterializes,
                 pluginCalls));
         }
-
-        return plans;
     }
 
     /// <summary>
@@ -2759,6 +2973,7 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
         string? resultTypeExpression,
         bool resultIsValueType,
         bool hasKeyedServiceExtensions,
+        ImmutableArray<string> targetGroups,
         out ImmutableArray<StagedCallModel> preCalls,
         out ImmutableArray<StagedCallModel> postCalls,
         out ImmutableArray<StagedCallModel> exceptionCalls,
@@ -2832,10 +3047,16 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                     return false;
                 }
 
+                // Out of this plan's group: the set it is keyed by does not select this
+                // participant, so the stage simply does not carry it.
+                if (!ParticipatesInGroups(candidate, targetGroups))
+                {
+                    continue;
+                }
+
                 // Participation established. The participant itself must be modelable.
                 if (!candidate.IsAccessible
                     || !candidate.DiscoveryKeys.IsEmpty
-                    || candidate.GroupsExpression is not null
                     || candidate.IsNestedType)
                 {
                     return false;
@@ -3004,6 +3225,7 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
         RegistrableTypeModel message,
         List<RegistrableTypeModel> types,
         bool hasKeyedServiceExtensions,
+        ImmutableArray<string> targetGroups,
         out ImmutableArray<StagedHandlerModel> handlers,
         out ImmutableArray<StagedHandlerModel> indirectHandlers)
     {
@@ -3061,9 +3283,15 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 return false;
             }
 
+            // Out of this plan's group, so not a participant of it — and not a defect
+            // either: the set this plan is keyed by simply does not select it.
+            if (!ParticipatesInGroups(candidate, targetGroups))
+            {
+                continue;
+            }
+
             if (!candidate.IsAccessible
                 || !candidate.DiscoveryKeys.IsEmpty
-                || candidate.GroupsExpression is not null
                 || candidate.IsNestedType)
             {
                 return false;
