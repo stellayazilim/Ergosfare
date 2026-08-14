@@ -2476,7 +2476,8 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
             var pluginCalls = SelectPluginCalls(pluginInvocations, type, resultTypeExpression is null);
 
             if (pre.Length + post.Length + exceptionCalls.Length + finalCalls.Length == 0
-                && pluginCalls.IsEmpty)
+                && pluginCalls.IsEmpty
+                && !isBroadcast)
             {
                 // No interceptors and no plugin: the single-handler plans already cover this
                 // shape. A plugin is what pulls an interceptorless pipeline in here — its
@@ -2484,6 +2485,13 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 // only place a call can live. The body collapses accordingly: with no pre
                 // chain, the pipeline start and the pre-handler boundary are the same point,
                 // as are the post-handler and after-post ones.
+                //
+                // A broadcast has no single-handler family to fall back on, so its bare
+                // loop IS the plan: the interceptorless publish gets the same straight-line
+                // body — and, through the construction gate, the same direct construction —
+                // that the interceptorless command already enjoys. Without this arm the
+                // flagship "hooks cost zero while not attached" lane is the only lane left
+                // resolving its participants through the container per publish.
                 continue;
             }
 

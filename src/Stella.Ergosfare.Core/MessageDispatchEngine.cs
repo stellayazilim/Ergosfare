@@ -27,10 +27,10 @@ public sealed class MessageDispatchEngine
     private readonly PipelineExecutorCache _executorCache;
 
     /// <summary>
-    /// This container's broadcast pipelines, one per message type — the publishing
+    /// This container's frozen publish pipelines, one per message type — the publishing
     /// counterpart of the executor cache above.
     /// </summary>
-    private readonly BroadcastDispatchTable _broadcasts;
+    private readonly FrozenBroadcastTable _broadcasts;
 
     /// <summary>
     /// This container's streaming pipelines, one per (query, result) pair.
@@ -46,12 +46,19 @@ public sealed class MessageDispatchEngine
     {
         _executorCache = executorCache ?? throw new ArgumentNullException(nameof(executorCache));
         _dependenciesFactory = dependenciesFactory ?? throw new ArgumentNullException(nameof(dependenciesFactory));
-        _broadcasts = new BroadcastDispatchTable(_dependenciesFactory);
+        _broadcasts = new FrozenBroadcastTable(_dependenciesFactory);
         _streams = new StreamDispatchTable(_dependenciesFactory);
     }
 
     /// <inheritdoc cref="_dependenciesFactory"/>
     internal IMessageDependenciesFactory DependenciesFactory => _dependenciesFactory;
+
+    /// <inheritdoc cref="_broadcasts"/>
+    /// <remarks>
+    /// Exposed to the event facade so a typed publish is one body: guard, slot read,
+    /// pooled execute — no relay frames between the facade and the frozen pipeline.
+    /// </remarks>
+    internal FrozenBroadcastTable Broadcasts => _broadcasts;
 
     /// <summary>
     /// Broadcasts a message to every handler of its pipeline, renting a pooled context for
@@ -70,9 +77,8 @@ public sealed class MessageDispatchEngine
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        return Rent(
-            _broadcasts.Get(message.GetType()), message, serviceProvider, cancellationToken,
-            groups, throwIfNoHandlerFound);
+        return _broadcasts.Get(message.GetType())
+            .PublishPooled(message, serviceProvider, cancellationToken, groups, throwIfNoHandlerFound);
     }
 
     /// <summary>
@@ -92,7 +98,8 @@ public sealed class MessageDispatchEngine
             ? _broadcasts.Get<TMessage>()
             : _broadcasts.Get(message.GetType());
 
-        return Rent(dispatch, message, serviceProvider, cancellationToken, groups, throwIfNoHandlerFound);
+        // The pool logic rides inside the dispatch's own frame — no renting frame here.
+        return dispatch.PublishPooled(message, serviceProvider, cancellationToken, groups, throwIfNoHandlerFound);
     }
 
     /// <summary>
@@ -134,46 +141,6 @@ public sealed class MessageDispatchEngine
 
         return _streams.Get<TResult>(query.GetType())
             .Stream(query, context, context.CancellationToken, serviceProvider, groups);
-    }
-
-    private static ValueTask Rent(
-        BroadcastDispatch dispatch, object message, IServiceProvider serviceProvider,
-        CancellationToken cancellationToken,
-        IEnumerable<string>? groups, bool throwIfNoHandlerFound)
-    {
-        var context = ErgosfareContextPool.Rent(null, cancellationToken);
-        ValueTask task;
-
-        try
-        {
-            task = dispatch.Publish(message, context, serviceProvider, groups, throwIfNoHandlerFound);
-        }
-        catch
-        {
-            ErgosfareContextPool.Return(context);
-            throw;
-        }
-
-        if (task.IsCompletedSuccessfully)
-        {
-            ErgosfareContextPool.Return(context);
-            return default;
-        }
-
-        return AwaitAndReturn(task, context);
-
-        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
-        static async ValueTask AwaitAndReturn(ValueTask task, ErgosfareContext context)
-        {
-            try
-            {
-                await task;
-            }
-            finally
-            {
-                ErgosfareContextPool.Return(context);
-            }
-        }
     }
 
     /// <summary>
