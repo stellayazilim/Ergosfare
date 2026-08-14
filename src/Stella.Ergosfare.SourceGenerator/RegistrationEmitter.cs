@@ -404,7 +404,14 @@ internal static class RegistrationEmitter
         bool hasKeyedServiceExtensions)
     {
         StartMember(sb, ref wroteMember);
-        sb.AppendLine("        private static void RootDispatchInstantiations()");
+        // A module initializer, not a registration side effect: the dispatch roots and the
+        // compiled plans are properties of the compilation — like the frozen compositions —
+        // so they enter the process-wide tables the moment the assembly loads. A container
+        // that never calls RegisterGenerated()/RegisterAll() still dispatches through the
+        // plans compiled here; which rows it runs is settled by what it registered. The
+        // registration surfaces keep their explicit calls — every Add below is idempotent.
+        sb.AppendLine("        [global::System.Runtime.CompilerServices.ModuleInitializer]");
+        sb.AppendLine("        internal static void RootDispatchInstantiations()");
         sb.AppendLine("        {");
 
         foreach (var type in types)

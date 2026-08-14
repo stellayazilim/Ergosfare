@@ -1,5 +1,4 @@
-﻿using System.Collections.Concurrent;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 
 namespace Stella.Ergosfare.Core.Internal.Registry;
@@ -34,30 +33,24 @@ internal sealed class HandlerLifetimeRegistry(
     /// </summary>
     public bool IsPlainTransientRegistration(Type handlerType) => _plainTransients.Contains(handlerType);
 
-    private readonly ConcurrentDictionary<Type, bool> _allSingletonByMessageType = new();
-
     /// <summary>
-    /// Whether every participant of a message's pipeline is registered as a singleton —
-    /// the memoized fast path's eligibility. Computed once per message type: a
-    /// composition is settled before the container is built, so the verdict cannot change.
+    /// Whether every participant of a pipeline shape is registered as a singleton — the
+    /// memoized fast path's eligibility.
     /// </summary>
+    /// <remarks>
+    /// Deliberately uncached: the verdict is a property of the SHAPE, and one message type
+    /// has one shape per group set — a per-type cache here once let an empty group-less
+    /// shape (vacuously all-singleton) stamp the type as memoizable, silently promoting the
+    /// grouped shape's transient handlers to de-facto singletons. The caller's own
+    /// per-(type, groups) graph cache already makes this a freeze-time-only computation.
+    /// </remarks>
     public bool AreAllParticipantsSingleton(Type messageType, FrozenPipelineShape shape)
-    {
-        if (_allSingletonByMessageType.TryGetValue(messageType, out var cached))
-        {
-            return cached;
-        }
-
-        var verdict = AllSingleton(shape.Handlers)
-                      && AllSingleton(shape.IndirectHandlers)
-                      && AllSingleton(shape.PreInterceptors)
-                      && AllSingleton(shape.PostInterceptors)
-                      && AllSingleton(shape.ExceptionInterceptors)
-                      && AllSingleton(shape.FinalInterceptors);
-
-        _allSingletonByMessageType[messageType] = verdict;
-        return verdict;
-    }
+        => AllSingleton(shape.Handlers)
+           && AllSingleton(shape.IndirectHandlers)
+           && AllSingleton(shape.PreInterceptors)
+           && AllSingleton(shape.PostInterceptors)
+           && AllSingleton(shape.ExceptionInterceptors)
+           && AllSingleton(shape.FinalInterceptors);
 
     private bool AllSingleton(IReadOnlyList<Type> participants)
     {

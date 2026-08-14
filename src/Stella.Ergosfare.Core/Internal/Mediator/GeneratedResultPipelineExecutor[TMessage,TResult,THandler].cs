@@ -2,7 +2,7 @@
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
-using Stella.Ergosfare.Core.Abstractions.Strategies;
+using Stella.Ergosfare.Core.Abstractions.Results;
 using Stella.Ergosfare.Core.Internal.Factories;
 
 namespace Stella.Ergosfare.Core.Internal.Mediator;
@@ -26,18 +26,17 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
 {
     private static readonly string[] EmptyGroups = [];
 
-    private readonly SingleAsyncHandlerMediationStrategy<TMessage, TResult> _strategy = new();
-
     /// <summary>
-    /// The plain pipeline this executor becomes under a group filter; see
+    /// The grouped compositions of this pipeline; see
     /// <see cref="GeneratedVoidPipelineExecutor{TMessage, THandler}"/>.
     /// </summary>
-    private readonly ResultPipelineExecutor<TMessage, TResult> _filtered = new(dependenciesFactory);
+    private readonly GroupedCompositions _grouped = new(dependenciesFactory, typeof(TMessage));
 
-    // Whether the pipeline's result slot has an effective adapter — the attribute tiers
-    // plus the container's default, resolved once on the first dispatch, so the fast
-    // paths below pay nothing when (as almost always) there is none.
-    private bool _hasResultAdapter;
+    // The effective adapter of the pipeline's result slot — the attribute tiers plus the
+    // container's default, resolved once on the first dispatch, so the fast paths below
+    // pay nothing when (as almost always) there is none.
+    private IResultAdapter<TResult>? _resultAdapter;
+    private IResultMaterializer<TResult>? _resultMaterializer;
     private volatile bool _resultAdapterResolved;
 
     private static readonly bool HandlerIsDisposable =
@@ -60,7 +59,7 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
     {
         if (groups is not null)
         {
-            return _filtered.Execute(message, context, serviceProvider, groups);
+            return ExecuteGrouped(message, context, serviceProvider, groups);
         }
 
         if (_fastDirect)
@@ -69,17 +68,12 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
             return direct.HandleAsync((TMessage)message, context);
         }
 
-        if (!_resultAdapterResolved)
-        {
-            _hasResultAdapter = global::Stella.Ergosfare.Core.Abstractions.Results
-                .ResultAdapterBinding.For<TMessage, TResult>(serviceProvider) is not null;
-            _resultAdapterResolved = true;
-        }
+        EnsureResultAdapter(serviceProvider);
 
         var dependencies = GetDependencies();
 
         if (_cachedFastDependencies?.FastSingleHandler is { } handlerReference
-            && !_hasResultAdapter)
+            && _resultAdapter is null)
         {
             IHandler handler = _useDirectConstruction && handlerReference.HandlerType == typeof(THandler)
                 ? _directHandlerFactory is not null ? _directHandlerFactory() : _providerHandlerFactory!(serviceProvider)
@@ -104,7 +98,55 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
             }
         }
 
-        return _strategy.Mediate((TMessage)message, dependencies, context, serviceProvider);
+        return ResultPipelineBody<TMessage, TResult>.Run(
+            (TMessage)message, dependencies, _resultAdapter, _resultMaterializer, context, serviceProvider);
+    }
+
+    /// <summary>
+    /// The group-filtered dispatch; see
+    /// <see cref="GeneratedVoidPipelineExecutor{TMessage, THandler}"/>.
+    /// </summary>
+    private ValueTask<TResult> ExecuteGrouped(object message, ErgosfareContext context,
+        IServiceProvider serviceProvider, IEnumerable<string> groups)
+    {
+        EnsureResultAdapter(serviceProvider);
+
+        var composition = _grouped.Resolve(groups);
+
+        if (composition.Fast?.FastSingleHandler is { } handlerReference && _resultAdapter is null)
+        {
+            var handler = handlerReference.Resolve(serviceProvider);
+
+            switch (handler)
+            {
+                case IAsyncHandler<TMessage, TResult> asyncHandler:
+                    return asyncHandler.HandleAsync((TMessage)message, context);
+                case IHandler<TMessage, ValueTask<TResult>> valueTaskShaped:
+                    return valueTaskShaped.Handle((TMessage)message, context);
+                case IHandler<TMessage, TResult> syncHandler:
+                    return ValueTask.FromResult(syncHandler.Handle((TMessage)message, context));
+            }
+        }
+
+        return ResultPipelineBody<TMessage, TResult>.Run(
+            (TMessage)message, composition.Dependencies, _resultAdapter, _resultMaterializer, context, serviceProvider);
+    }
+
+    /// <summary>
+    /// Resolves the slot's effective adapter once; see
+    /// <see cref="FrozenVoidDispatch{TMessage}.EnsureResultAdapter"/>.
+    /// </summary>
+    private void EnsureResultAdapter(IServiceProvider serviceProvider)
+    {
+        if (_resultAdapterResolved)
+        {
+            return;
+        }
+
+        var adapter = ResultAdapterBinding.For<TMessage, TResult>(serviceProvider);
+        _resultAdapter = adapter;
+        _resultMaterializer = adapter as IResultMaterializer<TResult>;
+        _resultAdapterResolved = true;
     }
 
     private IMessageDependencies GetDependencies()
@@ -130,7 +172,7 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
                 && typedFactory.IsPlainTransientRegistration(typeof(THandler));
             // Execute resolves the adapter slot before the first GetDependencies call, so
             // the answer is already in hand here.
-            _fastDirect = _useDirectConstruction && !_hasResultAdapter;
+            _fastDirect = _useDirectConstruction && _resultAdapter is null;
             return dependencies;
         }
 
