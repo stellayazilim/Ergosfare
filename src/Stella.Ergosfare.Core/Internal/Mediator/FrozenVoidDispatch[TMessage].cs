@@ -1,4 +1,5 @@
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Results;
@@ -66,7 +67,7 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
     {
         _factory = dependenciesFactory;
         _plan = plan;
-        _grouped = new GroupedCompositions(dependenciesFactory, typeof(TMessage));
+        _grouped = new GroupedCompositions(dependenciesFactory, typeof(TMessage), AdmitGroupedPlan);
 
         if (dependenciesFactory is not MessageDependenciesFactory)
         {
@@ -199,7 +200,67 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
 
         var composition = _grouped.Resolve(groups);
 
+        if (composition.Admission.Plan is StagedVoidPlan<TMessage> groupedPlan)
+        {
+            // A plan keyed by this set decided its participants at compile time; the
+            // filtering plan decides them from the set it is handed.
+            if (groupedPlan.FilterGroups is not null)
+            {
+                return composition.Admission.Direct
+                    ? groupedPlan.ExecuteFilteredDirect((TMessage)message, context, serviceProvider, composition.Groups)
+                    : groupedPlan.ExecuteFiltered((TMessage)message, context, serviceProvider, composition.Groups);
+            }
+
+            return composition.Admission.Direct
+                ? groupedPlan.ExecuteDirect((TMessage)message, context, serviceProvider)
+                : groupedPlan.Execute((TMessage)message, context, serviceProvider);
+        }
+
         return ExecuteRuntimeLane(message, composition.Dependencies, composition.Fast, context, serviceProvider);
+    }
+
+    /// <summary>
+    /// The compiled plan for one group set, admitted against that set's own composition —
+    /// the same question <see cref="ExecuteUndecided"/> answers for the default set, asked
+    /// once per set when its entry is built rather than per dispatch.
+    /// </summary>
+    private GroupedPlanAdmission AdmitGroupedPlan(string[] groups, IMessageDependencies dependencies)
+    {
+        if (_resultAdapter is not null)
+        {
+            return default;
+        }
+
+        var plan = GeneratedDispatchRoots.FindStagedVoidPlan(typeof(TMessage), groups) as StagedVoidPlan<TMessage>;
+
+        if (plan is not null)
+        {
+            if (dependencies is not MessageDependencies { MemoizedInstances: false } keyed
+                || !StagedPlanGate.Matches(keyed, plan.Composition))
+            {
+                return default;
+            }
+        }
+        else
+        {
+            // No plan is keyed by this set. The filtering plan answers any set, gated
+            // against the composition over the groups it covers — the only set that
+            // reproduces the participants its body holds.
+            plan = GeneratedDispatchRoots.FindFilteredVoidPlan(typeof(TMessage)) as StagedVoidPlan<TMessage>;
+
+            if (plan?.FilterGroups is not { } covered
+                || _factory.Find(typeof(TMessage), covered) is not MessageDependencies { MemoizedInstances: false } full
+                || !StagedPlanGate.Matches(full, plan.Composition))
+            {
+                return default;
+            }
+        }
+
+        var direct = plan.SupportsDirectConstruction
+                     && _factory is MessageDependenciesFactory typedFactory
+                     && StagedPlanGate.AllPlainTransient(typedFactory, plan.Composition);
+
+        return new GroupedPlanAdmission(plan, direct);
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 ﻿
+using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis.CSharp;
 using Stella.Ergosfare.SourceGenerator.Models;
@@ -188,16 +189,19 @@ internal static class RegistrationEmitter
 
         if (dispatchSites.Count > 0)
         {
-            var entries = new List<(string MetadataName, DispatchSiteKind Kind, bool Opaque)>(dispatchSites.Count);
-            var seen = new HashSet<(string, DispatchSiteKind, bool)>();
+            var entries = new List<(string MetadataName, DispatchSiteKind Kind, bool Opaque, string GroupKey, ImmutableArray<string> Groups)>(dispatchSites.Count);
+            var seen = new HashSet<(string, DispatchSiteKind, bool, string)>();
 
             foreach (var site in dispatchSites)
             {
-                var entry = (site.MessageTypeMetadataName, site.Kind, site.IsOpaque);
+                // A site whose filter could not be read carries no group payload: the
+                // reading assembly must not mistake "unreadable" for "the default group".
+                var groups = site.HasUnprovableGroups ? ImmutableArray<string>.Empty : site.Groups;
+                var entry = (site.MessageTypeMetadataName, site.Kind, site.IsOpaque, GroupKey: JoinGroups(groups));
 
                 if (seen.Add(entry))
                 {
-                    entries.Add(entry);
+                    entries.Add((entry.MessageTypeMetadataName, entry.Kind, entry.IsOpaque, entry.GroupKey, groups));
                 }
             }
 
@@ -211,17 +215,39 @@ internal static class RegistrationEmitter
                     return byName;
                 }
 
+                var byGroups = string.CompareOrdinal(x.GroupKey, y.GroupKey);
+
+                if (byGroups != 0)
+                {
+                    return byGroups;
+                }
+
                 var byKind = x.Kind.CompareTo(y.Kind);
 
                 return byKind != 0 ? byKind : x.Opaque.CompareTo(y.Opaque);
             });
 
-            foreach (var (metadataName, kind, opaque) in entries)
+            foreach (var (metadataName, kind, opaque, _, groups) in entries)
             {
                 sb.Append("[assembly: ").Append(DispatchSiteAttributeFullName).Append('(')
                   .Append(SymbolDisplay.FormatLiteral(metadataName, quote: true)).Append(", ")
                   .Append(DispatchKindFullName).Append('.').Append(DispatchKindMemberName(kind)).Append(", ")
-                  .Append(opaque ? "true" : "false").AppendLine(")]");
+                  .Append(opaque ? "true" : "false");
+
+                if (!groups.IsEmpty)
+                {
+                    sb.Append(", Groups = new string[] { ");
+
+                    for (var i = 0; i < groups.Length; i++)
+                    {
+                        sb.Append(i == 0 ? string.Empty : ", ")
+                          .Append(SymbolDisplay.FormatLiteral(groups[i], quote: true));
+                    }
+
+                    sb.Append(" }");
+                }
+
+                sb.AppendLine(")]");
             }
         }
 
@@ -248,6 +274,125 @@ internal static class RegistrationEmitter
         }
 
         sb.AppendLine();
+    }
+
+    /// <summary>
+    ///     Flattens a normalized group set into one comparable string — deduplication and
+    ///     sorting already happened, so joining is enough to make two spellings of one set
+    ///     compare equal.
+    /// </summary>
+    private static string JoinGroups(ImmutableArray<string> groups)
+    {
+        if (groups.IsEmpty)
+        {
+            return string.Empty;
+        }
+
+        var sb = new StringBuilder();
+
+        for (var i = 0; i < groups.Length; i++)
+        {
+            // The unit separator keeps {"ab"} and {"a","b"} distinct; a group name
+            // carrying a control character is not a name anyone writes.
+            sb.Append(i == 0 ? string.Empty : "").Append(groups[i]);
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    ///     Emits a filtering plan's unfiltered entry, which the abstract base still declares:
+    ///     it forwards to the filtered body with the empty set, because a dispatch that names
+    ///     no group is asking for the default one and that is exactly what an empty request
+    ///     means to every baked guard.
+    /// </summary>
+    private static void AppendUnfilteredForward(StringBuilder sb, StagedPlanModel plan, bool isVoid, bool direct)
+    {
+        if (!plan.IsGroupFiltering)
+        {
+            return;
+        }
+
+        var name = direct ? "ExecuteDirect" : "Execute";
+        var target = direct ? "ExecuteFilteredDirect" : "ExecuteFiltered";
+
+        sb.AppendLine();
+        sb.Append("            public override ").Append(ValueTaskFullName);
+
+        if (!isVoid)
+        {
+            sb.Append('<').Append(plan.ResultTypeExpression).Append('>');
+        }
+
+        sb.Append(' ').Append(name).AppendLine("(");
+        sb.Append("                ").Append(plan.MessageTypeExpression).AppendLine(" message,");
+        sb.Append("                ").Append(ExecutionContextFullName).AppendLine(" context,");
+        sb.AppendLine("                global::System.IServiceProvider serviceProvider)");
+        sb.AppendLine("            {");
+        sb.Append("                return ").Append(target)
+          .AppendLine("(message, context, serviceProvider, global::System.Array.Empty<string>());");
+        sb.AppendLine("            }");
+    }
+
+    /// <summary>
+    ///     Opens the <c>if</c> a guarded participant sits behind, returning the indent its
+    ///     call is emitted at. An unguarded call — every call of a keyed plan — is emitted
+    ///     exactly as before, so the two plan shapes share one emission path.
+    /// </summary>
+    private static string OpenGuard(StringBuilder sb, string? guard, string indent)
+    {
+        if (guard is null)
+        {
+            return indent;
+        }
+
+        sb.Append(indent).Append("if (").Append(guard).AppendLine(")");
+        sb.Append(indent).AppendLine("{");
+
+        return indent + "    ";
+    }
+
+    private static void CloseGuard(StringBuilder sb, string? guard, string indent)
+    {
+        if (guard is not null)
+        {
+            sb.Append(indent).AppendLine("}");
+        }
+    }
+
+    /// <summary>
+    ///     Closes an execute signature: a filtering plan takes the requested group set as a
+    ///     parameter, because deciding participation is what its body does.
+    /// </summary>
+    private static void AppendGroupsParameter(StringBuilder sb, StagedPlanModel plan)
+    {
+        if (plan.IsGroupFiltering)
+        {
+            sb.AppendLine(",");
+            sb.AppendLine("                global::System.Collections.Generic.IReadOnlyList<string> groups)");
+        }
+        else
+        {
+            sb.AppendLine(")");
+        }
+    }
+
+    /// <summary>
+    ///     Emits the group tests a filtering plan evaluates once, before any participant
+    ///     runs: one boolean per distinct declared set, read by every call behind it.
+    /// </summary>
+    private static void EmitGroupGuards(StringBuilder sb, StagedPlanModel plan, string indent)
+    {
+        foreach (var guard in plan.GroupGuards)
+        {
+            sb.Append(indent).Append("var ").Append(guard.Name).Append(" = ")
+              .Append(guard.Expression).AppendLine(";");
+        }
+
+        if (!plan.GroupGuards.IsEmpty)
+        {
+            sb.AppendLine();
+        }
     }
 
     private static string DispatchKindMemberName(DispatchSiteKind kind)
@@ -478,8 +623,12 @@ internal static class RegistrationEmitter
             // A broadcast roots into its own store: a publish looks there and a send looks at
             // the resultless plans, so which store answered settles the delivery difference
             // and no dispatch has to branch on the message.
+            var addMethod = plan.IsGroupFiltering
+                ? plan.IsBroadcast ? ".AddFilteredBroadcastPlan<" : ".AddFilteredPlan<"
+                : plan.IsBroadcast ? ".AddBroadcastPlan<" : ".AddStagedPlan<";
+
             sb.Append("            ").Append(DispatchRootsFullName)
-              .Append(plan.IsBroadcast ? ".AddBroadcastPlan<" : ".AddStagedPlan<")
+              .Append(addMethod)
               .Append(plan.MessageTypeExpression);
 
             if (plan.ResultTypeExpression is not null)
@@ -487,7 +636,25 @@ internal static class RegistrationEmitter
                 sb.Append(", ").Append(plan.ResultTypeExpression);
             }
 
-            sb.Append(">(new StagedPlan").Append(i).AppendLine("());");
+            sb.Append(">(new StagedPlan").Append(i).Append("()");
+
+            // The group set is part of the key, so it travels with the plan. The default
+            // set is the absent argument — the overload without it. A filtering plan is not
+            // keyed by a set at all: it carries its covered groups on the plan instead.
+            if (!plan.Groups.IsEmpty && !plan.IsGroupFiltering)
+            {
+                sb.Append(", new string[] { ");
+
+                for (var g = 0; g < plan.Groups.Length; g++)
+                {
+                    sb.Append(g == 0 ? string.Empty : ", ")
+                      .Append(SymbolDisplay.FormatLiteral(plan.Groups[g], quote: true));
+                }
+
+                sb.Append(" }");
+            }
+
+            sb.AppendLine(");");
         }
 
         sb.AppendLine("        }");
@@ -667,6 +834,28 @@ internal static class RegistrationEmitter
             sb.AppendLine("            }");
             sb.AppendLine();
 
+            if (plan.IsGroupFiltering)
+            {
+                // The groups this body can be asked about. The gate validates the plan
+                // against the composition over exactly these — the only set that reproduces
+                // the participants the body carries.
+                sb.Append("            private static readonly string[] CoveredGroups = new string[] { ");
+
+                for (var g = 0; g < plan.Groups.Length; g++)
+                {
+                    sb.Append(g == 0 ? string.Empty : ", ")
+                      .Append(SymbolDisplay.FormatLiteral(plan.Groups[g], quote: true));
+                }
+
+                sb.AppendLine(" };");
+                sb.AppendLine();
+                sb.AppendLine("            public override string[] FilterGroups");
+                sb.AppendLine("            {");
+                sb.AppendLine("                get { return CoveredGroups; }");
+                sb.AppendLine("            }");
+                sb.AppendLine();
+            }
+
             sb.Append("            public override async ").Append(ValueTaskFullName);
 
             if (!isVoid)
@@ -674,10 +863,11 @@ internal static class RegistrationEmitter
                 sb.Append('<').Append(plan.ResultTypeExpression).Append('>');
             }
 
-            sb.AppendLine(" Execute(");
+            sb.Append(plan.IsGroupFiltering ? " ExecuteFiltered(" : " Execute(").AppendLine();
             sb.Append("                ").Append(plan.MessageTypeExpression).AppendLine(" message,");
             sb.Append("                ").Append(ExecutionContextFullName).AppendLine(" context,");
-            sb.AppendLine("                global::System.IServiceProvider serviceProvider)");
+            sb.Append("                global::System.IServiceProvider serviceProvider");
+            AppendGroupsParameter(sb, plan);
             sb.AppendLine("            {");
 
             if (isVoid)
@@ -690,6 +880,11 @@ internal static class RegistrationEmitter
             }
 
             sb.AppendLine("            }");
+
+            // The unfiltered entry of a filtering plan: a dispatch that names no group asks
+            // for the default one, and that is what an empty set means to every guard — so
+            // the same body answers it, no participant special-cased.
+            AppendUnfilteredForward(sb, plan, isVoid, direct: false);
 
             // The direct-construction variant: the same pipeline with every participant
             // constructed via `new` — used by the hosting executor only after it verified
@@ -709,10 +904,11 @@ internal static class RegistrationEmitter
                     sb.Append('<').Append(plan.ResultTypeExpression).Append('>');
                 }
 
-                sb.AppendLine(" ExecuteDirect(");
+                sb.Append(plan.IsGroupFiltering ? " ExecuteFilteredDirect(" : " ExecuteDirect(").AppendLine();
                 sb.Append("                ").Append(plan.MessageTypeExpression).AppendLine(" message,");
                 sb.Append("                ").Append(ExecutionContextFullName).AppendLine(" context,");
-                sb.AppendLine("                global::System.IServiceProvider serviceProvider)");
+                sb.Append("                global::System.IServiceProvider serviceProvider");
+                AppendGroupsParameter(sb, plan);
                 sb.AppendLine("            {");
 
                 if (isVoid)
@@ -725,6 +921,8 @@ internal static class RegistrationEmitter
                 }
 
                 sb.AppendLine("            }");
+
+                AppendUnfilteredForward(sb, plan, isVoid, direct: true);
             }
 
             sb.AppendLine("        }");
@@ -928,11 +1126,15 @@ internal static class RegistrationEmitter
     {
         foreach (var handler in handlers)
         {
-            EmitPluginCalls(sb, plan, PluginStage.PreMainHandler, null, indent);
-            sb.Append(indent).Append("await ");
+            var body = OpenGuard(sb, handler.GroupGuard, indent);
+
+            EmitPluginCalls(sb, plan, PluginStage.PreMainHandler, null, body);
+            sb.Append(body).Append("await ");
             AppendParticipant(sb, handler.TypeExpression, direct ? handler.ConstructionExpression : null);
             sb.AppendLine(".HandleAsync(message, context);");
-            EmitPluginCalls(sb, plan, PluginStage.PostMainHandler, null, indent);
+            EmitPluginCalls(sb, plan, PluginStage.PostMainHandler, null, body);
+
+            CloseGuard(sb, handler.GroupGuard, indent);
         }
     }
 
@@ -940,7 +1142,9 @@ internal static class RegistrationEmitter
     {
         foreach (var call in plan.PreCalls)
         {
-            sb.Append(indent).Append("message = (").Append(plan.MessageTypeExpression).Append(") ");
+            var body = OpenGuard(sb, call.GroupGuard, indent);
+
+            sb.Append(body).Append("message = (").Append(plan.MessageTypeExpression).Append(") ");
 
             if (call.Arm == StagedCallArm.Sync)
             {
@@ -954,6 +1158,8 @@ internal static class RegistrationEmitter
                 AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                 sb.AppendLine(").HandleAsync(message, context);");
             }
+
+            CloseGuard(sb, call.GroupGuard, indent);
         }
     }
 
@@ -979,6 +1185,9 @@ internal static class RegistrationEmitter
         // stage carries one, and only the exception stage declares its result parameter
         // nullable. The post stage takes TResult and object, not TResult? and object?.
         var targetAcceptsNull = exceptionArgument is not null;
+        var outerIndent = indent;
+
+        indent = OpenGuard(sb, call.GroupGuard, indent);
 
         sb.Append(indent).Append(chainVariable).Append(" = ");
 
@@ -1009,6 +1218,8 @@ internal static class RegistrationEmitter
                   .Append(extraArgument).AppendLine(", context);");
                 break;
         }
+
+        CloseGuard(sb, call.GroupGuard, outerIndent);
     }
 
     private static void EmitFinalCalls(StringBuilder sb, StagedPlanModel plan, bool direct, string resultExpressionText, string indent)
@@ -1022,10 +1233,12 @@ internal static class RegistrationEmitter
 
         foreach (var call in plan.FinalCalls)
         {
+            var body = OpenGuard(sb, call.GroupGuard, indent);
+
             switch (call.Arm)
             {
                 case StagedCallArm.AsyncTyped:
-                    sb.Append(indent).Append("await ((").Append(HandlersNamespace).Append("IAsyncFinalInterceptor<")
+                    sb.Append(body).Append("await ((").Append(HandlersNamespace).Append("IAsyncFinalInterceptor<")
                       .Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
                     AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                     sb.Append(").HandleAsync(message, ")
@@ -1033,13 +1246,13 @@ internal static class RegistrationEmitter
                       .AppendLine(", exception, context);");
                     break;
                 case StagedCallArm.AsyncAgnostic:
-                    sb.Append(indent).Append("await ((").Append(HandlersNamespace).Append("IAsyncFinalInterceptor<")
+                    sb.Append(body).Append("await ((").Append(HandlersNamespace).Append("IAsyncFinalInterceptor<")
                       .Append(plan.MessageTypeExpression).Append(">)");
                     AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                     sb.Append(").HandleAsync(message, ").Append(resultExpressionText).AppendLine(", exception, context);");
                     break;
                 default:
-                    sb.Append(indent).Append("((").Append(HandlersNamespace).Append("IFinalInterceptor<")
+                    sb.Append(body).Append("((").Append(HandlersNamespace).Append("IFinalInterceptor<")
                       .Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
                     AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
                     sb.Append(").Handle(message, ")
@@ -1047,6 +1260,8 @@ internal static class RegistrationEmitter
                       .AppendLine(", exception, context);");
                     break;
             }
+
+            CloseGuard(sb, call.GroupGuard, indent);
         }
 
         // The plugin's final observers close the stage: nothing they do can keep an
@@ -1138,6 +1353,8 @@ internal static class RegistrationEmitter
 
     private static void EmitVoidExecuteBody(StringBuilder sb, StagedPlanModel plan, bool direct)
     {
+        EmitGroupGuards(sb, plan, "                ");
+
         var needsResult = !plan.PostCalls.IsEmpty || !plan.ExceptionCalls.IsEmpty || !plan.FinalCalls.IsEmpty;
         var needsGuards = needsResult || plan.PluginNeedsGuards;
 
@@ -1222,6 +1439,8 @@ internal static class RegistrationEmitter
 
     private static void EmitResultExecuteBody(StringBuilder sb, StagedPlanModel plan, bool direct)
     {
+        EmitGroupGuards(sb, plan, "                ");
+
         if (plan.AdapterKind != StagedResultAdapterKind.None)
         {
             EmitAdaptedResultExecuteBody(sb, plan, direct);

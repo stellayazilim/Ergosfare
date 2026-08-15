@@ -222,13 +222,73 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
                 return NoPipeline(throwIfNoHandlerFound);
             }
 
-            slot = new GroupedSlot(materialized, canonical, dependencies);
+            var admitted = AdmitGroupedPlan(materialized, dependencies, out var planDirect);
+            slot = new GroupedSlot(materialized, canonical, dependencies, admitted, planDirect);
             _cachedGroupedSlot = slot;
+        }
+
+        if (slot.Plan is { } plan)
+        {
+            // A plan keyed by this set decided its participants at compile time; the
+            // filtering plan decides them from the set it is handed.
+            if (plan.FilterGroups is not null)
+            {
+                return slot.PlanDirect
+                    ? plan.ExecuteFilteredDirect((TEvent)message, context, serviceProvider, slot.Groups)
+                    : plan.ExecuteFiltered((TEvent)message, context, serviceProvider, slot.Groups);
+            }
+
+            return slot.PlanDirect
+                ? plan.ExecuteDirect((TEvent)message, context, serviceProvider)
+                : plan.Execute((TEvent)message, context, serviceProvider);
         }
 
         return slot.Fast is { HasNoInterceptors: true } fast
             ? PublishStraightThrough((TEvent)message, fast, context, serviceProvider, throwIfNoHandlerFound)
             : PublishThroughStages((TEvent)message, slot.Dependencies, context, serviceProvider, throwIfNoHandlerFound);
+    }
+
+    /// <summary>
+    /// The compiled plan for one group set, admitted against that set's own composition —
+    /// the same question the group-less arm answers in the constructor, asked once per set
+    /// when its slot is first filled rather than per publish.
+    /// </summary>
+    private StagedBroadcastPlan<TEvent>? AdmitGroupedPlan(
+        string[] groups, IMessageDependencies dependencies, out bool direct)
+    {
+        direct = false;
+
+        var plan = GeneratedDispatchRoots.FindBroadcastPlan(typeof(TEvent), groups) as StagedBroadcastPlan<TEvent>;
+
+        if (plan is not null)
+        {
+            if (dependencies is not MessageDependencies { MemoizedInstances: false } keyed
+                || !StagedPlanGate.Matches(keyed, plan.Composition))
+            {
+                return null;
+            }
+        }
+        else
+        {
+            // No plan is keyed by this set — the filter was a runtime value at every call
+            // site, or this particular set was never spelled at one. The filtering plan
+            // answers any set, and it is gated against the composition over the groups it
+            // covers: that is the only set that reproduces the participants its body holds.
+            plan = GeneratedDispatchRoots.FindFilteredBroadcastPlan(typeof(TEvent)) as StagedBroadcastPlan<TEvent>;
+
+            if (plan?.FilterGroups is not { } covered
+                || _factory.Find(typeof(TEvent), covered) is not MessageDependencies { MemoizedInstances: false } full
+                || !StagedPlanGate.Matches(full, plan.Composition))
+            {
+                return null;
+            }
+        }
+
+        direct = plan.SupportsDirectConstruction
+                 && _factory is MessageDependenciesFactory typedFactory
+                 && StagedPlanGate.AllPlainTransient(typedFactory, plan.Composition);
+
+        return plan;
     }
 
     /// <summary>
@@ -440,11 +500,22 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
             ? ValueTask.FromException(new NoHandlerFoundException(typeof(TEvent)))
             : default;
 
-    private sealed class GroupedSlot(string[] groups, GroupSet? canonical, IMessageDependencies dependencies)
+    private sealed class GroupedSlot(
+        string[] groups,
+        GroupSet? canonical,
+        IMessageDependencies dependencies,
+        StagedBroadcastPlan<TEvent>? plan,
+        bool planDirect)
     {
         public readonly string[] Groups = groups;
         public readonly GroupSet? Canonical = canonical;
         public readonly IMessageDependencies Dependencies = dependencies;
         public readonly MessageDependencies? Fast = dependencies as MessageDependencies;
+
+        /// <summary>The compiled plan of this group set, or <c>null</c> when none serves it.</summary>
+        public readonly StagedBroadcastPlan<TEvent>? Plan = plan;
+
+        /// <summary>Whether the plan's direct-construction variant qualifies for this container.</summary>
+        public readonly bool PlanDirect = planDirect;
     }
 }

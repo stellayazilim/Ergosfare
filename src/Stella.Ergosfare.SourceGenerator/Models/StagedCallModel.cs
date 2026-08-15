@@ -13,8 +13,15 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 ///     type — emitted as an <c>is</c> guard around the call, standing in for the runtime
 ///     stage's filter probe. <c>null</c> means the call is unguarded.
 /// </param>
+/// <param name="GroupGuard">
+///     For a call inside a group-filtering plan, the name of the local holding this
+///     participant's group test — the body evaluates every guard once and then puts one
+///     boolean in front of each call. <c>null</c> in a plan keyed by a proven set, where
+///     participation is a compile-time fact and no call needs a guard.
+/// </param>
 internal readonly record struct StagedCallModel(
     string TypeExpression,
     StagedCallArm Arm,
     string? ConstructionExpression,
-    string? ExceptionFilterExpression = null);
+    string? ExceptionFilterExpression = null,
+    string? GroupGuard = null);
