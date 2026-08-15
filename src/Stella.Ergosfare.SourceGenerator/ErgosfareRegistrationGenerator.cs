@@ -2112,7 +2112,8 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
             ? ComputeStagedPlans(types, availability.HasKeyedServiceExtensions,
                 defaultResultAdapter is { IsBakeable: true } ? defaultResultAdapter : null,
                 pluginInvocations,
-                CollectGroupSets(dispatchSites, referencedSites.Sites))
+                CollectGroupSets(dispatchSites, referencedSites.Sites),
+                CollectUnprovableGroupKeys(dispatchSites, referencedSites.Sites))
             : (IReadOnlyList<StagedPlanModel>)Array.Empty<StagedPlanModel>();
 
         // A message a plugin pulled into the staged family leaves the single-handler one:
@@ -2386,6 +2387,60 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
     ///     no key — its message keeps the runtime group lane, which filters the live
     ///     composition per dispatch and is always correct, merely not straight-line.
     /// </remarks>
+    /// <summary>
+    ///     The message keys some dispatch site names under a filter this compilation cannot
+    ///     read. Those messages get the filtering plan — the body that answers any set.
+    /// </summary>
+    private static HashSet<string> CollectUnprovableGroupKeys(
+        ImmutableArray<DispatchSiteModel> sourceSites,
+        ImmutableArray<DispatchSiteModel> referencedSites)
+    {
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+
+        Add(sourceSites);
+        Add(referencedSites);
+
+        return keys;
+
+        void Add(ImmutableArray<DispatchSiteModel> sites)
+        {
+            foreach (var site in sites)
+            {
+                if (site.HasUnprovableGroups)
+                {
+                    keys.Add(DefinitionKey(site.MessageTypeExpression));
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Whether any unreadable filter can reach this message — through its own type or
+    ///     through a base a site was typed as, the same reach a keyed set has.
+    /// </summary>
+    private static bool HasUnprovableGroupSite(RegistrableTypeModel type, HashSet<string> unprovableKeys)
+    {
+        if (unprovableKeys.Count == 0)
+        {
+            return false;
+        }
+
+        if (unprovableKeys.Contains(DefinitionKey(type.TypeofExpression)))
+        {
+            return true;
+        }
+
+        foreach (var assignableKey in type.AssignableKeys)
+        {
+            if (unprovableKeys.Contains(DefinitionKey(assignableKey)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static Dictionary<string, List<ImmutableArray<string>>> CollectGroupSets(
         ImmutableArray<DispatchSiteModel> sourceSites,
         ImmutableArray<DispatchSiteModel> referencedSites)
@@ -2504,6 +2559,113 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
     }
 
     /// <summary>
+    ///     How one plan decides which participants it carries. A plan keyed by a proven group
+    ///     set decides at compile time and simply omits the rest; the filtering plan — the one
+    ///     serving dispatches whose set is a runtime value — carries everyone and hands each
+    ///     call the name of a boolean the body evaluates once.
+    /// </summary>
+    private sealed class PlanGroupFilter(ImmutableArray<string> target, bool filtering)
+    {
+        private readonly Dictionary<string, string> _guardsBySignature = new(StringComparer.Ordinal);
+        private readonly List<StagedGroupGuardModel> _guards = [];
+        private readonly HashSet<string> _covered = new(StringComparer.Ordinal);
+
+        public ImmutableArray<string> Target { get; } = target;
+
+        public bool Filtering { get; } = filtering;
+
+        public ImmutableArray<StagedGroupGuardModel> Guards => ImmutableArray.CreateRange(_guards);
+
+        /// <summary>
+        ///     Every group the filtering plan can be asked about — the union of what its
+        ///     participants declare. The runtime gate validates the plan against the
+        ///     composition over exactly these, which is the only set that reproduces the
+        ///     participants the body carries.
+        /// </summary>
+        public ImmutableArray<string> CoveredGroups
+        {
+            get
+            {
+                var names = new List<string>(_covered);
+
+                return NormalizeGroupNames(names);
+
+            }
+        }
+
+        /// <summary>
+        ///     Whether the plan carries this participant, and under which guard. A keyed plan
+        ///     answers false for anyone its set does not select; the filtering plan takes
+        ///     everyone and names their test.
+        /// </summary>
+        public bool TryInclude(RegistrableTypeModel participant, out string? guard)
+        {
+            if (!Filtering)
+            {
+                guard = null;
+                return ParticipatesInGroups(participant, Target);
+            }
+
+            var signature = participant.GroupNames.IsEmpty
+                ? DefaultGroupName
+                : string.Join("\u001f", participant.GroupNames);
+
+            if (participant.GroupNames.IsEmpty)
+            {
+                _covered.Add(DefaultGroupName);
+            }
+            else
+            {
+                foreach (var name in participant.GroupNames)
+                {
+                    _covered.Add(name);
+                }
+            }
+
+            if (!_guardsBySignature.TryGetValue(signature, out guard))
+            {
+                guard = "group" + _guards.Count;
+                _guardsBySignature.Add(signature, guard);
+                _guards.Add(new StagedGroupGuardModel(guard, GuardExpression(participant)));
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        ///     The call filling one guard: the single-group overload for the common shape, the
+        ///     array one when a participant declares several, and the default-group test for a
+        ///     participant that declares none.
+        /// </summary>
+        private static string GuardExpression(RegistrableTypeModel participant)
+        {
+            const string helper = "global::Stella.Ergosfare.Core.Abstractions.StagedPlans.PlanGroups.";
+
+            if (participant.GroupNames.IsEmpty)
+            {
+                return helper + "MatchesDefault(groups)";
+            }
+
+            if (participant.GroupNames.Length == 1)
+            {
+                return helper + "Matches(groups, " + Quote(participant.GroupNames[0]) + ")";
+            }
+
+            var sb = new StringBuilder(helper).Append("Matches(groups, new string[] { ");
+
+            for (var i = 0; i < participant.GroupNames.Length; i++)
+            {
+                sb.Append(i == 0 ? string.Empty : ", ").Append(Quote(participant.GroupNames[i]));
+            }
+
+            return sb.Append(" })").ToString();
+        }
+
+        private static string Quote(string value)
+            => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(value, quote: true);
+    }
+
+    /// <summary>
     ///     Whether a participant runs under a target group set, mirroring the runtime's
     ///     any-of × any-of test: a participant declaring no <c>[Group]</c> belongs to the
     ///     default group, and an empty target set IS the default group.
@@ -2560,7 +2722,8 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
         bool hasKeyedServiceExtensions,
         DefaultResultAdapterSiteModel? defaultResultAdapter,
         ImmutableArray<PluginInvocationModel> pluginInvocations,
-        Dictionary<string, List<ImmutableArray<string>>> groupSetsByKey)
+        Dictionary<string, List<ImmutableArray<string>>> groupSetsByKey,
+        HashSet<string> unprovableGroupKeys)
     {
         CollectPipelineFacts(types, out var handlerCounts, out var soleHandlers, out _);
 
@@ -2582,14 +2745,22 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
 
             foreach (var targetGroups in targetSets)
             {
-                AddStagedPlan(type, targetGroups);
+                AddStagedPlan(type, new PlanGroupFilter(targetGroups, filtering: false));
+            }
+
+            // And, when a call site names a filter this compilation cannot read, the one plan
+            // that answers any set: every participant present, each call behind its guard.
+            if (HasUnprovableGroupSite(type, unprovableGroupKeys))
+            {
+                AddStagedPlan(type, new PlanGroupFilter(ImmutableArray<string>.Empty, filtering: true));
             }
         }
 
         return plans;
 
-        void AddStagedPlan(RegistrableTypeModel type, ImmutableArray<string> targetGroups)
+        void AddStagedPlan(RegistrableTypeModel type, PlanGroupFilter filter)
         {
+            var targetGroups = filter.Target;
 
             string? resultTypeExpression = null;
             var resultIsValueType = false;
@@ -2625,7 +2796,7 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 // No sole-handler gate and no covariant disqualification: a broadcast is
                 // where a covariant handler is a legitimate participant rather than a
                 // competing claim on the message.
-                if (!TryAssembleBroadcastHandlers(type, types, hasKeyedServiceExtensions, targetGroups,
+                if (!TryAssembleBroadcastHandlers(type, types, hasKeyedServiceExtensions, filter,
                         out handlers, out indirectHandlers))
                 {
                     return;
@@ -2655,7 +2826,7 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 // A send delivers to one handler; under a filter that excludes it, the
                 // pipeline has no handler at all and there is nothing to bake — the runtime
                 // lane raises the no-handler outcome the caller asked for.
-                if (!ParticipatesInGroups(handler, targetGroups))
+                if (!filter.TryInclude(handler, out var handlerGuard))
                 {
                     return;
                 }
@@ -2671,12 +2842,13 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 }
 
                 handlers = ImmutableArray.Create(new StagedHandlerModel(
-                    handler.TypeofExpression, GatedConstructionExpression(handler, hasKeyedServiceExtensions)));
+                    handler.TypeofExpression, GatedConstructionExpression(handler, hasKeyedServiceExtensions),
+                    handlerGuard));
                 indirectHandlers = ImmutableArray<StagedHandlerModel>.Empty;
             }
 
             if (!TryAssembleStagedStages(type, types, resultTypeExpression, resultIsValueType, hasKeyedServiceExtensions,
-                    targetGroups, out var pre, out var post, out var exceptionCalls, out var finalCalls))
+                    filter, out var pre, out var post, out var exceptionCalls, out var finalCalls))
             {
                 return;
             }
@@ -2767,7 +2939,7 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
 
             plans.Add(new StagedPlanModel(
                 type.TypeofExpression,
-                targetGroups,
+                filter.Filtering ? filter.CoveredGroups : targetGroups,
                 isBroadcast,
                 resultTypeExpression,
                 resultIsValueType,
@@ -2775,7 +2947,8 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 indirectHandlers,
                 pre, post, exceptionCalls, finalCalls,
                 adapterKind, adapterTypeExpression, adapterMaterializes,
-                pluginCalls));
+                pluginCalls,
+                filter.Guards));
         }
     }
 
@@ -2973,7 +3146,7 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
         string? resultTypeExpression,
         bool resultIsValueType,
         bool hasKeyedServiceExtensions,
-        ImmutableArray<string> targetGroups,
+        PlanGroupFilter filter,
         out ImmutableArray<StagedCallModel> preCalls,
         out ImmutableArray<StagedCallModel> postCalls,
         out ImmutableArray<StagedCallModel> exceptionCalls,
@@ -2987,7 +3160,7 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
         var pipelineResultExpression = resultTypeExpression ?? UnitExpression;
         var pipelineResultIsValueType = resultTypeExpression is not null && resultIsValueType;
 
-        var stages = new List<(RegistrableTypeModel Type, StagedCallArm Arm, bool Direct, string? ExceptionFilter)>?[4];
+        var stages = new List<(RegistrableTypeModel Type, StagedCallArm Arm, bool Direct, string? ExceptionFilter, string? Guard)>?[4];
 
         foreach (var candidate in types)
         {
@@ -3048,8 +3221,9 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 }
 
                 // Out of this plan's group: the set it is keyed by does not select this
-                // participant, so the stage simply does not carry it.
-                if (!ParticipatesInGroups(candidate, targetGroups))
+                // participant, so the stage simply does not carry it. The filtering plan
+                // carries it behind a guard instead.
+                if (!filter.TryInclude(candidate, out var candidateGuard))
                 {
                     continue;
                 }
@@ -3068,7 +3242,7 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                     return false;
                 }
 
-                (stages[kindIndex] ??= []).Add((candidate, arm, matchedDirect, exceptionFilter));
+                (stages[kindIndex] ??= []).Add((candidate, arm, matchedDirect, exceptionFilter, candidateGuard));
                 _ = matchedMessageKey;
             }
         }
@@ -3225,14 +3399,14 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
         RegistrableTypeModel message,
         List<RegistrableTypeModel> types,
         bool hasKeyedServiceExtensions,
-        ImmutableArray<string> targetGroups,
+        PlanGroupFilter filter,
         out ImmutableArray<StagedHandlerModel> handlers,
         out ImmutableArray<StagedHandlerModel> indirectHandlers)
     {
         handlers = ImmutableArray<StagedHandlerModel>.Empty;
         indirectHandlers = ImmutableArray<StagedHandlerModel>.Empty;
 
-        List<(RegistrableTypeModel Type, bool Direct)>? entries = null;
+        List<(RegistrableTypeModel Type, bool Direct, string? Guard)>? entries = null;
 
         foreach (var candidate in types)
         {
@@ -3284,8 +3458,9 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
             }
 
             // Out of this plan's group, so not a participant of it — and not a defect
-            // either: the set this plan is keyed by simply does not select it.
-            if (!ParticipatesInGroups(candidate, targetGroups))
+            // either: the set this plan is keyed by simply does not select it. The filtering
+            // plan takes everyone instead and remembers the test each one runs behind.
+            if (!filter.TryInclude(candidate, out var candidateGuard))
             {
                 continue;
             }
@@ -3297,7 +3472,7 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 return false;
             }
 
-            (entries ??= []).Add((candidate, direct));
+            (entries ??= []).Add((candidate, direct, candidateGuard));
         }
 
         if (entries is null)
@@ -3324,10 +3499,10 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
         var directBuilder = ImmutableArray.CreateBuilder<StagedHandlerModel>();
         var indirectBuilder = ImmutableArray.CreateBuilder<StagedHandlerModel>();
 
-        foreach (var (type, isDirect) in entries)
+        foreach (var (type, isDirect, guard) in entries)
         {
             var model = new StagedHandlerModel(
-                type.TypeofExpression, GatedConstructionExpression(type, hasKeyedServiceExtensions));
+                type.TypeofExpression, GatedConstructionExpression(type, hasKeyedServiceExtensions), guard);
 
             (isDirect ? directBuilder : indirectBuilder).Add(model);
         }
@@ -3338,7 +3513,7 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
     }
 
     private static ImmutableArray<StagedCallModel> OrderStage(
-        List<(RegistrableTypeModel Type, StagedCallArm Arm, bool Direct, string? ExceptionFilter)>? entries,
+        List<(RegistrableTypeModel Type, StagedCallArm Arm, bool Direct, string? ExceptionFilter, string? Guard)>? entries,
         bool hasKeyedServiceExtensions)
     {
         if (entries is null)
@@ -3364,11 +3539,11 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
 
         var calls = ImmutableArray.CreateBuilder<StagedCallModel>(entries.Count);
 
-        foreach (var (type, arm, _, exceptionFilter) in entries)
+        foreach (var (type, arm, _, exceptionFilter, guard) in entries)
         {
             calls.Add(new StagedCallModel(
                 type.TypeofExpression, arm, GatedConstructionExpression(type, hasKeyedServiceExtensions),
-                exceptionFilter));
+                exceptionFilter, guard));
         }
 
         return calls.MoveToImmutable();

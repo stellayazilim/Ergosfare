@@ -26,4 +26,23 @@ public abstract class StagedVoidPlan<TMessage> : StagedVoidPlan
     /// <inheritdoc />
     public sealed override TReturn Accept<TReturn, TState>(IStagedVoidPlanVisitor<TReturn, TState> visitor, TState state)
         => visitor.Visit<TMessage>(state);
+
+    /// <summary>
+    /// Runs the baked pipeline for a dispatch whose group filter is a runtime value: every
+    /// participant is present in the body and each call is guarded by the group test the
+    /// generator baked for it. Only invoked on a plan that reports
+    /// <see cref="StagedVoidPlan.FilterGroups"/>; the default forwards to the unfiltered body.
+    /// </summary>
+    public virtual ValueTask ExecuteFiltered(
+        TMessage message, ErgosfareContext context, IServiceProvider serviceProvider, IReadOnlyList<string> groups)
+        => Execute(message, context, serviceProvider);
+
+    /// <summary>
+    /// The direct-construction variant of <see cref="ExecuteFiltered"/>; see
+    /// <see cref="ExecuteDirect"/> for when it qualifies.
+    /// </summary>
+    public virtual ValueTask ExecuteFilteredDirect(
+        TMessage message, ErgosfareContext context, IServiceProvider serviceProvider, IReadOnlyList<string> groups)
+        => ExecuteFiltered(message, context, serviceProvider, groups);
+
 }

@@ -12,7 +12,16 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 ///     asynchronous contract, so the emitted call is always the same member on the concrete
 ///     type. Anything else disqualifies the plan and the runtime strategy serves the message.
 /// </remarks>
-internal readonly record struct StagedHandlerModel(string TypeExpression, string? ConstructionExpression);
+internal readonly record struct StagedHandlerModel(
+    string TypeExpression,
+    string? ConstructionExpression,
+    string? GroupGuard = null);
+
+/// <summary>
+///     One group test a filtering plan evaluates once at the top of its body: the local's
+///     name and the call that fills it.
+/// </summary>
+internal readonly record struct StagedGroupGuardModel(string Name, string Expression);
 
 /// <summary>
 ///     A staged pipeline plan ready for emission: a message whose whole discovered
@@ -44,8 +53,17 @@ internal sealed record StagedPlanModel(
     StagedResultAdapterKind AdapterKind,
     string? ResultAdapterTypeExpression,
     bool ResultAdapterMaterializes,
-    ImmutableArray<PluginInvocationModel> PluginCalls)
+    ImmutableArray<PluginInvocationModel> PluginCalls,
+    ImmutableArray<StagedGroupGuardModel> GroupGuards)
 {
+    /// <summary>
+    ///     Whether this is the plan that serves dispatches whose group filter is a runtime
+    ///     value: every participant is present and each call carries a guard, so one body
+    ///     answers any set. A plan keyed by a proven set carries no guards — participation
+    ///     there is a compile-time fact.
+    /// </summary>
+    public bool IsGroupFiltering => !GroupGuards.IsEmpty;
+
     /// <summary>The sole main handler's type; meaningful only when the plan is not a broadcast.</summary>
     public string HandlerTypeExpression => Handlers[0].TypeExpression;
 

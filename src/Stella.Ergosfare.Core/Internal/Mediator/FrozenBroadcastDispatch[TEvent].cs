@@ -229,6 +229,15 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
 
         if (slot.Plan is { } plan)
         {
+            // A plan keyed by this set decided its participants at compile time; the
+            // filtering plan decides them from the set it is handed.
+            if (plan.FilterGroups is not null)
+            {
+                return slot.PlanDirect
+                    ? plan.ExecuteFilteredDirect((TEvent)message, context, serviceProvider, slot.Groups)
+                    : plan.ExecuteFiltered((TEvent)message, context, serviceProvider, slot.Groups);
+            }
+
             return slot.PlanDirect
                 ? plan.ExecuteDirect((TEvent)message, context, serviceProvider)
                 : plan.Execute((TEvent)message, context, serviceProvider);
@@ -249,11 +258,30 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
     {
         direct = false;
 
-        if (GeneratedDispatchRoots.FindBroadcastPlan(typeof(TEvent), groups) is not StagedBroadcastPlan<TEvent> plan
-            || dependencies is not MessageDependencies { MemoizedInstances: false } fast
-            || !StagedPlanGate.Matches(fast, plan.Composition))
+        var plan = GeneratedDispatchRoots.FindBroadcastPlan(typeof(TEvent), groups) as StagedBroadcastPlan<TEvent>;
+
+        if (plan is not null)
         {
-            return null;
+            if (dependencies is not MessageDependencies { MemoizedInstances: false } keyed
+                || !StagedPlanGate.Matches(keyed, plan.Composition))
+            {
+                return null;
+            }
+        }
+        else
+        {
+            // No plan is keyed by this set — the filter was a runtime value at every call
+            // site, or this particular set was never spelled at one. The filtering plan
+            // answers any set, and it is gated against the composition over the groups it
+            // covers: that is the only set that reproduces the participants its body holds.
+            plan = GeneratedDispatchRoots.FindFilteredBroadcastPlan(typeof(TEvent)) as StagedBroadcastPlan<TEvent>;
+
+            if (plan?.FilterGroups is not { } covered
+                || _factory.Find(typeof(TEvent), covered) is not MessageDependencies { MemoizedInstances: false } full
+                || !StagedPlanGate.Matches(full, plan.Composition))
+            {
+                return null;
+            }
         }
 
         direct = plan.SupportsDirectConstruction

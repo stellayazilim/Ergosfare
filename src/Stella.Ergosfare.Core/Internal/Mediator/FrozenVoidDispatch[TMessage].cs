@@ -202,6 +202,15 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
 
         if (composition.Admission.Plan is StagedVoidPlan<TMessage> groupedPlan)
         {
+            // A plan keyed by this set decided its participants at compile time; the
+            // filtering plan decides them from the set it is handed.
+            if (groupedPlan.FilterGroups is not null)
+            {
+                return composition.Admission.Direct
+                    ? groupedPlan.ExecuteFilteredDirect((TMessage)message, context, serviceProvider, composition.Groups)
+                    : groupedPlan.ExecuteFiltered((TMessage)message, context, serviceProvider, composition.Groups);
+            }
+
             return composition.Admission.Direct
                 ? groupedPlan.ExecuteDirect((TMessage)message, context, serviceProvider)
                 : groupedPlan.Execute((TMessage)message, context, serviceProvider);
@@ -217,12 +226,34 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
     /// </summary>
     private GroupedPlanAdmission AdmitGroupedPlan(string[] groups, IMessageDependencies dependencies)
     {
-        if (_resultAdapter is not null
-            || GeneratedDispatchRoots.FindStagedVoidPlan(typeof(TMessage), groups) is not StagedVoidPlan<TMessage> plan
-            || dependencies is not MessageDependencies { MemoizedInstances: false } fast
-            || !StagedPlanGate.Matches(fast, plan.Composition))
+        if (_resultAdapter is not null)
         {
             return default;
+        }
+
+        var plan = GeneratedDispatchRoots.FindStagedVoidPlan(typeof(TMessage), groups) as StagedVoidPlan<TMessage>;
+
+        if (plan is not null)
+        {
+            if (dependencies is not MessageDependencies { MemoizedInstances: false } keyed
+                || !StagedPlanGate.Matches(keyed, plan.Composition))
+            {
+                return default;
+            }
+        }
+        else
+        {
+            // No plan is keyed by this set. The filtering plan answers any set, gated
+            // against the composition over the groups it covers — the only set that
+            // reproduces the participants its body holds.
+            plan = GeneratedDispatchRoots.FindFilteredVoidPlan(typeof(TMessage)) as StagedVoidPlan<TMessage>;
+
+            if (plan?.FilterGroups is not { } covered
+                || _factory.Find(typeof(TMessage), covered) is not MessageDependencies { MemoizedInstances: false } full
+                || !StagedPlanGate.Matches(full, plan.Composition))
+            {
+                return default;
+            }
         }
 
         var direct = plan.SupportsDirectConstruction

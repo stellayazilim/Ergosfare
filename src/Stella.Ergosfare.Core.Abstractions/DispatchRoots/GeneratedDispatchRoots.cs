@@ -212,6 +212,43 @@ public static class GeneratedDispatchRoots
         => StagedResultPlans.TryGetValue((messageType, resultType, GroupKey(groups)), out var plan) ? plan : null;
 
     /// <summary>
+    /// The key the group-filtering plan is stored under. A control character keeps it out of
+    /// the space of real group keys: no group set can spell it, so the filtering plan and the
+    /// keyed ones never collide.
+    /// </summary>
+    private const string FilteredPlanKey = "\u0000filtered";
+
+    /// <summary>
+    /// Roots the plan that serves dispatches whose group filter is a runtime value: one body
+    /// carrying every participant, each call guarded by its own group test. Idempotent.
+    /// </summary>
+    public static void AddFilteredPlan<TMessage>(StagedVoidPlan<TMessage> plan)
+        where TMessage : IMessage
+        => StagedVoidPlans.TryAdd((typeof(TMessage), FilteredPlanKey), plan);
+
+    /// <summary>Result-producing counterpart of <see cref="AddFilteredPlan{TMessage}"/>. Idempotent.</summary>
+    public static void AddFilteredPlan<TMessage, TResult>(StagedResultPlan<TMessage, TResult> plan)
+        where TMessage : IMessage
+        => StagedResultPlans.TryAdd((typeof(TMessage), typeof(TResult), FilteredPlanKey), plan);
+
+    /// <summary>Broadcast counterpart of <see cref="AddFilteredPlan{TMessage}"/>. Idempotent.</summary>
+    public static void AddFilteredBroadcastPlan<TEvent>(StagedBroadcastPlan<TEvent> plan)
+        where TEvent : notnull
+        => BroadcastPlans.TryAdd((typeof(TEvent), FilteredPlanKey), plan);
+
+    /// <summary>The group-filtering void plan, or <c>null</c> when none was generated.</summary>
+    public static StagedVoidPlan? FindFilteredVoidPlan(Type messageType)
+        => StagedVoidPlans.TryGetValue((messageType, FilteredPlanKey), out var plan) ? plan : null;
+
+    /// <summary>The group-filtering result plan, or <c>null</c> when none was generated.</summary>
+    public static StagedResultPlan? FindFilteredResultPlan(Type messageType, Type resultType)
+        => StagedResultPlans.TryGetValue((messageType, resultType, FilteredPlanKey), out var plan) ? plan : null;
+
+    /// <summary>The group-filtering broadcast plan, or <c>null</c> when none was generated.</summary>
+    public static StagedBroadcastPlan? FindFilteredBroadcastPlan(Type messageType)
+        => BroadcastPlans.TryGetValue((messageType, FilteredPlanKey), out var plan) ? plan : null;
+
+    /// <summary>
     /// The canonical key of a group set: ordinal-sorted, deduplicated and joined, so the
     /// spelling a dispatch happens to use finds the plan the generator baked. Group
     /// selection is an any-of test, which makes order and repetition meaningless — a key
@@ -252,7 +289,7 @@ public static class GeneratedDispatchRoots
             }
 
             // The unit separator keeps {"ab"} and {"a","b"} distinct.
-            builder.Append('').Append(names[i]);
+            builder.Append('\u001f').Append(names[i]);
         }
 
         return builder.ToString();

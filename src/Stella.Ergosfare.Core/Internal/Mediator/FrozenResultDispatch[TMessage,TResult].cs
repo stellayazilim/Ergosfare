@@ -171,6 +171,15 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
 
         if (composition.Admission.Plan is StagedResultPlan<TMessage, TResult> groupedPlan)
         {
+            // A plan keyed by this set decided its participants at compile time; the
+            // filtering plan decides them from the set it is handed.
+            if (groupedPlan.FilterGroups is not null)
+            {
+                return composition.Admission.Direct
+                    ? groupedPlan.ExecuteFilteredDirect((TMessage)message, context, serviceProvider, composition.Groups)
+                    : groupedPlan.ExecuteFiltered((TMessage)message, context, serviceProvider, composition.Groups);
+            }
+
             return composition.Admission.Direct
                 ? groupedPlan.ExecuteDirect((TMessage)message, context, serviceProvider)
                 : groupedPlan.Execute((TMessage)message, context, serviceProvider);
@@ -186,13 +195,32 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
     /// </summary>
     private GroupedPlanAdmission AdmitGroupedPlan(string[] groups, IMessageDependencies dependencies)
     {
-        if (GeneratedDispatchRoots.FindStagedResultPlan(typeof(TMessage), typeof(TResult), groups)
-                is not StagedResultPlan<TMessage, TResult> plan
-            || plan.Composition.ResultAdapterType != _resultAdapter?.GetType()
-            || dependencies is not MessageDependencies { MemoizedInstances: false } fast
-            || !StagedPlanGate.Matches(fast, plan.Composition))
+        var plan = GeneratedDispatchRoots.FindStagedResultPlan(typeof(TMessage), typeof(TResult), groups)
+            as StagedResultPlan<TMessage, TResult>;
+
+        if (plan is not null)
         {
-            return default;
+            if (plan.Composition.ResultAdapterType != _resultAdapter?.GetType()
+                || dependencies is not MessageDependencies { MemoizedInstances: false } keyed
+                || !StagedPlanGate.Matches(keyed, plan.Composition))
+            {
+                return default;
+            }
+        }
+        else
+        {
+            // No plan is keyed by this set; see the void dispatch for what the filtering
+            // plan is gated against.
+            plan = GeneratedDispatchRoots.FindFilteredResultPlan(typeof(TMessage), typeof(TResult))
+                as StagedResultPlan<TMessage, TResult>;
+
+            if (plan?.FilterGroups is not { } covered
+                || plan.Composition.ResultAdapterType != _resultAdapter?.GetType()
+                || _factory.Find(typeof(TMessage), covered) is not MessageDependencies { MemoizedInstances: false } full
+                || !StagedPlanGate.Matches(full, plan.Composition))
+            {
+                return default;
+            }
         }
 
         var direct = plan.SupportsDirectConstruction
