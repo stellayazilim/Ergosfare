@@ -1,15 +1,8 @@
-using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.E2E.Api;
 using Stella.Ergosfare.E2E.Api.Contracts;
 using Stella.Ergosfare.E2E.Api.Endpoints;
 using Stella.Ergosfare.E2E.Infrastructure;
 using Stella.Ergosfare.E2E.UseCases;
-using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Generated;
-// Where the generator writes every plugin's install extension — here, AddTiming().
-using Stella.Ergosfare.Plugins.Abstractions.Generated;
-using Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
 using Stella.MinimalApi.Extensions;
 
 // The slim builder: the AOT-friendly host, without the hosting features this app does not
@@ -18,18 +11,10 @@ var builder = WebApplication.CreateSlimBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("Todo") ?? "Data Source=e2e-todos.db";
 
-// Source-generated registration. RegisterGenerated() is emitted into this compilation by the
-// analyzer; it discovers the handlers and the interceptor over in the UseCases assembly.
-// AddTiming() comes from the example plugin in examples/TimingPlugin: it registers the
-// service carrying the hook methods, while the calls themselves are already baked into this
-// app's dispatch plans. It is installed here so the plugin surface crosses the AOT gate with
-// everything else — hook calls are static and closed over concrete types, which is the claim
-// this publish is what actually tests.
-builder.Services.AddErgosfare(o => o
-    .AddCommandModule(c => c.RegisterGenerated())
-    .AddQueryModule(q => q.RegisterGenerated())
-    .AddEventModule(e => e.RegisterGenerated())
-    .AddTiming());
+// The application layer owns the composition — including the generator that emits
+// RegisterGenerated() and the plugin it installs. This host holds no Ergosfare reference of
+// its own; it reaches the mediator contracts transitively and dispatches through them.
+builder.Services.AddApplication();
 
 builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddSingleton<TodoStats>();
