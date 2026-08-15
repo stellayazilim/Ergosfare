@@ -97,12 +97,80 @@ internal static class RegistrationPipeline
             types, excludedShadows, availability,
             defaultResultAdapter, pluginInvocations, dispatchSites, referencedSites.Sites).Build();
 
-        var source = RegistrationEmitter.Emit(types, availability,
+        // A hand-written Register collects what RegisterGenerated() would have collected for
+        // the same construct — messages included. So a hidden message a registration reaches
+        // is rooted like a discovered one.
+        var registeredShadows = CollectRegisteredShadows(excludedShadows, registrationSites);
+
+        var source = RegistrationEmitter.Emit(types, registeredShadows, availability,
             plans.VoidPlans, plans.ResultPlans, plans.StagedPlans, plans.FrozenCompositions,
             emitManifest ? dispatchSites : ImmutableArray<DispatchSiteModel>.Empty,
             emitManifest ? registrationSites : ImmutableArray<RegistrationSiteModel>.Empty,
             emitManifest, GeneratorVersion.Value);
         context.AddSource("ErgosfareRegistrations.g.cs", SourceText.From(source, Encoding.UTF8));
+    }
+
+    /// <summary>
+    ///     The hidden messages a registration reaches, so they can be rooted alongside the
+    ///     discovered ones. <c>[ExcludeFromDiscovery]</c> keeps a type out of bulk collection;
+    ///     it does not make it invisible, and a <c>Register</c> naming it — or naming a
+    ///     handler that serves it — collects it exactly as <c>RegisterGenerated()</c> would.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///     Rooting is not registering. <c>AddMessage&lt;T&gt;()</c> instantiates a
+    ///     <c>MessageRoot&lt;T&gt;</c> so a dispatch can close its generic inside a generic
+    ///     context; it selects nothing into any container, which is still settled entirely by
+    ///     what the application registered. Without the root the dispatch closes the same
+    ///     generic through <c>MakeGenericType</c> — an answer only a JIT can give, so the same
+    ///     dispatch works in development and fails under NativeAOT.
+    ///     </para>
+    ///     <para>
+    ///     Decidable at compile time only because ERGOSG018 requires every <c>Register</c> to
+    ///     name its type: a site contributes either its own metadata name or, when it names a
+    ///     handler, the messages that handler's main-handler descriptors serve.
+    ///     </para>
+    /// </remarks>
+    private static List<RegistrableTypeModel> CollectRegisteredShadows(
+        List<RegistrableTypeModel> excludedShadows,
+        ImmutableArray<RegistrationSiteModel> registrationSites)
+    {
+        if (excludedShadows.Count == 0 || registrationSites.IsEmpty)
+        {
+            return [];
+        }
+
+        var registeredTypes = new HashSet<string>(StringComparer.Ordinal);
+        var reachedMessages = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var site in registrationSites)
+        {
+            if (site.TypeMetadataName is { } metadataName)
+            {
+                registeredTypes.Add(metadataName);
+            }
+
+            foreach (var message in site.MainHandlerMessageKeys)
+            {
+                reachedMessages.Add(message);
+            }
+        }
+
+        var rooted = new List<RegistrableTypeModel>();
+
+        foreach (var shadow in excludedShadows)
+        {
+            if (shadow is { IsDispatchableMessage: true, IsAccessible: true }
+                && (registeredTypes.Contains(shadow.MetadataSortKey)
+                    || reachedMessages.Contains(shadow.TypeofExpression)))
+            {
+                rooted.Add(shadow);
+            }
+        }
+
+        rooted.Sort(static (x, y) => string.CompareOrdinal(x.TypeofExpression, y.TypeofExpression));
+
+        return rooted;
     }
 
     internal static void AddModels(
