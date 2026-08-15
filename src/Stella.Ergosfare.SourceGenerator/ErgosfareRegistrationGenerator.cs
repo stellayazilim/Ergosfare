@@ -2853,7 +2853,7 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 return;
             }
 
-            var pluginCalls = SelectPluginCalls(pluginInvocations, type, resultTypeExpression is null);
+            var pluginCalls = SelectPluginCalls(pluginInvocations, type);
 
             if (pre.Length + post.Length + exceptionCalls.Length + finalCalls.Length == 0
                 && pluginCalls.IsEmpty
@@ -2953,50 +2953,41 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
     }
 
     /// <summary>
-    ///     The plugin methods emitted into one plan: those whose declared shape matches the
-    ///     pipeline's, whose family filter admits the message's module, whose discovery-key
-    ///     filter admits the message's keys, and whose generic constraints the message
-    ///     satisfies. A method failing any of them contributes nothing to this plan — no
-    ///     call, no runtime check — which is the design's point about a constraint being the
-    ///     filter.
+    ///     The plugin methods emitted into one plan: those whose family filter admits the
+    ///     message's module, whose discovery-key filter admits the message's keys, and whose
+    ///     generic constraints the message satisfies. A method failing any of them
+    ///     contributes nothing to this plan — no call, no runtime check — which is the
+    ///     design's point about a constraint being the filter.
     /// </summary>
     /// <remarks>
+    ///     <para>
+    ///         Pipeline shape is not among the filters: no hook carries a result, so one
+    ///         declaration serves a void command, a result-producing query and a broadcast
+    ///         alike. The one family outside this path is the stream lane, which has no plan
+    ///         to emit into — so a plugin declaring <c>Module.Query</c> covers a query's
+    ///         single-result dispatches and not its streaming ones.
+    ///     </para>
     ///     <para>
     ///         The order is ordinal by service type then method name. Weight-by-registration
     ///         order is a property of the consumer's fluent chain, which this slice does not
     ///         read; a stable arbitrary order is preferable to an unstable one, and pinning it
     ///         here keeps the emitted source deterministic.
     ///     </para>
-    ///     <para>
-    ///         Events never reach this path: the staged family covers void commands and
-    ///         single-result commands and queries, so a plugin filtered to the event module
-    ///         alone currently selects nothing.
-    ///     </para>
     /// </remarks>
     private static ImmutableArray<PluginInvocationModel> SelectPluginCalls(
         ImmutableArray<PluginInvocationModel> invocations,
-        RegistrableTypeModel message,
-        bool isVoidPipeline)
+        RegistrableTypeModel message)
     {
         if (invocations.IsEmpty)
         {
             return ImmutableArray<PluginInvocationModel>.Empty;
         }
 
-        var shape = isVoidPipeline ? PluginPipelineShape.Void : PluginPipelineShape.Result;
-
-        // The method's own arity is what emission closes over: one type parameter for the
-        // resultless shape, two for the result-bearing one. Anything else is a declaration
-        // this emission cannot write a call for.
-        var expectedArity = isVoidPipeline ? 1 : 2;
-
         ImmutableArray<PluginInvocationModel>.Builder? selected = null;
 
         foreach (var invocation in invocations)
         {
-            if (invocation.Shape != shape
-                || invocation.Arity != expectedArity
-                || invocation.Constraints.IsUnmodelable
+            if (invocation.Constraints.IsUnmodelable
                 || !MatchesModule(invocation.Modules, message)
                 || !MatchesDiscoveryKeys(invocation.Keys, message.DiscoveryKeys)
                 || !SatisfiesConstraints(invocation.Constraints, message))

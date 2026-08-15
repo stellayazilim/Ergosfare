@@ -93,7 +93,7 @@ public class BroadcastPlanExecutionTests
 
             public sealed class GenBroadcastHooks
             {
-                [VoidPipelineInvokable(Stage.PostMainHandler)]
+                [PipelineInvokable(Hook.PostMain)]
                 public void Delivered<TMessage>(TMessage message, ErgosfareContext context)
                     => BroadcastSink.Entries.Add("observer");
             }

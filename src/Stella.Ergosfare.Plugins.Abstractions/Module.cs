@@ -23,7 +23,11 @@ public enum Module
     /// <summary>Command dispatch plans, both the resultless and result-returning shapes.</summary>
     Command = 1 << 0,
 
-    /// <summary>Query dispatch plans, including streams.</summary>
+    /// <summary>
+    /// Query dispatch plans. Streaming queries are named by this family but not yet served
+    /// by it: the stream lane has no compiled plan, and a plugin call lives only in a plan
+    /// body. A stream dispatch therefore observes nothing until that lane joins the family.
+    /// </summary>
     Query = 1 << 1,
 
     /// <summary>Event broadcast plans.</summary>

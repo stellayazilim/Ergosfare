@@ -70,12 +70,17 @@ internal sealed record StagedPlanModel(
     /// <summary>The sole main handler's construction expression; see <see cref="HandlerTypeExpression"/>.</summary>
     public string? HandlerConstructionExpression => Handlers[0].ConstructionExpression;
 
-    /// <summary>Whether any plugin method is emitted at the given stage of this plan.</summary>
-    public bool HasPluginCalls(PluginStage stage)
+    /// <summary>Whether any plugin method is emitted at the given hook of this plan.</summary>
+    /// <remarks>
+    ///     Every hook is a straight-line position, so this only ever decides whether a line
+    ///     is written — never whether the plan grows a guard. A plugin cannot change the
+    ///     shape of a pipeline it observes.
+    /// </remarks>
+    public bool HasPluginCalls(PluginHook hook)
     {
         foreach (var call in PluginCalls)
         {
-            if (call.Stage == stage)
+            if (call.Hook == hook)
             {
                 return true;
             }
@@ -83,15 +88,6 @@ internal sealed record StagedPlanModel(
 
         return false;
     }
-
-    /// <summary>
-    ///     Whether a plugin declared a stage the plan has to grow a guard for: an exception
-    ///     observer needs the <c>catch</c>, a final observer the <c>finally</c>. Nobody
-    ///     declaring either leaves the body bare, which is what keeps an interceptorless
-    ///     pipeline the straight line it is today.
-    /// </summary>
-    public bool PluginNeedsGuards
-        => HasPluginCalls(PluginStage.OnException) || HasPluginCalls(PluginStage.OnFinal);
 
     /// <summary>
     ///     Whether every participant — each handler and each interceptor — carries a

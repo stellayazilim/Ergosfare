@@ -30,7 +30,6 @@ public sealed partial class ErgosfareRegistrationGenerator
     private const string PluginsAbstractionsNamespace = "Stella.Ergosfare.Plugins.Abstractions";
     private const string ErgosfarePluginAttributeName = "ErgosfarePluginAttribute";
     private const string PipelineInvokableAttributeName = "PipelineInvokableAttribute";
-    private const string VoidPipelineInvokableAttributeName = "VoidPipelineInvokableAttribute";
 
     private const string ModuleMetadataName =
         "Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.IModule";
@@ -46,6 +45,9 @@ public sealed partial class ErgosfareRegistrationGenerator
 
     private const string ServiceCollectionDescriptorExtensionsExpression =
         "global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions";
+
+    private const string GetRequiredServiceExpression =
+        "global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService";
 
     /// <summary>
     ///     Mirrors <c>ExperimentalIds.PluginSurface</c>; spelled here because the generator
@@ -69,7 +71,26 @@ public sealed partial class ErgosfareRegistrationGenerator
                 return;
             }
 
+            foreach (var service in model.Value.Services)
+            {
+                if (service.CannotReceiveOptions)
+                {
+                    spc.ReportDiagnostic(Diagnostic.Create(
+                        GeneratorDiagnostics.PluginServiceCannotReceiveOptions,
+                        service.Location?.ToLocation() ?? Location.None,
+                        service.DisplayName,
+                        model.Value.OptionsDisplayName));
+                }
+            }
+
             spc.AddSource("ErgosfarePluginFacade.g.cs", EmitPluginFacade(model.Value));
+
+            // Its own file: the facade uses a file-scoped namespace, and the parts belong to
+            // the services' own namespaces rather than the facade's.
+            if (EmitPluginServiceParts(model.Value) is { } parts)
+            {
+                spc.AddSource("ErgosfarePluginServices.g.cs", parts);
+            }
         });
     }
 
@@ -78,9 +99,8 @@ public sealed partial class ErgosfareRegistrationGenerator
     private const string ValueTaskMetadataName = "System.Threading.Tasks.ValueTask";
 
     /// <summary>
-    ///     Collects every <c>[PipelineInvokable]</c> / <c>[VoidPipelineInvokable]</c> method
-    ///     visible to this compilation — declared here or carried by a scanned reference —
-    ///     reduced to what emission needs.
+    ///     Collects every <c>[PipelineInvokable]</c> method visible to this compilation —
+    ///     declared here or carried by a scanned reference — reduced to what emission needs.
     /// </summary>
     /// <remarks>
     ///     Reference scanning follows the same rules as the participant scan: an assembly
@@ -185,24 +205,21 @@ public sealed partial class ErgosfareRegistrationGenerator
             var methodFilter = ReadServiceFilter(method.GetAttributes());
             var filter = Intersect(typeFilter, methodFilter);
 
+            // One type parameter, the message: no hook carries a result, so every hook
+            // method has the same shape and any other arity is a declaration this emission
+            // cannot write a call for.
+            if (method.Arity != 1)
+            {
+                continue;
+            }
+
             foreach (var attribute in method.GetAttributes())
             {
-                if (attribute.AttributeClass is not { } attributeClass
+                if (attribute.AttributeClass is not { Name: PipelineInvokableAttributeName } attributeClass
                     || !IsInNamespace(attributeClass, PluginsAbstractionsNamespace)
                     || attribute.ConstructorArguments.Length != 1
-                    || attribute.ConstructorArguments[0].Value is not int stage)
-                {
-                    continue;
-                }
-
-                var shape = attributeClass.Name switch
-                {
-                    PipelineInvokableAttributeName => PluginPipelineShape.Result,
-                    VoidPipelineInvokableAttributeName => PluginPipelineShape.Void,
-                    _ => (PluginPipelineShape?)null,
-                };
-
-                if (shape is null || !Enum.IsDefined(typeof(PluginStage), stage))
+                    || attribute.ConstructorArguments[0].Value is not int hook
+                    || !Enum.IsDefined(typeof(PluginHook), hook))
                 {
                     continue;
                 }
@@ -212,12 +229,10 @@ public sealed partial class ErgosfareRegistrationGenerator
                     typeExpression,
                     displayName,
                     method.Name,
-                    (PluginStage)stage,
-                    shape.Value,
+                    (PluginHook)hook,
                     IsAsync: valueTask is not null
                              && SymbolEqualityComparer.Default.Equals(method.ReturnType.OriginalDefinition, valueTask),
                     method.IsStatic,
-                    method.Arity,
                     filter.Modules,
                     filter.Keys,
                     BindParameters(method, context),
@@ -248,21 +263,6 @@ public sealed partial class ErgosfareRegistrationGenerator
             return PluginConstraintModel.None;
         }
 
-        // Only the message parameter's constraints are modeled. A constraint on the result
-        // parameter would have to be checked against a result type the plan models as a bare
-        // expression, with no assignable chain behind it.
-        for (var i = 1; i < method.TypeParameters.Length; i++)
-        {
-            var other = method.TypeParameters[i];
-
-            if (other.HasReferenceTypeConstraint || other.HasValueTypeConstraint
-                || other.HasConstructorConstraint || other.HasUnmanagedTypeConstraint
-                || !other.ConstraintTypes.IsEmpty)
-            {
-                return new PluginConstraintModel(ImmutableArray<string>.Empty, false, false, IsUnmodelable: true);
-            }
-        }
-
         var parameter = method.TypeParameters[0];
 
         if (parameter.HasConstructorConstraint || parameter.HasUnmanagedTypeConstraint)
@@ -290,9 +290,9 @@ public sealed partial class ErgosfareRegistrationGenerator
     }
 
     /// <summary>
-    ///     Resolves each parameter to what emission substitutes for it: the plan's message and
-    ///     result come from the method's own type parameters, the context from the plan's, and
-    ///     anything else from the dispatching provider.
+    ///     Resolves each parameter to what emission substitutes for it: the plan's message
+    ///     comes from the method's own type parameter, the context and the failure from the
+    ///     plan's own locals, and anything else from the dispatching provider.
     /// </summary>
     private static ImmutableArray<PluginParameterBinding> BindParameters(
         IMethodSymbol method,
@@ -310,7 +310,6 @@ public sealed partial class ErgosfareRegistrationGenerator
             var kind = parameter.Type switch
             {
                 ITypeParameterSymbol { Ordinal: 0 } p when p.DeclaringMethod is not null => PluginParameterKind.Message,
-                ITypeParameterSymbol { Ordinal: 1 } p when p.DeclaringMethod is not null => PluginParameterKind.Result,
                 INamedTypeSymbol named when SymbolEqualityComparer.Default.Equals(named, context)
                     => PluginParameterKind.Context,
                 _ => PluginParameterKind.Service,
@@ -421,7 +420,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
             if (!IsErgosfareAssemblyName(assembly.Name)
                 || HasForceScanReferencesOptIn(assembly)
-                || ReadPluginName(assembly) is null)
+                || ReadPluginDeclaration(assembly) is null)
             {
                 continue;
             }
@@ -442,35 +441,60 @@ public sealed partial class ErgosfareRegistrationGenerator
     /// </summary>
     private static PluginFacadeModel? ReadPluginFacade(Compilation compilation, CancellationToken ct)
     {
-        var name = ReadPluginName(compilation.Assembly);
+        var declaration = ReadPluginDeclaration(compilation.Assembly);
 
-        if (name is null || compilation.GetTypeByMetadataName(ModuleMetadataName) is null)
+        if (declaration is null || compilation.GetTypeByMetadataName(ModuleMetadataName) is null)
         {
             return null;
         }
 
-        var services = ImmutableArray.CreateBuilder<string>();
+        var services = ImmutableArray.CreateBuilder<PluginServiceModel>();
 
-        CollectPluginServices(compilation.Assembly.GlobalNamespace, services, ct);
+        CollectPluginServices(compilation.Assembly.GlobalNamespace, declaration.Value.Options, services, ct);
 
-        var ordered = services.ToImmutable().Sort(StringComparer.Ordinal);
+        var ordered = services.ToImmutable()
+            .Sort(static (x, y) => string.CompareOrdinal(x.TypeExpression, y.TypeExpression));
 
-        return new PluginFacadeModel(name, ordered);
+        return new PluginFacadeModel(
+            declaration.Value.Name,
+            declaration.Value.Options?.TypeExpression,
+            declaration.Value.Options?.DisplayName ?? string.Empty,
+            ordered);
     }
 
-    /// <summary>The <c>[assembly: ErgosfarePlugin("…")]</c> name, or <c>null</c>.</summary>
-    private static string? ReadPluginName(IAssemblySymbol assembly)
+    /// <summary>The plugin's settings type as emission and diagnostics need to name it.</summary>
+    private readonly record struct PluginOptionsType(string TypeExpression, string DisplayName, ISymbol Symbol);
+
+    /// <summary>
+    ///     The <c>[assembly: ErgosfarePlugin("…", typeof(…))]</c> declaration, or <c>null</c>.
+    ///     The options argument is optional, so a plugin that takes no settings reads exactly
+    ///     as it did before the argument existed.
+    /// </summary>
+    private static (string Name, PluginOptionsType? Options)? ReadPluginDeclaration(IAssemblySymbol assembly)
     {
         foreach (var attribute in assembly.GetAttributes())
         {
-            if (attribute.AttributeClass is { Name: ErgosfarePluginAttributeName } attributeClass
-                && IsInNamespace(attributeClass, PluginsAbstractionsNamespace)
-                && attribute.ConstructorArguments.Length == 1
-                && attribute.ConstructorArguments[0].Value is string name
-                && name.Length > 0)
+            if (attribute.AttributeClass is not { Name: ErgosfarePluginAttributeName } attributeClass
+                || !IsInNamespace(attributeClass, PluginsAbstractionsNamespace)
+                || attribute.ConstructorArguments.Length == 0
+                || attribute.ConstructorArguments[0].Value is not string name
+                || name.Length == 0)
             {
-                return name;
+                continue;
             }
+
+            PluginOptionsType? options = null;
+
+            if (attribute.ConstructorArguments.Length > 1
+                && attribute.ConstructorArguments[1].Value is INamedTypeSymbol optionsType)
+            {
+                options = new PluginOptionsType(
+                    optionsType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                    optionsType.ToDisplayString(),
+                    optionsType);
+            }
+
+            return (name, options);
         }
 
         return null;
@@ -483,7 +507,8 @@ public sealed partial class ErgosfareRegistrationGenerator
     /// </summary>
     private static void CollectPluginServices(
         INamespaceSymbol @namespace,
-        ImmutableArray<string>.Builder services,
+        PluginOptionsType? options,
+        ImmutableArray<PluginServiceModel>.Builder services,
         CancellationToken ct)
     {
         foreach (var member in @namespace.GetMembers())
@@ -493,11 +518,11 @@ public sealed partial class ErgosfareRegistrationGenerator
             switch (member)
             {
                 case INamespaceSymbol nested:
-                    CollectPluginServices(nested, services, ct);
+                    CollectPluginServices(nested, options, services, ct);
                     break;
 
                 case INamedTypeSymbol type:
-                    CollectPluginServices(type, services, ct);
+                    CollectPluginServices(type, options, services, ct);
                     break;
             }
         }
@@ -505,14 +530,15 @@ public sealed partial class ErgosfareRegistrationGenerator
 
     private static void CollectPluginServices(
         INamedTypeSymbol type,
-        ImmutableArray<string>.Builder services,
+        PluginOptionsType? options,
+        ImmutableArray<PluginServiceModel>.Builder services,
         CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
 
         foreach (var nested in type.GetTypeMembers())
         {
-            CollectPluginServices(nested, services, ct);
+            CollectPluginServices(nested, options, services, ct);
         }
 
         if (type is not { TypeKind: TypeKind.Class, IsAbstract: false, IsStatic: false }
@@ -526,10 +552,107 @@ public sealed partial class ErgosfareRegistrationGenerator
         {
             if (member is IMethodSymbol method && HasPipelineInvokable(method))
             {
-                services.Add(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+                services.Add(ReadPluginService(type, options, ct));
                 return;
             }
         }
+    }
+
+    /// <summary>
+    ///     How the module will construct one plugin service. Without a declared options type
+    ///     this is the shape it always was — register the type and let the container activate
+    ///     it. With one, the options instance never enters the container: the module holds it
+    ///     and hands it to a baked <c>new</c>, so what has to be decided here is which
+    ///     constructor that <c>new</c> calls and what each of its parameters binds to.
+    /// </summary>
+    private static PluginServiceModel ReadPluginService(
+        INamedTypeSymbol type,
+        PluginOptionsType? options,
+        CancellationToken ct)
+    {
+        var typeExpression = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var displayName = type.ToDisplayString();
+
+        if (options is not { } declared)
+        {
+            return new PluginServiceModel(typeExpression, displayName);
+        }
+
+        var constructors = type.InstanceConstructors
+            .Where(static c => !c.IsImplicitlyDeclared && c.DeclaredAccessibility == Accessibility.Public)
+            .ToArray();
+
+        // The author wrote a constructor: it is the contract, and its parameters bind the
+        // same way a hook method's do — the options type from the module's own instance,
+        // everything else from the container.
+        if (constructors.Length == 1)
+        {
+            var arguments = ImmutableArray.CreateBuilder<string?>(constructors[0].Parameters.Length);
+            var bindsOptions = false;
+
+            foreach (var parameter in constructors[0].Parameters)
+            {
+                if (SymbolEqualityComparer.Default.Equals(parameter.Type, declared.Symbol))
+                {
+                    arguments.Add(null);
+                    bindsOptions = true;
+                }
+                else
+                {
+                    arguments.Add(parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+                }
+            }
+
+            return new PluginServiceModel(
+                typeExpression,
+                displayName,
+                ConstructorArguments: arguments.MoveToImmutable(),
+                CannotReceiveOptions: !bindsOptions,
+                Location: bindsOptions ? null : LocationInfo.From(type));
+        }
+
+        // Several constructors is an ambiguity this emission will not guess at.
+        if (constructors.Length > 1)
+        {
+            return new PluginServiceModel(
+                typeExpression, displayName,
+                CannotReceiveOptions: true, Location: LocationInfo.From(type));
+        }
+
+        // No constructor at all. If the class is partial the generator writes the field and
+        // the one-line constructor that assigns it; otherwise it has no way in and says so.
+        if (!IsPartial(type, ct) || type.ContainingType is not null)
+        {
+            return new PluginServiceModel(
+                typeExpression, displayName,
+                CannotReceiveOptions: true, Location: LocationInfo.From(type));
+        }
+
+        return new PluginServiceModel(
+            typeExpression,
+            displayName,
+            ConstructorArguments: ImmutableArray.Create<string?>([null]),
+            GeneratedNamespace: type.ContainingNamespace.IsGlobalNamespace
+                ? null
+                : type.ContainingNamespace.ToDisplayString(),
+            GeneratedTypeName: type.Name,
+            GeneratedTypeKeyword: type.IsRecord ? "record" : "class");
+    }
+
+    /// <summary>Whether every source declaration of the type carries <c>partial</c>.</summary>
+    private static bool IsPartial(INamedTypeSymbol type, CancellationToken ct)
+    {
+        foreach (var reference in type.DeclaringSyntaxReferences)
+        {
+            if (reference.GetSyntax(ct) is Microsoft.CodeAnalysis.CSharp.Syntax.TypeDeclarationSyntax declaration
+                && declaration.Modifiers.Any(static m =>
+                    m.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.PartialKeyword)))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -541,8 +664,7 @@ public sealed partial class ErgosfareRegistrationGenerator
     {
         foreach (var attribute in method.GetAttributes())
         {
-            if (attribute.AttributeClass is
-                    { Name: PipelineInvokableAttributeName or VoidPipelineInvokableAttributeName } attributeClass
+            if (attribute.AttributeClass is { Name: PipelineInvokableAttributeName } attributeClass
                 && IsInNamespace(attributeClass, PluginsAbstractionsNamespace))
             {
                 return true;
@@ -575,19 +697,65 @@ public sealed partial class ErgosfareRegistrationGenerator
         sb.Append("internal sealed class ").Append(model.Name).Append("Module : ")
             .Append(ModuleInterfaceExpression).AppendLine();
         sb.AppendLine("{");
+
+        if (model.OptionsTypeExpression is { } optionsType)
+        {
+            // The module holds the instance the consumer passed. It is never registered, so
+            // the container carries nothing for it and no resolution ever looks it up.
+            sb.Append("    private readonly ").Append(optionsType).AppendLine(" _options;");
+            sb.AppendLine();
+            sb.Append("    public ").Append(model.Name).Append("Module(").Append(optionsType)
+                .AppendLine(" options)");
+            sb.AppendLine("    {");
+            sb.AppendLine("        _options = options;");
+            sb.AppendLine("    }");
+            sb.AppendLine();
+        }
+
         sb.Append("    public void Build(").Append(ModuleConfigurationExpression).AppendLine(" configuration)");
         sb.AppendLine("    {");
 
-        if (model.ServiceTypeExpressions.IsEmpty)
+        if (model.Services.IsEmpty)
         {
             sb.AppendLine("        // The plugin declares no [PipelineInvokable] methods yet — nothing to register.");
         }
         else
         {
-            foreach (var service in model.ServiceTypeExpressions)
+            foreach (var service in model.Services)
             {
-                sb.Append("        ").Append(ServiceCollectionDescriptorExtensionsExpression)
-                    .Append(".TryAddSingleton<").Append(service).AppendLine(">(configuration.Services);");
+                sb.Append("        ").Append(ServiceCollectionDescriptorExtensionsExpression);
+
+                if (service.ConstructorArguments.IsDefault)
+                {
+                    // No options to hand over: the container activates the type, as it always
+                    // has.
+                    sb.Append(".TryAddSingleton<").Append(service.TypeExpression).AppendLine(">(configuration.Services);");
+                    continue;
+                }
+
+                sb.Append(".TryAddSingleton<").Append(service.TypeExpression)
+                    .Append(">(configuration.Services, serviceProvider => new ")
+                    .Append(service.TypeExpression).Append('(');
+
+                for (var i = 0; i < service.ConstructorArguments.Length; i++)
+                {
+                    if (i > 0)
+                    {
+                        sb.Append(", ");
+                    }
+
+                    if (service.ConstructorArguments[i] is { } dependency)
+                    {
+                        sb.Append(GetRequiredServiceExpression).Append('<').Append(dependency)
+                            .Append(">(serviceProvider)");
+                    }
+                    else
+                    {
+                        sb.Append("_options");
+                    }
+                }
+
+                sb.AppendLine("));");
             }
         }
 
@@ -606,9 +774,17 @@ public sealed partial class ErgosfareRegistrationGenerator
         sb.AppendLine("{");
         sb.Append("    public static ").Append(ModuleRegistryExpression)
             .Append(" Add").Append(model.Name).Append("(this ").Append(ModuleRegistryExpression)
-            .AppendLine(" moduleRegistry)");
+            .Append(" moduleRegistry");
+
+        if (model.OptionsTypeExpression is { } parameterType)
+        {
+            sb.Append(", ").Append(parameterType).Append(" options");
+        }
+
+        sb.AppendLine(")");
         sb.AppendLine("    {");
-        sb.Append("        moduleRegistry.Register(new ").Append(model.Name).AppendLine("Module());");
+        sb.Append("        moduleRegistry.Register(new ").Append(model.Name).Append("Module(")
+            .Append(model.OptionsTypeExpression is null ? string.Empty : "options").AppendLine("));");
         sb.AppendLine("        return moduleRegistry;");
         sb.AppendLine("    }");
         sb.AppendLine("}");
@@ -616,14 +792,122 @@ public sealed partial class ErgosfareRegistrationGenerator
         return sb.ToString();
     }
 
+    /// <summary>
+    ///     Writes the other half of each partial service that declared no constructor: the
+    ///     options field and the one line that assigns it. A service that wrote its own
+    ///     constructor gets nothing here — the generator does not add members to a type whose
+    ///     author already said how it is built.
+    /// </summary>
+    private static string? EmitPluginServiceParts(PluginFacadeModel model)
+    {
+        if (model.OptionsTypeExpression is not { } optionsType)
+        {
+            return null;
+        }
+
+        StringBuilder? sb = null;
+
+        foreach (var service in model.Services)
+        {
+            if (service.GeneratedTypeName is not { } typeName)
+            {
+                continue;
+            }
+
+            if (sb is null)
+            {
+                sb = new StringBuilder();
+                sb.AppendLine("// <auto-generated/>");
+                sb.AppendLine("#nullable enable");
+            }
+
+            sb.AppendLine();
+
+            var indent = string.Empty;
+
+            if (service.GeneratedNamespace is { } @namespace)
+            {
+                sb.Append("namespace ").AppendLine(@namespace);
+                sb.AppendLine("{");
+                indent = "    ";
+            }
+
+            sb.Append(indent).Append("[global::System.CodeDom.Compiler.GeneratedCode(\"Stella.Ergosfare.SourceGenerator\", \"")
+                .Append(GeneratorVersion).AppendLine("\")]");
+            sb.Append(indent).Append("partial ").Append(service.GeneratedTypeKeyword).Append(' ')
+                .AppendLine(typeName);
+            sb.Append(indent).AppendLine("{");
+            sb.Append(indent).AppendLine("    /// <summary>The options the consumer passed to this plugin's Add method.</summary>");
+            sb.Append(indent).Append("    private readonly ").Append(optionsType).AppendLine(" _options;");
+            sb.AppendLine();
+            sb.Append(indent).Append("    public ").Append(typeName).Append('(').Append(optionsType)
+                .AppendLine(" options)");
+            sb.Append(indent).AppendLine("    {");
+            sb.Append(indent).AppendLine("        _options = options;");
+            sb.Append(indent).AppendLine("    }");
+            sb.Append(indent).AppendLine("}");
+
+            if (service.GeneratedNamespace is not null)
+            {
+                sb.AppendLine("}");
+            }
+        }
+
+        return sb?.ToString();
+    }
+
     /// <summary>The plugin declaration reduced to what the facade emission needs.</summary>
-    private readonly record struct PluginFacadeModel(string Name, ImmutableArray<string> ServiceTypeExpressions)
+    private readonly record struct PluginFacadeModel(
+        string Name,
+        string? OptionsTypeExpression,
+        string OptionsDisplayName,
+        ImmutableArray<PluginServiceModel> Services)
     {
         public bool Equals(PluginFacadeModel other)
             => Name == other.Name
-               && ServiceTypeExpressions.SequenceEqualOrBothEmpty(other.ServiceTypeExpressions);
+               && OptionsTypeExpression == other.OptionsTypeExpression
+               && Services.SequenceEqualOrBothEmpty(other.Services);
 
         public override int GetHashCode()
-            => (Name.GetHashCode() * 397) ^ ServiceTypeExpressions.Length;
+            => (Name.GetHashCode() * 397) ^ Services.Length;
+    }
+
+    /// <summary>
+    ///     One plugin service and how the module constructs it.
+    /// </summary>
+    /// <param name="ConstructorArguments">
+    ///     One entry per constructor parameter: <c>null</c> binds the module's options
+    ///     instance, anything else is a type expression resolved from the container. Default
+    ///     when the plugin declares no options, which leaves the container to activate the
+    ///     type as it always did.
+    /// </param>
+    /// <param name="CannotReceiveOptions">
+    ///     The plugin declares options and this service has no way to receive them; ERGOSG017
+    ///     reports it.
+    /// </param>
+    /// <param name="GeneratedTypeName">
+    ///     Set when the generator writes this service's other half — the options field and its
+    ///     constructor — into a partial declaration.
+    /// </param>
+    private readonly record struct PluginServiceModel(
+        string TypeExpression,
+        string DisplayName,
+        ImmutableArray<string?> ConstructorArguments = default,
+        bool CannotReceiveOptions = false,
+        LocationInfo? Location = null,
+        string? GeneratedNamespace = null,
+        string? GeneratedTypeName = null,
+        string GeneratedTypeKeyword = "class")
+    {
+        public bool Equals(PluginServiceModel other)
+            => TypeExpression == other.TypeExpression
+               && CannotReceiveOptions == other.CannotReceiveOptions
+               && GeneratedTypeName == other.GeneratedTypeName
+               && GeneratedNamespace == other.GeneratedNamespace
+               && GeneratedTypeKeyword == other.GeneratedTypeKeyword
+               && ConstructorArguments.SequenceEqualOrBothEmpty(other.ConstructorArguments);
+
+        public override int GetHashCode()
+            => (TypeExpression.GetHashCode() * 397) ^ (CannotReceiveOptions ? 1 : 0);
     }
 }

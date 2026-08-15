@@ -303,4 +303,27 @@ internal static class GeneratorDiagnostics
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    /// <summary>
+    ///     A plugin declares an options type, but one of its services has no way to receive
+    ///     it: no constructor to pass it to, and not partial, so the generator cannot write
+    ///     one either.
+    /// </summary>
+    /// <remarks>
+    ///     The options instance never enters the container — the module holds it and passes
+    ///     it to the constructed service — so a service the generator cannot construct with
+    ///     it simply never sees it. Reported rather than left alone because the plugin's
+    ///     author declared settings and this service silently ignores them.
+    /// </remarks>
+    internal static readonly DiagnosticDescriptor PluginServiceCannotReceiveOptions = new(
+        id: "ERGOSG017",
+        title: "Plugin service cannot receive the plugin's options",
+        messageFormat:
+            "'{0}' carries plugin hook methods and its plugin declares options of type '{1}', but the service has no " +
+            "constructor to receive them and is not declared partial, so none reaches it. Declare a constructor taking " +
+            "'{1}' (other parameters are resolved from the container), or mark the class partial and the generator " +
+            "writes the field and constructor for you.",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 }

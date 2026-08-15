@@ -2,9 +2,9 @@ namespace Stella.Ergosfare.SourceGenerator.Test;
 
 /// <summary>
 ///     Plugin call emission: a <c>[PipelineInvokable]</c> method becomes a straight call baked
-///     into the plan body at the boundary it declared, closed over the plan's own message and
-///     result types. The filters — family, discovery key, generic constraint — are decided at
-///     emission, so a plan they exclude carries no call and no runtime check at all.
+///     into the plan body at the hook it declared, closed over the plan's own message type. The
+///     filters — family, discovery key, generic constraint — are decided at emission, so a plan
+///     they exclude carries no call and no runtime check at all.
 /// </summary>
 /// <remarks>
 ///     Every test asserts <c>CompilationErrors</c> is empty. That is not ceremony here: the
@@ -14,9 +14,9 @@ namespace Stella.Ergosfare.SourceGenerator.Test;
 /// </remarks>
 public class PluginInvocationEmissionTests
 {
-    /// <summary>A void command with one pre interceptor, plus a resultless observer.</summary>
+    /// <summary>A void command with one pre interceptor, plus an observer on the handler seam.</summary>
     [Fact]
-    public void VoidInvokable_IsCalledInTheStagedPlanBody()
+    public void Invokable_IsCalledInTheStagedPlanBody()
     {
         var result = GeneratorTestHost.Run("""
             using Stella.Ergosfare.Commands.Abstractions;
@@ -41,7 +41,7 @@ public class PluginInvocationEmissionTests
 
                 public sealed class CountingHooks
                 {
-                    [VoidPipelineInvokable(Stage.PostMainHandler)]
+                    [PipelineInvokable(Hook.PostMain)]
                     public void Count<TMessage>(TMessage message, ErgosfareContext context)
                     {
                     }
@@ -65,13 +65,15 @@ public class PluginInvocationEmissionTests
     }
 
     /// <summary>
-    ///     The result-shaped observer is closed over both the message and the result, and reads
-    ///     the plan's own result local rather than an erased one.
+    ///     One declaration serves every family. No hook carries a result, so the same method —
+    ///     generic over the message alone — is emitted into a resultless command's plan and a
+    ///     result-producing query's plan without the author writing either shape twice.
     /// </summary>
     [Fact]
-    public void ResultInvokable_IsClosedOverTheMessageAndResult()
+    public void OneDeclaration_ReachesBothTheVoidAndTheResultPlan()
     {
         var result = GeneratorTestHost.Run("""
+            using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Plugins.Abstractions;
             using Stella.Ergosfare.Queries.Abstractions;
@@ -79,6 +81,13 @@ public class PluginInvocationEmissionTests
 
             namespace TestApp
             {
+                public sealed record WritePing : ICommand;
+
+                public sealed class WritePingHandler : ICommandHandler<WritePing>
+                {
+                    public ValueTask HandleAsync(WritePing message, ErgosfareContext context) => default;
+                }
+
                 public sealed record CountQuery : IQuery<int>;
 
                 public sealed class CountQueryHandler : IQueryHandler<CountQuery, int>
@@ -89,8 +98,8 @@ public class PluginInvocationEmissionTests
 
                 public sealed class TracingHooks
                 {
-                    [PipelineInvokable(Stage.PostMainHandler)]
-                    public ValueTask ObserveAsync<TMessage, TResult>(TMessage message, TResult result, ErgosfareContext context)
+                    [PipelineInvokable(Hook.PostMain)]
+                    public ValueTask ObserveAsync<TMessage>(TMessage message, ErgosfareContext context)
                         => default;
                 }
             }
@@ -98,12 +107,15 @@ public class PluginInvocationEmissionTests
 
         Assert.Empty(result.CompilationErrors);
 
-        // A value-typed result crosses the call as an int, not as a boxed object.
-        Assert.Contains(
-            "await global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions"
-            + ".GetRequiredService<global::TestApp.TracingHooks>(serviceProvider)"
-            + ".ObserveAsync<global::TestApp.CountQuery, int>(message, result, context);",
-            result.GeneratedSource);
+        // The result type never reaches the hook's signature — a query's plan closes the call
+        // exactly as a command's does.
+        Assert.Contains(".ObserveAsync<global::TestApp.WritePing>(message, context);", result.GeneratedSource);
+        Assert.Contains(".ObserveAsync<global::TestApp.CountQuery>(message, context);", result.GeneratedSource);
+        Assert.DoesNotContain("ObserveAsync<global::TestApp.CountQuery, int>", result.GeneratedSource);
+
+        // A ValueTask-returning method is awaited.
+        Assert.Contains("await global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions"
+                        + ".GetRequiredService<global::TestApp.TracingHooks>", result.GeneratedSource);
     }
 
     /// <summary>
@@ -131,7 +143,7 @@ public class PluginInvocationEmissionTests
 
                 public sealed class CountingHooks
                 {
-                    [VoidPipelineInvokable(Stage.PreMainHandler)]
+                    [PipelineInvokable(Hook.PreMain)]
                     public void Count<TMessage>(TMessage message, ErgosfareContext context)
                     {
                     }
@@ -145,20 +157,16 @@ public class PluginInvocationEmissionTests
             "GeneratedDispatchRoots.AddStagedPlan<global::TestApp.BarePing>(new StagedPlan0());",
             result.GeneratedSource);
         Assert.DoesNotContain("AddVoidPlan<global::TestApp.BarePing", result.GeneratedSource);
-
-        // Nobody declared an exception or final observer, so the collapsed body stays the
-        // straight line it is today: no try, no catch, no finally.
-        Assert.DoesNotContain("catch (", result.GeneratedSource);
-        Assert.DoesNotContain("finally", result.GeneratedSource);
     }
 
     /// <summary>
-    ///     The guards grow only for what was declared: a final observer earns the
-    ///     <c>finally</c>, and an aborted dispatch skips it exactly as it skips the final
-    ///     interceptor stage.
+    ///     A plugin cannot change the shape of the pipeline it observes. Every hook is a
+    ///     straight-line position, so an interceptorless plan carrying calls at all four of
+    ///     them stays the straight line it is without one: no <c>try</c>, no <c>catch</c>, no
+    ///     <c>finally</c>, and no abort flag to track.
     /// </summary>
     [Fact]
-    public void FinalObserver_GrowsTheFinallyOnACollapsedPlan()
+    public void EveryHook_LeavesACollapsedPlanUnguarded()
     {
         var result = GeneratorTestHost.Run("""
             using Stella.Ergosfare.Commands.Abstractions;
@@ -177,7 +185,22 @@ public class PluginInvocationEmissionTests
 
                 public sealed class ScopeHooks
                 {
-                    [VoidPipelineInvokable(Stage.OnFinal)]
+                    [PipelineInvokable(Hook.Start)]
+                    public void Open<TMessage>(TMessage message, ErgosfareContext context)
+                    {
+                    }
+
+                    [PipelineInvokable(Hook.PreMain)]
+                    public void Entering<TMessage>(TMessage message, ErgosfareContext context)
+                    {
+                    }
+
+                    [PipelineInvokable(Hook.PostMain)]
+                    public void Left<TMessage>(TMessage message, ErgosfareContext context)
+                    {
+                    }
+
+                    [PipelineInvokable(Hook.Finish)]
                     public void Close<TMessage>(TMessage message, ErgosfareContext context)
                     {
                     }
@@ -187,21 +210,21 @@ public class PluginInvocationEmissionTests
 
         Assert.Empty(result.CompilationErrors);
 
-        Assert.Contains("finally", result.GeneratedSource);
-        Assert.Contains("if (!aborted)", result.GeneratedSource);
-        Assert.Contains(
-            "GetRequiredService<global::TestApp.ScopeHooks>(serviceProvider)"
-            + ".Close<global::TestApp.ClosingPing>(message, context);",
-            result.GeneratedSource);
+        Assert.Contains(".Open<global::TestApp.ClosingPing>(message, context);", result.GeneratedSource);
+        Assert.Contains(".Close<global::TestApp.ClosingPing>(message, context);", result.GeneratedSource);
+
+        Assert.DoesNotContain("catch (", result.GeneratedSource);
+        Assert.DoesNotContain("finally", result.GeneratedSource);
+        Assert.DoesNotContain("aborted", result.GeneratedSource);
     }
 
     /// <summary>
-    ///     The exception observer runs ahead of the interceptor stage: an interceptor that
-    ///     returns a value swallows the exception, and an observer whose job is to see every
-    ///     failure must not depend on whether one did.
+    ///     <c>Finish</c> is the end of a pipeline that completed, so it is emitted on the
+    ///     success path — after the post chain, inside the pipeline's own <c>try</c> — and
+    ///     nowhere else. A failure leaves through the exception path and never reaches it.
     /// </summary>
     [Fact]
-    public void ExceptionObserver_RunsBeforeTheInterceptorStage()
+    public void FinishHook_SitsOnTheSuccessPathAfterThePostChain()
     {
         var result = GeneratorTestHost.Run("""
             using Stella.Ergosfare.Commands.Abstractions;
@@ -219,6 +242,12 @@ public class PluginInvocationEmissionTests
                     public ValueTask HandleAsync(FailingPing message, ErgosfareContext context) => default;
                 }
 
+                public sealed class FailingPingPost : ICommandPostInterceptor<FailingPing>
+                {
+                    public ValueTask<object> HandleAsync(FailingPing message, object result, ErgosfareContext context)
+                        => ValueTask.FromResult<object>(Unit.Value);
+                }
+
                 public sealed class FailingPingExceptionInterceptor : ICommandExceptionInterceptor<FailingPing>
                 {
                     public ValueTask<object> HandleAsync(
@@ -228,8 +257,8 @@ public class PluginInvocationEmissionTests
 
                 public sealed class MetricHooks
                 {
-                    [VoidPipelineInvokable(Stage.OnException)]
-                    public void Failed<TMessage>(TMessage message, ErgosfareContext context)
+                    [PipelineInvokable(Hook.Finish)]
+                    public void Ended<TMessage>(TMessage message, ErgosfareContext context)
                     {
                     }
                 }
@@ -239,12 +268,19 @@ public class PluginInvocationEmissionTests
         Assert.Empty(result.CompilationErrors);
 
         var source = result.GeneratedSource;
-        var observer = source.IndexOf(".Failed<global::TestApp.FailingPing>", StringComparison.Ordinal);
-        var interceptors = source.IndexOf("var resultBeforeExceptions", StringComparison.Ordinal);
+        const string observed = ".Ended<global::TestApp.FailingPing>";
+        const string caught = "catch (global::System.Exception e)";
 
-        Assert.True(observer > 0);
-        Assert.True(interceptors > 0);
-        Assert.True(observer < interceptors);
+        // The plan emits a resolving and a direct-construction body, so every position is
+        // asserted in both: each call sits after that body's post chain and before its catch.
+        Assert.True(source.IndexOf("var invokedPostResult", StringComparison.Ordinal)
+                    < source.IndexOf(observed, StringComparison.Ordinal));
+        Assert.True(source.IndexOf(observed, StringComparison.Ordinal)
+                    < source.IndexOf(caught, StringComparison.Ordinal));
+        Assert.True(source.LastIndexOf("var invokedPostResult", StringComparison.Ordinal)
+                    < source.LastIndexOf(observed, StringComparison.Ordinal));
+        Assert.True(source.LastIndexOf(observed, StringComparison.Ordinal)
+                    < source.LastIndexOf(caught, StringComparison.Ordinal));
     }
 
     /// <summary>The family filter: a command-only plugin never reaches a query plan.</summary>
@@ -278,13 +314,8 @@ public class PluginInvocationEmissionTests
                 [PluginServiceFilter(Module.Command)]
                 public sealed class UnitOfWorkHooks
                 {
-                    [VoidPipelineInvokable(Stage.PostMainHandler)]
+                    [PipelineInvokable(Hook.PostMain)]
                     public void Commit<TMessage>(TMessage message, ErgosfareContext context)
-                    {
-                    }
-
-                    [PipelineInvokable(Stage.PostMainHandler)]
-                    public void CommitWithResult<TMessage, TResult>(TMessage message, TResult result, ErgosfareContext context)
                     {
                     }
                 }
@@ -294,7 +325,7 @@ public class PluginInvocationEmissionTests
         Assert.Empty(result.CompilationErrors);
 
         Assert.Contains("Commit<global::TestApp.WritePing>", result.GeneratedSource);
-        Assert.DoesNotContain("CommitWithResult<global::TestApp.ReadPing", result.GeneratedSource);
+        Assert.DoesNotContain("Commit<global::TestApp.ReadPing", result.GeneratedSource);
         Assert.DoesNotContain("AddStagedPlan<global::TestApp.ReadPing", result.GeneratedSource);
     }
 
@@ -332,7 +363,7 @@ public class PluginInvocationEmissionTests
 
                 public sealed class CountingHooks
                 {
-                    [VoidPipelineInvokable(Stage.PostMainHandler)]
+                    [PipelineInvokable(Hook.PostMain)]
                     public void Count<TMessage>(TMessage message, ErgosfareContext context)
                     {
                     }
@@ -377,7 +408,7 @@ public class PluginInvocationEmissionTests
                 [PluginServiceFilter("reporting")]
                 public sealed class CountingHooks
                 {
-                    [VoidPipelineInvokable(Stage.PostMainHandler)]
+                    [PipelineInvokable(Hook.PostMain)]
                     public void Count<TMessage>(TMessage message, ErgosfareContext context)
                     {
                     }
@@ -425,7 +456,7 @@ public class PluginInvocationEmissionTests
 
                 public sealed class AuditHooks
                 {
-                    [VoidPipelineInvokable(Stage.PostMainHandler)]
+                    [PipelineInvokable(Hook.PostMain)]
                     public void Audit<TMessage>(TMessage message, ErgosfareContext context)
                         where TMessage : IAudited
                     {
@@ -467,7 +498,7 @@ public class PluginInvocationEmissionTests
 
                 public sealed class OutboxHooks
                 {
-                    [VoidPipelineInvokable(Stage.PostMainHandler)]
+                    [PipelineInvokable(Hook.PostMain)]
                     public void Enqueue<TMessage>(TMessage message, ErgosfareContext context, IOutboxStore store)
                     {
                     }
@@ -508,7 +539,7 @@ public class PluginInvocationEmissionTests
 
                 public sealed class StaticHooks
                 {
-                    [VoidPipelineInvokable(Stage.PipelineStart)]
+                    [PipelineInvokable(Hook.Start)]
                     public static void Started<TMessage>(TMessage message, ErgosfareContext context)
                     {
                     }

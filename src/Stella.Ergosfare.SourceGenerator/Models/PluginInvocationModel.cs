@@ -3,8 +3,8 @@ using System.Collections.Immutable;
 namespace Stella.Ergosfare.SourceGenerator.Models;
 
 /// <summary>
-///     Which plan boundary a plugin call is emitted at. Mirrors
-///     <c>Stella.Ergosfare.Plugins.Abstractions.Stage</c> by numeric value — the generator
+///     Which pipeline point a plugin call is emitted at. Mirrors
+///     <c>Stella.Ergosfare.Plugins.Abstractions.Hook</c> by numeric value — the generator
 ///     cannot reference that assembly, so it reads the attribute's constructor argument and
 ///     maps it here.
 /// </summary>
@@ -12,29 +12,12 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 ///     The numeric values are a compatibility surface: a plugin compiled against one version
 ///     of the abstractions carries the number, not the name. They are never renumbered.
 /// </remarks>
-internal enum PluginStage
+internal enum PluginHook
 {
-    PipelineStart = 0,
-    PreMainHandler = 1,
-    PostMainHandler = 2,
-    AfterPost = 3,
-    OnException = 4,
-    OnFinal = 5,
-}
-
-/// <summary>
-///     Which pipeline shape a plugin method was declared for. The two are separate
-///     declarations because their signatures genuinely differ: a resultless pipeline has no
-///     result to observe, and folding both into one attribute would force every author to
-///     carry a <c>TResult</c> that is always <c>Unit</c>.
-/// </summary>
-internal enum PluginPipelineShape : byte
-{
-    /// <summary><c>[PipelineInvokable]</c> — pipelines that produce a result.</summary>
-    Result,
-
-    /// <summary><c>[VoidPipelineInvokable]</c> — resultless commands and event broadcasts.</summary>
-    Void,
+    Start = 0,
+    PreMain = 1,
+    PostMain = 2,
+    Finish = 3,
 }
 
 /// <summary>
@@ -43,11 +26,8 @@ internal enum PluginPipelineShape : byte
 /// </summary>
 internal enum PluginParameterKind : byte
 {
-    /// <summary>The dispatched message — the method's first type parameter.</summary>
+    /// <summary>The dispatched message — the method's type parameter.</summary>
     Message,
-
-    /// <summary>The pipeline result — the method's second type parameter.</summary>
-    Result,
 
     /// <summary>The execution context.</summary>
     Context,
@@ -58,7 +38,7 @@ internal enum PluginParameterKind : byte
 
 /// <summary>
 ///     Mirrors <c>Stella.Ergosfare.Plugins.Abstractions.Module</c> by numeric value; see
-///     <see cref="PluginStage"/> for why the values are pinned.
+///     <see cref="PluginHook"/> for why the values are pinned.
 /// </summary>
 [Flags]
 internal enum PluginModule
@@ -78,25 +58,25 @@ internal enum PluginModule
 /// <remarks>
 ///     <para>
 ///         The method is an observer — it returns <c>void</c> or <c>ValueTask</c> and does
-///         not rewrite the message or the result. <see cref="IsAsync"/> selects between a
-///         plain call and an awaited one; a <c>void</c> method never enters an async state
+///         not rewrite the message or produce a result. <see cref="IsAsync"/> selects between
+///         a plain call and an awaited one; a <c>void</c> method never enters an async state
 ///         machine, which is the whole point of the cheap shape.
 ///     </para>
 ///     <para>
-///         <see cref="Arity"/> is the method's own generic arity. The generator closes it
-///         over the plan's concrete message (and result) types at each emission site, so a
-///         value-typed message or result is never boxed on the way in.
+///         The method is generic over the message alone — no hook carries a result, so there
+///         is one signature shape and one arity. The generator closes it over the plan's
+///         concrete message type at each emission site, so a value-typed message is never
+///         boxed on the way in; a method of any other arity is not a hook this emission can
+///         write and is dropped at discovery.
 ///     </para>
 /// </remarks>
 internal readonly record struct PluginInvocationModel(
     string ServiceTypeExpression,
     string ServiceDisplayName,
     string MethodName,
-    PluginStage Stage,
-    PluginPipelineShape Shape,
+    PluginHook Hook,
     bool IsAsync,
     bool IsStatic,
-    int Arity,
     PluginModule Modules,
     ImmutableArray<string> Keys,
     ImmutableArray<PluginParameterBinding> Parameters,
@@ -113,11 +93,9 @@ internal readonly record struct PluginInvocationModel(
     public bool Equals(PluginInvocationModel other)
         => ServiceTypeExpression == other.ServiceTypeExpression
            && MethodName == other.MethodName
-           && Stage == other.Stage
-           && Shape == other.Shape
+           && Hook == other.Hook
            && IsAsync == other.IsAsync
            && IsStatic == other.IsStatic
-           && Arity == other.Arity
            && Modules == other.Modules
            && Constraints == other.Constraints
            && Keys.SequenceEqualOrBothEmpty(other.Keys)
@@ -127,9 +105,7 @@ internal readonly record struct PluginInvocationModel(
     {
         var hash = ServiceTypeExpression.GetHashCode();
         hash = (hash * 397) ^ MethodName.GetHashCode();
-        hash = (hash * 397) ^ (int)Stage;
-        hash = (hash * 397) ^ (int)Shape;
-        hash = (hash * 397) ^ Arity;
+        hash = (hash * 397) ^ (int)Hook;
         hash = (hash * 397) ^ (int)Modules;
         hash = (hash * 397) ^ Parameters.Length;
         hash = (hash * 397) ^ Constraints.GetHashCode();
@@ -152,9 +128,8 @@ internal readonly record struct PluginInvocationModel(
 /// <param name="RequiresValueType"><c>where TMessage : struct</c>.</param>
 /// <param name="IsUnmodelable">
 ///     A constraint the string model cannot decide — a <c>new()</c> or <c>unmanaged</c>
-///     constraint, one naming another type parameter, or any constraint at all on the
-///     result parameter. Such a method is left out of every plan: emitting it risks a
-///     broken consumer build, which is worse than the miss.
+///     constraint, or one naming a constructed generic. Such a method is left out of every
+///     plan: emitting it risks a broken consumer build, which is worse than the miss.
 /// </param>
 internal readonly record struct PluginConstraintModel(
     ImmutableArray<string> MessageTypes,
