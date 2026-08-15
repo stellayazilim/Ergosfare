@@ -1,10 +1,11 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Stella.Ergosfare.SourceGenerator.Models;
+using Stella.Ergosfare.SourceGenerator.Symbols;
 
 namespace Stella.Ergosfare.SourceGenerator;
 
@@ -17,93 +18,14 @@ namespace Stella.Ergosfare.SourceGenerator;
 /// </summary>
 public sealed partial class ErgosfareRegistrationGenerator
 {
-    private const string CoreAbstractionsNamespace = "Stella.Ergosfare.Core.Abstractions";
     private const string CommandMediatorInterfaceName = "ICommandMediator";
     private const string QueryMediatorInterfaceName = "IQueryMediator";
     private const string EventMediatorInterfaceName = "IEventMediator";
     private const string MessageMediatorInterfaceName = "IMessageMediator";
 
-    private const string DispatchSitesNamespace = "Stella.Ergosfare.Core.Abstractions.DispatchSites";
-    private const string DispatchSiteAttributeMetadataName = DispatchSitesNamespace + ".DispatchSiteAttribute";
 
     private const string CompositionRootBuildProperty = "build_property.ErgosfareCompositionRoot";
     private const string TrimUnusedHandlersBuildProperty = "build_property.ErgosfareTrimUnusedHandlers";
-
-    /// <summary>
-    ///     Composition-root override, the trim opt-in, and the two compilation facts the
-    ///     reachability judgment gates on.
-    /// </summary>
-    internal readonly record struct JudgmentInputs(
-        bool? CompositionRootOverride,
-        bool TrimUnusedHandlers,
-        bool ScanReferences,
-        bool IsExecutableOutput);
-
-    /// <summary>
-    ///     The referenced assemblies' aggregated dispatch manifests: dispatch sites,
-    ///     manual-registration evidence, and two soundness flags.
-    ///     <see cref="HasUnknownSiteAssemblies"/> guards the unreachable-handler judgment:
-    ///     any Ergosfare-referencing assembly in the closure without a manifest marker
-    ///     (built without the generator, or with one predating manifests) may contain
-    ///     dispatch sites this scan cannot see, so ERGOSG007 and the trim stay silent
-    ///     while it is set. <see cref="HasOpaqueRegistrations"/> guards the dead-dispatch
-    ///     judgment: a registration whose type is statically unknowable means coverage
-    ///     evidence is incomplete by construction, so ERGOSG005/006 stay silent.
-    /// </summary>
-    internal readonly struct DispatchManifestScanResult(
-        ImmutableArray<DispatchSiteModel> sites,
-        ImmutableArray<RegistrationSiteModel> registrationSites,
-        bool hasUnknownSiteAssemblies,
-        bool hasOpaqueRegistrations) : IEquatable<DispatchManifestScanResult>
-    {
-        public static readonly DispatchManifestScanResult Empty = new(
-            ImmutableArray<DispatchSiteModel>.Empty, ImmutableArray<RegistrationSiteModel>.Empty, false, false);
-
-        public ImmutableArray<DispatchSiteModel> Sites { get; } = sites;
-
-        public ImmutableArray<RegistrationSiteModel> RegistrationSites { get; } = registrationSites;
-
-        public bool HasUnknownSiteAssemblies { get; } = hasUnknownSiteAssemblies;
-
-        public bool HasOpaqueRegistrations { get; } = hasOpaqueRegistrations;
-
-        public bool Equals(DispatchManifestScanResult other)
-        {
-            if (HasUnknownSiteAssemblies != other.HasUnknownSiteAssemblies
-                || HasOpaqueRegistrations != other.HasOpaqueRegistrations
-                || Sites.Length != other.Sites.Length
-                || RegistrationSites.Length != other.RegistrationSites.Length)
-            {
-                return false;
-            }
-
-            for (var i = 0; i < Sites.Length; i++)
-            {
-                if (!Sites[i].Equals(other.Sites[i]))
-                {
-                    return false;
-                }
-            }
-
-            for (var i = 0; i < RegistrationSites.Length; i++)
-            {
-                if (!RegistrationSites[i].Equals(other.RegistrationSites[i]))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        public override bool Equals(object? obj) => obj is DispatchManifestScanResult other && Equals(other);
-
-        public override int GetHashCode()
-            => (Sites.Length * 397)
-               ^ (RegistrationSites.Length * 31)
-               ^ (HasUnknownSiteAssemblies ? 1 : 0)
-               ^ (HasOpaqueRegistrations ? 2 : 0);
-    }
 
     /// <summary>
     ///     Cheap syntax pre-filter for dispatch invocations: an invocation with arguments
@@ -148,7 +70,7 @@ public sealed partial class ErgosfareRegistrationGenerator
             _ => null,
         };
 
-        return name is "Register" or "RegisterParticipants" or "RegisterFromAssembly" or "RegisterDescriptors";
+        return name is "Register" or "RegisterParticipants";
     }
 
     /// <summary>
@@ -173,33 +95,25 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         switch (method.Name)
         {
-            case "RegisterFromAssembly":
-                // Removed from the current surface, but the generator also runs against
-                // older packages where the reflective scan still exists — its catch is
-                // unknowable here either way.
-                return OpaqueRegistration();
-
             case "RegisterParticipants":
                 // A batch of types assembled at run time is a value, not a set of type
                 // arguments; nothing here can say which types it carries.
                 return OpaqueRegistration();
 
-            case "RegisterDescriptors":
-                // Gone from the current surface, kept for older packages. Descriptor
-                // batches are values, not types; unknowable either way.
-                return OpaqueRegistration();
-
             case "Register" when method is { IsGenericMethod: true, TypeArguments.Length: 1 }:
+                // A type argument that is itself a type parameter — Register<T>() inside a
+                // generic method — names a different type per instantiation, none of which
+                // this compilation can enumerate.
                 return method.TypeArguments[0] is INamedTypeSymbol genericArgument
                     ? EvidenceRegistration(genericArgument)
-                    : OpaqueRegistration();
+                    : UnknownTypeRegistration(invocation);
 
             case "Register" when method.Parameters.Length >= 1:
             {
                 var parameterType = method.Parameters[0].Type;
 
                 if (parameterType is INamedTypeSymbol { Name: "Type" } typeParameter
-                    && IsInNamespace(typeParameter, "System"))
+                    && SymbolNaming.IsInNamespace(typeParameter, "System"))
                 {
                     // Register(typeof(X)) is provable; any other Type-valued argument
                     // is a runtime decision.
@@ -211,7 +125,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                         return EvidenceRegistration(literal);
                     }
 
-                    return OpaqueRegistration();
+                    return UnknownTypeRegistration(invocation);
                 }
 
                 // Register(IModule) and friends: a container, not a type registration —
@@ -228,6 +142,18 @@ public sealed partial class ErgosfareRegistrationGenerator
             TypeMetadataName = null,
             MainHandlerMessageKeys = ImmutableArray<string>.Empty,
             IsOpaque = true,
+            UnknownTypeLocation = null,
+        };
+
+        // Opaque, and a defect: ERGOSG018 reports it at the call. Still opaque so the
+        // dead-dispatch judgment stays quiet — the dispatches downstream of an unknown
+        // registration are not the finding, the registration is.
+        static RegistrationSiteModel UnknownTypeRegistration(SyntaxNode call) => new()
+        {
+            TypeMetadataName = null,
+            MainHandlerMessageKeys = ImmutableArray<string>.Empty,
+            IsOpaque = true,
+            UnknownTypeLocation = LocationInfo.From(call),
         };
     }
 
@@ -248,13 +174,18 @@ public sealed partial class ErgosfareRegistrationGenerator
                     TypeMetadataName = null,
                     MainHandlerMessageKeys = ImmutableArray<string>.Empty,
                     IsOpaque = true,
+
+                    // Named, but generic: the runtime builds a generic registration's
+                    // descriptors reflectively per closed form, so the type is known and its
+                    // evidence is not. Not the ERGOSG018 defect.
+                    UnknownTypeLocation = null,
                 };
             }
         }
 
         ImmutableArray<string>.Builder? keys = null;
 
-        foreach (var descriptor in BuildDescriptors(registered))
+        foreach (var descriptor in ContractReader.BuildDescriptors(registered))
         {
             if (descriptor.Kind == DescriptorKind.MainHandler)
             {
@@ -264,9 +195,10 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         return new RegistrationSiteModel
         {
-            TypeMetadataName = BuildMetadataName(registered.OriginalDefinition),
+            TypeMetadataName = SymbolNaming.BuildMetadataName(registered.OriginalDefinition),
             MainHandlerMessageKeys = keys?.ToImmutable() ?? ImmutableArray<string>.Empty,
             IsOpaque = false,
+            UnknownTypeLocation = null,
         };
     }
 
@@ -275,11 +207,10 @@ public sealed partial class ErgosfareRegistrationGenerator
     ///     builders (and their DI-extension siblings) or the registry abstraction itself.
     /// </summary>
     private static bool IsErgosfareRegistrationSurface(INamedTypeSymbol type)
-        => IsInNamespace(type, "Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection")
-           || IsInNamespace(type, "Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection")
-           || IsInNamespace(type, "Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection")
-           || IsInNamespace(type, "Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection")
-           || IsInNamespace(type, "Stella.Ergosfare.Core.Abstractions.Registry");
+        => SymbolNaming.IsInNamespace(type, "Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection")
+           || SymbolNaming.IsInNamespace(type, "Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection")
+           || SymbolNaming.IsInNamespace(type, "Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection")
+           || SymbolNaming.IsInNamespace(type, "Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection");
 
     /// <summary>
     ///     Projects a candidate invocation to its dispatch-site model, or <c>null</c> when
@@ -355,7 +286,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         if (TryReadGroupNames(ctx, UnwrapConversions(argument.Expression), ct, names, depth: 0))
         {
-            groups = NormalizeGroupNames(names);
+            groups = GroupNames.Normalize(names);
             return;
         }
 
@@ -416,7 +347,7 @@ public sealed partial class ErgosfareRegistrationGenerator
         }
 
         return parameter.Type is INamedTypeSymbol { Name: "GroupSet" } groupSet
-               && IsInNamespace(groupSet, CoreAbstractionsNamespace);
+               && SymbolNaming.IsInNamespace(groupSet, ContractNames.CoreAbstractionsNamespace);
     }
 
     /// <summary>
@@ -451,7 +382,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                     {
                         Name: "Of", ContainingType: { Name: "GroupSet" } owner,
                     }
-                    || !IsInNamespace(owner, CoreAbstractionsNamespace))
+                    || !SymbolNaming.IsInNamespace(owner, ContractNames.CoreAbstractionsNamespace))
                 {
                     return false;
                 }
@@ -496,7 +427,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                 var symbol = ctx.SemanticModel.GetSymbolInfo(expression, ct).Symbol;
 
                 if (symbol is IFieldSymbol { Name: "Empty", ContainingType: { Name: "GroupSet" } emptyOwner }
-                    && IsInNamespace(emptyOwner, CoreAbstractionsNamespace))
+                    && SymbolNaming.IsInNamespace(emptyOwner, ContractNames.CoreAbstractionsNamespace))
                 {
                     return true;
                 }
@@ -600,33 +531,6 @@ public sealed partial class ErgosfareRegistrationGenerator
     }
 
     /// <summary>
-    ///     Canonical form of a group set: ordinal-sorted and deduplicated, because group
-    ///     selection is an any-of test — order and repetition select the same participants,
-    ///     so two spellings of one set must key one plan.
-    /// </summary>
-    internal static ImmutableArray<string> NormalizeGroupNames(List<string> names)
-    {
-        if (names.Count == 0)
-        {
-            return ImmutableArray<string>.Empty;
-        }
-
-        names.Sort(StringComparer.Ordinal);
-
-        var builder = ImmutableArray.CreateBuilder<string>(names.Count);
-
-        foreach (var name in names)
-        {
-            if (builder.Count == 0 || !string.Equals(builder[builder.Count - 1], name, StringComparison.Ordinal))
-            {
-                builder.Add(name);
-            }
-        }
-
-        return builder.ToImmutable();
-    }
-
-    /// <summary>
     ///     Maps a bound method to its dispatch surface: the mediator interfaces' dispatch
     ///     methods, matched on the interface itself or — for calls through a concrete
     ///     mediator implementation — on any mediator interface the containing type
@@ -658,15 +562,15 @@ public sealed partial class ErgosfareRegistrationGenerator
     private static DispatchSiteKind? ClassifyByMediatorInterface(INamedTypeSymbol type, string methodName)
         => methodName switch
         {
-            "SendAsync" when type.Name == CommandMediatorInterfaceName && IsInNamespace(type, CommandMarkerNamespace)
+            "SendAsync" when type.Name == CommandMediatorInterfaceName && SymbolNaming.IsInNamespace(type, ContractNames.CommandMarkerNamespace)
                 => DispatchSiteKind.Command,
-            "QueryAsync" when type.Name == QueryMediatorInterfaceName && IsInNamespace(type, QueryMarkerNamespace)
+            "QueryAsync" when type.Name == QueryMediatorInterfaceName && SymbolNaming.IsInNamespace(type, ContractNames.QueryMarkerNamespace)
                 => DispatchSiteKind.Query,
-            "StreamAsync" when type.Name == QueryMediatorInterfaceName && IsInNamespace(type, QueryMarkerNamespace)
+            "StreamAsync" when type.Name == QueryMediatorInterfaceName && SymbolNaming.IsInNamespace(type, ContractNames.QueryMarkerNamespace)
                 => DispatchSiteKind.Stream,
-            "PublishAsync" when type.Name == EventMediatorInterfaceName && IsInNamespace(type, EventMarkerNamespace)
+            "PublishAsync" when type.Name == EventMediatorInterfaceName && SymbolNaming.IsInNamespace(type, ContractNames.EventMarkerNamespace)
                 => DispatchSiteKind.Event,
-            "DispatchAsync" or "Mediate" when type.Name == MessageMediatorInterfaceName && IsInNamespace(type, CoreAbstractionsNamespace)
+            "DispatchAsync" or "Mediate" when type.Name == MessageMediatorInterfaceName && SymbolNaming.IsInNamespace(type, ContractNames.CoreAbstractionsNamespace)
                 => DispatchSiteKind.Message,
             _ => null,
         };
@@ -767,7 +671,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         if (kind == DispatchSiteKind.Message && !isOpaque)
         {
-            GetMarkers(named, out var isCommand, out var isQuery, out var isEvent);
+            ParticipantAttributes.GetMarkers(named, out var isCommand, out var isQuery, out var isEvent);
 
             if (!isCommand && !isQuery && !isEvent)
             {
@@ -779,14 +683,14 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         return new DispatchSiteModel
         {
-            MessageTypeExpression = NormalizedTypeExpression(named),
-            MessageTypeMetadataName = BuildMetadataName(named.OriginalDefinition),
+            MessageTypeExpression = SymbolNaming.NormalizedTypeExpression(named),
+            MessageTypeMetadataName = SymbolNaming.BuildMetadataName(named.OriginalDefinition),
             DisplayName = named.ToDisplayString(),
             Kind = kind,
             IsOpaque = isOpaque,
             IsValueType = named.IsValueType,
             IsGenericMessage = named.IsGenericType,
-            AssignableKeys = GetAssignableKeys(named),
+            AssignableKeys = ParticipantAttributes.GetAssignableKeys(named),
             Groups = ImmutableArray<string>.Empty,
             HasUnprovableGroups = false,
             Location = location,
@@ -838,10 +742,10 @@ public sealed partial class ErgosfareRegistrationGenerator
             return false;
         }
 
-        return (type.Name == "IMessage" && IsInNamespace(type, CoreAbstractionsNamespace))
-               || (type.Name == CommandMarkerName && IsInNamespace(type, CommandMarkerNamespace))
-               || (type.Name is QueryMarkerName or "IStreamQuery" && IsInNamespace(type, QueryMarkerNamespace))
-               || (type.Name == EventMarkerName && IsInNamespace(type, EventMarkerNamespace));
+        return (type.Name == "IMessage" && SymbolNaming.IsInNamespace(type, ContractNames.CoreAbstractionsNamespace))
+               || (type.Name == ContractNames.CommandMarker && SymbolNaming.IsInNamespace(type, ContractNames.CommandMarkerNamespace))
+               || (type.Name is ContractNames.QueryMarker or "IStreamQuery" && SymbolNaming.IsInNamespace(type, ContractNames.QueryMarkerNamespace))
+               || (type.Name == ContractNames.EventMarker && SymbolNaming.IsInNamespace(type, ContractNames.EventMarkerNamespace));
     }
 
     /// <summary>
@@ -856,21 +760,21 @@ public sealed partial class ErgosfareRegistrationGenerator
         var (expression, metadataName, displayName) = kind switch
         {
             DispatchSiteKind.Command => (
-                "global::" + CommandMarkerNamespace + "." + CommandMarkerName,
-                CommandMarkerNamespace + "." + CommandMarkerName,
-                CommandMarkerNamespace + "." + CommandMarkerName),
+                "global::" + ContractNames.CommandMarkerNamespace + "." + ContractNames.CommandMarker,
+                ContractNames.CommandMarkerNamespace + "." + ContractNames.CommandMarker,
+                ContractNames.CommandMarkerNamespace + "." + ContractNames.CommandMarker),
             DispatchSiteKind.Query or DispatchSiteKind.Stream => (
-                "global::" + QueryMarkerNamespace + "." + QueryMarkerName,
-                QueryMarkerNamespace + "." + QueryMarkerName,
-                QueryMarkerNamespace + "." + QueryMarkerName),
+                "global::" + ContractNames.QueryMarkerNamespace + "." + ContractNames.QueryMarker,
+                ContractNames.QueryMarkerNamespace + "." + ContractNames.QueryMarker,
+                ContractNames.QueryMarkerNamespace + "." + ContractNames.QueryMarker),
             DispatchSiteKind.Event => (
-                "global::" + EventMarkerNamespace + "." + EventMarkerName,
-                EventMarkerNamespace + "." + EventMarkerName,
-                EventMarkerNamespace + "." + EventMarkerName),
+                "global::" + ContractNames.EventMarkerNamespace + "." + ContractNames.EventMarker,
+                ContractNames.EventMarkerNamespace + "." + ContractNames.EventMarker,
+                ContractNames.EventMarkerNamespace + "." + ContractNames.EventMarker),
             _ => (
-                "global::" + CoreAbstractionsNamespace + ".IMessage",
-                CoreAbstractionsNamespace + ".IMessage",
-                CoreAbstractionsNamespace + ".IMessage"),
+                "global::" + ContractNames.CoreAbstractionsNamespace + ".IMessage",
+                ContractNames.CoreAbstractionsNamespace + ".IMessage",
+                ContractNames.CoreAbstractionsNamespace + ".IMessage"),
         };
 
         return new DispatchSiteModel
@@ -890,42 +794,6 @@ public sealed partial class ErgosfareRegistrationGenerator
         };
     }
 
-    /// <summary>
-    ///     The CLR metadata name of a type definition (<c>Ns.Type`1</c>, nested via
-    ///     <c>+</c>) — the manifest attribute's payload, resolvable back to a symbol by
-    ///     <c>GetTypeByMetadataName</c> in an aggregating compilation.
-    /// </summary>
-    private static string BuildMetadataName(INamedTypeSymbol symbol)
-    {
-        var parts = new Stack<string>();
-
-        for (var current = symbol; current is not null; current = current.ContainingType)
-        {
-            parts.Push(current.MetadataName);
-        }
-
-        var sb = new StringBuilder();
-
-        if (symbol.ContainingNamespace is { IsGlobalNamespace: false } ns)
-        {
-            sb.Append(ns.ToDisplayString()).Append('.');
-        }
-
-        var first = true;
-
-        foreach (var part in parts)
-        {
-            if (!first)
-            {
-                sb.Append('+');
-            }
-
-            sb.Append(part);
-            first = false;
-        }
-
-        return sb.ToString();
-    }
 
     /// <summary>
     ///     Aggregates the dispatch manifests of the referenced assemblies, rehydrating each
@@ -945,12 +813,12 @@ public sealed partial class ErgosfareRegistrationGenerator
         {
             ct.ThrowIfCancellationRequested();
 
-            if (!ReferencesErgosfare(assembly))
+            if (!ReferenceScanner.ReferencesErgosfare(assembly))
             {
                 continue;
             }
 
-            if (IsErgosfareAssemblyName(assembly.Name) && !HasForceScanReferencesOptIn(assembly))
+            if (ReferenceScanner.IsErgosfareAssemblyName(assembly.Name) && !ReferenceScanner.HasForceScanReferencesOptIn(assembly))
             {
                 continue;
             }
@@ -962,7 +830,7 @@ public sealed partial class ErgosfareRegistrationGenerator
             foreach (var attribute in assembly.GetAttributes())
             {
                 if (attribute.AttributeClass is not { } attributeClass
-                    || !IsInNamespace(attributeClass, DispatchSitesNamespace))
+                    || !SymbolNaming.IsInNamespace(attributeClass, ContractMetadataNames.DispatchSitesNamespace))
                 {
                     continue;
                 }
@@ -1107,7 +975,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                 names.Add(name);
             }
 
-            return NormalizeGroupNames(names);
+            return GroupNames.Normalize(names);
         }
 
         return ImmutableArray<string>.Empty;
@@ -1144,7 +1012,7 @@ public sealed partial class ErgosfareRegistrationGenerator
     ///     composition root with reference scanning on, and the unreachable-handler side
     ///     additionally requires every closure assembly's manifest to be present.
     /// </summary>
-    private static List<RegistrableTypeModel> ApplyDispatchJudgment(
+    internal static List<RegistrableTypeModel> ApplyDispatchJudgment(
         SourceProductionContext context,
         List<RegistrableTypeModel> types,
         List<RegistrableTypeModel> excludedShadows,
@@ -1183,7 +1051,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
             foreach (var key in registration.MainHandlerMessageKeys)
             {
-                handlerMessageKeys.Add(DefinitionKey(key));
+                handlerMessageKeys.Add(TypeExpressions.DefinitionKey(key));
             }
         }
 
@@ -1191,7 +1059,7 @@ public sealed partial class ErgosfareRegistrationGenerator
         {
             foreach (var key in registration.MainHandlerMessageKeys)
             {
-                handlerMessageKeys.Add(DefinitionKey(key));
+                handlerMessageKeys.Add(TypeExpressions.DefinitionKey(key));
             }
         }
 
@@ -1265,7 +1133,7 @@ public sealed partial class ErgosfareRegistrationGenerator
     {
         foreach (var type in models)
         {
-            var typeKey = DefinitionKey(type.TypeofExpression);
+            var typeKey = TypeExpressions.DefinitionKey(type.TypeofExpression);
 
             if (!modelsByKey.ContainsKey(typeKey))
             {
@@ -1278,7 +1146,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                 {
                     if (descriptor.Kind == DescriptorKind.MainHandler)
                     {
-                        handlerMessageKeys.Add(DefinitionKey(descriptor.MessageTypeExpression));
+                        handlerMessageKeys.Add(TypeExpressions.DefinitionKey(descriptor.MessageTypeExpression));
                     }
                 }
             }
@@ -1290,7 +1158,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
             foreach (var assignableKey in type.AssignableKeys)
             {
-                var key = DefinitionKey(assignableKey);
+                var key = TypeExpressions.DefinitionKey(assignableKey);
 
                 if (!subtypesByKey.TryGetValue(key, out var list))
                 {
@@ -1318,7 +1186,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                 continue;
             }
 
-            var siteKey = DefinitionKey(site.MessageTypeExpression);
+            var siteKey = TypeExpressions.DefinitionKey(site.MessageTypeExpression);
 
             if (IsCovered(siteKey, site.AssignableKeys, site.IsValueType, handlerMessageKeys))
             {
@@ -1331,7 +1199,7 @@ public sealed partial class ErgosfareRegistrationGenerator
             {
                 foreach (var subtype in subtypes)
                 {
-                    if (IsCovered(DefinitionKey(subtype.TypeofExpression), subtype.AssignableKeys,
+                    if (IsCovered(TypeExpressions.DefinitionKey(subtype.TypeofExpression), subtype.AssignableKeys,
                             subtype.IsValueType, handlerMessageKeys))
                     {
                         coveredSubtype = subtype;
@@ -1408,7 +1276,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                     continue;
                 }
 
-                var key = DefinitionKey(descriptor.MessageTypeExpression);
+                var key = TypeExpressions.DefinitionKey(descriptor.MessageTypeExpression);
 
                 if (!(claimed ??= new HashSet<string>(StringComparer.Ordinal)).Add(key))
                 {
@@ -1439,7 +1307,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                 continue;
             }
 
-            var messageKey = DefinitionKey(message.TypeofExpression);
+            var messageKey = TypeExpressions.DefinitionKey(message.TypeofExpression);
 
             if (claimsByKey.TryGetValue(messageKey, out var directClaimants) && directClaimants.Count > 1)
             {
@@ -1463,7 +1331,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
             foreach (var assignableKey in message.AssignableKeys)
             {
-                if (!claimsByKey.TryGetValue(DefinitionKey(assignableKey), out var claimants))
+                if (!claimsByKey.TryGetValue(TypeExpressions.DefinitionKey(assignableKey), out var claimants))
                 {
                     continue;
                 }
@@ -1530,7 +1398,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         foreach (var key in assignableKeys)
         {
-            if (handlerMessageKeys.Contains(DefinitionKey(key)))
+            if (handlerMessageKeys.Contains(TypeExpressions.DefinitionKey(key)))
             {
                 return true;
             }
@@ -1560,12 +1428,12 @@ public sealed partial class ErgosfareRegistrationGenerator
         {
             foreach (var site in sites)
             {
-                var siteKey = DefinitionKey(site.MessageTypeExpression);
+                var siteKey = TypeExpressions.DefinitionKey(site.MessageTypeExpression);
                 reached.Add(siteKey);
 
                 foreach (var key in site.AssignableKeys)
                 {
-                    reached.Add(DefinitionKey(key));
+                    reached.Add(TypeExpressions.DefinitionKey(key));
                 }
 
                 if (!subtypesByKey.TryGetValue(siteKey, out var subtypes))
@@ -1575,11 +1443,11 @@ public sealed partial class ErgosfareRegistrationGenerator
 
                 foreach (var subtype in subtypes)
                 {
-                    reached.Add(DefinitionKey(subtype.TypeofExpression));
+                    reached.Add(TypeExpressions.DefinitionKey(subtype.TypeofExpression));
 
                     foreach (var key in subtype.AssignableKeys)
                     {
-                        reached.Add(DefinitionKey(key));
+                        reached.Add(TypeExpressions.DefinitionKey(key));
                     }
                 }
             }
@@ -1622,7 +1490,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
                 hasMainHandler = true;
 
-                if (reachedKeys.Contains(DefinitionKey(descriptor.MessageTypeExpression)))
+                if (reachedKeys.Contains(TypeExpressions.DefinitionKey(descriptor.MessageTypeExpression)))
                 {
                     unreachedMessage = null;
                     break;
@@ -1655,71 +1523,11 @@ public sealed partial class ErgosfareRegistrationGenerator
                     GeneratorDiagnostics.UnreachableHandler,
                     type.ReferencedAssemblyName is null ? type.InfoLocation?.ToLocation() : null,
                     type.DisplayName,
-                    StripGlobalPrefix(unreachedMessage),
+                    TypeExpressions.StripGlobalPrefix(unreachedMessage),
                     originSuffix));
             }
         }
 
         return trimmedExpressions;
-    }
-
-    private static string StripGlobalPrefix(string typeExpression)
-        => typeExpression.StartsWith("global::", StringComparison.Ordinal)
-            ? typeExpression.Substring("global::".Length)
-            : typeExpression;
-
-    /// <summary>
-    ///     Reduces every generic argument list in a type expression to its unbound form
-    ///     (<c>Foo&lt;int&gt;</c> → <c>Foo&lt;&gt;</c>, <c>Bar&lt;int, string&gt;</c> →
-    ///     <c>Bar&lt;,&gt;</c>), so constructed and definition spellings compare equal.
-    ///     Non-generic expressions pass through unchanged.
-    /// </summary>
-    private static string DefinitionKey(string typeExpression)
-    {
-        if (typeExpression.IndexOf('<') < 0)
-        {
-            return typeExpression;
-        }
-
-        var sb = new StringBuilder(typeExpression.Length);
-        var depth = 0;
-        var topLevelCommas = 0;
-
-        foreach (var c in typeExpression)
-        {
-            switch (c)
-            {
-                case '<':
-                    if (depth == 0)
-                    {
-                        sb.Append('<');
-                        topLevelCommas = 0;
-                    }
-
-                    depth++;
-                    break;
-                case '>':
-                    depth--;
-
-                    if (depth == 0)
-                    {
-                        sb.Append(',', topLevelCommas).Append('>');
-                    }
-
-                    break;
-                case ',' when depth == 1:
-                    topLevelCommas++;
-                    break;
-                default:
-                    if (depth == 0)
-                    {
-                        sb.Append(c);
-                    }
-
-                    break;
-            }
-        }
-
-        return sb.ToString();
     }
 }

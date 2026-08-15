@@ -3,21 +3,6 @@ using System.Collections.Immutable;
 namespace Stella.Ergosfare.SourceGenerator.Models;
 
 /// <summary>
-///     The dispatch surface a discovered dispatch site goes through. Mirrors the public
-///     <c>Stella.Ergosfare.Core.Abstractions.DispatchSites.DispatchKind</c> values — the
-///     generator cannot reference the runtime assembly, so the numeric values must stay
-///     in lockstep with it.
-/// </summary>
-internal enum DispatchSiteKind : byte
-{
-    Command = 0,
-    Query = 1,
-    Stream = 2,
-    Event = 3,
-    Message = 4,
-}
-
-/// <summary>
 ///     Value-equatable projection of one dispatch site: a mediator dispatch invocation
 ///     (<c>SendAsync</c>, <c>QueryAsync</c>, <c>StreamAsync</c>, <c>PublishAsync</c>,
 ///     <c>DispatchAsync</c>, <c>Mediate</c>) together with the static type of its message

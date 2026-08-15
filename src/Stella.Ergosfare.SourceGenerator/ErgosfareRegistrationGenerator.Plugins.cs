@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Stella.Ergosfare.SourceGenerator.Models;
+using Stella.Ergosfare.SourceGenerator.Symbols;
 
 namespace Stella.Ergosfare.SourceGenerator;
 
@@ -132,8 +133,8 @@ public sealed partial class ErgosfareRegistrationGenerator
             {
                 ct.ThrowIfCancellationRequested();
 
-                if (!ReferencesErgosfare(assembly)
-                    || (IsErgosfareAssemblyName(assembly.Name) && !HasForceScanReferencesOptIn(assembly)))
+                if (!ReferenceScanner.ReferencesErgosfare(assembly)
+                    || (ReferenceScanner.IsErgosfareAssemblyName(assembly.Name) && !ReferenceScanner.HasForceScanReferencesOptIn(assembly)))
                 {
                     continue;
                 }
@@ -185,7 +186,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         if (type is not { TypeKind: TypeKind.Class, IsAbstract: false }
             || type.IsGenericType
-            || !IsNameableClosedType(type, type.ContainingAssembly))
+            || !ConstructionAnalyzer.IsNameableClosedType(type, type.ContainingAssembly))
         {
             return;
         }
@@ -216,7 +217,7 @@ public sealed partial class ErgosfareRegistrationGenerator
             foreach (var attribute in method.GetAttributes())
             {
                 if (attribute.AttributeClass is not { Name: PipelineInvokableAttributeName } attributeClass
-                    || !IsInNamespace(attributeClass, PluginsAbstractionsNamespace)
+                    || !SymbolNaming.IsInNamespace(attributeClass, PluginsAbstractionsNamespace)
                     || attribute.ConstructorArguments.Length != 1
                     || attribute.ConstructorArguments[0].Value is not int hook
                     || !Enum.IsDefined(typeof(PluginHook), hook))
@@ -279,7 +280,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                 return new PluginConstraintModel(ImmutableArray<string>.Empty, false, false, IsUnmodelable: true);
             }
 
-            types.Add(NormalizedTypeExpression(named));
+            types.Add(SymbolNaming.NormalizedTypeExpression(named));
         }
 
         return new PluginConstraintModel(
@@ -335,7 +336,7 @@ public sealed partial class ErgosfareRegistrationGenerator
         foreach (var attribute in attributes)
         {
             if (attribute.AttributeClass is not { Name: PluginServiceFilterAttributeName } attributeClass
-                || !IsInNamespace(attributeClass, PluginsAbstractionsNamespace)
+                || !SymbolNaming.IsInNamespace(attributeClass, PluginsAbstractionsNamespace)
                 || attribute.ConstructorArguments.Length != 1)
             {
                 continue;
@@ -418,8 +419,8 @@ public sealed partial class ErgosfareRegistrationGenerator
         {
             ct.ThrowIfCancellationRequested();
 
-            if (!IsErgosfareAssemblyName(assembly.Name)
-                || HasForceScanReferencesOptIn(assembly)
+            if (!ReferenceScanner.IsErgosfareAssemblyName(assembly.Name)
+                || ReferenceScanner.HasForceScanReferencesOptIn(assembly)
                 || ReadPluginDeclaration(assembly) is null)
             {
                 continue;
@@ -462,9 +463,6 @@ public sealed partial class ErgosfareRegistrationGenerator
             ordered);
     }
 
-    /// <summary>The plugin's settings type as emission and diagnostics need to name it.</summary>
-    private readonly record struct PluginOptionsType(string TypeExpression, string DisplayName, ISymbol Symbol);
-
     /// <summary>
     ///     The <c>[assembly: ErgosfarePlugin("…", typeof(…))]</c> declaration, or <c>null</c>.
     ///     The options argument is optional, so a plugin that takes no settings reads exactly
@@ -475,7 +473,7 @@ public sealed partial class ErgosfareRegistrationGenerator
         foreach (var attribute in assembly.GetAttributes())
         {
             if (attribute.AttributeClass is not { Name: ErgosfarePluginAttributeName } attributeClass
-                || !IsInNamespace(attributeClass, PluginsAbstractionsNamespace)
+                || !SymbolNaming.IsInNamespace(attributeClass, PluginsAbstractionsNamespace)
                 || attribute.ConstructorArguments.Length == 0
                 || attribute.ConstructorArguments[0].Value is not string name
                 || name.Length == 0)
@@ -543,7 +541,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         if (type is not { TypeKind: TypeKind.Class, IsAbstract: false, IsStatic: false }
             || type.IsGenericType
-            || !IsNameableClosedType(type, type.ContainingAssembly))
+            || !ConstructionAnalyzer.IsNameableClosedType(type, type.ContainingAssembly))
         {
             return;
         }
@@ -665,7 +663,7 @@ public sealed partial class ErgosfareRegistrationGenerator
         foreach (var attribute in method.GetAttributes())
         {
             if (attribute.AttributeClass is { Name: PipelineInvokableAttributeName } attributeClass
-                && IsInNamespace(attributeClass, PluginsAbstractionsNamespace))
+                && SymbolNaming.IsInNamespace(attributeClass, PluginsAbstractionsNamespace))
             {
                 return true;
             }
@@ -693,7 +691,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         sb.AppendLine("/// <summary>The plugin's module: registers the services carrying its pipeline methods.</summary>");
         sb.Append("[global::System.CodeDom.Compiler.GeneratedCode(\"Stella.Ergosfare.SourceGenerator\", \"")
-            .Append(GeneratorVersion).AppendLine("\")]");
+            .Append(GeneratorVersion.Value).AppendLine("\")]");
         sb.Append("internal sealed class ").Append(model.Name).Append("Module : ")
             .Append(ModuleInterfaceExpression).AppendLine();
         sb.AppendLine("{");
@@ -765,7 +763,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         sb.AppendLine("/// <summary>Adds this plugin to an Ergosfare module registry.</summary>");
         sb.Append("[global::System.CodeDom.Compiler.GeneratedCode(\"Stella.Ergosfare.SourceGenerator\", \"")
-            .Append(GeneratorVersion).AppendLine("\")]");
+            .Append(GeneratorVersion.Value).AppendLine("\")]");
         // The consumer's opt-in point: installing a plugin is using the experimental surface,
         // and this extension is the one line of it they write themselves.
         sb.Append("[global::System.Diagnostics.CodeAnalysis.Experimental(\"")
@@ -833,7 +831,7 @@ public sealed partial class ErgosfareRegistrationGenerator
             }
 
             sb.Append(indent).Append("[global::System.CodeDom.Compiler.GeneratedCode(\"Stella.Ergosfare.SourceGenerator\", \"")
-                .Append(GeneratorVersion).AppendLine("\")]");
+                .Append(GeneratorVersion.Value).AppendLine("\")]");
             sb.Append(indent).Append("partial ").Append(service.GeneratedTypeKeyword).Append(' ')
                 .AppendLine(typeName);
             sb.Append(indent).AppendLine("{");
@@ -854,60 +852,5 @@ public sealed partial class ErgosfareRegistrationGenerator
         }
 
         return sb?.ToString();
-    }
-
-    /// <summary>The plugin declaration reduced to what the facade emission needs.</summary>
-    private readonly record struct PluginFacadeModel(
-        string Name,
-        string? OptionsTypeExpression,
-        string OptionsDisplayName,
-        ImmutableArray<PluginServiceModel> Services)
-    {
-        public bool Equals(PluginFacadeModel other)
-            => Name == other.Name
-               && OptionsTypeExpression == other.OptionsTypeExpression
-               && Services.SequenceEqualOrBothEmpty(other.Services);
-
-        public override int GetHashCode()
-            => (Name.GetHashCode() * 397) ^ Services.Length;
-    }
-
-    /// <summary>
-    ///     One plugin service and how the module constructs it.
-    /// </summary>
-    /// <param name="ConstructorArguments">
-    ///     One entry per constructor parameter: <c>null</c> binds the module's options
-    ///     instance, anything else is a type expression resolved from the container. Default
-    ///     when the plugin declares no options, which leaves the container to activate the
-    ///     type as it always did.
-    /// </param>
-    /// <param name="CannotReceiveOptions">
-    ///     The plugin declares options and this service has no way to receive them; ERGOSG017
-    ///     reports it.
-    /// </param>
-    /// <param name="GeneratedTypeName">
-    ///     Set when the generator writes this service's other half — the options field and its
-    ///     constructor — into a partial declaration.
-    /// </param>
-    private readonly record struct PluginServiceModel(
-        string TypeExpression,
-        string DisplayName,
-        ImmutableArray<string?> ConstructorArguments = default,
-        bool CannotReceiveOptions = false,
-        LocationInfo? Location = null,
-        string? GeneratedNamespace = null,
-        string? GeneratedTypeName = null,
-        string GeneratedTypeKeyword = "class")
-    {
-        public bool Equals(PluginServiceModel other)
-            => TypeExpression == other.TypeExpression
-               && CannotReceiveOptions == other.CannotReceiveOptions
-               && GeneratedTypeName == other.GeneratedTypeName
-               && GeneratedNamespace == other.GeneratedNamespace
-               && GeneratedTypeKeyword == other.GeneratedTypeKeyword
-               && ConstructorArguments.SequenceEqualOrBothEmpty(other.ConstructorArguments);
-
-        public override int GetHashCode()
-            => (TypeExpression.GetHashCode() * 397) ^ (CannotReceiveOptions ? 1 : 0);
     }
 }

@@ -170,6 +170,65 @@ public class GroupKeyedPlanEmissionTests
         Assert.DoesNotContain("new string[] { \"billing\", \"audit\" }", result.GeneratedSource);
     }
 
+    /// <summary>
+    ///     The canonical use of groups: one message, one handler per group. Each set selects
+    ///     exactly one of them, so each set gets its plan. Counting handlers per message
+    ///     instead of per set read this as a contested pipeline and abandoned every plan the
+    ///     message had — the headline feature losing its compiled lane, silently.
+    /// </summary>
+    [Fact]
+    public void HandlersInDifferentGroups_EachKeyItsOwnPlan()
+    {
+        var result = GeneratorTestHost.Run("""
+            using Stella.Ergosfare.Commands.Abstractions;
+            using Stella.Ergosfare.Core.Abstractions;
+            using Stella.Ergosfare.Core.Abstractions.Attributes;
+            using System.Threading.Tasks;
+
+            namespace TestApp
+            {
+                public sealed record ArchiveTodo : ICommand;
+
+                [Group("audit")]
+                public sealed class AuditArchiveHandler : ICommandHandler<ArchiveTodo>
+                {
+                    public ValueTask HandleAsync(ArchiveTodo message, ErgosfareContext context) => default;
+                }
+
+                [Group("billing")]
+                public sealed class BillingArchiveHandler : ICommandHandler<ArchiveTodo>
+                {
+                    public ValueTask HandleAsync(ArchiveTodo message, ErgosfareContext context) => default;
+                }
+
+                public static class Caller
+                {
+                    public static ValueTask Audit(ICommandMediator mediator)
+                        => mediator.SendAsync(new ArchiveTodo(), GroupSet.Of("audit"));
+
+                    public static ValueTask Billing(ICommandMediator mediator)
+                        => mediator.SendAsync(new ArchiveTodo(), GroupSet.Of("billing"));
+                }
+            }
+            """);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.CompilationErrors);
+
+        // One plan per proven set, each carrying the one handler that set selects.
+        Assert.Equal(2, CountOccurrences(result.GeneratedSource, "AddStagedPlan<global::TestApp.ArchiveTodo>"));
+        Assert.Contains("new string[] { \"audit\" });", result.GeneratedSource);
+        Assert.Contains("new string[] { \"billing\" });", result.GeneratedSource);
+        Assert.Contains("typeof(global::TestApp.AuditArchiveHandler)", result.GeneratedSource);
+        Assert.Contains("typeof(global::TestApp.BillingArchiveHandler)", result.GeneratedSource);
+
+        // The default set selects neither handler, so its pipeline has none and there is
+        // nothing to bake — an absent plan, not an abandoned one.
+        Assert.DoesNotContain(
+            "AddStagedPlan<global::TestApp.ArchiveTodo>(new StagedPlan0());",
+            result.GeneratedSource);
+    }
+
     private static int CountOccurrences(string source, string value)
     {
         var count = 0;

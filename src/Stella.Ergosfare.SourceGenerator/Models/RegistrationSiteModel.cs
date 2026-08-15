@@ -30,10 +30,19 @@ internal readonly struct RegistrationSiteModel : IEquatable<RegistrationSiteMode
     /// <summary>Whether the registration's type is statically unknowable.</summary>
     public required bool IsOpaque { get; init; }
 
+    /// <summary>
+    ///     Where to report ERGOSG018, set only for a <c>Register</c> call naming a type this
+    ///     compilation cannot know. The other opaque shape — the generator's own
+    ///     <c>RegisterParticipants</c> batch channel — leaves it null: its argument is an
+    ///     <c>IEnumerable&lt;Type&gt;</c> by design, so it is opaque without being a defect.
+    /// </summary>
+    public required LocationInfo? UnknownTypeLocation { get; init; }
+
     public bool Equals(RegistrationSiteModel other)
     {
         if (TypeMetadataName != other.TypeMetadataName
             || IsOpaque != other.IsOpaque
+            || !Nullable.Equals(UnknownTypeLocation, other.UnknownTypeLocation)
             || MainHandlerMessageKeys.Length != other.MainHandlerMessageKeys.Length)
         {
             return false;

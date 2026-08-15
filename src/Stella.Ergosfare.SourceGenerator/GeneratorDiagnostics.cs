@@ -326,4 +326,29 @@ internal static class GeneratorDiagnostics
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    /// <summary>
+    ///     A <c>Register</c> call whose type is decided at run time — a <c>Type</c>-valued
+    ///     argument that is not a <c>typeof</c> literal, or a type argument that is itself a
+    ///     type parameter. Ergosfare's world is closed: a construct's pipeline is compiled,
+    ///     its composition frozen and its plan baked from what this compilation can see. A
+    ///     type named only at run time enters none of that, so the registration cannot mean
+    ///     what it appears to mean.
+    /// </summary>
+    /// <remarks>
+    ///     An error rather than a suppression of the reachability judgment, which is what it
+    ///     used to be: a build that cannot say which types it registers cannot be told
+    ///     anything useful about its dispatches either, and the honest place to say so is
+    ///     the registration, not the dispatch that later looks dead.
+    /// </remarks>
+    internal static readonly DiagnosticDescriptor UnknownRegisteredType = new(
+        id: "ERGOSG018",
+        title: "Registered type is not known at compile time",
+        messageFormat:
+            "This registration names its type at run time, which the closed-world model cannot follow — the type gets " +
+            "no compiled pipeline, no frozen composition and no plan. Register it as 'Register(typeof(T))' or " +
+            "'Register<T>()' with a concrete type, or let 'RegisterGenerated()' collect it.",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }
