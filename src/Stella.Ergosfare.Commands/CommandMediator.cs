@@ -12,30 +12,14 @@ namespace Stella.Ergosfare.Commands;
 public class CommandMediator : ICommandMediator
 {
     /// <summary>
-    /// The mediator backing the original construction shape; null when the facade is
-    /// engine-backed.
+    /// The singleton dispatch engine every send runs against.
     /// </summary>
-    private readonly IMessageMediator? _messageMediator;
+    private readonly MessageDispatchEngine _engine;
 
     /// <summary>
-    /// The singleton dispatch engine; null when the facade wraps an
-    /// <see cref="IMessageMediator"/>.
+    /// The scope provider handlers resolve against.
     /// </summary>
-    private readonly MessageDispatchEngine? _engine;
-
-    /// <summary>
-    /// The scope provider handlers resolve against on the engine path.
-    /// </summary>
-    private readonly IServiceProvider? _serviceProvider;
-
-    /// <summary>
-    /// Wraps an existing <see cref="IMessageMediator"/> — the original construction shape,
-    /// kept for direct construction and foreign mediator implementations.
-    /// </summary>
-    public CommandMediator(IMessageMediator messageMediator)
-    {
-        _messageMediator = messageMediator;
-    }
+    private readonly IServiceProvider _serviceProvider;
 
     /// <summary>
     /// Engine-backed construction: dispatches go straight to the process-wide engine with
@@ -56,29 +40,21 @@ public class CommandMediator : ICommandMediator
     /// <inheritdoc />
     public ValueTask SendAsync(ICommand commandConstruct, IEnumerable<string>? groups,
         CancellationToken cancellationToken)
-        => _engine is not null
-            ? _engine.DispatchAsync(commandConstruct, _serviceProvider!, cancellationToken, groups)
-            : _messageMediator!.DispatchAsync(commandConstruct, null, cancellationToken, groups);
+        => _engine.DispatchAsync(commandConstruct, _serviceProvider, cancellationToken, groups);
 
     /// <inheritdoc />
     public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct, IEnumerable<string>? groups,
         CancellationToken cancellationToken)
-        => _engine is not null
-            ? _engine.DispatchAsync<TResult>(commandConstruct, _serviceProvider!, cancellationToken, groups)
-            : _messageMediator!.DispatchAsync<TResult>(commandConstruct, null, cancellationToken, groups);
+        => _engine.DispatchAsync<TResult>(commandConstruct, _serviceProvider, cancellationToken, groups);
 
     /// <inheritdoc />
     public ValueTask SendAsync(ICommand commandConstruct, ErgosfareContext context, IEnumerable<string>? groups = null)
-        => _engine is not null
-            ? _engine.DispatchAsync(commandConstruct, context, _serviceProvider!, groups)
-            : _messageMediator!.DispatchAsync(commandConstruct, context, groups);
+        => _engine.DispatchAsync(commandConstruct, context, _serviceProvider, groups);
 
     /// <inheritdoc />
     public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct, ErgosfareContext context,
         IEnumerable<string>? groups = null)
-        => _engine is not null
-            ? _engine.DispatchAsync<TResult>(commandConstruct, context, _serviceProvider!, groups)
-            : _messageMediator!.DispatchAsync<TResult>(commandConstruct, context, groups);
+        => _engine.DispatchAsync<TResult>(commandConstruct, context, _serviceProvider, groups);
 
     /// <summary>Sends a command through its default pipeline.</summary>
     /// <remarks>

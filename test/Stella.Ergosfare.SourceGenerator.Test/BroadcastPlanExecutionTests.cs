@@ -84,7 +84,7 @@ public class BroadcastPlanExecutionTests
             public sealed class GenBroadcastFinal : IEventFinalInterceptor<GenOrderPlaced>
             {
                 public ValueTask HandleAsync(
-                    GenOrderPlaced @event, Unit? result, System.Exception? exception, ErgosfareContext context)
+                    GenOrderPlaced @event, System.Exception? exception, ErgosfareContext context)
                 {
                     BroadcastSink.Entries.Add("final");
                     return default;

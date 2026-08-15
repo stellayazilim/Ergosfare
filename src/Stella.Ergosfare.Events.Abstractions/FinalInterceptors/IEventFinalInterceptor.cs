@@ -5,23 +5,27 @@ namespace Stella.Ergosfare.Events.Abstractions;
 
 
 /// <summary>
-/// Represents a non-generic final interceptor for events, allowing custom logic
-/// to execute after all event handlers and other interceptors have completed.
+/// Final interceptor for every event: the untyped counterpart of
+/// <see cref="IEventFinalInterceptor{TEvent}"/>.
 /// </summary>
 /// <remarks>
-/// <para>
-/// This interface is a non-generic version of <see cref="IEventFinalInterceptor{TEvent}"/>,
-/// applying to all events implementing <see cref="IEvent"/>.
-/// </para>
-/// <para>
-/// It inherits from <see cref="IAsyncFinalInterceptor{TMessage}"/>,
-/// enabling asynchronous final processing of events after they are dispatched to their handlers.
-/// </para>
-/// <para>
-/// Event handlers and messages that implement <see cref="IEvent"/> will recognize
-/// this interceptor automatically in the event mediation pipeline.
-/// </para>
+/// Carries its own member rather than inheriting the stage contract's; see the typed
+/// counterpart for why a publish's final stage takes no result.
 /// </remarks>
 // ReSharper disable once UnusedType.Global
-public interface IEventFinalInterceptor : IEvent, IAsyncFinalInterceptor<IEvent, Unit>;
-    
+public interface IEventFinalInterceptor : IEvent, IAsyncFinalInterceptor<IEvent, Unit>
+{
+    /// <inheritdoc cref="IAsyncFinalInterceptor{TMessage, TResult}.HandleAsync"/>
+    ValueTask IAsyncFinalInterceptor<IEvent, Unit>.HandleAsync(IEvent message, Unit? result,
+        Exception? exception, ErgosfareContext context)
+        => HandleAsync(message, exception, context);
+
+    /// <summary>
+    /// Runs after the publish has settled.
+    /// </summary>
+    /// <param name="event">The event that was published.</param>
+    /// <param name="exception">The failure the publish ended with, or <c>null</c> when it succeeded.</param>
+    /// <param name="context">The execution context for the current mediation pipeline.</param>
+    /// <returns>A <see cref="ValueTask"/> representing the asynchronous operation.</returns>
+    ValueTask HandleAsync(IEvent @event, Exception? exception, ErgosfareContext context);
+}

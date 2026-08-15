@@ -104,30 +104,4 @@ public class EngineBackedFacadeTests
         Assert.NotEqual(first, third);
     }
 
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
-    public async Task BothConstructors_DispatchIdentically()
-    {
-        var provider = new ServiceCollection()
-            .AddErgosfare(x => x.AddCommandModule(c => c.Register<EchoCommandHandler>()))
-            .BuildServiceProvider();
-        await using var _ = provider;
-
-        var engineBacked = new CommandMediator(
-            provider.GetRequiredService<MessageDispatchEngine>(), provider);
-        var mediatorBacked = new CommandMediator(
-            provider.GetRequiredService<IMessageMediator>());
-
-        foreach (var mediator in new[] { engineBacked, mediatorBacked })
-        {
-            var settings = new ErgosfareContext();
-
-            var result = await mediator.SendAsync(
-                new EchoCommand { Payload = "hi" }, settings);
-
-            Assert.Equal("hi!", result);
-            Assert.Equal("hi", settings.Items["sawPayload"]);
-        }
-    }
 }

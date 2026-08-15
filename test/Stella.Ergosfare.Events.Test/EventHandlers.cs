@@ -80,7 +80,7 @@ public sealed class StubNonGenericEventExceptionInterceptor: IEventExceptionInte
     /// <summary>
     /// Handles an exception thrown by an event handler and sets <see cref="IsRuned"/> to true.
     /// </summary>
-    public async ValueTask HandleAsync(StubNonGenericEventThrows @event, ValueTask result, Exception exception, ErgosfareContext context)
+    public async ValueTask HandleAsync(StubNonGenericEventThrows @event, Exception exception, ErgosfareContext context)
     {
         IsRuned = true;
         await ValueTask.CompletedTask;
