@@ -1,3 +1,90 @@
+## v2.11.0-preview – '2026-08-15'
+
+Preview release. The theme: **a plugin observes a pipeline, and cannot reshape one.** The
+plugin surface shipped in v2.10.0-preview with six addressable stages, two of which let a
+plugin change the emitted plan's structure. That is the wrong relationship: a plugin is a
+third-party package, the consumer's pipeline is the consumer's, and neither is obliged to
+fit the other's model. This release settles what a plugin can ask for, and gives it settings
+without putting them in the container.
+
+The whole release lives behind `ERGOEXP002`. Nothing outside the experimental plugin surface
+changes shape.
+
+### Four hooks, all of them free
+
+* `Hook` replaces `Stage` and names four points: `Start`, `PreMain`, `PostMain`, `Finish`.
+  Every one is a straight-line position that exists in every pipeline, so **no plan grows a
+  `try`, a `catch` or a `finally` because a plugin was installed.** An interceptorless
+  pipeline carrying calls at all four is still the straight line it is without them.
+* The interceptor stages are deliberately not addressable. A plugin that must see the failure
+  path, or run on every exit, writes an interceptor — which a plugin package ships just as
+  easily, and which the consumer's composition already knows how to place.
+* Points coincide rather than disappear: with no pre chain, `Start` and `PreMain` name the
+  same instant and both calls run. In a broadcast, `PreMain` and `PostMain` name the seam
+  around a *delivery*, so they run once per handler.
+
+### One declaration, whatever the pipeline produces
+
+* No hook carries a result, so `[PipelineInvokable]` and `[VoidPipelineInvokable]` collapse
+  into one attribute with one signature — generic over the message alone. A void command, a
+  result-producing query and an event broadcast call the same method the same way.
+* With them go `PluginPipelineShape`, the arity check, the result parameter binding, and the
+  per-plan selection that had to decide which family a method fitted.
+
+### Settings the container never sees
+
+* `[ErgosfarePlugin]` takes an optional options type. Naming one makes the generated
+  `Add<Name>` take an instance, which the module holds and hands to the constructed service.
+  **It is never registered**: the container carries nothing for it and no dispatch resolves
+  it. The consumer constructs what they pass, so there is no builder in between and nothing
+  configurable the call site cannot see.
+* Two ways in, chosen by what the author writes. A constructor taking the options type is
+  left alone, and its *other* parameters are resolved from the container — so a plugin
+  service takes ordinary dependencies too. A `partial` service with no constructor gets the
+  `readonly` field and the line that assigns it written for it.
+* `ERGOSG017` reports a service that is neither, rather than letting it silently ignore
+  settings its own plugin declared. Several public constructors is an ambiguity this emission
+  will not guess at, and takes the same diagnostic.
+* A plugin that declares no options is untouched by any of it: `Add<Name>` stays
+  parameterless and the container activates the service as before.
+
+### Corrections
+
+* **Fix:** the void and result plan bodies emitted `finally { if (!aborted) { } }` — an empty
+  guard and the abort flag that fed it — for any plan with an exception stage and no final
+  stage. The `finally` existed to host the final stage and the now-retired final observer; it
+  is emitted only when there is a final stage to run.
+* Two documented claims were wrong on their own terms. The plugin selector still said events
+  never reach it, though the broadcast plan family arrived in v2.10.0-preview and a test had
+  been pinning the opposite since. And `Module.Query` claimed to cover streams, though the
+  stream lane has no plan and a plugin call lives only in a plan body. Both now say what the
+  code does; the stream gap is tracked separately.
+
+### Breaking changes
+
+Within the experimental plugin surface only, and a plugin is recompiled against the
+abstractions it targets:
+
+* `Stage` is replaced by `Hook`, and the exception and final stages have no successor. An
+  observer that needs either becomes an interceptor.
+* `VoidPipelineInvokableAttribute` is removed. `[PipelineInvokable]` serves every pipeline,
+  and a hook method takes one type parameter — its message — where the result-bearing shape
+  took two.
+
+### Examples
+
+* `examples/TimingPlugin`: a complete plugin small enough to read in one sitting — one
+  assembly attribute, two hook methods, and a README walking the stages. The consumer side is
+  the e2e app, which is also the NativeAOT gate, so installing it there tests the claim that
+  baked hook calls survive trimming.
+
+### Repository
+
+* A `--artifacts` benchmark run writes to a suffixed sibling of `BenchmarkDotNet.Artifacts`,
+  which the existing ignore pattern never matched — it excludes the directory's *contents* so
+  committed baselines can be re-included. Those siblings are per-run and hold no baselines, so
+  they are ignored whole.
+
 ## v2.10.0-preview – '2026-08-15'
 
 Preview release. The theme: **a dispatch stops deciding and starts executing.** Six
