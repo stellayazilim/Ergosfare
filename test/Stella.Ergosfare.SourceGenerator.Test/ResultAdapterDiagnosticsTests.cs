@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis;
 namespace Stella.Ergosfare.SourceGenerator.Test;
 
 /// <summary>
-/// ERGOSG011: a <c>[ResultAdapter]</c> annotation that can never bind — the adapter fits
+/// ERGO011: a <c>[ResultAdapter]</c> annotation that can never bind — the adapter fits
 /// none of the message's runtime-probed result slots, or the runtime binding could not
 /// instantiate it — fails the build where the message is compiled. A fitting, instantiable
 /// annotation stays silent, including one inherited from a base message type.
@@ -36,7 +36,7 @@ public class ResultAdapterDiagnosticsTests
 
     private static void AssertSingle011(GeneratorTestHost.GeneratorRunResult result)
     {
-        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGOSG011");
+        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGO011");
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
     }
 
@@ -57,7 +57,7 @@ public class ResultAdapterDiagnosticsTests
         """);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGOSG011");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO011");
     }
 
     [Fact]
@@ -181,7 +181,7 @@ public class ResultAdapterDiagnosticsTests
         """);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGOSG011");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO011");
     }
 
     [Fact]
@@ -222,9 +222,9 @@ public class ResultAdapterDiagnosticsTests
         }
         """);
 
-        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGOSG012");
+        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGO012");
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGOSG011");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO011");
     }
 
     [Fact]
@@ -248,7 +248,7 @@ public class ResultAdapterDiagnosticsTests
         }
         """);
 
-        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGOSG012");
+        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGO012");
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
     }
 
@@ -269,7 +269,7 @@ public class ResultAdapterDiagnosticsTests
         """);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id is "ERGOSG011" or "ERGOSG012");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id is "ERGO011" or "ERGO012");
     }
 
     private const string DefaultAdapterBoot = """
@@ -324,7 +324,7 @@ public class ResultAdapterDiagnosticsTests
 
         Assert.Empty(result.CompilationErrors);
 
-        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGOSG013");
+        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGO013");
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
     }
 
@@ -360,7 +360,7 @@ public class ResultAdapterDiagnosticsTests
         Assert.Empty(result.CompilationErrors);
 
         var diagnostic = Assert.Single(result.GeneratorDiagnostics);
-        Assert.Equal("ERGOSG014", diagnostic.Id);
+        Assert.Equal("ERGO014", diagnostic.Id);
         Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
     }
 

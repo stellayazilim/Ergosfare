@@ -12,7 +12,7 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 ///     type as it always did.
 /// </param>
 /// <param name="CannotReceiveOptions">
-///     The plugin declares options and this service has no way to receive them; ERGOSG017
+///     The plugin declares options and this service has no way to receive them; ERGO017
 ///     reports it.
 /// </param>
 /// <param name="GeneratedTypeName">

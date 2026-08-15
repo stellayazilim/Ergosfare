@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 
 namespace Stella.Ergosfare.SourceGenerator.Test;
@@ -256,7 +256,7 @@ public class DiscoveryKeyTests
                     """),
             ]);
 
-        // No registrations from the excluded assembly — and no ERGOSG002 for its
+        // No registrations from the excluded assembly — and no ERGO002 for its
         // internals either: the exclusion is deliberate.
         Assert.Empty(result.GeneratorDiagnostics);
         Assert.DoesNotContain("LibCommand", result.GeneratedSource);

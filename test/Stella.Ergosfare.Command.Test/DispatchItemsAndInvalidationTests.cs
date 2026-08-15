@@ -73,7 +73,7 @@ public class DispatchItemsAndInvalidationTests
 
     public sealed class LateInterceptedCommand : ICommand { }
 
-    // ERGOSG007 (suppressed in the csproj): dispatched after a runtime registration below,
+    // ERGO007 (suppressed in the csproj): dispatched after a runtime registration below,
     // a site the closed-world dispatch-site analysis cannot see.
     public sealed class LateInterceptedCommandHandler : ICommandHandler<LateInterceptedCommand>
     {

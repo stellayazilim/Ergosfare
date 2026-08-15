@@ -3,11 +3,11 @@ using Microsoft.CodeAnalysis;
 namespace Stella.Ergosfare.SourceGenerator.Test;
 
 /// <summary>
-///     Dead-dispatch verdicts (ERGOSG005/006) and their gates: a dispatch whose static
+///     Dead-dispatch verdicts (ERGO005/006) and their gates: a dispatch whose static
 ///     message type — and every closure subtype of it — lacks a covering handler is a
 ///     compile error at the composition root; a concrete static type covered only through
 ///     its subtypes warns; events, non-root compilations and disabled reference scanning
-///     stay silent. The opacity aid (ERGOSG009) is off by default and rises with an
+///     stay silent. The opacity aid (ERGO009) is off by default and rises with an
 ///     editorconfig-style severity override.
 /// </summary>
 public class DeadDispatchDiagnosticTests
@@ -37,7 +37,7 @@ public class DeadDispatchDiagnosticTests
         Assert.Empty(result.CompilationErrors);
 
         var diagnostic = Assert.Single(result.GeneratorDiagnostics);
-        Assert.Equal("ERGOSG005", diagnostic.Id);
+        Assert.Equal("ERGO005", diagnostic.Id);
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Contains("OrphanCommand", diagnostic.GetMessage());
         Assert.NotEqual(Location.None, diagnostic.Location);
@@ -136,7 +136,7 @@ public class DeadDispatchDiagnosticTests
         Assert.Empty(result.CompilationErrors);
 
         var diagnostic = Assert.Single(result.GeneratorDiagnostics);
-        Assert.Equal("ERGOSG006", diagnostic.Id);
+        Assert.Equal("ERGO006", diagnostic.Id);
         Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
         Assert.Contains("StarCommand", diagnostic.GetMessage());
         Assert.Contains("MagnetarCommand", diagnostic.GetMessage());
@@ -249,7 +249,7 @@ public class DeadDispatchDiagnosticTests
         Assert.Empty(result.CompilationErrors);
 
         var diagnostic = Assert.Single(result.GeneratorDiagnostics);
-        Assert.Equal("ERGOSG005", diagnostic.Id);
+        Assert.Equal("ERGO005", diagnostic.Id);
     }
 
     [Fact]
@@ -308,7 +308,7 @@ public class DeadDispatchDiagnosticTests
         Assert.Empty(result.CompilationErrors);
 
         var diagnostic = Assert.Single(result.GeneratorDiagnostics);
-        Assert.Equal("ERGOSG005", diagnostic.Id);
+        Assert.Equal("ERGO005", diagnostic.Id);
         Assert.Equal(Location.None, diagnostic.Location);
         Assert.Contains("LonelyCommand", diagnostic.GetMessage());
         Assert.Contains("Ergosfare.SiteLibrary", diagnostic.GetMessage());
@@ -340,7 +340,7 @@ public class DeadDispatchDiagnosticTests
         // [ExcludeFromDiscovery] only hides a type from bulk collection; it does not
         // register anything. No collection path feeds this message a handler → dead.
         var diagnostic = Assert.Single(result.GeneratorDiagnostics);
-        Assert.Equal("ERGOSG005", diagnostic.Id);
+        Assert.Equal("ERGO005", diagnostic.Id);
     }
 
     [Fact]
@@ -372,7 +372,7 @@ public class DeadDispatchDiagnosticTests
         var uncovered = GeneratorTestHost.Run(sourceWithoutRegistration, buildProperties: CompositionRoot);
 
         Assert.Empty(uncovered.CompilationErrors);
-        Assert.Equal("ERGOSG005", Assert.Single(uncovered.GeneratorDiagnostics).Id);
+        Assert.Equal("ERGO005", Assert.Single(uncovered.GeneratorDiagnostics).Id);
 
         // Register<T>() is the same collection path as RegisterGenerated(), per type
         // instead of in bulk — a visible call is coverage evidence.
@@ -428,7 +428,7 @@ public class DeadDispatchDiagnosticTests
 
         // The excluded subtype exists, but nothing collects its handler: every possible
         // runtime instance of the dispatch is uncovered.
-        Assert.Equal("ERGOSG005", Assert.Single(uncovered.GeneratorDiagnostics).Id);
+        Assert.Equal("ERGO005", Assert.Single(uncovered.GeneratorDiagnostics).Id);
 
         var registered = GeneratorTestHost.Run(source.Replace(
                 "public class Caller(ICommandMediator mediator)",
@@ -476,12 +476,12 @@ public class DeadDispatchDiagnosticTests
 
         Assert.Empty(result.CompilationErrors);
 
-        // The unknowable registration is itself the finding (ERGOSG018) — and it is the
+        // The unknowable registration is itself the finding (ERGO018) — and it is the
         // only one: coverage evidence is incomplete by construction, so no dead-dispatch
         // verdict over it would be sound. Reporting the cause and staying silent about its
         // consequences is the whole point of keeping the site opaque as well as reported.
         var diagnostic = Assert.Single(result.GeneratorDiagnostics);
-        Assert.Equal("ERGOSG018", diagnostic.Id);
+        Assert.Equal("ERGO018", diagnostic.Id);
     }
 
     [Fact]
@@ -603,13 +603,13 @@ public class DeadDispatchDiagnosticTests
         var raised = GeneratorTestHost.Run(source, buildProperties: CompositionRoot,
             diagnosticOptions: new Dictionary<string, Microsoft.CodeAnalysis.ReportDiagnostic>
             {
-                ["ERGOSG009"] = Microsoft.CodeAnalysis.ReportDiagnostic.Warn,
+                ["ERGO009"] = Microsoft.CodeAnalysis.ReportDiagnostic.Warn,
             });
 
         Assert.Empty(raised.CompilationErrors);
 
         var diagnostic = Assert.Single(raised.GeneratorDiagnostics);
-        Assert.Equal("ERGOSG009", diagnostic.Id);
+        Assert.Equal("ERGO009", diagnostic.Id);
         Assert.Contains("ICommand", diagnostic.GetMessage());
     }
 }

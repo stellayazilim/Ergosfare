@@ -13,7 +13,7 @@ namespace Stella.Ergosfare.Queries.Test;
 public class FilteredQueryExceptionInterceptorTests
 {
     // These probes are invoked directly by the tests below, never dispatched — deliberately
-    // outside the compiled closure, which is what silences ERGOSG001 for the private types.
+    // outside the compiled closure, which is what silences ERGO001 for the private types.
     [ExcludeFromDiscovery]
     private sealed record TestQuery : IQuery<string>;
 

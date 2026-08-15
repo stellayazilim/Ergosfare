@@ -1,14 +1,14 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <IsPackable>false</IsPackable>
         <!-- Deliberate consumer of the experimental result-adapter surface under test. -->
         <NoWarn>$(NoWarn);ERGOEXP001</NoWarn>
-        <!-- ERGOSG007: a few probe handlers are delivered through engine-level dispatch or
+        <!-- ERGO007: a few probe handlers are delivered through engine-level dispatch or
              runtime registration, sites the closed-world analysis cannot see; the handlers
              do execute. Generator diagnostics ignore #pragma, so the suppression lives
              here — the rationale is commented at each declaration site. -->
-        <NoWarn>$(NoWarn);ERGOSG007</NoWarn>
+        <NoWarn>$(NoWarn);ERGO007</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>

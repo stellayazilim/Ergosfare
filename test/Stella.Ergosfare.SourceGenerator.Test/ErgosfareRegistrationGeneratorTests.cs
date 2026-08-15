@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 
 namespace Stella.Ergosfare.SourceGenerator.Test;
@@ -152,8 +152,8 @@ public class ErgosfareRegistrationGeneratorTests
         // Emitted in unbound form — and bound by nothing, which this test used to assert
         // was fine by demanding no diagnostics. It is not fine: an interceptor taking its
         // message as a type parameter appears in no message's pipeline and never runs, so
-        // the registration above is all there is. ERGOSG016 is that fact said out loud.
-        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "ERGOSG016");
+        // the registration above is all there is. ERGO016 is that fact said out loud.
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "ERGO016");
     }
 
     [Fact]
@@ -178,7 +178,7 @@ public class ErgosfareRegistrationGeneratorTests
         Assert.DoesNotContain("HiddenCommand", result.GeneratedSource);
 
         var diagnostic = Assert.Single(result.GeneratorDiagnostics);
-        Assert.Equal("ERGOSG001", diagnostic.Id);
+        Assert.Equal("ERGO001", diagnostic.Id);
         Assert.Contains("HiddenCommand", diagnostic.GetMessage());
     }
 

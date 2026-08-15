@@ -1,4 +1,4 @@
-﻿namespace Stella.Ergosfare.SourceGenerator.Test;
+namespace Stella.Ergosfare.SourceGenerator.Test;
 
 /// <summary>
 ///     Reference scanning: the consuming compilation's generator discovers marker types in
@@ -112,7 +112,7 @@ public class ReferenceScanningTests
         Assert.DoesNotContain("HiddenCommand", result.GeneratedSource);
 
         var diagnostic = Assert.Single(result.GeneratorDiagnostics);
-        Assert.Equal("ERGOSG002", diagnostic.Id);
+        Assert.Equal("ERGO002", diagnostic.Id);
         Assert.Contains("HiddenCommand", diagnostic.GetMessage());
         Assert.Contains("Ergosfare.TestLibrary", diagnostic.GetMessage());
     }

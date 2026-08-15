@@ -359,10 +359,10 @@ public class StagedPlanEmissionTests
         Assert.Empty(result.CompilationErrors);
 
         // The staged plan itself still emits — only the direct variant is withheld,
-        // and the ERGOSG003 info points at the reason.
+        // and the ERGO003 info points at the reason.
         Assert.Contains("AddStagedPlan<global::TestApp.PickyDirectPing>", result.GeneratedSource);
         Assert.DoesNotContain("ExecuteDirect(", result.GeneratedSource);
-        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "ERGOSG003");
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "ERGO003");
     }
 
     [Fact]
@@ -393,7 +393,7 @@ public class StagedPlanEmissionTests
             """);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "ERGOSG004");
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "ERGO004");
     }
 
     [Fact]

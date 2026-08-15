@@ -109,8 +109,8 @@ internal static class RegistrableTypeReader
             HasMultiplePublicConstructors = hasMultipleCtors,
             HasFromServicesConstructorParameter = hasFromServices,
             // Handler-bearing types keep their declaration location too: the
-            // unreachable-handler diagnostics (ERGOSG007/008) anchor there; annotated
-            // messages anchor ERGOSG011/012 and dispatchable ones ERGOSG013 the same way.
+            // unreachable-handler diagnostics (ERGO007/008) anchor there; annotated
+            // messages anchor ERGO011/012 and dispatchable ones ERGO013 the same way.
             InfoLocation = hasMultipleCtors || hasFromServices || !descriptors.IsEmpty
                            || resultAdapter is not null || isDispatchable
                 ? LocationInfo.From(symbol)

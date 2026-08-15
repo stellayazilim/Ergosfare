@@ -13,8 +13,8 @@ namespace Stella.Ergosfare.SourceGenerator;
 ///     Dispatch-site side of the generator: discovers mediator dispatch invocations in the
 ///     current compilation, aggregates the dispatch manifests of referenced assemblies, and
 ///     judges whole-closure dispatch reachability in composition-root compilations —
-///     provably dead dispatches (ERGOSG005/006), unreachable handlers (ERGOSG007), the
-///     opt-in handler trim (ERGOSG008) and the strict-mode opacity aid (ERGOSG009).
+///     provably dead dispatches (ERGO005/006), unreachable handlers (ERGO007), the
+///     opt-in handler trim (ERGO008) and the strict-mode opacity aid (ERGO009).
 /// </summary>
 public sealed partial class ErgosfareRegistrationGenerator
 {
@@ -145,7 +145,7 @@ public sealed partial class ErgosfareRegistrationGenerator
             UnknownTypeLocation = null,
         };
 
-        // Opaque, and a defect: ERGOSG018 reports it at the call. Still opaque so the
+        // Opaque, and a defect: ERGO018 reports it at the call. Still opaque so the
         // dead-dispatch judgment stays quiet — the dispatches downstream of an unknown
         // registration are not the finding, the registration is.
         static RegistrationSiteModel UnknownTypeRegistration(SyntaxNode call) => new()
@@ -177,7 +177,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
                     // Named, but generic: the runtime builds a generic registration's
                     // descriptors reflectively per closed form, so the type is known and its
-                    // evidence is not. Not the ERGOSG018 defect.
+                    // evidence is not. Not the ERGO018 defect.
                     UnknownTypeLocation = null,
                 };
             }
@@ -1008,7 +1008,7 @@ public sealed partial class ErgosfareRegistrationGenerator
     /// <summary>
     ///     Reports the dispatch-reachability diagnostics and applies the opt-in handler
     ///     trim, returning the (possibly reduced) model list emission proceeds with.
-    ///     ERGOSG009 is local and always evaluated; every closure-wide verdict requires a
+    ///     ERGO009 is local and always evaluated; every closure-wide verdict requires a
     ///     composition root with reference scanning on, and the unreachable-handler side
     ///     additionally requires every closure assembly's manifest to be present.
     /// </summary>
@@ -1238,7 +1238,7 @@ public sealed partial class ErgosfareRegistrationGenerator
     }
 
     /// <summary>
-    ///     The ERGOSG010 judgment: for every dispatchable command/query/stream message in
+    ///     The ERGO010 judgment: for every dispatchable command/query/stream message in
     ///     the composition, counts the provable main-handler claims per priority level
     ///     and fails the build on a same-level contest — several direct claimants, or
     ///     several covariant ones with provably no direct winner. Only default-discovery,
@@ -1455,8 +1455,8 @@ public sealed partial class ErgosfareRegistrationGenerator
     }
 
     /// <summary>
-    ///     Reports ERGOSG007 for handlers no dispatch site can reach — or, when the trim is
-    ///     on, reports ERGOSG008 instead for the handlers it excludes and returns their
+    ///     Reports ERGO007 for handlers no dispatch site can reach — or, when the trim is
+    ///     on, reports ERGO008 instead for the handlers it excludes and returns their
     ///     type expressions. Keyed-discovery types are exempt (their participation is
     ///     deliberately conditional), and only pure main-handler types are trimmable: a
     ///     type that also carries interceptor contracts stays registered for those.

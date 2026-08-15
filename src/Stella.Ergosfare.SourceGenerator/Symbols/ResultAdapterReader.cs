@@ -68,7 +68,7 @@ internal static class ResultAdapterReader
 
         if (adapterSymbol is null || adapterSymbol.TypeKind == TypeKind.Error)
         {
-            // A typeof the model cannot resolve: nothing can ever bind — ERGOSG011
+            // A typeof the model cannot resolve: nothing can ever bind — ERGO011
             // material carrying no slots at all.
             return new ResultAdapterModel(
                 TypeofExpression: string.Empty,
@@ -286,7 +286,7 @@ internal static class ResultAdapterReader
     ///     modeled view, or <c>null</c> when the mirror must stand down: no site at all,
     ///     an opaque site, or sites disagreeing on the adapter. Standing down is never
     ///     wrong — the runtime tier serves the default, the adapter-identity gate keeps
-    ///     unbaked plans off served slots, and no ERGOSG013 judgment runs over facts the
+    ///     unbaked plans off served slots, and no ERGO013 judgment runs over facts the
     ///     mirror cannot see. Baking additionally requires <c>IsBakeable</c>.
     /// </summary>
     internal static DefaultResultAdapterSiteModel? ReduceDefaultResultAdapter(
@@ -317,7 +317,7 @@ internal static class ResultAdapterReader
     }
 
     /// <summary>
-    ///     The ERGOSG013 predicate: a result-bearing message none of whose non-stream
+    ///     The ERGO013 predicate: a result-bearing message none of whose non-stream
     ///     result slots any adapter tier serves — not native, not the configured default.
     ///     Void and stream-only messages never qualify: they have no result value to
     ///     carry a failure in, so throwing is their inherent contract, not a misfit.

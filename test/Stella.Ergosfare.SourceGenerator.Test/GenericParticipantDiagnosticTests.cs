@@ -1,7 +1,7 @@
 namespace Stella.Ergosfare.SourceGenerator.Test;
 
 /// <summary>
-///     ERGOSG016 — the diagnostic for a participant that registers and then binds to
+///     ERGO016 — the diagnostic for a participant that registers and then binds to
 ///     nothing. Participants are matched to messages by concrete type; a generic
 ///     participant's contract names a type parameter, so every message's stage arrays come
 ///     out without it. Before this diagnostic that happened in complete silence, which for
@@ -13,7 +13,7 @@ public class GenericParticipantDiagnosticTests
     ///     A participant whose constraint no compiled message satisfies. Monomorphization
     ///     closes an open participant over every message its constraint admits, so the only
     ///     way one still binds to nothing is for that set to be empty — which is exactly
-    ///     when ERGOSG016 has something to say.
+    ///     when ERGO016 has something to say.
     /// </summary>
     private const string GenericInterceptor = """
         using Stella.Ergosfare.Core.Abstractions;
@@ -47,7 +47,7 @@ public class GenericParticipantDiagnosticTests
         var result = GeneratorTestHost.Run(GenericInterceptor);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "ERGOSG016");
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "ERGO016");
     }
 
     /// <summary>
@@ -106,7 +106,7 @@ public class GenericParticipantDiagnosticTests
             """);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGOSG016");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO016");
 
         var composition = result.GeneratedSource
             .Split("AddFrozenComposition", StringSplitOptions.None)
@@ -121,7 +121,7 @@ public class GenericParticipantDiagnosticTests
     ///     generic message, its contract built from its own type parameters. The table keys
     ///     that message by its definition and the dispatch closes the participant over the
     ///     message's own arguments, so it binds — and must draw no diagnostic. This is the
-    ///     line between the two generic shapes, and the reason ERGOSG016 is narrow.
+    ///     line between the two generic shapes, and the reason ERGO016 is narrow.
     /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
@@ -150,7 +150,7 @@ public class GenericParticipantDiagnosticTests
             """);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGOSG016");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO016");
 
         // And it really does bind: the message's own composition names both participants.
         var composition = result.GeneratedSource
@@ -189,6 +189,6 @@ public class GenericParticipantDiagnosticTests
             """);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGOSG016");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO016");
     }
 }

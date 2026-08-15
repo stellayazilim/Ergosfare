@@ -13,7 +13,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Attributes;
 /// Inherited like <see cref="ResultAdapterAttribute"/>: an annotation on a base message
 /// type covers its derived messages. Declaring both this attribute and
 /// <see cref="ResultAdapterAttribute"/> on the same message (own or inherited, in any
-/// combination) is contradictory and fails the build (ERGOSG012); against assemblies
+/// combination) is contradictory and fails the build (ERGO012); against assemblies
 /// compiled before that rule, the runtime binding lets the opt-out win.
 /// </remarks>
 [Experimental(ExperimentalIds.ResultAdapterSurface)]

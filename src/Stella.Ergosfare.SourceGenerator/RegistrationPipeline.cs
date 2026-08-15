@@ -17,7 +17,7 @@ namespace Stella.Ergosfare.SourceGenerator;
 internal static class RegistrationPipeline
 {
     /// <summary>
-    ///     ERGOSG018 at every <c>Register</c> call naming a type only run time knows. Local
+    ///     ERGO018 at every <c>Register</c> call naming a type only run time knows. Local
     ///     to this compilation by construction: registration sites come from its own syntax,
     ///     and a referenced assembly's manifest carries no location to report against.
     /// </summary>
@@ -60,7 +60,7 @@ internal static class RegistrationPipeline
         // referenced type, typeof in the generated file binds to the source declaration.
         // The open definitions monomorphization answered for. A definition that closed over
         // at least one message still carries IsGenericParticipant on its own model — it is a
-        // declared open generic, after all — but it is no longer the shape ERGOSG016 reports.
+        // declared open generic, after all — but it is no longer the shape ERGO016 reports.
         var monomorphizedDefinitions = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var model in referencedModels)
@@ -171,7 +171,7 @@ internal static class RegistrationPipeline
                     model.DisplayName));
             }
 
-            // ERGOSG011/012 judge where the message is compiled: a referenced message's
+            // ERGO011/012 judge where the message is compiled: a referenced message's
             // annotations were already judged (or predate the rules) in its own build.
             if (model.ReferencedAssemblyName is null && model.ResultAdapter is { } resultAdapter)
             {
@@ -196,7 +196,7 @@ internal static class RegistrationPipeline
                 }
             }
 
-            // ERGOSG013/014: with a default adapter configured, a result-bearing message
+            // ERGO013/014: with a default adapter configured, a result-bearing message
             // no tier serves stays a throwing pipeline. Unacknowledged, that is a design
             // hole and fails the build right here — no reason to wait for a dispatch to
             // reveal it; acknowledged via [IgnoreResultAdapter], it stays visible as a

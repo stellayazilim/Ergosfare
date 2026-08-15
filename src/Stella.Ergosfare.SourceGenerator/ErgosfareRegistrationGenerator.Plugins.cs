@@ -106,7 +106,7 @@ public sealed partial class ErgosfareRegistrationGenerator
     /// <remarks>
     ///     Reference scanning follows the same rules as the participant scan: an assembly
     ///     that does not reference Ergosfare cannot carry plugin methods, and one matching the
-    ///     reserved prefix is skipped unless it force-opts in — the case ERGOSG015 reports so
+    ///     reserved prefix is skipped unless it force-opts in — the case ERGO015 reports so
     ///     the skip is never silent.
     /// </remarks>
     private static ImmutableArray<PluginInvocationModel> ScanPluginInvocations(

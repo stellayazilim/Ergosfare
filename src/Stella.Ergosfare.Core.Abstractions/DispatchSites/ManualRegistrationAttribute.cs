@@ -7,7 +7,7 @@ namespace Stella.Ergosfare.Core.Abstractions.DispatchSites;
 /// source-generated collection path as <c>RegisterGenerated()</c> — per type instead of in
 /// bulk — so an aggregating composition root counts these types' handler contracts as
 /// coverage evidence exactly like discovered ones when judging dead dispatches
-/// (ERGOSG005/006).
+/// (ERGO005/006).
 /// </summary>
 /// <remarks>
 /// Written by generated code; not intended to be applied by hand. Registrations whose type

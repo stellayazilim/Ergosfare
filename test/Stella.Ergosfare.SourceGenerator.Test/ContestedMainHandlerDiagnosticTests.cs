@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis;
 namespace Stella.Ergosfare.SourceGenerator.Test;
 
 /// <summary>
-/// ERGOSG010: a provable same-level main-handler contest — several direct claimants, or
+/// ERGO010: a provable same-level main-handler contest — several direct claimants, or
 /// several covariant ones with provably no direct winner — fails the build, mirroring the
 /// runtime priority ladder (a direct handler beats covariant ones; within a level there is
 /// no tiebreaker). Keyed or grouped registrations are container choices and abstain, so
@@ -27,7 +27,7 @@ public class ContestedMainHandlerDiagnosticTests
 
     private static void AssertSingle010(GeneratorTestHost.GeneratorRunResult result, string levelWord)
     {
-        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGOSG010");
+        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGO010");
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Contains(levelWord, diagnostic.GetMessage(), StringComparison.Ordinal);
     }
@@ -77,7 +77,7 @@ public class ContestedMainHandlerDiagnosticTests
 
         // The direct level wins outright at runtime, so this shape is legal — the base
         // handler is Entry's fallback and EntryBase's own direct handler.
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGOSG010");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO010");
 
         // Legal has to mean planned. Asserting the diagnostic alone let the two layers
         // disagree for a release: no error, and no plan either — the ladder honoured by the
@@ -137,7 +137,7 @@ public class ContestedMainHandlerDiagnosticTests
         """, buildProperties: CompositionRoot);
 
         // Which keys a container registers is a runtime choice; nothing is provable here.
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGOSG010");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO010");
     }
 
     [Fact]
@@ -177,7 +177,7 @@ public class ContestedMainHandlerDiagnosticTests
         }
         """, buildProperties: CompositionRoot);
 
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGOSG010");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO010");
     }
 
     [Fact]
@@ -200,6 +200,6 @@ public class ContestedMainHandlerDiagnosticTests
         """);
 
         // A library cannot know the closure; the verdict belongs to the root.
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGOSG010");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO010");
     }
 }

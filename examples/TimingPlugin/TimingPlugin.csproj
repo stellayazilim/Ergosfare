@@ -5,7 +5,7 @@
              for the frameworks its consumers are on, not for one of them. -->
         <!-- The Stella.Ergosfare.* prefix is reserved: a consumer's reference scan skips
              library assemblies, so a plugin named under it would silently never be read.
-             ERGOSG015 reports that, but the fix is to not be named under it. -->
+             ERGO015 reports that, but the fix is to not be named under it. -->
         <AssemblyName>Ergosfare.TimingPlugin</AssemblyName>
         <RootNamespace>Ergosfare.TimingPlugin</RootNamespace>
         <!-- The plugin surface is experimental; opting in is deliberate. -->

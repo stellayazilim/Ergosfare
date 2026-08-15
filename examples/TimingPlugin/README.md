@@ -36,7 +36,7 @@ sees.
 ```
 
 Name the assembly outside the reserved `Stella.Ergosfare.*` prefix. A consumer's reference
-scan skips library assemblies, so a plugin named under it would never be read. `ERGOSG015`
+scan skips library assemblies, so a plugin named under it would never be read. `ERGO015`
 reports that rather than letting it pass silently.
 
 ## 2. Write the hooks
@@ -149,7 +149,7 @@ receive it, and the author picks by what they write:
 |---|---|
 | A constructor taking `TimingOptions` | Nothing to it. Constructs it with the options, and resolves the constructor's *other* parameters from the container — so a plugin service takes ordinary dependencies too |
 | No constructor, class marked `partial` | Writes the other half: a `private readonly TimingOptions _options;` and the one line that assigns it |
-| No constructor, not `partial` | Nothing reaches it, and `ERGOSG017` says so rather than letting the settings be silently ignored |
+| No constructor, not `partial` | Nothing reaches it, and `ERGO017` says so rather than letting the settings be silently ignored |
 
 ## What the consumer's plan looks like
 

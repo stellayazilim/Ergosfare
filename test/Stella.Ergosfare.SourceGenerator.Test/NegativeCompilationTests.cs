@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 
 namespace Stella.Ergosfare.SourceGenerator.Test;
 
@@ -24,7 +24,7 @@ public class NegativeCompilationTests
         var (exitCode, output) = Build(fixture);
 
         Assert.False(exitCode == 0, $"the fixture was expected not to compile, but the build succeeded:{Environment.NewLine}{output}");
-        Assert.Contains("ERGOSG005", output, StringComparison.Ordinal);
+        Assert.Contains("ERGO005", output, StringComparison.Ordinal);
         Assert.Contains("Orphan", output, StringComparison.Ordinal);
     }
 

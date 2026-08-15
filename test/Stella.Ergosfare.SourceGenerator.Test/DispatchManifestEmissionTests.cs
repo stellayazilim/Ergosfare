@@ -323,10 +323,10 @@ public class DispatchManifestEmissionTests
 
         Assert.Empty(result.CompilationErrors);
 
-        // The registration is now a defect in its own right (ERGOSG018) — and the manifest
+        // The registration is now a defect in its own right (ERGO018) — and the manifest
         // still records the opacity, because a consumer reading this assembly's manifest
         // has to know its coverage evidence is incomplete either way.
-        Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGOSG018");
+        Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGO018");
         Assert.Contains("DispatchManifestAttribute(1, HasOpaqueRegistrations = true)", result.GeneratedSource);
     }
 
