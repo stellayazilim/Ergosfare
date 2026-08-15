@@ -35,5 +35,15 @@ internal class CommandModule : IModule
         // scope (the scope-per-dispatch hot path) with nothing to amortize it. The
         // engine-backed shape makes the facade the only object built per resolution.
         configuration.Services.TryAddTransient<ICommandMediator, EngineBackedCommandMediator>();
+
+        // The same facade under its concrete name, so an application can inject either. A
+        // send through the interface pays a generic-virtual dispatch the JIT cannot
+        // devirtualize; through the class it is a direct call. Measured at ~5 ns, which is
+        // nothing for most callers and everything for a hot loop — so the choice belongs to
+        // the caller, and both spellings resolve the one object graph.
+        configuration.Services.TryAddTransient<CommandMediator>(
+            static provider => global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<ICommandMediator>(provider) as CommandMediator
+                ?? throw new global::System.InvalidOperationException(
+                    "The registered ICommandMediator is not a CommandMediator; a replacement registration cannot serve the concrete facade."));
     }
 }

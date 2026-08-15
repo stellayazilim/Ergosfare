@@ -29,5 +29,15 @@ internal class QueryModule(
         // resolved-services dictionary insert to every dispatch for no benefit. The
         // engine-backed shape makes the facade the only object built per resolution.
         configuration.Services.TryAddTransient<IQueryMediator, EngineBackedQueryMediator>();
+
+        // The same facade under its concrete name, so an application can inject either. A
+        // query through the interface pays a generic-virtual dispatch the JIT cannot
+        // devirtualize; through the class it is a direct call. Measured at ~5 ns, which is
+        // nothing for most callers and everything for a hot loop — so the choice belongs to
+        // the caller, and both spellings resolve the one object graph.
+        configuration.Services.TryAddTransient<QueryMediator>(
+            static provider => global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<IQueryMediator>(provider) as QueryMediator
+                ?? throw new global::System.InvalidOperationException(
+                    "The registered IQueryMediator is not a QueryMediator; a replacement registration cannot serve the concrete facade."));
     }
 }
