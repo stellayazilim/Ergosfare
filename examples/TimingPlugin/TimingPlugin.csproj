@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <!-- Multi-targets with the repo, like a real plugin package would: a plugin ships
+             for the frameworks its consumers are on, not for one of them. -->
+        <!-- The Stella.Ergosfare.* prefix is reserved: a consumer's reference scan skips
+             library assemblies, so a plugin named under it would silently never be read.
+             ERGOSG015 reports that, but the fix is to not be named under it. -->
+        <AssemblyName>Ergosfare.TimingPlugin</AssemblyName>
+        <RootNamespace>Ergosfare.TimingPlugin</RootNamespace>
+        <!-- The plugin surface is experimental; opting in is deliberate. -->
+        <NoWarn>$(NoWarn);ERGOEXP002</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- The declaration surface: [ErgosfarePlugin], [PipelineInvokable], Hook. It
+             references nothing itself. -->
+        <ProjectReference Include="..\..\src\Stella.Ergosfare.Plugins.Abstractions\Stella.Ergosfare.Plugins.Abstractions.csproj" />
+        <!-- ErgosfareContext, which a hook method takes. -->
+        <ProjectReference Include="..\..\src\Stella.Ergosfare.Core.Abstractions\Stella.Ergosfare.Core.Abstractions.csproj" />
+        <!-- The IModule and IModuleRegistry the generated facade implements and extends. A
+             plugin cannot avoid this one: without it the generator emits no facade at all,
+             and the plugin has no install surface. -->
+        <ProjectReference Include="..\..\src\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj" />
+        <!-- The generator writes this assembly's module facade — the AddTiming() a consumer
+             calls. Without it the plugin still compiles; it just has no way to be installed. -->
+        <ProjectReference Include="..\..\src\Stella.Ergosfare.SourceGenerator\Stella.Ergosfare.SourceGenerator.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+    </ItemGroup>
+
+</Project>
