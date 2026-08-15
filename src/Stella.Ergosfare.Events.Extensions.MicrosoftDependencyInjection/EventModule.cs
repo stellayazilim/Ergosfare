@@ -35,6 +35,16 @@ internal class EventModule(Action<EventModuleBuilder> builder) : IModule
         // resolved-services dictionary insert to every dispatch for no benefit. The
         // engine-backed shape makes the facade the only object built per resolution.
         configuration.Services.TryAddTransient<IEventMediator, EngineBackedEventMediator>();
+
+        // The same facade under its concrete name, so an application can inject either. A
+        // publish through the interface pays a generic-virtual dispatch the JIT cannot
+        // devirtualize; through the class it is a direct call. Measured at ~5 ns, which is
+        // nothing for most callers and everything for a hot loop — so the choice belongs to
+        // the caller, and both spellings resolve the one object graph.
+        configuration.Services.TryAddTransient<EventMediator>(
+            static provider => global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<IEventMediator>(provider) as EventMediator
+                ?? throw new global::System.InvalidOperationException(
+                    "The registered IEventMediator is not a EventMediator; a replacement registration cannot serve the concrete facade."));
         configuration.Services.TryAddTransient<IPublisher, EngineBackedEventMediator>();
     }
 }

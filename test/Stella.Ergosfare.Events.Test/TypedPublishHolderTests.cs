@@ -43,7 +43,7 @@ public class TypedPublishHolderTests
     [Trait("Category", "Coverage")]
     public void TypedSlot_ServesTheSameInstance_AsTheRuntimeTypeLookup()
     {
-        var table = new BroadcastDispatchTable(new NoCompositionFactory());
+        var table = new FrozenBroadcastTable(new NoCompositionFactory());
 
         var fromSlot = table.Get<DerivedEvent>();
         var fromLookup = table.Get(typeof(DerivedEvent));
@@ -58,8 +58,8 @@ public class TypedPublishHolderTests
     [Trait("Category", "Unit")]
     public void TypedSlot_DoesNotLeakBetweenContainers()
     {
-        var first = new BroadcastDispatchTable(new NoCompositionFactory());
-        var second = new BroadcastDispatchTable(new NoCompositionFactory());
+        var first = new FrozenBroadcastTable(new NoCompositionFactory());
+        var second = new FrozenBroadcastTable(new NoCompositionFactory());
 
         var fromFirst = first.Get<DerivedEvent>();
         var fromSecond = second.Get<DerivedEvent>();

@@ -32,4 +32,13 @@ public abstract class StagedVoidPlan
 
     /// <summary>Invokes the visitor with this plan's message type as the generic argument.</summary>
     public abstract TReturn Accept<TReturn, TState>(IStagedVoidPlanVisitor<TReturn, TState> visitor, TState state);
+
+    /// <summary>
+    /// The union of the groups this plan bakes a filter for, or <c>null</c> when the plan is
+    /// keyed by one set and needs no filter. A group-filtering plan serves a dispatch whose
+    /// set is a runtime value: it carries every participant and decides per call, so what the
+    /// gate must validate is the composition over exactly these groups.
+    /// </summary>
+    public virtual string[]? FilterGroups => null;
+
 }

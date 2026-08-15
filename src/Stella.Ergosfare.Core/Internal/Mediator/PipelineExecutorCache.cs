@@ -164,14 +164,14 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
                 new ExecutorState(dependenciesFactory, plan.DirectHandlerFactory));
         }
 
-        // No plan claimed the message: the plain executor, closed over the generated root
-        // when there is one and reflectively when there is not.
+        // No plan claimed the message: the frozen runtime pipeline, closed over the
+        // generated root when there is one and reflectively when there is not.
         return DispatchLookup.OverMessage(
             messageType,
             VoidExecutorVisitor.Instance,
             new ExecutorState(dependenciesFactory),
-            typeof(VoidPipelineExecutor<>),
-            [dependenciesFactory]);
+            typeof(FrozenVoidDispatch<>),
+            [dependenciesFactory, null]);
     }
 
     private object CreateResultExecutor(Type messageType, Type resultType)
@@ -198,8 +198,8 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
             resultType,
             ResultExecutorVisitor.Instance,
             new ExecutorState(dependenciesFactory),
-            typeof(ResultPipelineExecutor<,>),
-            [dependenciesFactory]);
+            typeof(FrozenResultDispatch<,>),
+            [dependenciesFactory, null]);
     }
 
     /// <summary>
@@ -224,7 +224,7 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
         public static readonly VoidExecutorVisitor Instance = new();
 
         public IPipelineExecutor Visit<TMessage>(ExecutorState state) where TMessage : IMessage
-            => new VoidPipelineExecutor<TMessage>(state.DependenciesFactory);
+            => new FrozenVoidDispatch<TMessage>(state.DependenciesFactory, plan: null);
     }
 
     /// <summary>Result-executor counterpart of <see cref="VoidExecutorVisitor"/>.</summary>
@@ -233,7 +233,7 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
         public static readonly ResultExecutorVisitor Instance = new();
 
         public object Visit<TMessage, TResult>(ExecutorState state) where TMessage : IMessage
-            => new ResultPipelineExecutor<TMessage, TResult>(state.DependenciesFactory);
+            => new FrozenResultDispatch<TMessage, TResult>(state.DependenciesFactory, plan: null);
     }
 
     /// <summary>
@@ -282,7 +282,7 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
 
         public IPipelineExecutor Visit<TMessage>(ExecutorState state)
             where TMessage : IMessage
-            => new StagedVoidPipelineExecutor<TMessage>(
+            => new FrozenVoidDispatch<TMessage>(
                 state.DependenciesFactory,
                 (StagedVoidPlan<TMessage>)state.StagedPlan!);
     }
@@ -294,7 +294,7 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
 
         public object Visit<TMessage, TResult>(ExecutorState state)
             where TMessage : IMessage
-            => new StagedResultPipelineExecutor<TMessage, TResult>(
+            => new FrozenResultDispatch<TMessage, TResult>(
                 state.DependenciesFactory,
                 (StagedResultPlan<TMessage, TResult>)state.StagedPlan!);
     }

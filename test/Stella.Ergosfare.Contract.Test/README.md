@@ -41,8 +41,13 @@ contract class and closing it over a per-axis type set:
 
 | Axis | Types | Registration | Executors actually reached |
 | --- | --- | --- | --- |
-| `GeneratedRegistration*Tests` | top-level, unkeyed, ungrouped | `RegisterGenerated()` | `StagedVoidPipelineExecutor`, `StagedResultPipelineExecutor`, `GeneratedVoidPipelineExecutor` + the emitted `StagedPlanN` classes |
-| `RuntimeRegistration*Tests` | `[ExcludeFromDiscovery]` | `Register<T>()` | `VoidPipelineExecutor`, `ResultPipelineExecutor` + `SingleAsyncHandlerMediationStrategy` |
+| `GeneratedRegistration*Tests` | top-level, unkeyed, ungrouped | `RegisterGenerated()` | `FrozenVoidDispatch`/`FrozenResultDispatch` plan arms, `GeneratedVoidPipelineExecutor` + the emitted `StagedPlanN` classes |
+| `RuntimeRegistration*Tests` | `[ExcludeFromDiscovery]` | `Register<T>()` | `FrozenVoidDispatch`/`FrozenResultDispatch` runtime arms + `VoidPipelineBody`/`ResultPipelineBody` |
+
+> Plans load through module initializers now — not through `RegisterGenerated()` — so the
+> registration surface no longer decides plan availability. What keeps the runtime axis on
+> the runtime arms is `[ExcludeFromDiscovery]`: the generator bakes no plan for those types,
+> so their dispatches exercise the frozen runtime bodies by construction.
 
 Both halves of that table are load-bearing, and both are easy to break by accident:
 

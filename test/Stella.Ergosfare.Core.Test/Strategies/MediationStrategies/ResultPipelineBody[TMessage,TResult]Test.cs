@@ -1,14 +1,14 @@
-﻿using Stella.Ergosfare.Core.Abstractions.Exceptions;
-using Stella.Ergosfare.Core.Abstractions.Strategies;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
+using Stella.Ergosfare.Core.Internal.Mediator;
 using Stella.Ergosfare.Test.Fixtures;
 using Stella.Ergosfare.Test.Fixtures.Stubs.Basic;
 
 namespace Stella.Ergosfare.Core.Test.Strategies;
 
 /// <summary>
-/// Unit tests for <see cref="SingleAsyncHandlerMediationStrategy{TMessage, TResult}"/>.
+/// Unit tests for <see cref="ResultPipelineBody{TMessage, TResult}"/>.
 /// </summary>
-public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
+public class ResultPipelineBodyTMessageTResultTests :
     IClassFixture<MessageDependencyFixture>,
     IClassFixture<ExecutionContextFixture>
 {
@@ -16,7 +16,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
     private readonly ExecutionContextFixture _executionContextFixture;
 
     // ReSharper disable once ConvertToPrimaryConstructor
-    public SingleAsyncHandlerMediationStrategyTMessageTResultTests(
+    public ResultPipelineBodyTMessageTResultTests(
         MessageDependencyFixture messageDependencyFixture,
         ExecutionContextFixture executionContextFixture)
     {
@@ -31,17 +31,16 @@ public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task Mediate_ShouldReturnHandlerResult_OnFastPath()
+    public async Task Run_ShouldReturnHandlerResult_OnFastPath()
     {
         // arrange
         _messageDependencyFixture = _messageDependencyFixture.New;
         _messageDependencyFixture.RegisterHandler(typeof(StubStringAsyncHandler));
         var dependencies = _messageDependencyFixture.CreateDependencies<StubMessage>();
-        var strategy = new SingleAsyncHandlerMediationStrategy<StubMessage, string>();
 
         // act
-        var result = await strategy.Mediate(
-            new StubMessage(), dependencies, _executionContextFixture.Ctx, _messageDependencyFixture.ServiceProvider);
+        var result = await ResultPipelineBody<StubMessage, string>.Run(
+            new StubMessage(), dependencies, null, null, _executionContextFixture.Ctx, _messageDependencyFixture.ServiceProvider);
 
         // assert
         Assert.Equal(StubStringAsyncHandler.Result, result);
@@ -57,7 +56,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task Mediate_ShouldRunFullPipeline_WhenFinalInterceptorRegistered()
+    public async Task Run_ShouldRunFullPipeline_WhenFinalInterceptorRegistered()
     {
         // arrange
         _messageDependencyFixture = _messageDependencyFixture.New;
@@ -65,13 +64,12 @@ public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
             typeof(StubStringAsyncHandler),
             typeof(StubStringAsyncFinalInterceptor));
         var dependencies = _messageDependencyFixture.CreateDependencies<StubMessage>();
-        var strategy = new SingleAsyncHandlerMediationStrategy<StubMessage, string>();
 
         Assert.NotEmpty(dependencies.FinalInterceptors);
 
         // act
-        var result = await strategy.Mediate(
-            new StubMessage(), dependencies, _executionContextFixture.Ctx, _messageDependencyFixture.ServiceProvider);
+        var result = await ResultPipelineBody<StubMessage, string>.Run(
+            new StubMessage(), dependencies, null, null, _executionContextFixture.Ctx, _messageDependencyFixture.ServiceProvider);
 
         // assert
         Assert.Equal(StubStringAsyncHandler.Result, result);
@@ -87,7 +85,7 @@ public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task Mediate_ShouldThrowMultipleHandlerFoundException()
+    public async Task Run_ShouldThrowMultipleHandlerFoundException()
     {
         // arrange
         _messageDependencyFixture = _messageDependencyFixture.New;
@@ -95,12 +93,11 @@ public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
             typeof(StubStringAsyncHandler),
             typeof(StubStringHandler));
         var dependencies = _messageDependencyFixture.CreateDependencies<StubMessage>();
-        var strategy = new SingleAsyncHandlerMediationStrategy<StubMessage, string>();
 
         // act
         var exception = await Record.ExceptionAsync(async () =>
-            await strategy.Mediate(
-                new StubMessage(), dependencies, _executionContextFixture.Ctx, _messageDependencyFixture.ServiceProvider));
+            await ResultPipelineBody<StubMessage, string>.Run(
+                new StubMessage(), dependencies, null, null, _executionContextFixture.Ctx, _messageDependencyFixture.ServiceProvider));
 
         // assert
         Assert.IsType<MultipleHandlerFoundException>(exception);
@@ -116,18 +113,17 @@ public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task Mediate_ShouldThrow_WhenNoHandlerRegistered()
+    public async Task Run_ShouldThrow_WhenNoHandlerRegistered()
     {
         // arrange
         _messageDependencyFixture = _messageDependencyFixture.New;
         _messageDependencyFixture.RegisterHandler(typeof(StubMessage));
         var dependencies = _messageDependencyFixture.CreateDependencies<StubMessage>();
-        var strategy = new SingleAsyncHandlerMediationStrategy<StubMessage, string>();
 
         // act
         var exception = await Record.ExceptionAsync(async () =>
-            await strategy.Mediate(
-                new StubMessage(), dependencies, _executionContextFixture.Ctx, _messageDependencyFixture.ServiceProvider));
+            await ResultPipelineBody<StubMessage, string>.Run(
+                new StubMessage(), dependencies, null, null, _executionContextFixture.Ctx, _messageDependencyFixture.ServiceProvider));
 
         // assert
         Assert.IsType<NoHandlerFoundException>(exception);
@@ -142,13 +138,11 @@ public class SingleAsyncHandlerMediationStrategyTMessageTResultTests :
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task Mediate_ShouldThrowArgumentNullException_WhenDependenciesNull()
+    public async Task Run_ShouldThrowArgumentNullException_WhenDependenciesNull()
     {
-        var strategy = new SingleAsyncHandlerMediationStrategy<StubMessage, string>();
-
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
-            strategy.Mediate(
-                new StubMessage(), null!, _executionContextFixture.Ctx, EmptyServiceProviderStub.Instance).AsTask());
+            ResultPipelineBody<StubMessage, string>.Run(
+                new StubMessage(), null!, null, null, _executionContextFixture.Ctx, EmptyServiceProviderStub.Instance).AsTask());
     }
 
     /// <summary>

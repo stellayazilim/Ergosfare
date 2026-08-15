@@ -310,8 +310,320 @@ public sealed partial class ErgosfareRegistrationGenerator
         var expression = UnwrapConversions(argument.Expression);
         var typeInfo = ctx.SemanticModel.GetTypeInfo(expression, ct);
 
-        return BuildSiteModel(typeInfo.Type ?? typeInfo.ConvertedType, kind,
+        var site = BuildSiteModel(typeInfo.Type ?? typeInfo.ConvertedType, kind,
             LocationInfo.From(invocation), referencedAssemblyName: null);
+
+        if (site is null)
+        {
+            return null;
+        }
+
+        ReadGroupFilter(ctx, invocation, method, ct, out var groups, out var unprovable);
+
+        return site.Value with { Groups = groups, HasUnprovableGroups = unprovable };
+    }
+
+    /// <summary>
+    ///     Reads the site's group filter: the names when every element is a literal the
+    ///     compiler can fold, otherwise nothing plus the unprovable flag. A site that names
+    ///     no filter at all reports the empty set — the default group, which is a group set
+    ///     like any other.
+    /// </summary>
+    /// <remarks>
+    ///     The one indirection worth following is a reference to a field or local whose
+    ///     initializer is itself readable — the documented idiom is a
+    ///     <c>static readonly GroupSet</c> defined once and reused, so refusing to look
+    ///     through it would leave the recommended spelling unprovable.
+    /// </remarks>
+    private static void ReadGroupFilter(
+        GeneratorSyntaxContext ctx,
+        InvocationExpressionSyntax invocation,
+        IMethodSymbol method,
+        CancellationToken ct,
+        out ImmutableArray<string> groups,
+        out bool unprovable)
+    {
+        groups = ImmutableArray<string>.Empty;
+        unprovable = false;
+
+        if (FindGroupArgument(invocation, method) is not { } argument)
+        {
+            return;
+        }
+
+        var names = new List<string>();
+
+        if (TryReadGroupNames(ctx, UnwrapConversions(argument.Expression), ct, names, depth: 0))
+        {
+            groups = NormalizeGroupNames(names);
+            return;
+        }
+
+        unprovable = true;
+    }
+
+    /// <summary>
+    ///     The argument bound to the dispatch method's group parameter — the
+    ///     <c>IEnumerable&lt;string&gt;</c>, <c>GroupSet</c> or <c>string[]</c> slot — honoring
+    ///     named arguments and skipping the parameter when the call omits it.
+    /// </summary>
+    private static ArgumentSyntax? FindGroupArgument(InvocationExpressionSyntax invocation, IMethodSymbol method)
+    {
+        var groupParameterIndex = -1;
+
+        for (var i = 0; i < method.Parameters.Length; i++)
+        {
+            if (IsGroupParameter(method.Parameters[i]))
+            {
+                groupParameterIndex = i;
+                break;
+            }
+        }
+
+        if (groupParameterIndex < 0)
+        {
+            return null;
+        }
+
+        var groupParameterName = method.Parameters[groupParameterIndex].Name;
+        var arguments = invocation.ArgumentList.Arguments;
+
+        for (var i = 0; i < arguments.Count; i++)
+        {
+            var argument = arguments[i];
+
+            if (argument.NameColon is { } nameColon)
+            {
+                if (string.Equals(nameColon.Name.Identifier.ValueText, groupParameterName, StringComparison.Ordinal))
+                {
+                    return argument;
+                }
+            }
+            else if (i == groupParameterIndex)
+            {
+                return argument;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsGroupParameter(IParameterSymbol parameter)
+    {
+        if (parameter.Name is "groups")
+        {
+            return true;
+        }
+
+        return parameter.Type is INamedTypeSymbol { Name: "GroupSet" } groupSet
+               && IsInNamespace(groupSet, CoreAbstractionsNamespace);
+    }
+
+    /// <summary>
+    ///     Collects the literal names behind a group expression, returning <c>false</c> the
+    ///     moment anything is not statically readable.
+    /// </summary>
+    private static bool TryReadGroupNames(
+        GeneratorSyntaxContext ctx,
+        ExpressionSyntax expression,
+        CancellationToken ct,
+        List<string> names,
+        int depth)
+    {
+        // One hop through a named reference, no more: a chain of aliases is not an idiom
+        // worth chasing, and the bound is what keeps this analysis finite.
+        if (depth > 1)
+        {
+            return false;
+        }
+
+        switch (expression)
+        {
+            // null / default: no filter, the default group.
+            case LiteralExpressionSyntax literal when literal.IsKind(SyntaxKind.NullLiteralExpression):
+            case LiteralExpressionSyntax when expression.IsKind(SyntaxKind.DefaultLiteralExpression):
+                return true;
+
+            // GroupSet.Of("a", "b") — the canonical spelling.
+            case InvocationExpressionSyntax call:
+            {
+                if (ctx.SemanticModel.GetSymbolInfo(call, ct).Symbol is not IMethodSymbol
+                    {
+                        Name: "Of", ContainingType: { Name: "GroupSet" } owner,
+                    }
+                    || !IsInNamespace(owner, CoreAbstractionsNamespace))
+                {
+                    return false;
+                }
+
+                foreach (var argument in call.ArgumentList.Arguments)
+                {
+                    if (!TryReadStringLiteral(ctx, argument.Expression, ct, names))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            // new[] { "a" } / new string[] { "a" }
+            case ArrayCreationExpressionSyntax { Initializer: { } arrayInitializer }:
+                return TryReadStringLiterals(ctx, arrayInitializer.Expressions, ct, names);
+
+            case ImplicitArrayCreationExpressionSyntax implicitArray:
+                return TryReadStringLiterals(ctx, implicitArray.Initializer.Expressions, ct, names);
+
+            // ["a", "b"] — the collection expression.
+            case CollectionExpressionSyntax collection:
+            {
+                foreach (var element in collection.Elements)
+                {
+                    if (element is not ExpressionElementSyntax { Expression: { } elementExpression }
+                        || !TryReadStringLiteral(ctx, elementExpression, ct, names))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            // GroupSet.Empty, or a reference to a field/local holding a readable set.
+            case IdentifierNameSyntax:
+            case MemberAccessExpressionSyntax:
+            {
+                var symbol = ctx.SemanticModel.GetSymbolInfo(expression, ct).Symbol;
+
+                if (symbol is IFieldSymbol { Name: "Empty", ContainingType: { Name: "GroupSet" } emptyOwner }
+                    && IsInNamespace(emptyOwner, CoreAbstractionsNamespace))
+                {
+                    return true;
+                }
+
+                return symbol is IFieldSymbol or ILocalSymbol
+                       && TryReadInitializer(ctx, symbol, ct, names, depth);
+            }
+
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    ///     Follows a field or local back to its initializer and reads that instead. Only a
+    ///     single, unambiguous declaration counts, and only one that this compilation can
+    ///     see — a set assembled elsewhere stays unprovable.
+    /// </summary>
+    private static bool TryReadInitializer(
+        GeneratorSyntaxContext ctx,
+        ISymbol symbol,
+        CancellationToken ct,
+        List<string> names,
+        int depth)
+    {
+        if (symbol is IFieldSymbol { IsReadOnly: false, IsConst: false })
+        {
+            // A writable field can hold anything by the time the dispatch runs.
+            return false;
+        }
+
+        var references = symbol.DeclaringSyntaxReferences;
+
+        if (references.Length != 1)
+        {
+            return false;
+        }
+
+        var initializer = references[0].GetSyntax(ct) switch
+        {
+            VariableDeclaratorSyntax { Initializer.Value: { } value } => value,
+            PropertyDeclarationSyntax { Initializer.Value: { } value } => value,
+            _ => null,
+        };
+
+        if (initializer is null)
+        {
+            return false;
+        }
+
+        // The initializer's own semantic model: a field declared in another file belongs to
+        // a different syntax tree, and the site's model cannot answer questions about it.
+        var initializerContext = initializer.SyntaxTree == ctx.SemanticModel.SyntaxTree
+            ? ctx
+            : default;
+
+        if (initializerContext.SemanticModel is null)
+        {
+            return false;
+        }
+
+        return TryReadGroupNames(initializerContext, UnwrapConversions(initializer), ct, names, depth + 1);
+    }
+
+    private static bool TryReadStringLiterals(
+        GeneratorSyntaxContext ctx,
+        SeparatedSyntaxList<ExpressionSyntax> expressions,
+        CancellationToken ct,
+        List<string> names)
+    {
+        foreach (var expression in expressions)
+        {
+            if (!TryReadStringLiteral(ctx, expression, ct, names))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    ///     Reads one group name: any expression the compiler folds to a string constant,
+    ///     which covers literals, <c>const</c> fields and constant concatenation alike.
+    /// </summary>
+    private static bool TryReadStringLiteral(
+        GeneratorSyntaxContext ctx,
+        ExpressionSyntax expression,
+        CancellationToken ct,
+        List<string> names)
+    {
+        var constant = ctx.SemanticModel.GetConstantValue(expression, ct);
+
+        if (constant is { HasValue: true, Value: string name })
+        {
+            names.Add(name);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Canonical form of a group set: ordinal-sorted and deduplicated, because group
+    ///     selection is an any-of test — order and repetition select the same participants,
+    ///     so two spellings of one set must key one plan.
+    /// </summary>
+    internal static ImmutableArray<string> NormalizeGroupNames(List<string> names)
+    {
+        if (names.Count == 0)
+        {
+            return ImmutableArray<string>.Empty;
+        }
+
+        names.Sort(StringComparer.Ordinal);
+
+        var builder = ImmutableArray.CreateBuilder<string>(names.Count);
+
+        foreach (var name in names)
+        {
+            if (builder.Count == 0 || !string.Equals(builder[builder.Count - 1], name, StringComparison.Ordinal))
+            {
+                builder.Add(name);
+            }
+        }
+
+        return builder.ToImmutable();
     }
 
     /// <summary>
@@ -475,6 +787,8 @@ public sealed partial class ErgosfareRegistrationGenerator
             IsValueType = named.IsValueType,
             IsGenericMessage = named.IsGenericType,
             AssignableKeys = GetAssignableKeys(named),
+            Groups = ImmutableArray<string>.Empty,
+            HasUnprovableGroups = false,
             Location = location,
             ReferencedAssemblyName = referencedAssemblyName,
         };
@@ -569,6 +883,8 @@ public sealed partial class ErgosfareRegistrationGenerator
             IsValueType = false,
             IsGenericMessage = false,
             AssignableKeys = ImmutableArray<string>.Empty,
+            Groups = ImmutableArray<string>.Empty,
+            HasUnprovableGroups = false,
             Location = location,
             ReferencedAssemblyName = referencedAssemblyName,
         };
@@ -640,7 +956,7 @@ public sealed partial class ErgosfareRegistrationGenerator
             }
 
             var hasManifestMarker = false;
-            List<(string MetadataName, DispatchSiteKind Kind, bool Opaque)>? siteEntries = null;
+            List<(string MetadataName, DispatchSiteKind Kind, bool Opaque, ImmutableArray<string> Groups)>? siteEntries = null;
             List<string>? registrationEntries = null;
 
             foreach (var attribute in assembly.GetAttributes())
@@ -686,7 +1002,8 @@ public sealed partial class ErgosfareRegistrationGenerator
 
                         if (kind is not null && kind.Value <= DispatchSiteKind.Message)
                         {
-                            (siteEntries ??= []).Add((metadataName, kind.Value, opaque));
+                            (siteEntries ??= []).Add(
+                                (metadataName, kind.Value, opaque, ReadManifestGroups(attribute)));
                         }
 
                         continue;
@@ -702,7 +1019,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
             if (siteEntries is not null)
             {
-                foreach (var (metadataName, kind, opaque) in siteEntries)
+                foreach (var (metadataName, kind, opaque, groups) in siteEntries)
                 {
                     var symbol = assembly.GetTypeByMetadataName(metadataName)
                                  ?? compilation.GetTypeByMetadataName(metadataName);
@@ -718,10 +1035,11 @@ public sealed partial class ErgosfareRegistrationGenerator
 
                     if (BuildSiteModel(symbol, kind, location: null, assembly.Name) is { } value)
                     {
-                        // Opacity travels with the manifest: the recorder saw the original
-                        // expression, the rehydrated symbol alone cannot reconstruct it.
+                        // Opacity and the group filter travel with the manifest: the recorder
+                        // saw the original expression, the rehydrated symbol alone cannot
+                        // reconstruct either.
                         (sites ??= ImmutableArray.CreateBuilder<DispatchSiteModel>())
-                            .Add(value.IsOpaque == opaque ? value : value with { IsOpaque = opaque });
+                            .Add(value with { IsOpaque = opaque, Groups = groups });
                     }
                 }
             }
@@ -754,6 +1072,45 @@ public sealed partial class ErgosfareRegistrationGenerator
             registrations?.ToImmutable() ?? ImmutableArray<RegistrationSiteModel>.Empty,
             hasUnknownSiteAssemblies,
             hasOpaqueRegistrations);
+    }
+
+    /// <summary>
+    ///     Reads a manifest site's recorded group filter. Absent or empty means the site
+    ///     named no filter — or named one the recording generator could not read, which it
+    ///     records the same way: neither keys a plan here.
+    /// </summary>
+    private static ImmutableArray<string> ReadManifestGroups(AttributeData attribute)
+    {
+        foreach (var named in attribute.NamedArguments)
+        {
+            if (named.Key != "Groups" || named.Value.Kind != TypedConstantKind.Array)
+            {
+                continue;
+            }
+
+            var values = named.Value.Values;
+
+            if (values.IsDefaultOrEmpty)
+            {
+                return ImmutableArray<string>.Empty;
+            }
+
+            var names = new List<string>(values.Length);
+
+            foreach (var value in values)
+            {
+                if (value.Value is not string name)
+                {
+                    return ImmutableArray<string>.Empty;
+                }
+
+                names.Add(name);
+            }
+
+            return NormalizeGroupNames(names);
+        }
+
+        return ImmutableArray<string>.Empty;
     }
 
     private static bool IsExecutableOutputKind(OutputKind outputKind)

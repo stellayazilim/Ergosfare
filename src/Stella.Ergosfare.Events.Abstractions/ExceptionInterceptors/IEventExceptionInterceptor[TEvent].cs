@@ -1,4 +1,3 @@
-
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 
@@ -16,43 +15,33 @@ namespace Stella.Ergosfare.Events.Abstractions;
 /// pipeline when an exception is thrown during the handling of <typeparamref name="TEvent"/>.
 /// </para>
 /// <para>
-/// This interface inherits from <see cref="IAsyncExceptionInterceptor{TMessage}"/>, enabling
-/// asynchronous exception handling logic.
-/// </para>
-/// <para>
-/// The <typeparamref name="TEvent"/> type must be non-nullable and implement <see cref="IEvent"/>.
+/// A publish produces no result, so this member takes none. The pipeline's resultless slot
+/// is an implementation detail of the stage machinery and never carried anything an
+/// interceptor could read — it only ever held a completed task.
 /// </para>
 /// </remarks>
 // ReSharper disable once UnusedType.Global
 public interface IEventExceptionInterceptor<in TEvent> : IEvent, IAsyncExceptionInterceptor<TEvent, Unit>
     where TEvent : notnull
 {
-
     /// <inheritdoc cref="IAsyncExceptionInterceptor{TEvent, TResult}.HandleAsync"/>
     /// <remarks>
     /// A publish has no result: the slot carries <see cref="Unit.Value"/> and is not
-    /// forwarded. The typed member below keeps its <see cref="ValueTask"/> parameter — it
-    /// only ever received the completed task — and gets it directly.
+    /// forwarded to the typed member below.
     /// </remarks>
     async ValueTask<object?> IAsyncExceptionInterceptor<TEvent, Unit>.HandleAsync(TEvent @event, Unit? result,
         Exception exception, ErgosfareContext context)
     {
-        await HandleAsync(@event, ValueTask.CompletedTask, exception, context);
+        await HandleAsync(@event, exception, context);
         return Unit.Value;
     }
-    
-    
+
     /// <summary>
     /// Handles an exception asynchronously that occurred during the processing of the event.
     /// </summary>
     /// <param name="event">The event being processed.</param>
-    /// <param name="result">
-    /// The result returned by the main handlers, or <c>null</c> if the event does not produce a result.
-    /// </param>
     /// <param name="exception">The exception thrown during event handling.</param>
     /// <param name="context">The execution context for the current mediation pipeline.</param>
     /// <returns>A <see cref="ValueTask"/> representing the asynchronous exception handling operation.</returns>
-    ValueTask HandleAsync(TEvent @event, ValueTask result, Exception exception, ErgosfareContext context);
+    ValueTask HandleAsync(TEvent @event, Exception exception, ErgosfareContext context);
 }
-
-

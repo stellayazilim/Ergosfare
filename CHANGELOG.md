@@ -1,3 +1,156 @@
+## v2.10.0-preview – '2026-08-15'
+
+Preview release. The theme: **a dispatch stops deciding and starts executing.** Six
+generations of dispatch machinery had been living side by side — runtime strategies, fast
+lanes, generated plans, staged plans, memoized gates — and an options object could still
+change the pipeline at the call site. Both are gone. What a dispatch does is settled before
+it runs: the compiled plan is the pipeline, and everything that used to be decided per
+dispatch is now part of what keys it.
+
+### The options objects are gone
+
+* `SendAsync`, `QueryAsync`, `StreamAsync` and `PublishAsync` no longer take a settings
+  object. Everything a dispatch can be told is a parameter: the group filter, the
+  no-handler behaviour, the cancellation token. A settings object meant allocating one per
+  dispatch and reading it at dispatch time — a shape nothing can be compiled from.
+* The execution context is the only item channel. Items seeded through settings, and the
+  parallel context-versus-settings paths that came with it, are removed.
+* Six settings types go with them, without obsolete shims. The replacements are parameters
+  on the same members, so a call site is edited once and the compiler finds every one.
+
+### The group filter is a dispatch argument
+
+* A filter no longer forms part of an executor's identity. One pipeline per message type
+  serves every filter and selects its composition per call — which is what later lets a
+  filter key a plan instead of disqualifying one.
+
+### Events dispatch through compiled plans
+
+* Broadcasts get their own plan family, so a publish looks in one store and a send in
+  another, and nothing has to branch on the message.
+* The broadcast lane becomes a table the container owns, and the streaming lane joins it.
+  Closing a dispatch generic happens in one place for all three.
+
+### The plugin surface
+
+A plugin is a NuGet package that declares what it wants observed; the generator writes the
+call. `Stella.Ergosfare.Plugins.Abstractions` carries the declaration surface —
+`[ErgosfarePlugin]`, `[PipelineInvokable]`, `[VoidPipelineInvokable]`,
+`[PluginServiceFilter]`, and the Stage/Module enums — and references nothing: the generator
+matches attributes by metadata name, so a new stage ships without moving the core's version.
+Emission covers both plan families, and a compilation that references no plugin gets exactly
+the plan it would have had before this existed.
+
+This is deliberately still experimental and not yet part of the supported public API;
+`ERGOEXP002` marks it. It is recorded here because it works end to end and already shapes
+the plan bodies visible in generated output.
+
+### One dispatch shape
+
+* `BroadcastDispatch`, `BroadcastDispatchTable` and `BroadcastMediation` are replaced by
+  `FrozenBroadcastDispatch` and its table: plan or runtime body, bare loop or staged
+  pipeline, direct construction or provider resolution — all decided once, in the
+  constructor, from the container's settled composition.
+* The four pipeline executors collapse into `FrozenVoidDispatch` and `FrozenResultDispatch`.
+* `SingleAsyncHandlerMediationStrategy<TMessage>` and `<TMessage, TResult>` retire; their
+  bodies are relocated as the plan family's N = 1 base case, so a single-handler pipeline
+  and a broadcast become one body with a different handler count. The stream lane keeps its
+  own strategy.
+* Nothing on a dispatch path consults a gate, materializes a composition, or picks a
+  strategy any more.
+
+### Compiled plans load unconditionally
+
+* Dispatch roots and every plan family enter the process-wide tables from a module
+  initializer, as frozen compositions always have. A container that only calls
+  `Register<T>()` dispatches through compiled plans for the first time; the tables used to
+  be populated only by `RegisterGenerated()` or `RegisterAll()`.
+* An interceptorless broadcast gets a plan too — its bare loop *is* the plan. A command in
+  that shape falls back to the single-handler family; a publish has none, so the flagship
+  "hooks cost nothing while not attached" lane was the one lane still resolving its handlers
+  through the container on every dispatch.
+* **Fix:** a plan with exactly one handler was filed under the sending store, where no
+  publish ever looks — so every single-handler intercepted event plan was emitted, validated
+  and never run. Which store a plan belongs to is a property of the message kind now.
+
+### The group set keys the plan
+
+* The generator reads the group sets its call sites prove — `GroupSet.Of(...)`, array and
+  collection literals, and one hop through a named reference, since the documented idiom is
+  a reused `static readonly GroupSet` — and bakes one plan per (message, set). Sets are
+  normalized, because selection is an any-of test and two spellings of one set must key one
+  plan.
+* A participant outside a plan's set is skipped rather than disqualifying the plan. This
+  lifts an older over-conservatism too: a grouped interceptor used to cost its message the
+  default plan even though the default dispatch never runs it.
+* A dispatch whose filter is a runtime value gets a plan as well: one body carrying every
+  participant, each call behind a baked group test, validated against the composition over
+  the groups it covers.
+* Group sets travel to composition roots through `DispatchSiteAttribute.Groups`.
+
+### Generic participants
+
+* A participant that takes its message as a type parameter is monomorphized: the generator
+  emits the closed forms, and registering the open definition selects the forms compiled
+  from it.
+* `ERGOSG016` reports the participant that registers and never runs.
+
+### Lifetime correctness
+
+* **Fix:** the all-participants-singleton verdict was cached per message type, but the
+  answer is a property of the pipeline *shape*. A message whose handlers all live in a named
+  group has an empty default shape, which is vacuously all-singleton — and that verdict
+  leaked into the grouped shape, silently promoting its transient handlers to de-facto
+  singletons. The cache is gone; a regression test pins the lifetime.
+
+### Both facade names resolve
+
+* `CommandMediator`, `QueryMediator` and `EventMediator` register under their concrete names
+  alongside their interfaces, resolving one object graph. A dispatch through the interface
+  pays a generic-virtual dispatch the JIT cannot devirtualize; through the class it is a
+  direct call. Injecting the interface behaves exactly as before.
+
+### Measured
+
+Typical-user benchmark — one `AddErgosfare`, explicit `Register<T>()`, dispatch through the
+public facades — against the v2.3.0 surface, medians:
+
+| Row | v2.3.0 | this release |
+| --- | --- | --- |
+| Publish, no interceptors | 48.9 ns / 48 B | 28.4 ns / 0 B |
+| Publish, intercepted | 205.2 ns | 84.1 ns |
+| Publish, group-filtered | ~54 ns / 48 B | 32.8 ns / 0 B |
+| Send, no interceptors | 29.5 ns | 23.5 ns |
+| Send, intercepted | 150.0 ns | 59.4 ns |
+| Send, group-filtered | ~42 ns / 24 B | 30.8 ns / 0 B |
+| Query | 35.2 ns | 24.9 ns |
+| Query, intercepted | 184.3 ns | 88.3 ns |
+
+The zeroed allocations are dependency-free participants constructed with a visible `new`
+through the existing construction gate, which the JIT can stack-allocate.
+
+### Breaking changes
+
+* The dispatch surfaces drop their options objects, and six settings types are removed with
+  no obsolete shims.
+* `SingleAsyncHandlerMediationStrategy<TMessage>` and `<TMessage, TResult>` are removed from
+  `Core.Abstractions`. They were a LiteBus-era seam; the stream strategy is unaffected.
+* The event exception and final interceptor facades no longer take a result parameter:
+  `IEventExceptionInterceptor`, `IEventExceptionInterceptor<TEvent>`,
+  `IEventFinalInterceptor` and `IEventFinalInterceptor<TEvent>` declare
+  `(event, exception, context)`. A publish produces no result, so the parameter only ever
+  carried a fixed placeholder.
+* `CommandMediator(IMessageMediator)` is removed; the engine-backed constructor is the only
+  construction shape, as it already was for the query and event facades.
+
+### Repository
+
+* An [AI policy](.github/AI_POLICY.md): an assistant is a co-developer and never the
+  responsible party, architectural decisions stay with the developer, disclosure is
+  recommended rather than required, and every line is reviewed by a human.
+* A checked-in Codex MCP declaration for the documentation catalog, with `.codex/` admitting
+  only that declaration.
+
 ## v2.3.0 – '2026-08-12'
 
 Stable release. The theme: **the pipeline becomes a compiled artifact.** The preview cycle
