@@ -52,6 +52,23 @@ public sealed class StreamQueryTests
         }
     }
 
+    [DiscoveryKey(Key)]
+    public sealed class Names : IStreamQuery<string?>;
+
+    [DiscoveryKey(Key)]
+    public sealed class NamesHandler : IStreamQueryHandler<Names, string?>
+    {
+        public async IAsyncEnumerable<string?> StreamAsync(Names query, ErgosfareContext context)
+        {
+            yield return "a";
+
+            await Task.Yield();
+            yield return null;
+
+            yield return "c";
+        }
+    }
+
     private static ServiceProvider CreateProvider()
         => new ServiceCollection()
             .AddErgosfare(options => options.AddQueryModule(queries => queries.RegisterGenerated(Key)))
@@ -70,6 +87,26 @@ public sealed class StreamQueryTests
         }
 
         Assert.Equal([1, 2, 3], received);
+    }
+
+    /// <summary>
+    ///     <c>null</c> is an element like any other. Dropping it would hand the caller a
+    ///     well-formed but shorter sequence — data loss with no exception, no diagnostic and
+    ///     no truncation to notice.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Contract")]
+    public async Task A_null_element_arrives_in_its_place_rather_than_being_dropped()
+    {
+        await using var provider = CreateProvider();
+        var received = new List<string?>();
+
+        await foreach (var name in provider.GetRequiredService<IQueryMediator>().StreamAsync(new Names()))
+        {
+            received.Add(name);
+        }
+
+        Assert.Equal(["a", null, "c"], received);
     }
 
     [Fact]
