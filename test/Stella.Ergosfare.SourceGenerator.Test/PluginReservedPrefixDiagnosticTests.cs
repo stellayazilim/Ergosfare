@@ -34,8 +34,8 @@ public class PluginReservedPrefixDiagnosticTests
 
         public sealed class TracingHooks
         {
-            [PipelineInvokable(Stage.PostMainHandler)]
-            public void Observe<TMessage, TResult>(TMessage message, TResult result, ErgosfareContext context)
+            [PipelineInvokable(Hook.PostMain)]
+            public void Observe<TMessage>(TMessage message, ErgosfareContext context)
             {
             }
         }
@@ -53,8 +53,8 @@ public class PluginReservedPrefixDiagnosticTests
 
         public sealed class TracingHooks
         {
-            [PipelineInvokable(Stage.PostMainHandler)]
-            public void Observe<TMessage, TResult>(TMessage message, TResult result, ErgosfareContext context)
+            [PipelineInvokable(Hook.PostMain)]
+            public void Observe<TMessage>(TMessage message, ErgosfareContext context)
             {
             }
         }

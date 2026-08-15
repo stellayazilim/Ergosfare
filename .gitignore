@@ -26,6 +26,11 @@ docs/**
 **/BenchmarkDotNet.Artifacts/*
 !**/BenchmarkDotNet.Artifacts/baselines/
 
+# A run given `--artifacts` writes to a suffixed sibling — BenchmarkDotNet.Artifacts.canary,
+# .grouped, .final and so on — which the pattern above does not match. Those are named per
+# comparison and never hold baselines, so the whole directory goes.
+**/BenchmarkDotNet.Artifacts.*/
+
 # docfx output — the API reference is generated on demand (see
 # .github/workflows/api_reference.yml) and consumed by the docs site, never committed.
 # `api/` holds the ManagedReference YAML plus docfx's own `.manifest` and xrefmap;

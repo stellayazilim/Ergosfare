@@ -11,6 +11,8 @@
         <PublishAot>true</PublishAot>
         <InvariantGlobalization>true</InvariantGlobalization>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <!-- The plugin surface is experimental; installing one is deliberate. -->
+        <NoWarn>$(NoWarn);ERGOEXP002</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
@@ -36,6 +38,11 @@
         <ProjectReference Include="..\..\..\src\Stella.Ergosfare.SourceGenerator\Stella.Ergosfare.SourceGenerator.csproj"
                           OutputItemType="Analyzer"
                           ReferenceOutputAssembly="false" />
+
+        <!-- The example plugin. Installing one is a single reference: this app's generator
+             reads its [PipelineInvokable] methods out of the assembly and bakes the calls
+             into this app's plans. -->
+        <ProjectReference Include="..\..\TimingPlugin\TimingPlugin.csproj" />
     </ItemGroup>
 
 </Project>

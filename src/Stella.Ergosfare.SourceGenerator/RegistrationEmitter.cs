@@ -1034,11 +1034,11 @@ internal static class RegistrationEmitter
     ///     <c>default</c> and the observer reads it as such.
     /// </param>
     private static void EmitPluginCalls(
-        StringBuilder sb, StagedPlanModel plan, PluginStage stage, string? resultExpression, string indent)
+        StringBuilder sb, StagedPlanModel plan, PluginHook hook, string indent)
     {
         foreach (var call in plan.PluginCalls)
         {
-            if (call.Stage != stage)
+            if (call.Hook != hook)
             {
                 continue;
             }
@@ -1062,15 +1062,11 @@ internal static class RegistrationEmitter
                 AppendResolve(sb, call.ServiceTypeExpression);
             }
 
+            // Closed over the message alone: no hook carries a result, so the plan's result
+            // type never reaches a hook's signature and a void and a result-producing
+            // pipeline call the same method the same way.
             sb.Append('.').Append(call.MethodName)
-              .Append('<').Append(plan.MessageTypeExpression);
-
-            if (plan.ResultTypeExpression is not null)
-            {
-                sb.Append(", ").Append(plan.ResultTypeExpression);
-            }
-
-            sb.Append(">(");
+              .Append('<').Append(plan.MessageTypeExpression).Append(">(");
 
             for (var i = 0; i < call.Parameters.Length; i++)
             {
@@ -1083,9 +1079,6 @@ internal static class RegistrationEmitter
                 {
                     case PluginParameterKind.Message:
                         sb.Append("message");
-                        break;
-                    case PluginParameterKind.Result:
-                        sb.Append(resultExpression ?? "default!");
                         break;
                     case PluginParameterKind.Context:
                         sb.Append("context");
@@ -1128,11 +1121,11 @@ internal static class RegistrationEmitter
         {
             var body = OpenGuard(sb, handler.GroupGuard, indent);
 
-            EmitPluginCalls(sb, plan, PluginStage.PreMainHandler, null, body);
+            EmitPluginCalls(sb, plan, PluginHook.PreMain, body);
             sb.Append(body).Append("await ");
             AppendParticipant(sb, handler.TypeExpression, direct ? handler.ConstructionExpression : null);
             sb.AppendLine(".HandleAsync(message, context);");
-            EmitPluginCalls(sb, plan, PluginStage.PostMainHandler, null, body);
+            EmitPluginCalls(sb, plan, PluginHook.PostMain, body);
 
             CloseGuard(sb, handler.GroupGuard, indent);
         }
@@ -1263,11 +1256,6 @@ internal static class RegistrationEmitter
 
             CloseGuard(sb, call.GroupGuard, indent);
         }
-
-        // The plugin's final observers close the stage: nothing they do can keep an
-        // interceptor from running, and they see whatever result the stage settled on.
-        EmitPluginCalls(sb, plan, PluginStage.OnFinal,
-            plan.ResultTypeExpression is null ? null : resultExpressionText, indent);
     }
 
     /// <summary>Whether the plan's exception stage carries an unfiltered participant — one that accepts every exception.</summary>
@@ -1355,28 +1343,37 @@ internal static class RegistrationEmitter
     {
         EmitGroupGuards(sb, plan, "                ");
 
-        var needsResult = !plan.PostCalls.IsEmpty || !plan.ExceptionCalls.IsEmpty || !plan.FinalCalls.IsEmpty;
-        var needsGuards = needsResult || plan.PluginNeedsGuards;
+        var needsGuards = !plan.PostCalls.IsEmpty || !plan.ExceptionCalls.IsEmpty || !plan.FinalCalls.IsEmpty;
 
         if (!needsGuards)
         {
             // Pre-only pipeline: with zero exception and final stages there is nothing to
             // skip and nothing to clean up, so no guard at all — exceptions and aborts
-            // alike travel out untouched. A plugin observing only the four unguarded
-            // boundaries keeps the body exactly this shape.
-            EmitPluginCalls(sb, plan, PluginStage.PipelineStart, null, "                ");
+            // alike travel out untouched. Every hook is a straight-line point, so a plugin
+            // never moves a plan off this shape.
+            EmitPluginCalls(sb, plan, PluginHook.Start, "                ");
             EmitPreCalls(sb, plan, direct, "                ");
             EmitHandlerCalls(sb, plan, direct, "                ");
-            EmitPluginCalls(sb, plan, PluginStage.AfterPost, null, "                ");
+            EmitPluginCalls(sb, plan, PluginHook.Finish, "                ");
             return;
         }
 
+        // The abort flag and the finally that reads it exist for the final stage alone; a
+        // plan without one carries neither, since a hook can no longer ask for a finally the
+        // composition did not.
+        var hasFinalStage = !plan.FinalCalls.IsEmpty;
+
         sb.AppendLine("                object? result = null;");
         sb.AppendLine("                global::System.Exception? exception = null;");
-        sb.AppendLine("                var aborted = false;");
+
+        if (hasFinalStage)
+        {
+            sb.AppendLine("                var aborted = false;");
+        }
+
         sb.AppendLine("                try");
         sb.AppendLine("                {");
-        EmitPluginCalls(sb, plan, PluginStage.PipelineStart, null, "                    ");
+        EmitPluginCalls(sb, plan, PluginHook.Start, "                    ");
         EmitPreCalls(sb, plan, direct, "                    ");
         EmitHandlerCalls(sb, plan, direct, "                    ");
         sb.Append("                    result = ").Append(UnitFullName).AppendLine(".Value;");
@@ -1395,23 +1392,24 @@ internal static class RegistrationEmitter
             sb.Append("                    result = invokedPostResult == null ? ").Append(UnitFullName).AppendLine(".Value : result;");
         }
 
-        EmitPluginCalls(sb, plan, PluginStage.AfterPost, null, "                    ");
+        EmitPluginCalls(sb, plan, PluginHook.Finish, "                    ");
         sb.AppendLine("                }");
         // A participant stopped the pipeline: nothing else runs — not the exception stage,
         // not the final stage — and the signal continues to the caller. The strategy's own
         // abort arm, emitted.
         sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
         sb.AppendLine("                {");
-        sb.AppendLine("                    aborted = true;");
+
+        if (hasFinalStage)
+        {
+            sb.AppendLine("                    aborted = true;");
+        }
+
         sb.AppendLine("                    throw;");
         sb.AppendLine("                }");
         sb.AppendLine("                catch (global::System.Exception e)");
         sb.AppendLine("                {");
         sb.AppendLine("                    exception = e;");
-        // Before the interceptor stage, deliberately: an exception interceptor that returns
-        // a value swallows the exception, and an observer whose job is to see every failure
-        // must not depend on whether one did.
-        EmitPluginCalls(sb, plan, PluginStage.OnException, null, "                    ");
 
         if (plan.ExceptionCalls.IsEmpty)
         {
@@ -1428,13 +1426,17 @@ internal static class RegistrationEmitter
         }
 
         sb.AppendLine("                }");
-        sb.AppendLine("                finally");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    if (!aborted)");
-        sb.AppendLine("                    {");
-        EmitFinalCalls(sb, plan, direct, "result", "                        ");
-        sb.AppendLine("                    }");
-        sb.AppendLine("                }");
+
+        if (hasFinalStage)
+        {
+            sb.AppendLine("                finally");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    if (!aborted)");
+            sb.AppendLine("                    {");
+            EmitFinalCalls(sb, plan, direct, "result", "                        ");
+            sb.AppendLine("                    }");
+            sb.AppendLine("                }");
+        }
     }
 
     private static void EmitResultExecuteBody(StringBuilder sb, StagedPlanModel plan, bool direct)
@@ -1448,16 +1450,17 @@ internal static class RegistrationEmitter
         }
 
         var resultExpression = plan.ResultTypeExpression!;
-        var needsGuards = !plan.PostCalls.IsEmpty || !plan.ExceptionCalls.IsEmpty || !plan.FinalCalls.IsEmpty
-                          || plan.PluginNeedsGuards;
+        var needsGuards = !plan.PostCalls.IsEmpty || !plan.ExceptionCalls.IsEmpty || !plan.FinalCalls.IsEmpty;
+        // See the void body: the abort flag and its finally belong to the final stage alone.
+        var hasFinalStage = !plan.FinalCalls.IsEmpty;
 
         if (!needsGuards)
         {
             // Pre-only pipeline; see the void body. No guard: with nothing to skip and
             // nothing to clean up, exceptions and aborts alike travel out untouched.
-            EmitPluginCalls(sb, plan, PluginStage.PipelineStart, null, "                ");
+            EmitPluginCalls(sb, plan, PluginHook.Start, "                ");
             EmitPreCalls(sb, plan, direct, "                ");
-            EmitPluginCalls(sb, plan, PluginStage.PreMainHandler, null, "                ");
+            EmitPluginCalls(sb, plan, PluginHook.PreMain, "                ");
 
             if (!plan.PluginCalls.IsEmpty)
             {
@@ -1466,8 +1469,8 @@ internal static class RegistrationEmitter
                 sb.Append("                ").Append(resultExpression).Append(" result = await ");
                 AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
                 sb.AppendLine(".HandleAsync(message, context);");
-                EmitPluginCalls(sb, plan, PluginStage.PostMainHandler, "result", "                ");
-                EmitPluginCalls(sb, plan, PluginStage.AfterPost, "result", "                ");
+                EmitPluginCalls(sb, plan, PluginHook.PostMain, "                ");
+                EmitPluginCalls(sb, plan, PluginHook.Finish, "                ");
                 sb.AppendLine("                return result;");
                 return;
             }
@@ -1480,16 +1483,21 @@ internal static class RegistrationEmitter
 
         sb.Append("                ").Append(resultExpression).AppendLine(" result = default!;");
         sb.AppendLine("                global::System.Exception? exception = null;");
-        sb.AppendLine("                var aborted = false;");
+
+        if (hasFinalStage)
+        {
+            sb.AppendLine("                var aborted = false;");
+        }
+
         sb.AppendLine("                try");
         sb.AppendLine("                {");
-        EmitPluginCalls(sb, plan, PluginStage.PipelineStart, null, "                    ");
+        EmitPluginCalls(sb, plan, PluginHook.Start, "                    ");
         EmitPreCalls(sb, plan, direct, "                    ");
-        EmitPluginCalls(sb, plan, PluginStage.PreMainHandler, null, "                    ");
+        EmitPluginCalls(sb, plan, PluginHook.PreMain, "                    ");
         sb.Append("                    result = await ");
         AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
         sb.AppendLine(".HandleAsync(message, context);");
-        EmitPluginCalls(sb, plan, PluginStage.PostMainHandler, "result", "                    ");
+        EmitPluginCalls(sb, plan, PluginHook.PostMain, "                    ");
 
         if (!plan.PostCalls.IsEmpty)
         {
@@ -1513,21 +1521,23 @@ internal static class RegistrationEmitter
             }
         }
 
-        EmitPluginCalls(sb, plan, PluginStage.AfterPost, "result", "                    ");
+        EmitPluginCalls(sb, plan, PluginHook.Finish, "                    ");
         sb.AppendLine("                }");
         // A participant stopped the pipeline: nothing else runs — not the exception stage,
         // not the final stage — and the signal continues to the caller.
         sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
         sb.AppendLine("                {");
-        sb.AppendLine("                    aborted = true;");
+
+        if (hasFinalStage)
+        {
+            sb.AppendLine("                    aborted = true;");
+        }
+
         sb.AppendLine("                    throw;");
         sb.AppendLine("                }");
         sb.AppendLine("                catch (global::System.Exception e)");
         sb.AppendLine("                {");
         sb.AppendLine("                    exception = e;");
-        // See the void body: the observers run ahead of the interceptor stage so a swallowed
-        // exception is still an observed one.
-        EmitPluginCalls(sb, plan, PluginStage.OnException, "result", "                    ");
 
         if (plan.ExceptionCalls.IsEmpty)
         {
@@ -1551,13 +1561,18 @@ internal static class RegistrationEmitter
         }
 
         sb.AppendLine("                }");
-        sb.AppendLine("                finally");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    if (!aborted)");
-        sb.AppendLine("                    {");
-        EmitFinalCalls(sb, plan, direct, "result", "                        ");
-        sb.AppendLine("                    }");
-        sb.AppendLine("                }");
+
+        if (hasFinalStage)
+        {
+            sb.AppendLine("                finally");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    if (!aborted)");
+            sb.AppendLine("                    {");
+            EmitFinalCalls(sb, plan, direct, "result", "                        ");
+            sb.AppendLine("                    }");
+            sb.AppendLine("                }");
+        }
+
         sb.AppendLine();
         sb.AppendLine("                return result;");
     }
@@ -1659,8 +1674,7 @@ internal static class RegistrationEmitter
     {
         var resultExpression = plan.ResultTypeExpression!;
         var materializes = plan.ResultAdapterMaterializes;
-        var needsGuards = !plan.PostCalls.IsEmpty || !plan.ExceptionCalls.IsEmpty || !plan.FinalCalls.IsEmpty
-                          || !plan.PluginCalls.IsEmpty;
+        var needsGuards = !plan.PostCalls.IsEmpty || !plan.ExceptionCalls.IsEmpty || !plan.FinalCalls.IsEmpty;
 
         if (!needsGuards)
         {
@@ -1670,25 +1684,40 @@ internal static class RegistrationEmitter
             // absorb one and propagates unchanged otherwise.
             sb.AppendLine("                try");
             sb.AppendLine("                {");
+            EmitPluginCalls(sb, plan, PluginHook.Start, "                    ");
             EmitPreCalls(sb, plan, direct, "                    ");
+            EmitPluginCalls(sb, plan, PluginHook.PreMain, "                    ");
 
-            if (materializes)
+            if (materializes && plan.PluginCalls.IsEmpty)
             {
                 sb.Append("                    return await ");
                 AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
                 sb.AppendLine(".HandleAsync(message, context);");
+            }
+            else if (materializes)
+            {
+                // Observers stand between the handler and the return, so its result lands
+                // in a local first.
+                sb.Append("                    var handlerResult = await ");
+                AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
+                sb.AppendLine(".HandleAsync(message, context);");
+                EmitPluginCalls(sb, plan, PluginHook.PostMain, "                    ");
+                EmitPluginCalls(sb, plan, PluginHook.Finish, "                    ");
+                sb.AppendLine("                    return handlerResult;");
             }
             else
             {
                 sb.Append("                    var handlerResult = await ");
                 AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
                 sb.AppendLine(".HandleAsync(message, context);");
+                EmitPluginCalls(sb, plan, PluginHook.PostMain, "                    ");
                 sb.AppendLine();
                 sb.AppendLine("                    if (ResultAdapter.TryGetException(in handlerResult, out var carriedException) && carriedException is not null)");
                 sb.AppendLine("                    {");
                 sb.AppendLine("                        throw carriedException;");
                 sb.AppendLine("                    }");
                 sb.AppendLine();
+                EmitPluginCalls(sb, plan, PluginHook.Finish, "                    ");
                 sb.AppendLine("                    return handlerResult;");
             }
 
@@ -1725,15 +1754,15 @@ internal static class RegistrationEmitter
         sb.AppendLine("                {");
         sb.AppendLine("                    try");
         sb.AppendLine("                    {");
-        EmitPluginCalls(sb, plan, PluginStage.PipelineStart, null, "                        ");
+        EmitPluginCalls(sb, plan, PluginHook.Start, "                        ");
         EmitPreCalls(sb, plan, direct, "                        ");
-        EmitPluginCalls(sb, plan, PluginStage.PreMainHandler, null, "                        ");
+        EmitPluginCalls(sb, plan, PluginHook.PreMain, "                        ");
         sb.Append("                        result = await ");
         AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
         sb.AppendLine(".HandleAsync(message, context);");
         sb.AppendLine();
         EmitHandlerProbe(sb, plan, "                        ");
-        EmitPluginCalls(sb, plan, PluginStage.PostMainHandler, "result", "                        ");
+        EmitPluginCalls(sb, plan, PluginHook.PostMain, "                        ");
 
         if (!plan.PostCalls.IsEmpty)
         {
@@ -1759,12 +1788,12 @@ internal static class RegistrationEmitter
             sb.AppendLine("                        }");
         }
 
-        if (plan.HasPluginCalls(PluginStage.AfterPost))
+        if (plan.HasPluginCalls(PluginHook.Finish))
         {
             // The value channel may already carry a failure here; the observers see the
             // result the stage settled on either way, which is what the boundary means.
             sb.AppendLine();
-            EmitPluginCalls(sb, plan, PluginStage.AfterPost, "result", "                        ");
+            EmitPluginCalls(sb, plan, PluginHook.Finish, "                        ");
         }
 
         sb.AppendLine("                    }");
@@ -1782,17 +1811,6 @@ internal static class RegistrationEmitter
         }
 
         sb.AppendLine("                    }");
-
-        if (plan.HasPluginCalls(PluginStage.OnException))
-        {
-            // Its own branch, ahead of the interceptor stage: the adapted body reaches this
-            // point on a carried failure too, and the observer is told either way.
-            sb.AppendLine();
-            sb.AppendLine("                    if (exception is not null)");
-            sb.AppendLine("                    {");
-            EmitPluginCalls(sb, plan, PluginStage.OnException, "result", "                        ");
-            sb.AppendLine("                    }");
-        }
 
         if (!plan.ExceptionCalls.IsEmpty)
         {
