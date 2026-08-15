@@ -42,12 +42,20 @@ dotnet test
 * Write unit tests wherever possible.
 * Ensure event-driven code uses `HubEvent` and `ProxyEvent<T>` where applicable.
 
-### 5. Security
+### 5. AI-Assisted Contributions
+
+AI assistance is welcome — the maintainers use it too. Four rules apply: an assistant is a
+co-developer and never the responsible party; architectural decisions stay with the developer,
+who decides what is built and where, while the tool at most implements it; declaring AI
+assistance is recommended rather than required; and every line is reviewed by a human before
+it merges. See the [AI policy](AI_POLICY.md) for what that review looks for.
+
+### 6. Security
 
 * Only submit code you trust.
 * Follow the [security policy](SECURITY.md) for any sensitive fixes.
 
-### 6. Review Process
+### 7. Review Process
 
 * PRs will be reviewed by the maintainers.
 * You may be asked to clarify or modify your code before merging.
