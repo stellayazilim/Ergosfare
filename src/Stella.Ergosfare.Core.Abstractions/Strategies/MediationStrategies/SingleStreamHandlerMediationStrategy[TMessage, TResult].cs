@@ -108,11 +108,11 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         await using var enumerator = enumerable.GetAsyncEnumerator(cancellationToken);
         while (_consume)
         {
-            TResult? item = default;
+            var item = default(TResult)!;
             try
             {
                 _consume = await enumerator.MoveNextAsync().ConfigureAwait(false);
-                item = _consume ? enumerator.Current : default;
+                item = _consume ? enumerator.Current : default!;
             }
             catch (ExecutionAbortedException)
             {
@@ -126,7 +126,11 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
                 _consume = false;
                 _unknownException = exception;
             }
-            if (item is not null && _consume && _unknownException is null)
+            // `_consume` is the answer to "did MoveNextAsync produce an element", and the
+            // only one: `null` is a legitimate element of an IAsyncEnumerable<T?>, so
+            // testing the item for null would silently drop it from the middle of the
+            // sequence — the caller receiving a well-formed but shorter stream.
+            if (_consume && _unknownException is null)
                 yield return item;
             if (!_consume || _unknownException is not null)
             {

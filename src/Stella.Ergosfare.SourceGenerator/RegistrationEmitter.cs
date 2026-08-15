@@ -1,4 +1,4 @@
-﻿
+
 using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis.CSharp;
@@ -1094,10 +1094,14 @@ internal static class RegistrationEmitter
     }
 
     /// <summary>
-    ///     Emits the plan's main-handler calls: the directly registered segment, then the
-    ///     covariantly matched one. A single-handler pipeline is the same code with one
-    ///     entry and an empty second segment.
+    ///     Emits the plan's main-handler calls: the directly registered segment, and — for a
+    ///     broadcast, which delivers to everyone — the covariantly matched one after it.
     /// </summary>
+    /// <remarks>
+    ///     A single-handler plan carries its covariant segment for the gate and calls none of
+    ///     it: the priority ladder gives the message to its direct handler outright, so a
+    ///     covariant handler is present in the composition without being part of the delivery.
+    /// </remarks>
     /// <remarks>
     ///     The pre- and post-handler plugin boundaries are emitted <b>per handler</b>: they
     ///     name the seam around a handler, and a broadcast has one such seam per delivery.
@@ -1107,7 +1111,11 @@ internal static class RegistrationEmitter
     private static void EmitHandlerCalls(StringBuilder sb, StagedPlanModel plan, bool direct, string indent)
     {
         EmitHandlerSegment(sb, plan, plan.Handlers, direct, indent);
-        EmitHandlerSegment(sb, plan, plan.IndirectHandlers, direct, indent);
+
+        if (plan.IsBroadcast)
+        {
+            EmitHandlerSegment(sb, plan, plan.IndirectHandlers, direct, indent);
+        }
     }
 
     private static void EmitHandlerSegment(
@@ -1988,26 +1996,6 @@ internal static class RegistrationEmitter
         sb.AppendLine();
         sb.AppendLine("            return string.Equals(key, discoveryKeyPattern, global::System.StringComparison.Ordinal);");
         sb.AppendLine("        }");
-    }
-
-    /// <summary>
-    ///     A group of types sharing the same effective discovery-key set, emitted under a
-    ///     single key-match guard. Untagged types form the default cluster (the implicit
-    ///     empty-string key), which sorts first.
-    /// </summary>
-    private sealed class Cluster
-    {
-        public Cluster(string signature, List<string> keys)
-        {
-            Signature = signature;
-            Keys = keys;
-        }
-
-        public string Signature { get; }
-
-        public List<string> Keys { get; }
-
-        public List<RegistrableTypeModel> Types { get; } = [];
     }
 
     private static List<Cluster> BuildClusters(IReadOnlyList<RegistrableTypeModel> types)

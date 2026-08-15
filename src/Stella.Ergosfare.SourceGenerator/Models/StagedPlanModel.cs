@@ -3,27 +3,6 @@ using System.Collections.Immutable;
 namespace Stella.Ergosfare.SourceGenerator.Models;
 
 /// <summary>
-///     One main handler of a staged plan, with the construction expression the
-///     direct-construction variant uses when the participant qualifies.
-/// </summary>
-/// <remarks>
-///     No pattern-match arm travels with a handler the way it does with an interceptor
-///     (<see cref="StagedCallModel"/>): a plan is only computed when every handler is the
-///     asynchronous contract, so the emitted call is always the same member on the concrete
-///     type. Anything else disqualifies the plan and the runtime strategy serves the message.
-/// </remarks>
-internal readonly record struct StagedHandlerModel(
-    string TypeExpression,
-    string? ConstructionExpression,
-    string? GroupGuard = null);
-
-/// <summary>
-///     One group test a filtering plan evaluates once at the top of its body: the local's
-///     name and the call that fills it.
-/// </summary>
-internal readonly record struct StagedGroupGuardModel(string Name, string Expression);
-
-/// <summary>
 ///     A staged pipeline plan ready for emission: a message whose whole discovered
 ///     pipeline — its main handlers plus at least one interceptor stage or plugin call —
 ///     could be modeled exactly, with every stage in the runtime shape-builder's execution
@@ -35,8 +14,9 @@ internal readonly record struct StagedGroupGuardModel(string Name, string Expres
 /// <remarks>
 ///     Handlers are two segments because a broadcast serves all of them, directly registered
 ///     ones first and covariantly matched ones after. A command or query plan is the same
-///     shape with one direct handler and an empty indirect segment, which is what lets one
-///     emission path and one runtime gate serve both.
+///     shape with one direct handler, which is what lets one emission path and one runtime
+///     gate serve both — it carries its covariant segment too, for the gate, and delivers to
+///     the direct handler alone as the priority ladder prescribes.
 /// </remarks>
 internal sealed record StagedPlanModel(
     string MessageTypeExpression,

@@ -47,6 +47,68 @@ public class StagedPlanEmissionTests
             result.GeneratedSource);
     }
 
+    /// <summary>
+    ///     A handler on one of the message's base contracts is the recommended cross-cutting
+    ///     idiom, and the priority ladder resolves it without hesitation: the direct handler
+    ///     serves the message, the covariant one is its fallback. So the message is plannable
+    ///     — the plan delivers to the direct handler alone, and carries the covariant one in
+    ///     its composition because that is what the gate compares the live pipeline against.
+    /// </summary>
+    [Fact]
+    public void CovariantSibling_KeepsThePlanAndEntersItsComposition()
+    {
+        var result = GeneratorTestHost.Run("""
+            using Stella.Ergosfare.Commands.Abstractions;
+            using Stella.Ergosfare.Core.Abstractions;
+            using System.Threading.Tasks;
+
+            namespace TestApp
+            {
+                public interface IAuditedCommand : ICommand;
+
+                public sealed record TransferMoney : ICommand, IAuditedCommand;
+
+                public sealed class TransferMoneyHandler : ICommandHandler<TransferMoney>
+                {
+                    public ValueTask HandleAsync(TransferMoney message, ErgosfareContext context) => default;
+                }
+
+                public sealed class AuditedCommandHandler : ICommandHandler<IAuditedCommand>
+                {
+                    public ValueTask HandleAsync(IAuditedCommand message, ErgosfareContext context) => default;
+                }
+
+                public sealed class TransferMoneyPre : ICommandPreInterceptor<TransferMoney>
+                {
+                    public ValueTask<TransferMoney> HandleAsync(TransferMoney message, ErgosfareContext context)
+                        => ValueTask.FromResult(message);
+                }
+            }
+            """);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.CompilationErrors);
+
+        Assert.Contains(
+            "GeneratedDispatchRoots.AddStagedPlan<global::TestApp.TransferMoney>(new StagedPlan0());",
+            result.GeneratedSource);
+
+        // The covariant handler is in the composition the plan is gated on — and in the
+        // second segment, the covariant one. Omitting it would have the gate refuse the plan
+        // on every pipeline that has a base-contract handler.
+        Assert.Contains(
+            "new global::System.Type[] { typeof(global::TestApp.TransferMoneyHandler) },\n"
+            + "                new global::System.Type[] { typeof(global::TestApp.AuditedCommandHandler) }",
+            result.GeneratedSource.Replace("\r\n", "\n"));
+
+        // And it is not delivered to: the direct handler is the only main-handler call in
+        // the body, exactly as the ladder prescribes.
+        Assert.Contains("typeof(global::TestApp.TransferMoneyHandler)", result.GeneratedSource);
+        Assert.DoesNotContain(
+            "global::TestApp.AuditedCommandHandler>().HandleAsync(message, context);",
+            result.GeneratedSource);
+    }
+
     [Fact]
     public void WeightAndSegmentOrdering_BakesTheRuntimeOrder()
     {

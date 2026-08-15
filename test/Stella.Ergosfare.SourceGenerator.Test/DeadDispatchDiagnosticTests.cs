@@ -476,9 +476,12 @@ public class DeadDispatchDiagnosticTests
 
         Assert.Empty(result.CompilationErrors);
 
-        // A runtime-computed Register argument is unknowable at compile time: coverage
-        // evidence is incomplete by construction, so no dead-dispatch verdict is sound.
-        Assert.Empty(result.GeneratorDiagnostics);
+        // The unknowable registration is itself the finding (ERGOSG018) — and it is the
+        // only one: coverage evidence is incomplete by construction, so no dead-dispatch
+        // verdict over it would be sound. Reporting the cause and staying silent about its
+        // consequences is the whole point of keeping the site opaque as well as reported.
+        var diagnostic = Assert.Single(result.GeneratorDiagnostics);
+        Assert.Equal("ERGOSG018", diagnostic.Id);
     }
 
     [Fact]

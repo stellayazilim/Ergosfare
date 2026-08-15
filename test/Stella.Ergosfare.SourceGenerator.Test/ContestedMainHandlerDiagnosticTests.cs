@@ -78,6 +78,15 @@ public class ContestedMainHandlerDiagnosticTests
         // The direct level wins outright at runtime, so this shape is legal — the base
         // handler is Entry's fallback and EntryBase's own direct handler.
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGOSG010");
+
+        // Legal has to mean planned. Asserting the diagnostic alone let the two layers
+        // disagree for a release: no error, and no plan either — the ladder honoured by the
+        // runtime and contradicted by plan emission, silently, for the recommended
+        // base-contract-handler idiom.
+        // (EntryBase is abstract, so nothing dispatches it and it has no plan of its own.)
+        Assert.Contains(
+            "AddVoidPlan<global::TestApp.Entry, global::TestApp.EntryHandler>",
+            result.GeneratedSource);
     }
 
     [Fact]
