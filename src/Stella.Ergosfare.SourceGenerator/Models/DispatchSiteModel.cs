@@ -36,7 +36,7 @@ internal readonly struct DispatchSiteModel : IEquatable<DispatchSiteModel>
     ///     Whether the static type proves nothing about the concrete message: the bare
     ///     module marker, <c>IMessage</c>, <c>object</c>, or an unconstrained type
     ///     parameter. Opaque sites still contribute to reachability conservatively;
-    ///     opacity only drives the strict-mode ERGOSG009 diagnostic.
+    ///     opacity only drives the strict-mode ERGO009 diagnostic.
     /// </summary>
     public required bool IsOpaque { get; init; }
 

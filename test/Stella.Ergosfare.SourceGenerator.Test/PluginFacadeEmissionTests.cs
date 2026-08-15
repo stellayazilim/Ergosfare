@@ -322,7 +322,7 @@ public class PluginFacadeEmissionTests
 
         var diagnostic = Assert.Single(result.GeneratorDiagnostics);
 
-        Assert.Equal("ERGOSG017", diagnostic.Id);
+        Assert.Equal("ERGO017", diagnostic.Id);
         Assert.Contains("TracingOptions", diagnostic.GetMessage());
 
         // Still registered — the plugin works, it just never sees the settings.

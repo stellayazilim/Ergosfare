@@ -86,7 +86,7 @@ public class MonomorphizedParticipantTests
     }
 
     /// <summary>
-    ///     Once a participant closes over something, it is no longer the shape ERGOSG016
+    ///     Once a participant closes over something, it is no longer the shape ERGO016
     ///     reports — that diagnostic is for a participant that runs for no message at all.
     /// </summary>
     [Fact]
@@ -96,7 +96,7 @@ public class MonomorphizedParticipantTests
         var result = GeneratorTestHost.Run(TwoCommandsOneOpenInterceptor);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGOSG016");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO016");
     }
 
     /// <summary>
@@ -147,7 +147,7 @@ public class MonomorphizedParticipantTests
 
     /// <summary>
     ///     A participant whose constraint no message satisfies closes over nothing, so it
-    ///     keeps ERGOSG016: it was registered and it still runs for no message.
+    ///     keeps ERGO016: it was registered and it still runs for no message.
     /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
@@ -172,6 +172,6 @@ public class MonomorphizedParticipantTests
             """);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "ERGOSG016");
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "ERGO016");
     }
 }

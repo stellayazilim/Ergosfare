@@ -5,7 +5,7 @@ namespace Stella.Ergosfare.Core.Abstractions.DispatchSites;
 /// manifest support — including when the assembly contains no dispatch site at all. Its
 /// presence is what lets an aggregating composition root distinguish "this assembly truly
 /// dispatches nothing" from "this assembly predates manifests (or was built without the
-/// generator), so its dispatch sites are unknown". Unreachable-handler judgment (ERGOSG007)
+/// generator), so its dispatch sites are unknown". Unreachable-handler judgment (ERGO007)
 /// and compile-time handler trimming stay silent while any Ergosfare-referencing assembly
 /// in the closure lacks the marker.
 /// </summary>
@@ -20,7 +20,7 @@ public sealed class DispatchManifestAttribute(int version) : Attribute
     /// Whether the assembly performs registrations whose types cannot be statically known
     /// (a non-<c>typeof</c> <c>Type</c> argument, descriptor batches, or the legacy
     /// assembly scan of older packages). Coverage evidence is then incomplete by
-    /// construction, so composition roots suspend dead-dispatch judgment (ERGOSG005/006)
+    /// construction, so composition roots suspend dead-dispatch judgment (ERGO005/006)
     /// closure-wide.
     /// </summary>
     public bool HasOpaqueRegistrations { get; set; }

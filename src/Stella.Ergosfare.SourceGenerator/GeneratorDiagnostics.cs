@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis;
 namespace Stella.Ergosfare.SourceGenerator;
 
 /// <summary>
-///     Diagnostics reported by the Ergosfare source generator (ERGOSG prefix).
+///     Diagnostics reported by the Ergosfare source generator (ERGO prefix).
 /// </summary>
 internal static class GeneratorDiagnostics
 {
@@ -13,7 +13,7 @@ internal static class GeneratorDiagnostics
     ///     warning rather than silent divergence from what the declaration promises.
     /// </summary>
     public static readonly DiagnosticDescriptor InaccessibleRegistrableType = new(
-        id: "ERGOSG001",
+        id: "ERGO001",
         title: "Registrable type is not accessible from generated registration code",
         messageFormat:
             "Type '{0}' implements an Ergosfare marker interface but is private, protected, or file-local, " +
@@ -30,7 +30,7 @@ internal static class GeneratorDiagnostics
     ///     warning rather than silent divergence from what the declaration promises.
     /// </summary>
     public static readonly DiagnosticDescriptor InvisibleReferencedRegistrableType = new(
-        id: "ERGOSG002",
+        id: "ERGO002",
         title: "Registrable type in a referenced assembly is not visible to generated registration code",
         messageFormat:
             "Type '{0}' in referenced assembly '{1}' implements an Ergosfare marker interface but is not visible " +
@@ -48,7 +48,7 @@ internal static class GeneratorDiagnostics
     ///     construction fast path is lost.
     /// </summary>
     public static readonly DiagnosticDescriptor MultiplePublicConstructors = new(
-        id: "ERGOSG003",
+        id: "ERGO003",
         title: "Multiple public constructors keep the handler on the container path",
         messageFormat:
             "Handler '{0}' has more than one public constructor, so generated plans cannot prove which one the " +
@@ -65,7 +65,7 @@ internal static class GeneratorDiagnostics
     ///     is not there.
     /// </summary>
     public static readonly DiagnosticDescriptor FromServicesOnConstructor = new(
-        id: "ERGOSG004",
+        id: "ERGO004",
         title: "[FromServices] has no effect on constructor parameters",
         messageFormat:
             "Type '{0}' carries [FromServices] on a constructor parameter, where it has no effect — constructor " +
@@ -83,7 +83,7 @@ internal static class GeneratorDiagnostics
     ///     not compile around a provably dead dispatch.
     /// </summary>
     public static readonly DiagnosticDescriptor DeadDispatch = new(
-        id: "ERGOSG005",
+        id: "ERGO005",
         title: "Dispatch can never reach a handler",
         messageFormat:
             "This dispatch of '{0}' can never reach a handler: neither '{0}' nor any of its subtypes in the " +
@@ -99,7 +99,7 @@ internal static class GeneratorDiagnostics
     ///     exactly the static type fails at runtime even though subtype instances succeed.
     /// </summary>
     public static readonly DiagnosticDescriptor UncoveredStaticDispatch = new(
-        id: "ERGOSG006",
+        id: "ERGO006",
         title: "Only subtypes of the dispatched static type are handled",
         messageFormat:
             "The static message type '{0}' of this dispatch has no covering handler; only subtype(s) such as " +
@@ -117,11 +117,11 @@ internal static class GeneratorDiagnostics
     ///     the judgment stays silent).
     /// </summary>
     public static readonly DiagnosticDescriptor UnreachableHandler = new(
-        id: "ERGOSG007",
+        id: "ERGO007",
         title: "No dispatch site can reach this handler",
         messageFormat:
             "Handler '{0}' handles '{1}', but no dispatch site in the compiled closure can deliver that " +
-            "message{2} — the handler never executes. Suppress ERGOSG007 if the registration is deliberate, or " +
+            "message{2} — the handler never executes. Suppress ERGO007 if the registration is deliberate, or " +
             "set ErgosfareTrimUnusedHandlers=true to exclude such handlers from generated registration.",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Warning,
@@ -133,7 +133,7 @@ internal static class GeneratorDiagnostics
     ///     the linker drop it. Informational so the exclusion is visible in build logs.
     /// </summary>
     public static readonly DiagnosticDescriptor TrimmedUnreachableHandler = new(
-        id: "ERGOSG008",
+        id: "ERGO008",
         title: "Unreachable handler excluded from generated registration",
         messageFormat:
             "Handler '{0}' was excluded from generated registration because no dispatch site in the compiled " +
@@ -148,10 +148,10 @@ internal static class GeneratorDiagnostics
     ///     unconstrained type parameter), so compile-time reachability proofs degrade to
     ///     closure-wide aggregates there. Teams wanting every dispatch statically provable
     ///     raise the severity via .editorconfig
-    ///     (<c>dotnet_diagnostic.ERGOSG009.severity = warning</c>).
+    ///     (<c>dotnet_diagnostic.ERGO009.severity = warning</c>).
     /// </summary>
     public static readonly DiagnosticDescriptor OpaqueDispatchSite = new(
-        id: "ERGOSG009",
+        id: "ERGO009",
         title: "Dispatch site's static message type is opaque",
         messageFormat:
             "The static message type at this dispatch site is '{0}', which proves nothing about which concrete " +
@@ -171,7 +171,7 @@ internal static class GeneratorDiagnostics
     ///     registrations are container choices the compiler cannot prove co-registered.
     /// </summary>
     public static readonly DiagnosticDescriptor ContestedMainHandlers = new(
-        id: "ERGOSG010",
+        id: "ERGO010",
         title: "Multiple main handlers claim the same message at the same level",
         messageFormat:
             "Message '{0}' is claimed by {1} main handlers at the same {2} level ({3}) — the priority ladder has " +
@@ -189,7 +189,7 @@ internal static class GeneratorDiagnostics
     ///     pipeline would silently never deliver (or crash delivering).
     /// </summary>
     public static readonly DiagnosticDescriptor UnbindableResultAdapter = new(
-        id: "ERGOSG011",
+        id: "ERGO011",
         title: "Result adapter annotation can never bind",
         messageFormat:
             "The result adapter '{0}' declared on message '{1}' can never bind: {2}. The adapter must implement " +
@@ -206,7 +206,7 @@ internal static class GeneratorDiagnostics
     ///     remove one of the two.
     /// </summary>
     public static readonly DiagnosticDescriptor ConflictingResultAdapterAnnotations = new(
-        id: "ERGOSG012",
+        id: "ERGO012",
         title: "Conflicting result-adapter annotations",
         messageFormat:
             "Message '{0}' carries both [ResultAdapter] and [IgnoreResultAdapter] (own or inherited) — it declares " +
@@ -223,10 +223,10 @@ internal static class GeneratorDiagnostics
     ///     a default declares value-based error handling as the application's contract,
     ///     and a message that silently cannot participate is a design hole. The
     ///     per-message escape is <c>[IgnoreResultAdapter]</c>, which acknowledges the
-    ///     throwing pipeline and downgrades the finding to ERGOSG014.
+    ///     throwing pipeline and downgrades the finding to ERGO014.
     /// </summary>
     public static readonly DiagnosticDescriptor UnservedByDefaultResultAdapter = new(
-        id: "ERGOSG013",
+        id: "ERGO013",
         title: "Result type is not served by the configured default result adapter",
         messageFormat:
             "Message '{0}' declares result type '{1}', which the configured default result adapter '{2}' cannot " +
@@ -238,14 +238,14 @@ internal static class GeneratorDiagnostics
         isEnabledByDefault: true);
 
     /// <summary>
-    ///     The acknowledged twin of ERGOSG013: the message opted out via
+    ///     The acknowledged twin of ERGO013: the message opted out via
     ///     <c>[IgnoreResultAdapter]</c> while the application's default result adapter
     ///     cannot serve its result type anyway — a deliberate throwing pipeline inside a
     ///     value-channel application, kept visible as a warning. Suppressible through the
     ///     standard channels when the acknowledgment itself is considered enough.
     /// </summary>
     public static readonly DiagnosticDescriptor AcknowledgedThrowingPipeline = new(
-        id: "ERGOSG014",
+        id: "ERGO014",
         title: "Opted-out message keeps a throwing pipeline",
         messageFormat:
             "Message '{0}' opted out of result adaptation and its result type '{1}' is not served by the configured " +
@@ -263,7 +263,7 @@ internal static class GeneratorDiagnostics
     ///     is a silent no-op, which is the worst failure mode a plugin ecosystem can have.
     /// </summary>
     public static readonly DiagnosticDescriptor PluginUnderReservedPrefix = new(
-        id: "ERGOSG015",
+        id: "ERGO015",
         title: "Plugin assembly is excluded from reference scanning by the reserved name prefix",
         messageFormat:
             "Assembly '{0}' declares Ergosfare plugin methods but its name matches the reserved 'Stella.Ergosfare' " +
@@ -292,7 +292,7 @@ internal static class GeneratorDiagnostics
     ///     </para>
     /// </remarks>
     internal static readonly DiagnosticDescriptor GenericParticipantNeverBinds = new(
-        id: "ERGOSG016",
+        id: "ERGO016",
         title: "Generic participant closes over no message and never executes",
         messageFormat:
             "'{0}' takes its message as a type parameter and no compiled message satisfies its constraint, so it " +
@@ -316,7 +316,7 @@ internal static class GeneratorDiagnostics
     ///     author declared settings and this service silently ignores them.
     /// </remarks>
     internal static readonly DiagnosticDescriptor PluginServiceCannotReceiveOptions = new(
-        id: "ERGOSG017",
+        id: "ERGO017",
         title: "Plugin service cannot receive the plugin's options",
         messageFormat:
             "'{0}' carries plugin hook methods and its plugin declares options of type '{1}', but the service has no " +
@@ -342,7 +342,7 @@ internal static class GeneratorDiagnostics
     ///     the registration, not the dispatch that later looks dead.
     /// </remarks>
     internal static readonly DiagnosticDescriptor UnknownRegisteredType = new(
-        id: "ERGOSG018",
+        id: "ERGO018",
         title: "Registered type is not known at compile time",
         messageFormat:
             "This registration names its type at run time, which the closed-world model cannot follow — the type gets " +

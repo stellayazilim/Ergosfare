@@ -158,7 +158,7 @@ public sealed class BasicDispatchTests
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
         // Deliberate dead dispatch: this contract pins the runtime failure mode that
-        // ERGOSG005 exists to prove at compile time. The verdict is suppressed for this
+        // ERGO005 exists to prove at compile time. The verdict is suppressed for this
         // project via NoWarn in the csproj (errors cannot be pragma-suppressed).
         await Assert.ThrowsAsync<NoHandlerFoundException>(
             async () => await mediator.SendAsync(new NeverRegisteredCommand()));

@@ -98,7 +98,7 @@ internal static class Monomorphizer
     ///     that message's pipeline.
     ///     </para>
     ///     <para>
-    ///     A participant that closes over nothing keeps ERGOSG016: it was registered and it
+    ///     A participant that closes over nothing keeps ERGO016: it was registered and it
     ///     still runs for no message.
     ///     </para>
     /// </remarks>
@@ -331,7 +331,7 @@ internal static class Monomorphizer
             ExcludedInterceptorGroups = ParticipantAttributes.GetPipelineExclusionGroups(openDefinition),
             IsValueType = closed.IsValueType,
             IsNestedType = closed.ContainingType is not null,
-            // Bound, so no longer the shape ERGOSG016 reports.
+            // Bound, so no longer the shape ERGO016 reports.
             IsGenericParticipant = false,
             MonomorphizedFrom = SymbolNaming.BuildTypeofExpression(openDefinition),
             AssignableKeys = ImmutableArray<string>.Empty,

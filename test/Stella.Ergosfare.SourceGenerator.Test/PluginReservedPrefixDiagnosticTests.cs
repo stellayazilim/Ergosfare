@@ -3,7 +3,7 @@ using System.Linq;
 namespace Stella.Ergosfare.SourceGenerator.Test;
 
 /// <summary>
-///     ERGOSG015: a plugin package named under the reserved <c>Stella.Ergosfare</c> prefix is
+///     ERGO015: a plugin package named under the reserved <c>Stella.Ergosfare</c> prefix is
 ///     excluded from reference scanning like the library's own assemblies, which turns it
 ///     into a silent no-op. The exclusion stays; the silence does not.
 /// </summary>
@@ -61,7 +61,7 @@ public class PluginReservedPrefixDiagnosticTests
         """;
 
     private static bool HasErgosg015(GeneratorTestHost.GeneratorRunResult result)
-        => result.GeneratorDiagnostics.Any(d => d.Id == "ERGOSG015");
+        => result.GeneratorDiagnostics.Any(d => d.Id == "ERGO015");
 
     [Fact]
     public void PluginUnderTheReservedPrefix_WithoutOptIn_IsReported()
@@ -72,7 +72,7 @@ public class PluginReservedPrefixDiagnosticTests
 
         Assert.True(HasErgosg015(result));
 
-        var diagnostic = result.GeneratorDiagnostics.Single(d => d.Id == "ERGOSG015");
+        var diagnostic = result.GeneratorDiagnostics.Single(d => d.Id == "ERGO015");
 
         Assert.Contains("Stella.Ergosfare.Plugins.Tracing", diagnostic.GetMessage());
         Assert.Contains("ErgosfareSourceGeneratorForceScanReferences", diagnostic.GetMessage());

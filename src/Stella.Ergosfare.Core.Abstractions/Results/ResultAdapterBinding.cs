@@ -23,10 +23,10 @@ namespace Stella.Ergosfare.Core.Abstractions.Results;
 /// The attribute tiers resolve once per closed pair into a static generic slot, so
 /// dispatch paths only ever read a field; the default tier is per-container and cached by
 /// the callers that consult it. Both attributes are inherited; declaring both on one
-/// message (own or inherited) fails the build (ERGOSG012) — against assemblies compiled
+/// message (own or inherited) fails the build (ERGO012) — against assemblies compiled
 /// before that rule, the opt-out wins here. This is the runtime mirror of a compile-time
 /// fact: the source generator bakes the same attribute-tier binding into execution plans
-/// and fails the build on a mismatched annotation (ERGOSG011).
+/// and fails the build on a mismatched annotation (ERGO011).
 /// </remarks>
 public static class ResultAdapterBinding
 {
@@ -80,7 +80,7 @@ public static class ResultAdapterBinding
         {
             // One walk over the base chain for both attributes — the runtime mirror of
             // GetCustomAttribute's inheritance. The opt-out wins over an annotation from
-            // any level: in-source the combination is ERGOSG012 and never compiles, so
+            // any level: in-source the combination is ERGO012 and never compiles, so
             // this arbitration only ever serves assemblies compiled before that rule.
             var ignored = false;
             ResultAdapterAttribute? annotation = null;

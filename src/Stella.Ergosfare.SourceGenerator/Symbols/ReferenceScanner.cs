@@ -180,7 +180,7 @@ internal static class ReferenceScanner
     ///     on <see cref="INamedTypeSymbol"/>. Types the generated code cannot name —
     ///     internal without an <c>InternalsVisibleTo</c> grant, protected or private
     ///     nested, or compiler-mangled (file-local) — flow through as inaccessible and
-    ///     surface as ERGOSG002.
+    ///     surface as ERGO002.
     /// </summary>
     internal static RegistrableTypeModel? TryCreateReferencedModel(
         INamedTypeSymbol symbol,
@@ -214,7 +214,7 @@ internal static class ReferenceScanner
         var dispatchResults = isDispatchable ? ContractReader.GetDispatchResults(symbol) : ImmutableArray<DispatchResultModel>.Empty;
 
         // Referenced adapters get no current-assembly grant either: baking qualifies only
-        // over fully public adapter types. ERGOSG011/012 never fire here (the annotations
+        // over fully public adapter types. ERGO011/012 never fire here (the annotations
         // were judged where the message was compiled); the model only feeds the plan binding.
         var referencedHasIgnore = false;
         var resultAdapter = isDispatchable

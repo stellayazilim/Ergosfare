@@ -17,7 +17,7 @@ public class TypedEngineDispatchTests
 {
     public sealed class TypedProbeCommand : ICommand { }
 
-    // ERGOSG007 (suppressed in the csproj): delivered through the engine's typed dispatch
+    // ERGO007 (suppressed in the csproj): delivered through the engine's typed dispatch
     // overloads below, which the closed-world dispatch-site analysis cannot see.
     public sealed class TypedProbeCommandHandler : ICommandHandler<TypedProbeCommand>
     {
@@ -32,7 +32,7 @@ public class TypedEngineDispatchTests
 
     public sealed class IdentityProbeCommand : ICommand { }
 
-    // ERGOSG007 (suppressed in the csproj): delivered through the engine's typed dispatch
+    // ERGO007 (suppressed in the csproj): delivered through the engine's typed dispatch
     // overloads below.
     public sealed class IdentityProbeCommandHandler : ICommandHandler<IdentityProbeCommand>
     {

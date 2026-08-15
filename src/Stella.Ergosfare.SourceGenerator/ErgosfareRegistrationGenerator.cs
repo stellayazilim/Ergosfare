@@ -40,7 +40,7 @@ namespace Stella.Ergosfare.SourceGenerator;
 ///     marker), and Ergosfare's own assemblies are excluded because their handler contract
 ///     interfaces inherit the module markers. Types the generated code cannot name —
 ///     internal without <c>InternalsVisibleTo</c> covering this compilation — surface as
-///     ERGOSG002 instead of diverging silently from the runtime scan. Opt out per project
+///     ERGO002 instead of diverging silently from the runtime scan. Opt out per project
 ///     with the <c>ErgosfareSourceGeneratorScanReferences=false</c> MSBuild property.
 ///     </para>
 /// </remarks>

@@ -1,4 +1,4 @@
-﻿
+
 using System.Collections.Immutable;
 
 namespace Stella.Ergosfare.SourceGenerator.Models;
@@ -37,7 +37,7 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     /// <summary>
     ///     Whether generated code (a sibling type in the same assembly) can reference the
     ///     type; private/protected nested and file-local types cannot be registered and are
-    ///     reported via <c>ERGOSG001</c> instead.
+    ///     reported via <c>ERGO001</c> instead.
     /// </summary>
     public required bool IsAccessible { get; init; }
 
@@ -73,7 +73,7 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     /// <summary>
     ///     Name of the referenced assembly the type was discovered in, or <c>null</c> when
     ///     the type is declared in the current compilation. Selects between the
-    ///     ERGOSG001 (source) and ERGOSG002 (reference) diagnostics for inaccessible types.
+    ///     ERGO001 (source) and ERGO002 (reference) diagnostics for inaccessible types.
     /// </summary>
     public required string? ReferencedAssemblyName { get; init; }
 
@@ -164,7 +164,7 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     ///     names a bare type parameter as its message. It registers like any other
     ///     participant and then appears in no pipeline — participants are matched to
     ///     messages by concrete type, and a concrete message carries no generic arguments
-    ///     to close this one over. It never executes, and until ERGOSG016 it never said so.
+    ///     to close this one over. It never executes, and until ERGO016 it never said so.
     /// </summary>
     /// <remarks>
     ///     Not every generic participant: one whose contract's message type is built from
@@ -180,7 +180,7 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     /// </summary>
     /// <remarks>
     ///     The link back matters for exactly one thing: a definition that closed over at
-    ///     least one message is not the shape ERGOSG016 reports, and the only way to know is
+    ///     least one message is not the shape ERGO016 reports, and the only way to know is
     ///     to see whether anything came out of it.
     /// </remarks>
     public string? MonomorphizedFrom { get; init; }
@@ -217,20 +217,20 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
 
     /// <summary>
     ///     Whether a pipeline participant declares more than one public constructor —
-    ///     the ERGOSG003 info: the container's constructor selection stays in play, so
+    ///     the ERGO003 info: the container's constructor selection stays in play, so
     ///     generated plans skip the direct-construction fast path.
     /// </summary>
     public required bool HasMultiplePublicConstructors { get; init; }
 
     /// <summary>
     ///     Whether any constructor parameter carries <c>[FromServices]</c> — the
-    ///     ERGOSG004 info: the attribute has no effect on constructors.
+    ///     ERGO004 info: the attribute has no effect on constructors.
     /// </summary>
     public required bool HasFromServicesConstructorParameter { get; init; }
 
     /// <summary>
     ///     Declaration location for the informational diagnostics above and the
-    ///     unreachable-handler diagnostics (ERGOSG007/008); captured for source-declared
+    ///     unreachable-handler diagnostics (ERGO007/008); captured for source-declared
     ///     types when one of the constructor infos applies or the type carries handler
     ///     contracts.
     /// </summary>
@@ -256,7 +256,7 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
 
     /// <summary>
     ///     The message's <c>[ResultAdapter]</c> annotation (its own or an inherited one),
-    ///     projected for the staged plans' baked binding and the ERGOSG011 judgment.
+    ///     projected for the staged plans' baked binding and the ERGO011 judgment.
     ///     <c>null</c> for unannotated types and for non-dispatchable ones — captured only
     ///     where the runtime binding would consult it.
     /// </summary>
@@ -267,7 +267,7 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     ///     inherited one): every adapter tier — annotation, native, configured default —
     ///     is suppressed and the pipelines keep the classic try/catch semantics.
     ///     Combined with an effective <see cref="ResultAdapter"/> annotation, the
-    ///     contradiction is ERGOSG012.
+    ///     contradiction is ERGO012.
     /// </summary>
     public required bool HasIgnoredResultAdapter { get; init; }
 

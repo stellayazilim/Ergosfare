@@ -405,7 +405,7 @@ public class ResultAdapterPlanEmissionTests
             }
 
             // A slot the default cannot unify with: no adapter, classic emission — and
-            // the visible ERGOSG013 acknowledgment request.
+            // the visible ERGO013 acknowledgment request.
             public sealed record UnservedPing : ICommand<string>;
 
             public sealed class UnservedPingHandler : ICommandHandler<UnservedPing, string>
@@ -428,7 +428,7 @@ public class ResultAdapterPlanEmissionTests
         // design-hole error. The native slot and the opted-out (default-served) slot
         // stay silent.
         var diagnostic = Assert.Single(result.GeneratorDiagnostics);
-        Assert.Equal("ERGOSG013", diagnostic.Id);
+        Assert.Equal("ERGO013", diagnostic.Id);
 
         // Native slot bakes the built-in adapter; the ignored and unserved slots bake
         // nothing.

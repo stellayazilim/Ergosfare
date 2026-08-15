@@ -5,8 +5,8 @@ namespace Stella.Ergosfare.Core.Abstractions.DispatchSites;
 /// assembly's own source: a distinct (static message type, dispatch surface) pair reached
 /// by at least one call. The generator emitting into a composition root aggregates these
 /// manifests from every referenced assembly to judge whole-closure dispatch reachability —
-/// provably dead dispatches (ERGOSG005) and handlers no dispatch site can reach
-/// (ERGOSG007) — without needing the referenced assemblies' syntax.
+/// provably dead dispatches (ERGO005) and handlers no dispatch site can reach
+/// (ERGO007) — without needing the referenced assemblies' syntax.
 /// </summary>
 /// <remarks>
 /// Written by generated code; not intended to be applied by hand. The message type is

@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis;
 namespace Stella.Ergosfare.SourceGenerator.Test;
 
 /// <summary>
-///     ERGOSG018: a <c>Register</c> call that names its type at run time. The world is
+///     ERGO018: a <c>Register</c> call that names its type at run time. The world is
 ///     closed — a construct's pipeline is compiled, its composition frozen and its plan
 ///     baked from what the compilation can see — so a type only run time knows enters none
 ///     of it, and the registration cannot mean what it appears to mean.
@@ -32,7 +32,7 @@ public class UnknownRegisteredTypeDiagnosticTests
     {
         Assert.Empty(result.CompilationErrors);
 
-        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGOSG018");
+        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGO018");
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
     }
 
@@ -107,7 +107,7 @@ public class UnknownRegisteredTypeDiagnosticTests
             """);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGOSG018");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO018");
     }
 
     /// <summary>
@@ -128,7 +128,7 @@ public class UnknownRegisteredTypeDiagnosticTests
             """);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGOSG018");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO018");
     }
 
     /// <summary>

@@ -15,7 +15,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Attributes;
 /// declared result type and expose a public parameterless constructor; one instance is
 /// created per message type and cached. The source generator bakes the binding into the
 /// message's execution plan and fails the build when the adapter does not fit the declared
-/// result (planned diagnostic ERGOSG011).
+/// result (planned diagnostic ERGO011).
 /// </remarks>
 [Experimental(ExperimentalIds.ResultAdapterSurface)]
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface)]

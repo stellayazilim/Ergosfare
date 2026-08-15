@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis;
 namespace Stella.Ergosfare.SourceGenerator.Test;
 
 /// <summary>
-///     Unreachable-handler verdicts (ERGOSG007) and the opt-in trim (ERGOSG008): a handler
+///     Unreachable-handler verdicts (ERGO007) and the opt-in trim (ERGO008): a handler
 ///     no dispatch site in the closure can deliver to warns at the composition root — but
 ///     only while the closure's dispatch manifests are complete, and never for
 ///     keyed-discovery types. The trim replaces the warning by excluding pure main-handler
@@ -45,7 +45,7 @@ public class UnreachableHandlerDiagnosticTests
         Assert.Empty(result.CompilationErrors);
 
         var diagnostic = Assert.Single(result.GeneratorDiagnostics);
-        Assert.Equal("ERGOSG007", diagnostic.Id);
+        Assert.Equal("ERGO007", diagnostic.Id);
         Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
         Assert.Contains("PingHandler", diagnostic.GetMessage());
         Assert.Contains("TestApp.Ping", diagnostic.GetMessage());
@@ -259,7 +259,7 @@ public class UnreachableHandlerDiagnosticTests
         // dispatches are recorded like any other. With zero sites anywhere, the handler
         // is unreached — a warning, never an error.
         var diagnostic = Assert.Single(result.GeneratorDiagnostics);
-        Assert.Equal("ERGOSG007", diagnostic.Id);
+        Assert.Equal("ERGO007", diagnostic.Id);
         Assert.Contains("StarHandler", diagnostic.GetMessage());
     }
 
@@ -322,7 +322,7 @@ public class UnreachableHandlerDiagnosticTests
         Assert.Empty(result.CompilationErrors);
 
         var diagnostic = Assert.Single(result.GeneratorDiagnostics);
-        Assert.Equal("ERGOSG007", diagnostic.Id);
+        Assert.Equal("ERGO007", diagnostic.Id);
         Assert.Contains("BlinkedHandler", diagnostic.GetMessage());
     }
 
@@ -334,7 +334,7 @@ public class UnreachableHandlerDiagnosticTests
         Assert.Empty(result.CompilationErrors);
 
         var diagnostic = Assert.Single(result.GeneratorDiagnostics);
-        Assert.Equal("ERGOSG008", diagnostic.Id);
+        Assert.Equal("ERGO008", diagnostic.Id);
         Assert.Contains("PingHandler", diagnostic.GetMessage());
 
         // The handler is gone from every emitted surface; the plain message remains.
@@ -417,7 +417,7 @@ public class UnreachableHandlerDiagnosticTests
         // Pong's dispatch is dead-handler-free (DualRole handles only Ping), so the type's
         // main-handler role is unreachable — but its interceptor role participates in
         // Pong's pipeline, so it must stay registered and the warning stays a warning.
-        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGOSG007");
+        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGO007");
         Assert.Contains("DualRole", diagnostic.GetMessage());
         Assert.Contains("DualRole", result.GeneratedSource);
     }

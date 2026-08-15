@@ -4,7 +4,7 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 ///     Value-equatable projection of a message's <c>[ResultAdapter]</c> annotation (its own
 ///     or an inherited one): the adapter type, the result slots it can serve, and whether
 ///     the generator can instantiate and reference it. Feeds the staged plans' baked
-///     adapter binding and the ERGOSG011 judgment.
+///     adapter binding and the ERGO011 judgment.
 /// </summary>
 /// <param name="TypeofExpression">The adapter's fully qualified <c>typeof</c>/<c>new</c> expression.</param>
 /// <param name="DisplayName">Human-readable adapter type name used in diagnostics.</param>
@@ -29,7 +29,7 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 /// <param name="FitsDeclaredSlot">
 ///     Whether the adapter serves at least one of the message's runtime-probed result
 ///     slots (declared results, <c>Unit</c> for a void command, the enumerator slot for a
-///     stream). The ERGOSG011 fit judgment.
+///     stream). The ERGO011 fit judgment.
 /// </param>
 internal sealed record ResultAdapterModel(
     string TypeofExpression,

@@ -20,7 +20,7 @@ builder.Services.AddErgosfare(o => o
   removes it from discovery entirely.
 - Reference scanning is on by default; opt out per project with
   `<ErgosfareSourceGeneratorScanReferences>false</ErgosfareSourceGeneratorScanReferences>`.
-- Diagnostics: `ERGOSG001` (inaccessible registrable type), `ERGOSG002` (invisible type in
+- Diagnostics: `ERGO001` (inaccessible registrable type), `ERGO002` (invisible type in
   a referenced assembly).
 
 This is a development-time dependency (`analyzers/`); it adds no runtime assembly.
