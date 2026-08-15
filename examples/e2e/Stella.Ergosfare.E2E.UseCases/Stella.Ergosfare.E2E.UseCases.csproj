@@ -1,9 +1,11 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
+        <!-- Installing an experimental surface is deliberate. -->
+        <NoWarn>$(NoWarn);ERGOEXP002</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
@@ -16,6 +18,19 @@
         <ProjectReference Include="..\..\..\src\Stella.Ergosfare.Queries.Abstractions\Stella.Ergosfare.Queries.Abstractions.csproj" />
         <ProjectReference Include="..\..\..\src\Stella.Ergosfare.Events.Abstractions\Stella.Ergosfare.Events.Abstractions.csproj" />
         <ProjectReference Include="..\..\..\src\Stella.Ergosfare.Core.Abstractions\Stella.Ergosfare.Core.Abstractions.csproj" />
+
+        <!-- The application layer composes the pipeline, so the DI extensions and the whole
+             runtime live here rather than in the host. -->
+        <ProjectReference Include="..\..\..\src\Stella.Ergosfare\Stella.Ergosfare.csproj" />
+
+        <!-- The generator runs in this compilation: RegisterGenerated() is emitted here,
+             beside the AddErgosfare call that uses it. -->
+        <ProjectReference Include="..\..\..\src\Stella.Ergosfare.SourceGenerator\Stella.Ergosfare.SourceGenerator.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false" />
+
+        <!-- The example plugin is installed by the composition, so it is referenced here. -->
+        <ProjectReference Include="..\..\TimingPlugin\TimingPlugin.csproj" />
     </ItemGroup>
 
 </Project>

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
@@ -11,8 +11,6 @@
         <PublishAot>true</PublishAot>
         <InvariantGlobalization>true</InvariantGlobalization>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-        <!-- The plugin surface is experimental; installing one is deliberate. -->
-        <NoWarn>$(NoWarn);ERGOEXP002</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
