@@ -123,4 +123,74 @@ public class EventInterceptorDefaultImplementationTests
 
         Assert.True(interceptor.Called);
     }
+
+    [ExcludeFromDiscovery]
+    private sealed class TestExceptionInterceptor : IEventExceptionInterceptor
+    {
+        public Exception? Seen;
+
+        public ValueTask HandleAsync(IEvent @event, Exception exception, ErgosfareContext context)
+        {
+            Seen = exception;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    [ExcludeFromDiscovery]
+    private sealed class TestFinalInterceptor : IEventFinalInterceptor
+    {
+        public bool Called;
+
+        public Exception? Seen;
+
+        public ValueTask HandleAsync(IEvent @event, Exception? exception, ErgosfareContext context)
+        {
+            Called = true;
+            Seen = exception;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task ExceptionInterceptorDefaultImplementation_AnswersTheResultlessSlotItself()
+    {
+        var interceptor = new TestExceptionInterceptor();
+        var thrown = new InvalidOperationException("boom");
+
+        var result = await ((IAsyncExceptionInterceptor<IEvent, Unit>) interceptor).HandleAsync(
+            new TestEvent(), null, thrown, CreateContext());
+
+        Assert.Same(thrown, interceptor.Seen);
+
+        // The stage threads a result slot a publish has no way to fill, so the default body
+        // fills it — an implementor is never handed a parameter with one legal value.
+        Assert.Equal(Unit.Value, result);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task FinalInterceptorDefaultImplementation_ForwardsTheFailureAndDropsTheResult()
+    {
+        var interceptor = new TestFinalInterceptor();
+        var thrown = new InvalidOperationException("boom");
+
+        await ((IAsyncFinalInterceptor<IEvent, Unit>) interceptor).HandleAsync(
+            new TestEvent(), null, thrown, CreateContext());
+
+        Assert.True(interceptor.Called);
+        Assert.Same(thrown, interceptor.Seen);
+
+        // A publish that settled without failing arrives with no exception, and that is the
+        // only difference the final stage sees between the two paths.
+        var settled = new TestFinalInterceptor();
+
+        await ((IAsyncFinalInterceptor<IEvent, Unit>) settled).HandleAsync(
+            new TestEvent(), null, null, CreateContext());
+
+        Assert.True(settled.Called);
+        Assert.Null(settled.Seen);
+    }
 }
