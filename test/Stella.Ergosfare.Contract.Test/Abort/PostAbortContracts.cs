@@ -172,10 +172,12 @@ public abstract class AbortResultExceptionBase<TCommand> : ICommandExceptionInte
     where TCommand : class, IAbortResultCommand
 {
     /// <inheritdoc />
-    public ValueTask<string?> HandleAsync(TCommand command, string? result, Exception exception, ErgosfareContext context)
+    public ValueTask<string> HandleAsync(TCommand command, string? result, Exception exception, ErgosfareContext context)
     {
         context.Mark("exception", AbortVocabulary.Describe(exception));
-        return ValueTask.FromResult(result);
+
+        // Handling means answering; the slot is empty because the handler threw first.
+        return ValueTask.FromResult(result ?? string.Empty);
     }
 }
 

@@ -23,10 +23,13 @@ public class CommandExceptionInterceptorDefaultImplementationTests
     {
         public bool Called;
 
-        public ValueTask<string?> HandleAsync(TestCommandStringResult command, string? result, Exception exception, ErgosfareContext context)
+        public ValueTask<string> HandleAsync(TestCommandStringResult command, string? result, Exception exception, ErgosfareContext context)
         {
             Called = true;
-            return ValueTask.FromResult(result);
+
+            // Handling means answering: the slot is empty because the handler threw before
+            // it produced anything.
+            return ValueTask.FromResult(result ?? string.Empty);
         }
     }
 

@@ -173,8 +173,26 @@ internal static class ResultPipelineBody<TMessage, TResult> where TMessage : not
 
                     if (matched)
                     {
-                        var typedStageResult = (TResult?)stageResult;
-                        result = typedStageResult is null ? result : typedStageResult;
+                        // A matched interceptor handled the failure, so its answer IS the
+                        // result — there is nothing to fall back to. This used to keep the
+                        // previous result when the stage returned null, which reads as
+                        // defensive and is not: the handler threw, so the previous result is
+                        // still `default!`, and the dispatch answered null for a type that
+                        // promised a value while the failure disappeared.
+                        //
+                        // Nullability belongs to the message. A dispatch of ICommand<User>
+                        // locked User at the call site and no stage may downgrade that. The
+                        // contracts say so now; this is what an assembly compiled against the
+                        // older ones meets instead of the silent default.
+                        if (stageResult is null)
+                        {
+                            throw new InvalidOperationException(
+                                $"An exception interceptor handled the failure of '{typeof(TMessage)}' and returned no result. " +
+                                $"The dispatch is typed '{typeof(TResult)}' and cannot answer with null: produce a result, " +
+                                "or leave the failure unhandled so it surfaces to the caller.");
+                        }
+
+                        result = (TResult)stageResult;
                     }
                 }
 

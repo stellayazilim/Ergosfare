@@ -257,7 +257,7 @@ public class StagedPlanEmissionTests
 
                 public sealed class StagedTextQueryException : IQueryExceptionInterceptor<StagedTextQuery, string>
                 {
-                    public ValueTask<string?> HandleAsync(StagedTextQuery query, string? result, Exception exception, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
+                    public ValueTask<string> HandleAsync(StagedTextQuery query, string? result, Exception exception, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => ValueTask.FromResult(result);
                 }
 
