@@ -365,4 +365,90 @@ public sealed class MessageDispatchEngine
 
         return executor.Execute(message, context, serviceProvider, groups);
     }
+
+    /// <summary>
+    /// Typed result dispatch: the message is the type argument, not an <c>object</c> whose
+    /// type is read back per call. What that removes is the whole lookup — the
+    /// <c>GetType()</c>, the <c>(message, result)</c> tuple hash, the slot refresh, and the
+    /// root-table walk behind them — leaving a static generic field read the JIT and Native
+    /// AOT both resolve to a direct static access.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Safe to overload rather than name apart, unlike <see cref="DispatchVoidAsync{TMessage}(TMessage, IServiceProvider, CancellationToken)"/>:
+    /// <typeparamref name="TResult"/> appears only in the constraint the callers apply, so it
+    /// cannot be inferred and this member never joins a candidate set the caller did not ask
+    /// for by naming both arguments.
+    /// </para>
+    /// <para>
+    /// The runtime-type guard stays for the same reason the void lane keeps one: naming a
+    /// base type as <typeparamref name="TMessage"/> is legal, and the pipeline that runs is
+    /// the runtime type's.
+    /// </para>
+    /// </remarks>
+    /// <typeparam name="TMessage">The compile-time message type.</typeparam>
+    /// <typeparam name="TResult">The expected result type of the message.</typeparam>
+    public ValueTask<TResult> DispatchAsync<TMessage, TResult>(TMessage message, IServiceProvider serviceProvider,
+        CancellationToken cancellationToken = default,
+        IEnumerable<string>? groups = null)
+        where TMessage : IMessage
+    {
+        ArgumentNullException.ThrowIfNull(message);
+
+        var executor = message.GetType() == typeof(TMessage)
+            ? _executorCache.GetExecutor<TMessage, TResult>()
+            : _executorCache.GetExecutor<TResult>(message.GetType());
+        var context = ErgosfareContextPool.Rent(null, cancellationToken);
+        ValueTask<TResult> task;
+
+        try
+        {
+            task = executor.Execute(message, context, serviceProvider, groups);
+        }
+        catch
+        {
+            ErgosfareContextPool.Return(context);
+            throw;
+        }
+
+        if (task.IsCompletedSuccessfully)
+        {
+            var result = task.Result;
+            ErgosfareContextPool.Return(context);
+            return new ValueTask<TResult>(result);
+        }
+
+        return AwaitAndReturn(task, context);
+
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+        static async ValueTask<TResult> AwaitAndReturn(ValueTask<TResult> task, ErgosfareContext context)
+        {
+            try
+            {
+                return await task;
+            }
+            finally
+            {
+                ErgosfareContextPool.Return(context);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Typed counterpart of the context result dispatch. The caller owns the context, so
+    /// nothing is rented and nothing is returned.
+    /// </summary>
+    public ValueTask<TResult> DispatchAsync<TMessage, TResult>(TMessage message, ErgosfareContext context,
+        IServiceProvider serviceProvider, IEnumerable<string>? groups = null)
+        where TMessage : IMessage
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(context);
+
+        var executor = message.GetType() == typeof(TMessage)
+            ? _executorCache.GetExecutor<TMessage, TResult>()
+            : _executorCache.GetExecutor<TResult>(message.GetType());
+
+        return executor.Execute(message, context, serviceProvider, groups);
+    }
 }

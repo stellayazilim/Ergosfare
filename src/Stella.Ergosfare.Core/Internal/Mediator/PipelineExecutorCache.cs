@@ -141,6 +141,106 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
         return executor;
     }
 
+    /// <summary>
+    /// The result counterpart of <see cref="GetVoidExecutor{TMessage}"/>: both types are
+    /// compile-time constants, so the executor comes from a static generic field instead of
+    /// a tuple hash over two <see cref="Type"/> objects and a slot refresh. Callers must
+    /// guard with <c>message.GetType() == typeof(TMessage)</c> — a base-typed generic call
+    /// has to keep resolving by the runtime type.
+    /// </summary>
+    /// <remarks>
+    /// The container guard is not optional. A static generic field is process-wide and an
+    /// executor belongs to one container; without the check, two containers over the same
+    /// closed pair — which every test class creates — would read each other's pipelines.
+    /// The void lane learned this first and this is the same guard.
+    /// </remarks>
+    public IPipelineExecutor<TResult> GetExecutor<TMessage, TResult>()
+        where TMessage : IMessage
+    {
+        var slot = ResultExecutorHolder<TMessage, TResult>.Slot;
+
+        if (slot is not null && ReferenceEquals(slot.Cache, this))
+        {
+            return slot.Executor;
+        }
+
+        return GetTypedExecutorSlow<TMessage, TResult>();
+    }
+
+    /// <summary>
+    /// Slot miss for the typed result dispatch. The composite store stays authoritative, so
+    /// a message dispatched both ways shares one executor and one dependency cache; what
+    /// differs is how the executor is built when it has to be built.
+    /// </summary>
+    private IPipelineExecutor<TResult> GetTypedExecutorSlow<TMessage, TResult>()
+        where TMessage : IMessage
+    {
+        var executor = (IPipelineExecutor<TResult>)_resultExecutorsByType.GetOrAdd(
+            (typeof(TMessage), typeof(TResult)),
+            _ => CreateResultExecutor<TMessage, TResult>());
+
+        // Both slots, so a later untyped dispatch of the same message reads the same
+        // executor from its own fast path rather than rebuilding the lookup.
+        _resultSlotsByType[typeof(TMessage)] = new ResultExecutorSlot(typeof(TResult), executor);
+        ResultExecutorHolder<TMessage, TResult>.Slot = new TypedResultExecutorSlot<TResult>(this, executor);
+
+        return executor;
+    }
+
+    /// <summary>
+    /// Builds a result executor from type arguments the compiler already resolved. The plan
+    /// arms are the untyped path's, because a plan carries its own closed generics and needs
+    /// no closing; the last arm is where the two differ — the untyped one asks the root table
+    /// and, for a message with no root, closes <c>FrozenResultDispatch&lt;,&gt;</c> with
+    /// <see cref="Type.MakeGenericType"/>. Here the closed type is what the caller named, so
+    /// the construction is ordinary code the compiler emitted: no root lookup, no reflection,
+    /// and an answer Native AOT can give for a message the generator never saw.
+    /// </summary>
+    private object CreateResultExecutor<TMessage, TResult>()
+        where TMessage : IMessage
+    {
+        if (GeneratedDispatchRoots.FindStagedResultPlan(typeof(TMessage), typeof(TResult)) is { } stagedPlan)
+        {
+            return stagedPlan.Accept(
+                StagedResultExecutorVisitor.Instance,
+                new ExecutorState(dependenciesFactory, StagedPlan: stagedPlan));
+        }
+
+        if (GeneratedDispatchRoots.FindResultPlan(typeof(TMessage), typeof(TResult)) is { } plan)
+        {
+            return plan.Accept(
+                GeneratedResultExecutorVisitor.Instance,
+                new ExecutorState(dependenciesFactory, plan.DirectHandlerFactory));
+        }
+
+        return new FrozenResultDispatch<TMessage, TResult>(dependenciesFactory, plan: null);
+    }
+
+    /// <summary>
+    /// Immutable (cache, executor) pair, for the same reason its void twin is immutable: a
+    /// reader that observes the reference sees both fields.
+    /// </summary>
+    private sealed class TypedResultExecutorSlot<TResult>(
+        PipelineExecutorCache cache, IPipelineExecutor<TResult> executor)
+    {
+        public readonly PipelineExecutorCache Cache = cache;
+        public readonly IPipelineExecutor<TResult> Executor = executor;
+    }
+
+    /// <summary>
+    /// Per-(message, result) slot for the last cache instance that served a typed result
+    /// lookup. Unlike <see cref="ResultExecutorSlot"/> — keyed by message type alone, so
+    /// alternating result types on one message evict each other — this one is keyed by the
+    /// pair, because the pair is what the type parameters already named.
+    /// </summary>
+    // Both type parameters are the cache key: one static slot per closed pair.
+    // ReSharper disable once UnusedTypeParameter
+    private static class ResultExecutorHolder<TMessage, TResult>
+    {
+        // ReSharper disable once StaticMemberInGenericType
+        public static TypedResultExecutorSlot<TResult>? Slot;
+    }
+
     private IPipelineExecutor CreateVoidExecutor(Type messageType)
     {
         // Staged plan: bespoke code for the whole interceptor-bearing pipeline. Checked
