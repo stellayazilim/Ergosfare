@@ -271,6 +271,40 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     /// </summary>
     public required bool HasIgnoredResultAdapter { get; init; }
 
+    /// <summary>
+    ///     Event messages this type's handler contracts name, for the ones that carry no
+    ///     module marker of their own. A plain domain type is not a message until an
+    ///     <c>IEventHandler&lt;T&gt;</c> is written for it; that signature is not evidence
+    ///     pointing at a message, it is what makes one, so the model is born here rather than
+    ///     from a declaration that never gets visited.
+    /// </summary>
+    /// <remarks>
+    ///     Carried inside the model instead of widening the syntax provider to an array of
+    ///     models. Roslyn compares a provider's output with <c>EqualityComparer&lt;T&gt;.Default</c>
+    ///     to decide whether the rest of the pipeline may be skipped, and
+    ///     <c>ImmutableArray&lt;T&gt;</c> compares by the underlying array's reference — a fresh
+    ///     array every run, so the comparison would never hold and every keystroke would rerun
+    ///     plan computation and emission, silently. Nested here, the compared value stays this
+    ///     struct, whose equality reads arrays element by element.
+    /// </remarks>
+    /// <summary>
+    ///     Whether the type implements <c>IMessage</c> through a module marker of its own.
+    ///     False only for an event message derived from a subscriber's signature: the publish
+    ///     lane asks for <c>notnull</c>, so a plain domain type travels it without ever
+    ///     implementing the marker.
+    /// </summary>
+    /// <remarks>
+    ///     Emission reads this to decide whether the type may be named as a type argument
+    ///     where <c>IMessage</c> is required — <c>AddMessage&lt;T&gt;</c>, and the message-root
+    ///     table behind it. A broadcast never needs that root: the publish surface is generic
+    ///     over the event, so its dispatch closes inside a generic context, and the runtime
+    ///     type path that consults the root cannot be reached by a type with no base contract
+    ///     to be dispatched through.
+    /// </remarks>
+    public required bool ImplementsMessageMarker { get; init; }
+
+    public required ImmutableArray<RegistrableTypeModel> DerivedEventMessages { get; init; }
+
     public bool Equals(RegistrableTypeModel other)
     {
         if (TypeofExpression != other.TypeofExpression
@@ -301,6 +335,7 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
             || MetadataSortKey != other.MetadataSortKey
             || !Equals(ResultAdapter, other.ResultAdapter)
             || HasIgnoredResultAdapter != other.HasIgnoredResultAdapter
+            || ImplementsMessageMarker != other.ImplementsMessageMarker
             || !Nullable.Equals(InfoLocation, other.InfoLocation)
             || Descriptors.Length != other.Descriptors.Length
             || DiscoveryKeys.Length != other.DiscoveryKeys.Length
@@ -308,7 +343,8 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
             || GroupNames.Length != other.GroupNames.Length
             || DispatchResults.Length != other.DispatchResults.Length
             || AssignableKeys.Length != other.AssignableKeys.Length
-            || ContractShapes.Length != other.ContractShapes.Length)
+            || ContractShapes.Length != other.ContractShapes.Length
+            || DerivedEventMessages.Length != other.DerivedEventMessages.Length)
         {
             return false;
         }
@@ -364,6 +400,14 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
         for (var i = 0; i < DispatchResults.Length; i++)
         {
             if (!DispatchResults[i].Equals(other.DispatchResults[i]))
+            {
+                return false;
+            }
+        }
+
+        for (var i = 0; i < DerivedEventMessages.Length; i++)
+        {
+            if (!DerivedEventMessages[i].Equals(other.DerivedEventMessages[i]))
             {
                 return false;
             }

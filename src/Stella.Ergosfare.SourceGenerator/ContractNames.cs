@@ -17,6 +17,13 @@ internal static class ContractNames
     internal const string EventMarker = "IEvent";
     internal const string EventMarkerNamespace = "Stella.Ergosfare.Events.Abstractions";
 
+    /// <summary>
+    ///     The subscriber contract. Its type argument is what makes a plain type an event
+    ///     message: the publish lane is declared over <c>notnull</c> end to end, so a domain
+    ///     type needs no marker of its own to travel it.
+    /// </summary>
+    internal const string EventHandlerContract = "IEventHandler";
+
     internal const string HandlerNamespace = "Stella.Ergosfare.Core.Abstractions.Handlers";
     internal const string AttributeNamespace = "Stella.Ergosfare.Core.Abstractions.Attributes";
     internal const string CoreAbstractionsNamespace = "Stella.Ergosfare.Core.Abstractions";

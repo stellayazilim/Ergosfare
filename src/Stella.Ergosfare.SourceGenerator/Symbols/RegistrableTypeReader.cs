@@ -118,6 +118,96 @@ internal static class RegistrableTypeReader
             IsExcludedFromDiscovery = false,
             ResultAdapter = resultAdapter,
             HasIgnoredResultAdapter = hasIgnoredResultAdapter,
+            ImplementsMessageMarker = true,
+            DerivedEventMessages = DeriveEventMessages(symbol),
+            MetadataSortKey = SymbolNaming.BuildMetadataName(symbol),
+        };
+    }
+
+    /// <summary>
+    ///     The models of the event messages this type subscribes to, for the ones that carry
+    ///     no marker of their own. Empty for everything that is not a subscriber, which is
+    ///     almost everything.
+    /// </summary>
+    private static ImmutableArray<RegistrableTypeModel> DeriveEventMessages(INamedTypeSymbol symbol)
+    {
+        var messages = ContractReader.GetDerivedEventMessages(symbol);
+
+        if (messages.IsEmpty)
+        {
+            return ImmutableArray<RegistrableTypeModel>.Empty;
+        }
+
+        var models = ImmutableArray.CreateBuilder<RegistrableTypeModel>(messages.Length);
+
+        foreach (var message in messages)
+        {
+            models.Add(CreateDerivedEventMessageModel(message));
+        }
+
+        return models.ToImmutable();
+    }
+
+    /// <summary>
+    ///     The model of a plain type a subscriber named as its event. A message and nothing
+    ///     else: it carries no contracts, is never constructed by the pipeline, and answers
+    ///     no diagnostics of its own — the subscriber that named it is where those belong.
+    /// </summary>
+    /// <remarks>
+    ///     <see cref="RegistrableTypeModel.ReferencedAssemblyName"/> stays <c>null</c> even
+    ///     when the type is declared elsewhere. The field records where a model was
+    ///     <em>found</em> by scanning, and this one was not found — it was created because
+    ///     this compilation declares a subscriber for it, which is a fact about this
+    ///     compilation rather than about the assembly the type happens to live in.
+    /// </remarks>
+    private static RegistrableTypeModel CreateDerivedEventMessageModel(INamedTypeSymbol symbol)
+    {
+        var isAccessible = SymbolNaming.IsAccessibleFromGeneratedCode(symbol);
+        var descriptors = ImmutableArray<DescriptorModel>.Empty;
+        var isDispatchable = isAccessible && ContractReader.IsDispatchableMessage(symbol, descriptors);
+        var isMessageShape = isAccessible && ContractReader.IsMessageShape(symbol, descriptors);
+        var declaredHere = symbol.DeclaringSyntaxReferences.Length > 0;
+
+        return new RegistrableTypeModel
+        {
+            TypeofExpression = SymbolNaming.BuildTypeofExpression(symbol),
+            DisplayName = symbol.ToDisplayString(),
+            IsCommand = false,
+            IsQuery = false,
+            IsEvent = true,
+            IsAccessible = isAccessible,
+            Location = !isAccessible && declaredHere ? LocationInfo.From(symbol) : null,
+            Weight = ParticipantAttributes.GetWeight(symbol),
+            GroupsExpression = ParticipantAttributes.GetGroupsExpression(symbol),
+            GroupNames = ParticipantAttributes.GetGroupNames(symbol),
+            Descriptors = descriptors,
+            ReferencedAssemblyName = null,
+            DiscoveryKeys = ImmutableArray<string>.Empty,
+            IsDispatchableMessage = isDispatchable,
+            IsMessageShape = isMessageShape,
+            DispatchResults = ImmutableArray<DispatchResultModel>.Empty,
+            IsDirectlyConstructible = false,
+            ProviderConstructionExpression = null,
+            ProviderConstructionUsesKeyedServices = false,
+            HasPipelineExclusion = ParticipantAttributes.HasPipelineExclusionAttribute(symbol),
+            ExcludedInterceptorGroups = ParticipantAttributes.GetPipelineExclusionGroups(symbol),
+            IsValueType = symbol.IsValueType,
+            IsNestedType = symbol.ContainingType is not null,
+            IsGenericParticipant = false,
+            AssignableKeys = isMessageShape ? ParticipantAttributes.GetAssignableKeys(symbol) : ImmutableArray<string>.Empty,
+            ContractShapes = ImmutableArray<ContractShapeModel>.Empty,
+            StagedConstructionExpression = null,
+            StagedConstructionUsesKeyedServices = false,
+            HasMultiplePublicConstructors = false,
+            HasFromServicesConstructorParameter = false,
+            InfoLocation = isDispatchable && declaredHere ? LocationInfo.From(symbol) : null,
+            IsExcludedFromDiscovery = false,
+            ResultAdapter = null,
+            HasIgnoredResultAdapter = false,
+            // Hiding a subscriber from bulk collection does not stop it from running, so the
+            // message it names is still a message.
+            ImplementsMessageMarker = false,
+            DerivedEventMessages = DeriveEventMessages(symbol),
             MetadataSortKey = SymbolNaming.BuildMetadataName(symbol),
         };
     }
@@ -202,6 +292,8 @@ internal static class RegistrableTypeReader
             IsExcludedFromDiscovery = true,
             ResultAdapter = null,
             HasIgnoredResultAdapter = false,
+            ImplementsMessageMarker = true,
+            DerivedEventMessages = ImmutableArray<RegistrableTypeModel>.Empty,
             MetadataSortKey = SymbolNaming.BuildMetadataName(symbol),
         };
     }
