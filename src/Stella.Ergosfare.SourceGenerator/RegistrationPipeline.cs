@@ -178,7 +178,7 @@ internal static class RegistrationPipeline
         HashSet<string> monomorphizedDefinitions,
         DefaultResultAdapterSiteModel? defaultResultAdapter)
     {
-        foreach (var model in models)
+        foreach (var model in WithDerivedEventMessages(models))
         {
             if (!seen.Add(model.TypeofExpression))
             {
@@ -282,6 +282,33 @@ internal static class RegistrationPipeline
             }
 
             types.Add(model);
+        }
+    }
+
+    /// <summary>
+    ///     Each model, followed by the event messages its subscriber contracts named. The
+    ///     messages travel inside their subscriber's model so the syntax provider keeps
+    ///     comparing one value per declaration; this is where they become registrable types
+    ///     in their own right.
+    /// </summary>
+    /// <remarks>
+    ///     A derived message is emitted on its own terms rather than its subscriber's: the
+    ///     subscriber may be hidden from discovery and the message still is not, because
+    ///     hiding a subscriber says nothing about the message it serves. Duplicates — two
+    ///     subscribers for one message, or a subscriber seen twice through partial
+    ///     declarations — are dropped by the caller's <c>seen</c> set.
+    /// </remarks>
+    private static IEnumerable<RegistrableTypeModel> WithDerivedEventMessages(
+        ImmutableArray<RegistrableTypeModel> models)
+    {
+        foreach (var model in models)
+        {
+            yield return model;
+
+            foreach (var derived in model.DerivedEventMessages)
+            {
+                yield return derived;
+            }
         }
     }
 }

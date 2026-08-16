@@ -271,6 +271,8 @@ internal static class ReferenceScanner
             IsExcludedFromDiscovery = false,
             ResultAdapter = resultAdapter,
             HasIgnoredResultAdapter = referencedHasIgnore,
+            ImplementsMessageMarker = true,
+            DerivedEventMessages = ImmutableArray<RegistrableTypeModel>.Empty,
             MetadataSortKey = SymbolNaming.BuildMetadataName(symbol),
         };
     }

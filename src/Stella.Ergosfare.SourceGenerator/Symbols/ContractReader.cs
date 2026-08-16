@@ -449,4 +449,47 @@ internal static class ContractReader
             }
         }
     }
+
+    /// <summary>
+    ///     The event messages this type's subscriber contracts name, limited to the ones that
+    ///     carry no module marker of their own.
+    /// </summary>
+    /// <remarks>
+    ///     An <c>IEventHandler&lt;T&gt;</c> signature is not evidence pointing at a message —
+    ///     it is what makes one. A plain domain type means nothing to the generator until a
+    ///     subscriber is written for it, and its own declaration is never visited (it has no
+    ///     base list to be selected by), so this is where its model has to be born. A message
+    ///     that already carries <c>IEvent</c> is skipped: it is registrable on its own terms
+    ///     and deriving it again would only produce a duplicate for the pipeline to drop.
+    /// </remarks>
+    internal static ImmutableArray<INamedTypeSymbol> GetDerivedEventMessages(INamedTypeSymbol symbol)
+    {
+        ImmutableArray<INamedTypeSymbol>.Builder? derived = null;
+
+        foreach (var iface in symbol.AllInterfaces)
+        {
+            if (iface is not { Arity: 1, Name: ContractNames.EventHandlerContract }
+                || !SymbolNaming.IsInNamespace(iface, ContractNames.EventMarkerNamespace)
+                || iface.TypeArguments[0] is not INamedTypeSymbol message)
+            {
+                continue;
+            }
+
+            ParticipantAttributes.GetMarkers(message, out var isCommand, out var isQuery, out var isEvent);
+
+            if (isCommand || isQuery || isEvent)
+            {
+                continue;
+            }
+
+            derived ??= ImmutableArray.CreateBuilder<INamedTypeSymbol>();
+
+            if (!derived.Contains(message, SymbolEqualityComparer.Default))
+            {
+                derived.Add(message);
+            }
+        }
+
+        return derived?.ToImmutable() ?? ImmutableArray<INamedTypeSymbol>.Empty;
+    }
 }

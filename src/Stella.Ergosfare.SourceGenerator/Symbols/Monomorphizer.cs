@@ -342,6 +342,8 @@ internal static class Monomorphizer
             IsExcludedFromDiscovery = false,
             ResultAdapter = null,
             HasIgnoredResultAdapter = false,
+            ImplementsMessageMarker = true,
+            DerivedEventMessages = ImmutableArray<RegistrableTypeModel>.Empty,
             MetadataSortKey = SymbolNaming.BuildMetadataName(closed),
         };
     }

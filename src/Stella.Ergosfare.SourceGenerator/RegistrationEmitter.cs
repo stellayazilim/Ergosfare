@@ -564,7 +564,10 @@ internal static class RegistrationEmitter
 
         foreach (var type in types)
         {
-            if (!type.IsDispatchableMessage)
+            // A derived event message implements no marker, so it cannot be named where
+            // IMessage is required — and needs no root: a publish is generic over the event,
+            // so its dispatch closes without ever consulting the root table.
+            if (!type.IsDispatchableMessage || !type.ImplementsMessageMarker)
             {
                 continue;
             }
