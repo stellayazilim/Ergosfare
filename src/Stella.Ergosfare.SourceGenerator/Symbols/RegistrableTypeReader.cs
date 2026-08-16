@@ -123,11 +123,20 @@ internal static class RegistrableTypeReader
     }
 
     /// <summary>
-    ///     The reduced model of an <c>[ExcludeFromDiscovery]</c> type: only what the
-    ///     reachability judgment's exclusion zone needs — the type's assignable chain when
-    ///     it could be a runtime message instance, and its main-handler descriptor
-    ///     messages when it carries handler contracts. Never emitted, never diagnosed.
+    ///     The reduced model of an <c>[ExcludeFromDiscovery]</c> type: the reachability
+    ///     judgment's exclusion zone — the type's assignable chain when it could be a runtime
+    ///     message instance, and its main-handler descriptor messages when it carries handler
+    ///     contracts — plus what a hidden participant still contributes to emission: its
+    ///     pipeline row in the frozen composition, and its dispatch roots when a registration
+    ///     reaches it. Never registered, never diagnosed.
     /// </summary>
+    /// <remarks>
+    ///     Reduced is not the same as empty, and the difference is decided per field by who
+    ///     reads it. What the type would cost to construct stays out, because nothing hidden
+    ///     is ever constructed from here; what a dispatch needs to close its generics stays
+    ///     in, because hiding a type from bulk registration does not stop it from being
+    ///     dispatched.
+    /// </remarks>
     internal static RegistrableTypeModel CreateExcludedShadowModel(
         INamedTypeSymbol symbol,
         bool isCommand,
@@ -147,6 +156,16 @@ internal static class RegistrableTypeReader
         var isAccessible = SymbolNaming.IsAccessibleFromGeneratedCode(symbol);
         var isMessageShape = isAccessible && ContractReader.IsMessageShape(symbol, descriptors);
 
+        // A hidden message a registration reaches is rooted, and rooting a message means its
+        // result contracts too — AddMessage closes the message generic, AddResult/AddStream
+        // close the (message, result) ones, and they are different tables. Left empty, the
+        // shared root emission wrote the message root and silently skipped the others, so a
+        // hidden ICommand<string> dispatched by result still closed its generic through
+        // MakeGenericType. The judgment this model was first written for never read them.
+        var dispatchResults = isDispatchable
+            ? ContractReader.GetDispatchResults(symbol)
+            : ImmutableArray<DispatchResultModel>.Empty;
+
         return new RegistrableTypeModel
         {
             TypeofExpression = SymbolNaming.BuildTypeofExpression(symbol),
@@ -164,7 +183,7 @@ internal static class RegistrableTypeReader
             DiscoveryKeys = ImmutableArray<string>.Empty,
             IsDispatchableMessage = isDispatchable,
             IsMessageShape = isMessageShape,
-            DispatchResults = ImmutableArray<DispatchResultModel>.Empty,
+            DispatchResults = dispatchResults,
             IsDirectlyConstructible = false,
             ProviderConstructionExpression = null,
             ProviderConstructionUsesKeyedServices = false,
