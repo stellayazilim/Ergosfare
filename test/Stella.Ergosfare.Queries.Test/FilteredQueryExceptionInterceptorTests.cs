@@ -28,11 +28,11 @@ public class FilteredQueryExceptionInterceptorTests
 
         public TestFault? Received;
 
-        public ValueTask<string?> HandleAsync(
+        public ValueTask<string> HandleAsync(
             TestQuery query, string? result, TestFault exception, ErgosfareContext context)
         {
             Received = exception;
-            return ValueTask.FromResult<string?>(Recovery);
+            return ValueTask.FromResult(Recovery);
         }
     }
 

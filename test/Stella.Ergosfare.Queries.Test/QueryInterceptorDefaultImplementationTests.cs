@@ -40,7 +40,10 @@ public class QueryInterceptorDefaultImplementationTests
         public ValueTask<string> HandleAsync(TestQuery query, string result, ErgosfareContext executionContext)
         {
             Called = true;
-            return ValueTask.FromResult(result);
+
+            // The stage handled the failure, so it owes a result; the incoming slot is empty
+            // here because the handler threw before producing one.
+            return ValueTask.FromResult(result ?? string.Empty);
         }
     }
 
@@ -49,10 +52,13 @@ public class QueryInterceptorDefaultImplementationTests
     {
         public bool Called;
 
-        public ValueTask<string?> HandleAsync(TestQuery query, string? result, Exception exception, ErgosfareContext context)
+        public ValueTask<string> HandleAsync(TestQuery query, string? result, Exception exception, ErgosfareContext context)
         {
             Called = true;
-            return ValueTask.FromResult(result);
+
+            // Handling means answering: the slot is empty because the handler threw before
+            // it produced anything.
+            return ValueTask.FromResult(result ?? string.Empty);
         }
     }
 

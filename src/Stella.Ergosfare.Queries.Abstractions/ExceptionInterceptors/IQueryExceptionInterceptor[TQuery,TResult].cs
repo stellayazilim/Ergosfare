@@ -41,5 +41,11 @@ public interface IQueryExceptionInterceptor<in TQuery, TResult>
     /// A <see cref="ValueTask{TResult}"/> producing the (possibly modified) result that
     /// continues through the pipeline.
     /// </returns>
-    new ValueTask<TResult?> HandleAsync(TQuery query, TResult? result, Exception exception, ErgosfareContext context);
+    /// <remarks>
+    /// The stage owes a result. A dispatch of this message locked its result type at the call
+    /// site, so nothing downstream may answer with null — to leave the failure unhandled,
+    /// do not claim it: an unmatched stage lets the exception surface to the caller. Model
+    /// absence in the value instead, the way <c>Result&lt;T&gt;</c> does.
+    /// </remarks>
+    new ValueTask<TResult> HandleAsync(TQuery query, TResult? result, Exception exception, ErgosfareContext context);
 }
