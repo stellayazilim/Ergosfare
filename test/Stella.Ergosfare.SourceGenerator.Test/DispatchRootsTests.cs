@@ -68,6 +68,72 @@ public class DispatchRootsTests
         Assert.DoesNotContain("AddMessage<global::TestApp.Wrapped<", source);
     }
 
+    private const string HiddenSource = """
+        using Stella.Ergosfare.Commands.Abstractions;
+        using Stella.Ergosfare.Queries.Abstractions;
+        using Stella.Ergosfare.Core.Abstractions;
+        using Stella.Ergosfare.Core.Abstractions.Attributes;
+        using System.Collections.Generic;
+        using System.Threading.Tasks;
+
+        namespace TestApp
+        {
+            [ExcludeFromDiscovery]
+            public sealed record HiddenTyped : ICommand<string>;
+
+            [ExcludeFromDiscovery]
+            public sealed class HiddenTypedHandler : ICommandHandler<HiddenTyped, string>
+            {
+                public ValueTask<string> HandleAsync(HiddenTyped message, ErgosfareContext context)
+                    => ValueTask.FromResult("hidden");
+            }
+
+            [ExcludeFromDiscovery]
+            public sealed record HiddenStream : IStreamQuery<int>;
+
+            [ExcludeFromDiscovery]
+            public sealed class HiddenStreamHandler : IStreamQueryHandler<HiddenStream, int>
+            {
+                public async IAsyncEnumerable<int> StreamAsync(HiddenStream query, ErgosfareContext context)
+                {
+                    await Task.Yield();
+                    yield return 1;
+                }
+            }
+
+            public static class Boot
+            {
+                public static void Configure(
+                    Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.CommandModuleBuilder commands,
+                    Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.QueryModuleBuilder queries)
+                {
+                    commands.Register<HiddenTypedHandler>();
+                    queries.Register<HiddenStreamHandler>();
+                }
+            }
+        }
+        """;
+
+    [Fact]
+    public void AHiddenMessageARegistrationReaches_RootsItsResultContractsToo()
+    {
+        var result = GeneratorTestHost.Run(HiddenSource);
+
+        Assert.Empty(result.CompilationErrors);
+
+        var source = result.GeneratedSource;
+
+        // Rooting is not registering: a message hidden from bulk collection still gets the
+        // generics a dispatch has to close, because hiding it does not stop it from being
+        // dispatched. The three roots are three tables, and a message root alone leaves a
+        // dispatch by result or by stream closing through MakeGenericType — which has no
+        // answer under Native AOT, so the same dispatch works in development and fails at
+        // publish.
+        Assert.Contains("GeneratedDispatchRoots.AddMessage<global::TestApp.HiddenTyped>();", source);
+        Assert.Contains("GeneratedDispatchRoots.AddResult<global::TestApp.HiddenTyped, string>();", source);
+        Assert.Contains("GeneratedDispatchRoots.AddStream<global::TestApp.HiddenStream, int>();", source);
+    }
+
     [Fact]
     public void ExecutingRegisterAll_PopulatesTheProcessWideRootStore()
     {
