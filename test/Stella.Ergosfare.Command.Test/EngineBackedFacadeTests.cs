@@ -104,4 +104,45 @@ public class EngineBackedFacadeTests
         Assert.NotEqual(first, third);
     }
 
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task TypedSend_ThroughTheInterface_RunsTheSamePipeline()
+    {
+        var provider = new ServiceCollection()
+            .AddErgosfare(x => x.AddCommandModule(c => c.Register<EchoCommandHandler>()))
+            .BuildServiceProvider();
+        await using var _ = provider;
+
+        var mediator = provider.GetRequiredService<ICommandMediator>();
+        var context = new ErgosfareContext();
+
+        var typed = await mediator.SendAsync<EchoCommand, string>(new EchoCommand { Payload = "hi" }, context);
+        var untyped = await mediator.SendAsync(new EchoCommand { Payload = "hi" });
+
+        Assert.Equal("hi!", typed);
+        Assert.Equal(untyped, typed);
+        Assert.Equal("hi", context.Items["sawPayload"]);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public void TypedSend_IsImplementedByTheFacade_NotInheritedFromTheDefault()
+    {
+        // The typed members are default interface methods forwarding to the untyped calls,
+        // so an implementation that does not override them still compiles and still returns
+        // the right answer — it just never reaches the typed engine path. That failure is
+        // invisible: no diagnostic, no wrong result, only the speedup quietly gone. This
+        // pins the override so a signature drifting apart from the contract fails here
+        // instead of downgrading in silence.
+        var declared = typeof(CommandMediator)
+            .GetMethods()
+            .Where(m => m.Name == nameof(ICommandMediator.SendAsync) && m.GetGenericArguments().Length == 2)
+            .ToArray();
+
+        // One per shape: groups, context, cancellation token, GroupSet, string[].
+        Assert.Equal(5, declared.Length);
+        Assert.All(declared, m => Assert.Equal(typeof(CommandMediator), m.DeclaringType));
+    }
 }

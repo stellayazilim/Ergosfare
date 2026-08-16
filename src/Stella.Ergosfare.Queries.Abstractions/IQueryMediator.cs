@@ -95,4 +95,62 @@ public interface IQueryMediator : IMessage
 #pragma warning disable CS0618
         => StreamAsync(query, (IEnumerable<string>?)groups, cancellationToken);
 #pragma warning restore CS0618
+
+    /// <summary>
+    ///     Executes a query whose own type is named alongside its result, so the dispatch
+    ///     reaches its pipeline through a compile-time constant pair rather than reading the
+    ///     query's type back at run time.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Every other lane already takes the message as its type argument; this one could
+    ///         not, because <typeparamref name="TQueryResult"/> has to be a type parameter for
+    ///         the return type and C# does not infer type arguments through constraints. Naming
+    ///         both is the price, and it is why these are additions rather than replacements:
+    ///         <c>QueryAsync&lt;TQueryResult&gt;(IQuery&lt;TQueryResult&gt;)</c> stays the terse
+    ///         form, and executing a query read off a queue is a legitimate shape whose
+    ///         concrete type genuinely is a run-time fact.
+    ///     </para>
+    ///     <para>
+    ///         Default implementations over the untyped calls, so an existing implementation
+    ///         keeps compiling and simply forwards. What is gained is gained by overriding
+    ///         them — <c>QueryMediator</c> does.
+    ///     </para>
+    ///     <para>
+    ///         The streaming members are deliberately left untyped: their shape is under
+    ///         revision, and adding a surface to something scheduled to change is work that
+    ///         has to be undone.
+    ///     </para>
+    /// </remarks>
+    /// <typeparam name="TQuery">The query's own type.</typeparam>
+    /// <typeparam name="TQueryResult">The result the query declares.</typeparam>
+    ValueTask<TQueryResult> QueryAsync<TQuery, TQueryResult>(TQuery query, IEnumerable<string>? groups,
+        CancellationToken cancellationToken)
+        where TQuery : IQuery<TQueryResult>
+        => QueryAsync<TQueryResult>(query, groups, cancellationToken);
+
+    /// <summary>Typed counterpart of the context query.</summary>
+    ValueTask<TQueryResult> QueryAsync<TQuery, TQueryResult>(TQuery query, ErgosfareContext context,
+        IEnumerable<string>? groups = null)
+        where TQuery : IQuery<TQueryResult>
+        => QueryAsync<TQueryResult>(query, context, groups);
+
+    /// <summary>Typed query through the default pipeline.</summary>
+    ValueTask<TQueryResult> QueryAsync<TQuery, TQueryResult>(TQuery query,
+        CancellationToken cancellationToken = default)
+        where TQuery : IQuery<TQueryResult>
+        => QueryAsync<TQuery, TQueryResult>(query, (IEnumerable<string>?)null, cancellationToken);
+
+    /// <summary>Typed counterpart of the canonical group-filter query.</summary>
+    ValueTask<TQueryResult> QueryAsync<TQuery, TQueryResult>(TQuery query, GroupSet groups,
+        CancellationToken cancellationToken = default)
+        where TQuery : IQuery<TQueryResult>
+        => QueryAsync<TQuery, TQueryResult>(query, groups.Count == 0 ? null : (IEnumerable<string>?)groups,
+            cancellationToken);
+
+    /// <summary>Typed counterpart of the array group-filter query.</summary>
+    ValueTask<TQueryResult> QueryAsync<TQuery, TQueryResult>(TQuery query, string[] groups,
+        CancellationToken cancellationToken = default)
+        where TQuery : IQuery<TQueryResult>
+        => QueryAsync<TQuery, TQueryResult>(query, (IEnumerable<string>?)groups, cancellationToken);
 }

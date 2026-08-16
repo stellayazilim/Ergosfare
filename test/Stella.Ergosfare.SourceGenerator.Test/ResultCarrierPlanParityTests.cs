@@ -354,8 +354,12 @@ public class ResultCarrierPlanParityTests
     /// </summary>
     private static async Task<object?> SendReflective(ICommandMediator mediator, object command, Type resultType)
     {
+        // Arity one: the terse result overload, which takes the command as ICommand<TResult>.
+        // Its typed sibling — SendAsync<TCommand, TResult> — has the same parameter shape and
+        // would otherwise match here too.
         var send = typeof(ICommandMediator).GetMethods()
             .Single(m => m.Name == "SendAsync" && m.IsGenericMethodDefinition
+                && m.GetGenericArguments().Length == 1
                 && m.GetParameters() is { Length: 3 } parameters
                 && parameters[1].ParameterType == typeof(IEnumerable<string>))
             .MakeGenericMethod(resultType);

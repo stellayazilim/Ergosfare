@@ -99,4 +99,44 @@ public class CommandMediator : ICommandMediator
     public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct, string[] groups,
         CancellationToken cancellationToken = default)
         => SendAsync(commandConstruct, (IEnumerable<string>?)groups, cancellationToken);
+
+    /// <summary>
+    /// Typed send: both the command's own type and its result reach the engine as type
+    /// arguments, so the executor is a static generic field read instead of a lookup keyed
+    /// by the command's run-time type.
+    /// </summary>
+    /// <inheritdoc cref="ICommandMediator.SendAsync{TCommand,TResult}(TCommand, IEnumerable{string}, CancellationToken)" path="/remarks"/>
+    public ValueTask<TResult> SendAsync<TCommand, TResult>(TCommand commandConstruct, IEnumerable<string>? groups,
+        CancellationToken cancellationToken)
+        where TCommand : ICommand<TResult>
+        => _engine.DispatchAsync<TCommand, TResult>(commandConstruct, _serviceProvider, cancellationToken, groups);
+
+    /// <summary>Typed counterpart of the context send.</summary>
+    public ValueTask<TResult> SendAsync<TCommand, TResult>(TCommand commandConstruct, ErgosfareContext context,
+        IEnumerable<string>? groups = null)
+        where TCommand : ICommand<TResult>
+        => _engine.DispatchAsync<TCommand, TResult>(commandConstruct, context, _serviceProvider, groups);
+
+    /// <summary>Typed send through the default pipeline.</summary>
+    public ValueTask<TResult> SendAsync<TCommand, TResult>(TCommand commandConstruct,
+        CancellationToken cancellationToken = default)
+        where TCommand : ICommand<TResult>
+        => SendAsync<TCommand, TResult>(commandConstruct, (IEnumerable<string>?)null, cancellationToken);
+
+    /// <summary>Typed counterpart of the canonical group-filter send.</summary>
+    public ValueTask<TResult> SendAsync<TCommand, TResult>(TCommand commandConstruct, GroupSet groups,
+        CancellationToken cancellationToken = default)
+        where TCommand : ICommand<TResult>
+    {
+        ArgumentNullException.ThrowIfNull(groups);
+
+        return SendAsync<TCommand, TResult>(commandConstruct,
+            groups.Count == 0 ? null : (IEnumerable<string>?)groups, cancellationToken);
+    }
+
+    /// <summary>Typed counterpart of the array group-filter send.</summary>
+    public ValueTask<TResult> SendAsync<TCommand, TResult>(TCommand commandConstruct, string[] groups,
+        CancellationToken cancellationToken = default)
+        where TCommand : ICommand<TResult>
+        => SendAsync<TCommand, TResult>(commandConstruct, (IEnumerable<string>?)groups, cancellationToken);
 }
