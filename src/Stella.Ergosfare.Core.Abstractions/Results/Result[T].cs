@@ -6,7 +6,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Results;
 /// See <see cref="Result"/> for the zero-allocation rationale.
 /// </summary>
 /// <typeparam name="TValue">The successful payload type.</typeparam>
-public readonly record struct Result<TValue>
+public readonly record struct Result<TValue> : INativeAdapterCarrier
 {
     private readonly TValue? _value;
 
@@ -15,6 +15,9 @@ public readonly record struct Result<TValue>
         _value = value;
         Exception = exception;
     }
+
+    /// <inheritdoc />
+    object INativeAdapterCarrier.NativeAdapter => ResultExceptionAdapter<TValue>.Instance;
 
     /// <summary>The carried failure, or <c>null</c> on success.</summary>
     public Exception? Exception { get; }

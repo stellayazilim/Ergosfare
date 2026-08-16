@@ -18,9 +18,12 @@ namespace Stella.Ergosfare.Core.Abstractions.Results;
 /// via <see cref="Results.ResultExceptionAdapter"/> — no user adapter registration needed.
 /// </para>
 /// </remarks>
-public readonly record struct Result
+public readonly record struct Result : INativeAdapterCarrier
 {
     private Result(Exception? exception) => Exception = exception;
+
+    /// <inheritdoc />
+    object INativeAdapterCarrier.NativeAdapter => ResultExceptionAdapter.Instance;
 
     /// <summary>The carried failure, or <c>null</c> on success.</summary>
     public Exception? Exception { get; }

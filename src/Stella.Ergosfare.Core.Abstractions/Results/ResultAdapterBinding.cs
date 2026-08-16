@@ -70,13 +70,8 @@ public static class ResultAdapterBinding
             (Ignored, Adapter) = Resolve();
         }
 
-        [UnconditionalSuppressMessage("Trimming", "IL2055",
-            Justification = "The built-in adapter generic closes over a live pipeline's result payload type; the pipeline roots it.")]
         [UnconditionalSuppressMessage("Trimming", "IL2072",
             Justification = "The annotation's DynamicallyAccessedMembers preserves the adapter's public parameterless constructor.")]
-        [UnconditionalSuppressMessage("AOT", "IL3050",
-            Justification = "Reflective instantiation only serves Result<T> pipelines outside generated dispatch roots; " +
-                            "generated apps close the executor generics — and with them this slot — at compile time.")]
         private static (bool Ignored, IResultAdapter<TResult>? Adapter) Resolve()
         {
             // One walk over the base chain for both attributes — the runtime mirror of
@@ -117,18 +112,13 @@ public static class ResultAdapterBinding
                 }
             }
 
-            var resultType = typeof(TResult);
-
-            if (resultType == typeof(Result))
+            // The framework's own carriers name their adapter themselves, so both of them
+            // answer through one boxing of the slot's default rather than a type test per
+            // carrier and a reflective closing for the generic one. A reference-typed slot
+            // boxes to null and falls through, which is the overwhelmingly common case.
+            if (default(TResult) is INativeAdapterCarrier carrier)
             {
-                return (false, (IResultAdapter<TResult>)(object)ResultExceptionAdapter.Instance);
-            }
-
-            if (resultType.IsGenericType && resultType.GetGenericTypeDefinition() == typeof(Result<>))
-            {
-                var adapterType = typeof(ResultExceptionAdapter<>).MakeGenericType(resultType.GetGenericArguments());
-
-                return (false, (IResultAdapter<TResult>)adapterType.GetField("Instance")!.GetValue(null)!);
+                return (false, (IResultAdapter<TResult>)carrier.NativeAdapter);
             }
 
             return (false, null);
