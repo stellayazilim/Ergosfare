@@ -80,4 +80,56 @@ public interface ICommandMediator
     ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, string[] groups,
         CancellationToken cancellationToken = default)
         => SendAsync(command, (IEnumerable<string>?)groups, cancellationToken);
+
+    /// <summary>
+    ///     Sends a command whose own type is named alongside its result, so the dispatch
+    ///     reaches its pipeline through a compile-time constant pair rather than reading the
+    ///     command's type back at run time.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Every other lane already takes the message as its type argument; this one could
+    ///         not, because <typeparamref name="TResult"/> has to be a type parameter for the
+    ///         return type and C# does not infer type arguments through constraints. Naming
+    ///         both is the price, and it is why these are additions rather than replacements:
+    ///         <c>SendAsync&lt;TResult&gt;(ICommand&lt;TResult&gt;)</c> stays the terse form,
+    ///         and dispatching a command read off a queue is a legitimate shape whose concrete
+    ///         type genuinely is a run-time fact.
+    ///     </para>
+    ///     <para>
+    ///         Default implementations over the untyped calls, so an existing implementation
+    ///         keeps compiling and simply forwards. What is gained is gained by overriding
+    ///         them — <c>CommandMediator</c> does.
+    ///     </para>
+    /// </remarks>
+    /// <typeparam name="TCommand">The command's own type.</typeparam>
+    /// <typeparam name="TResult">The result the command declares.</typeparam>
+    ValueTask<TResult> SendAsync<TCommand, TResult>(TCommand command, IEnumerable<string>? groups,
+        CancellationToken cancellationToken)
+        where TCommand : ICommand<TResult>
+        => SendAsync<TResult>(command, groups, cancellationToken);
+
+    /// <summary>Typed counterpart of the context send.</summary>
+    ValueTask<TResult> SendAsync<TCommand, TResult>(TCommand command, ErgosfareContext context,
+        IEnumerable<string>? groups = null)
+        where TCommand : ICommand<TResult>
+        => SendAsync<TResult>(command, context, groups);
+
+    /// <summary>Typed send through the default pipeline.</summary>
+    ValueTask<TResult> SendAsync<TCommand, TResult>(TCommand command, CancellationToken cancellationToken = default)
+        where TCommand : ICommand<TResult>
+        => SendAsync<TCommand, TResult>(command, (IEnumerable<string>?)null, cancellationToken);
+
+    /// <summary>Typed counterpart of the canonical group-filter send.</summary>
+    ValueTask<TResult> SendAsync<TCommand, TResult>(TCommand command, GroupSet groups,
+        CancellationToken cancellationToken = default)
+        where TCommand : ICommand<TResult>
+        => SendAsync<TCommand, TResult>(command, groups.Count == 0 ? null : (IEnumerable<string>?)groups,
+            cancellationToken);
+
+    /// <summary>Typed counterpart of the array group-filter send.</summary>
+    ValueTask<TResult> SendAsync<TCommand, TResult>(TCommand command, string[] groups,
+        CancellationToken cancellationToken = default)
+        where TCommand : ICommand<TResult>
+        => SendAsync<TCommand, TResult>(command, (IEnumerable<string>?)groups, cancellationToken);
 }

@@ -111,7 +111,8 @@ public class CachePressureBenchmark
     }
 
     /// <summary>Builds the source-generated lane in its own benchmark process.</summary>
-    [GlobalSetup(Targets = [nameof(Command_Void_Generated), nameof(Query_Result_Generated)])]
+    [GlobalSetup(Targets = [nameof(Command_Void_Generated), nameof(Query_Result_Generated),
+        nameof(Query_Result_Generated_Typed)])]
     public void SetupGenerated()
     {
         _ergosfareGenerated = new ServiceCollection()
@@ -131,7 +132,8 @@ public class CachePressureBenchmark
     }
 
     /// <summary>Releases the source-generated lane's provider.</summary>
-    [GlobalCleanup(Targets = [nameof(Command_Void_Generated), nameof(Query_Result_Generated)])]
+    [GlobalCleanup(Targets = [nameof(Command_Void_Generated), nameof(Query_Result_Generated),
+        nameof(Query_Result_Generated_Typed)])]
     public void CleanupGenerated() => _ergosfareGenerated.Dispose();
 
     /// <summary>Builds the memoized lane in its own benchmark process.</summary>
@@ -194,6 +196,16 @@ public class CachePressureBenchmark
     /// <inheritdoc cref="Command_Void_Generated" />
     [Benchmark, BenchmarkCategory(ResultShape)]
     public ValueTask<int> Query_Result_Generated() => _generatedQueries.QueryAsync(_intQuery);
+
+    /// <summary>
+    /// The same generated lane reached through the typed overload: the query's own type is
+    /// a type argument, so the executor is a static generic field read instead of a
+    /// <c>GetType()</c>, a <c>(message, result)</c> tuple hash and a slot refresh. The pair
+    /// against <see cref="Query_Result_Generated"/> is what that lookup costs.
+    /// </summary>
+    [Benchmark, BenchmarkCategory(ResultShape)]
+    public ValueTask<int> Query_Result_Generated_Typed()
+        => _generatedQueries.QueryAsync<IntQuery, int>(_intQuery);
 
     /// <inheritdoc cref="Command_Void_Memoized" />
     [Benchmark, BenchmarkCategory(ResultShape)]

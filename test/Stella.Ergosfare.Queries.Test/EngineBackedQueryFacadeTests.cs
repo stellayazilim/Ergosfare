@@ -76,4 +76,45 @@ public class EngineBackedQueryFacadeTests
             Assert.Equal(string.Empty, await mediator.QueryAsync(new StubNonGenericStringResultQuery()));
         }
     }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task TypedQuery_ThroughTheInterface_AnswersLikeTheUntypedOne()
+    {
+        var provider = new ServiceCollection()
+            .AddErgosfare(x => x.AddQueryModule(q => q.Register<StubNonGenericStringResultQueryHandler>()))
+            .BuildServiceProvider();
+        await using var _ = provider;
+
+        var mediator = provider.GetRequiredService<IQueryMediator>();
+
+        var typed = await mediator
+            .QueryAsync<StubNonGenericStringResultQuery, string>(new StubNonGenericStringResultQuery());
+        var untyped = await mediator.QueryAsync(new StubNonGenericStringResultQuery());
+
+        Assert.Equal(untyped, typed);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public void TypedQuery_IsImplementedByTheFacade_NotInheritedFromTheDefault()
+    {
+        // The typed members are default interface methods forwarding to the untyped calls,
+        // so an implementation that does not override them still compiles and still returns
+        // the right answer — it just never reaches the typed engine path. That failure is
+        // invisible: no diagnostic, no wrong result, only the speedup quietly gone. This
+        // pins the override so a signature drifting apart from the contract fails here
+        // instead of downgrading in silence.
+        var declared = typeof(QueryMediator)
+            .GetMethods()
+            .Where(m => m.Name == nameof(IQueryMediator.QueryAsync) && m.GetGenericArguments().Length == 2)
+            .ToArray();
+
+        // One per shape: groups, context, cancellation token, GroupSet, string[]. The
+        // streaming members stay untyped on purpose — their shape is under revision.
+        Assert.Equal(5, declared.Length);
+        Assert.All(declared, m => Assert.Equal(typeof(QueryMediator), m.DeclaringType));
+    }
 }

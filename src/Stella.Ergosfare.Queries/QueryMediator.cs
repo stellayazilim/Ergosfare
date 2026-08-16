@@ -110,4 +110,43 @@ public class QueryMediator : IQueryMediator
     public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, string[] groups,
         CancellationToken cancellationToken = default)
         => StreamAsync(query, (IEnumerable<string>?)groups, cancellationToken);
+
+    /// <summary>
+    /// Typed query: both the query's own type and its result reach the engine as type
+    /// arguments, so the executor is a static generic field read instead of a lookup keyed
+    /// by the query's run-time type.
+    /// </summary>
+    /// <inheritdoc cref="IQueryMediator.QueryAsync{TQuery,TQueryResult}(TQuery, IEnumerable{string}, CancellationToken)" path="/remarks"/>
+    public ValueTask<TResult> QueryAsync<TQuery, TResult>(TQuery query, IEnumerable<string>? groups,
+        CancellationToken cancellationToken)
+        where TQuery : IQuery<TResult>
+        => _engine.DispatchAsync<TQuery, TResult>(query, _serviceProvider, cancellationToken, groups);
+
+    /// <summary>Typed counterpart of the context query.</summary>
+    public ValueTask<TResult> QueryAsync<TQuery, TResult>(TQuery query, ErgosfareContext context,
+        IEnumerable<string>? groups = null)
+        where TQuery : IQuery<TResult>
+        => _engine.DispatchAsync<TQuery, TResult>(query, context, _serviceProvider, groups);
+
+    /// <summary>Typed query through the default pipeline.</summary>
+    public ValueTask<TResult> QueryAsync<TQuery, TResult>(TQuery query, CancellationToken cancellationToken = default)
+        where TQuery : IQuery<TResult>
+        => QueryAsync<TQuery, TResult>(query, (IEnumerable<string>?)null, cancellationToken);
+
+    /// <summary>Typed counterpart of the canonical group-filter query.</summary>
+    public ValueTask<TResult> QueryAsync<TQuery, TResult>(TQuery query, GroupSet groups,
+        CancellationToken cancellationToken = default)
+        where TQuery : IQuery<TResult>
+    {
+        ArgumentNullException.ThrowIfNull(groups);
+
+        return QueryAsync<TQuery, TResult>(query, groups.Count == 0 ? null : (IEnumerable<string>?)groups,
+            cancellationToken);
+    }
+
+    /// <summary>Typed counterpart of the array group-filter query.</summary>
+    public ValueTask<TResult> QueryAsync<TQuery, TResult>(TQuery query, string[] groups,
+        CancellationToken cancellationToken = default)
+        where TQuery : IQuery<TResult>
+        => QueryAsync<TQuery, TResult>(query, (IEnumerable<string>?)groups, cancellationToken);
 }
