@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
@@ -369,7 +369,7 @@ public class StagedPlanExecutionParityTests
         var frozen = GeneratedDispatchRoots.FindFrozenComposition(commandType);
         Assert.NotNull(frozen);
 
-        var shape = frozen!.BuildShape(commandType, []);
+        var shape = frozen.BuildShape(commandType, []);
 
         Assert.Equal([assembly.GetType("TestApp.GenHappyCommandHandler")!], shape.Handlers);
         Assert.Empty(shape.IndirectHandlers);

@@ -1,7 +1,7 @@
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
 
-namespace Stella.Ergosfare.Contract.Test.Pipeline.Generated;
+namespace Stella.Ergosfare.Contract.Test.Pipeline;
 
 // The pipeline scenarios' types for the source-generated registration axis. They are the
 // assembly's ONLY default-discovery constructs — every other area's types carry a

@@ -708,7 +708,7 @@ internal static class RegistrationEmitter
     private const string FrozenParticipantFullName = "global::Stella.Ergosfare.Core.Abstractions.DispatchRoots.FrozenParticipant";
 
     private static void AppendFrozenSegment(
-        StringBuilder sb, System.Collections.Immutable.ImmutableArray<FrozenParticipantModel> segment, bool last = false)
+        StringBuilder sb, ImmutableArray<FrozenParticipantModel> segment, bool last = false)
     {
         if (segment.IsEmpty)
         {
@@ -937,7 +937,7 @@ internal static class RegistrationEmitter
     ///     applies to a broadcast — one shape, one gate.
     /// </summary>
     private static void AppendHandlerSegment(
-        StringBuilder sb, System.Collections.Immutable.ImmutableArray<StagedHandlerModel> handlers)
+        StringBuilder sb, ImmutableArray<StagedHandlerModel> handlers)
     {
         if (handlers.IsEmpty)
         {
@@ -960,7 +960,7 @@ internal static class RegistrationEmitter
         sb.Append(" }");
     }
 
-    private static void AppendCompositionStage(StringBuilder sb, System.Collections.Immutable.ImmutableArray<StagedCallModel> calls)
+    private static void AppendCompositionStage(StringBuilder sb, ImmutableArray<StagedCallModel> calls)
     {
         if (calls.IsEmpty)
         {
@@ -1006,6 +1006,12 @@ internal static class RegistrationEmitter
     ///     The strategy/invoker-parity cast of the chained object result back to the
     ///     pipeline result type.
     /// </summary>
+    /// <param name="resultExpression">The pipeline's result type expression.</param>
+    /// <param name="resultIsValueType">
+    ///     Whether that result is a value type, which cannot carry a null state and so
+    ///     takes the suppressing form.
+    /// </param>
+    /// <param name="operand">The chain variable being cast.</param>
     /// <param name="targetAcceptsNull">
     ///     Whether the stage being called declares its result parameter as
     ///     <c>TResult?</c>. Exception and final interceptors do; post interceptors declare
@@ -1029,12 +1035,6 @@ internal static class RegistrationEmitter
     ///     message and result types, so a value-typed message or result crosses the call
     ///     unboxed, and its dependencies bind positionally to what the boundary has.
     /// </summary>
-    /// <param name="resultExpression">
-    ///     The local holding the pipeline result at this boundary, or <c>null</c> where the
-    ///     body has none. A resultless pipeline's observers declare no result parameter, so
-    ///     the two go together; before the handler has run, the local is the plan's
-    ///     <c>default</c> and the observer reads it as such.
-    /// </param>
     private static void EmitPluginCalls(
         StringBuilder sb, StagedPlanModel plan, PluginHook hook, string indent)
     {
@@ -1123,7 +1123,7 @@ internal static class RegistrationEmitter
     private static void EmitHandlerSegment(
         StringBuilder sb,
         StagedPlanModel plan,
-        System.Collections.Immutable.ImmutableArray<StagedHandlerModel> handlers,
+        ImmutableArray<StagedHandlerModel> handlers,
         bool direct,
         string indent)
     {

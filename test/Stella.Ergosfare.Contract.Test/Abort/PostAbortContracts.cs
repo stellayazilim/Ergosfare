@@ -175,7 +175,7 @@ public abstract class AbortResultExceptionBase<TCommand> : ICommandExceptionInte
     public ValueTask<string?> HandleAsync(TCommand command, string? result, Exception exception, ErgosfareContext context)
     {
         context.Mark("exception", AbortVocabulary.Describe(exception));
-        return ValueTask.FromResult<string?>(result);
+        return ValueTask.FromResult(result);
     }
 }
 

@@ -1,5 +1,6 @@
-﻿using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
+using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Events.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
@@ -42,8 +43,8 @@ internal class EventModule(Action<EventModuleBuilder> builder) : IModule
         // nothing for most callers and everything for a hot loop — so the choice belongs to
         // the caller, and both spellings resolve the one object graph.
         configuration.Services.TryAddTransient<EventMediator>(
-            static provider => global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<IEventMediator>(provider) as EventMediator
-                ?? throw new global::System.InvalidOperationException(
+            static provider => provider.GetRequiredService<IEventMediator>() as EventMediator
+                ?? throw new InvalidOperationException(
                     "The registered IEventMediator is not a EventMediator; a replacement registration cannot serve the concrete facade."));
         configuration.Services.TryAddTransient<IPublisher, EngineBackedEventMediator>();
     }

@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 
 namespace Stella.Ergosfare.Core.Test;
 
@@ -101,8 +101,12 @@ public class FrozenCompositionTests
             composition.BuildShape(typeof(ParityMessage), ["default", "reporting"]).PostInterceptors);
     }
 
+    // The parameter is the scenario: these exist to be generic, not to use T.
+    // ReSharper disable once UnusedTypeParameter
     private sealed record GenericMessage<T>;
 
+    // The parameter is the scenario: these exist to be generic, not to use T.
+    // ReSharper disable once UnusedTypeParameter
     private sealed class GenericHandler<T>;
 
     [Fact]
@@ -157,6 +161,8 @@ public class FrozenCompositionTests
         Assert.Null(GeneratedDispatchRoots.FindFrozenComposition(typeof(LadderForeign)));
     }
 
+    // The parameter is the scenario: the type exists to be generic, not to use T.
+    // ReSharper disable once UnusedTypeParameter
     private sealed record LadderGenericMessage<T>;
 
     [Fact]

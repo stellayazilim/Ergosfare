@@ -172,6 +172,7 @@ public sealed class FrozenCompositionCatalog
             Add(composition.IndirectFinalInterceptorRows, into, narrow);
         }
 
+        // ReSharper disable once LocalFunctionHidesMethod
         void Add(FrozenParticipant[] segment, HashSet<Type> into, bool narrow)
         {
             foreach (var participant in segment)

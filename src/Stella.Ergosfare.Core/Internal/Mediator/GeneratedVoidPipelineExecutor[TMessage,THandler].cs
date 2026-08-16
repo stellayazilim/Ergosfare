@@ -1,5 +1,4 @@
-﻿using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Exceptions;
+using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Results;
@@ -10,7 +9,7 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// <summary>
 /// Void pipeline closed over both the message and its compile-time-known sole handler —
 /// the executor a generated void plan constructs. The fast path resolves the handler
-/// reference exactly like <see cref="VoidPipelineExecutor{TMessage}"/> but invokes it
+/// reference exactly like <see cref="FrozenVoidDispatch{TMessage}"/> but invokes it
 /// through the closed <typeparamref name="THandler"/> type, so the call devirtualizes
 /// (and inlines for sealed handlers) instead of walking the contract pattern match. The
 /// plan is advisory: the dependency cache validates the pipeline on the first dispatch,
@@ -25,7 +24,6 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
     where TMessage : IMessage
     where THandler : class, IAsyncHandler<TMessage>
 {
-    private static readonly string[] EmptyGroups = [];
 
     /// <summary>
     /// The grouped compositions of this pipeline. The plan names one handler as the whole
@@ -167,6 +165,9 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
 
         var adapter = ResultAdapterBinding.For<TMessage, Unit>(serviceProvider);
         _resultAdapter = adapter;
+        // The materializer facet is optional and consumer-supplied: no adapter in this
+        // repository implements both, which is exactly what the probe is for.
+        // ReSharper disable once SuspiciousTypeConversion.Global
         _resultMaterializer = adapter as IResultMaterializer<Unit>;
         _resultAdapterResolved = true;
     }
@@ -184,7 +185,7 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
                 return cached;
             }
 
-            var dependencies = typedFactory.Create(typeof(TMessage), EmptyGroups);
+            var dependencies = typedFactory.Create(typeof(TMessage), []);
             var fastDependencies = dependencies as MessageDependencies;
             _cachedFastDependencies = fastDependencies;
             _cachedDependencies = dependencies;
@@ -199,6 +200,6 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
         }
 
         _useDirectConstruction = false;
-        return dependenciesFactory.Create(typeof(TMessage), EmptyGroups);
+        return dependenciesFactory.Create(typeof(TMessage), []);
     }
 }

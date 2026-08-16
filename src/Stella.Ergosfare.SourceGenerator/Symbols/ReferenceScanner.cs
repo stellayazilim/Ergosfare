@@ -176,7 +176,8 @@ internal static class ReferenceScanner
     /// <summary>
     ///     Projects a metadata type from a referenced assembly to its registration model,
     ///     or <c>null</c> when it carries no Ergosfare marker. Mirrors
-    ///     <see cref="Transform"/>; descriptor computation is shared because both operate
+    ///     <see cref="RegistrableTypeReader.Transform"/>; descriptor computation is shared
+    ///     because both operate
     ///     on <see cref="INamedTypeSymbol"/>. Types the generated code cannot name —
     ///     internal without an <c>InternalsVisibleTo</c> grant, protected or private
     ///     nested, or compiler-mangled (file-local) — flow through as inaccessible and

@@ -62,6 +62,7 @@ public static class ResultAdapterBinding
     private static class Slot<TMessage, TResult>
     {
         public static readonly IResultAdapter<TResult>? Adapter;
+        // ReSharper disable once StaticMemberInGenericType
         public static readonly bool Ignored;
 
         static Slot()

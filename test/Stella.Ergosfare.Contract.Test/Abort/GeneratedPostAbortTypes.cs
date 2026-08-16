@@ -1,5 +1,9 @@
 using Stella.Ergosfare.Core.Abstractions.Attributes;
 
+// The sub-namespace is load-bearing: this file and its Fallback twin declare the same
+// type names on purpose, so one lane can be compared against the other. Flattening
+// either to its folder namespace collides.
+// ReSharper disable once CheckNamespace
 namespace Stella.Ergosfare.Contract.Test.Abort.Generated;
 
 // The post-abort scenarios' types for the source-generated registration axis. Top-level,

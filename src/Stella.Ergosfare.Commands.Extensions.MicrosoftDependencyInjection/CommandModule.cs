@@ -42,8 +42,8 @@ internal class CommandModule : IModule
         // nothing for most callers and everything for a hot loop — so the choice belongs to
         // the caller, and both spellings resolve the one object graph.
         configuration.Services.TryAddTransient<CommandMediator>(
-            static provider => global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<ICommandMediator>(provider) as CommandMediator
-                ?? throw new global::System.InvalidOperationException(
+            static provider => Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<ICommandMediator>(provider) as CommandMediator
+                ?? throw new InvalidOperationException(
                     "The registered ICommandMediator is not a CommandMediator; a replacement registration cannot serve the concrete facade."));
     }
 }

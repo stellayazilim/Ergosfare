@@ -52,7 +52,7 @@ public class CommandExceptionInterceptorDefaultImplementationTests
 
         // act — invoke through the root interface member the pipeline uses
         var result = await ((IAsyncExceptionInterceptor<TestCommandStringResult, string>) interceptor).HandleAsync(
-            new TestCommandStringResult(), "original", new Exception("boom"), new ErgosfareContext(null, default));
+            new TestCommandStringResult(), "original", new Exception("boom"), new ErgosfareContext());
 
         // assert
         Assert.True(interceptor.Called);
@@ -67,7 +67,7 @@ public class CommandExceptionInterceptorDefaultImplementationTests
         var interceptor = new TestCommandPostInterceptor();
 
         var result = await ((IAsyncPostInterceptor<TestCommandStringResult, string>) interceptor).HandleAsync(
-            new TestCommandStringResult(), "result", new ErgosfareContext(null, default));
+            new TestCommandStringResult(), "result", new ErgosfareContext());
 
         Assert.True(interceptor.Called);
         Assert.Equal("result", result);

@@ -1,10 +1,13 @@
 using System.Collections.Immutable;
 using Stella.Ergosfare.SourceGenerator.Models;
-using Stella.Ergosfare.SourceGenerator.ResultAdapters;
 
 namespace Stella.Ergosfare.SourceGenerator.Planning;
 internal sealed partial class PlanBuilder
 {
+    /// <summary>
+    ///     The participant's staged construction expression, or <c>null</c> when keyed
+    ///     resolutions are needed but the keyed-service extensions are not resolvable in
+    ///     the consuming compilation.
     /// </summary>
     private static string? GatedConstructionExpression(RegistrableTypeModel participant, bool hasKeyedServiceExtensions)
         => participant.StagedConstructionUsesKeyedServices && !hasKeyedServiceExtensions

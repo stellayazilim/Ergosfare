@@ -1,4 +1,4 @@
-namespace Stella.Ergosfare.Core.Abstractions;
+namespace Stella.Ergosfare.Core.Abstractions.Results;
 
 /// <summary>
 /// The framework's default value-carried outcome for pipelines without a payload: success,

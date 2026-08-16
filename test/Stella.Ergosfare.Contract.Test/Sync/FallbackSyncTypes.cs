@@ -7,11 +7,15 @@ using Stella.Ergosfare.Core.Abstractions.Attributes;
 // Excluding them is mandatory, not tidiness — the generator's descriptor catalog is filled
 // by a module initializer for every type it models, so a discoverable type would keep its
 // pre-computed descriptors even when registered with Register<T>().
+// The sub-namespace is load-bearing: this file and its generated twin declare the same
+// type names on purpose, so one lane can be compared against the other. Flattening
+// either to its folder namespace collides.
+// ReSharper disable once CheckNamespace
 namespace Stella.Ergosfare.Contract.Test.Sync.Fallback;
 
 // --- void command, synchronous interceptors --------------------------------
 
-/// <inheritdoc cref="Generated.SyncCommand"/>
+/// <inheritdoc cref="Sync.SyncCommand"/>
 [ExcludeFromDiscovery]
 public sealed class SyncCommand : ISyncPayloadCommand
 {
@@ -41,7 +45,7 @@ public sealed class SyncCommandFinal : SyncVoidFinalBase<SyncCommand>;
 
 // --- string-result command, synchronous interceptors -----------------------
 
-/// <inheritdoc cref="Generated.SyncResultCommand"/>
+/// <inheritdoc cref="Sync.SyncResultCommand"/>
 [ExcludeFromDiscovery]
 public sealed class SyncResultCommand : ISyncPayloadResultCommand
 {
@@ -71,7 +75,7 @@ public sealed class SyncResultCommandFinal : SyncResultFinalBase<SyncResultComma
 
 // --- stage ordering across the two flavors ---------------------------------
 
-/// <inheritdoc cref="Generated.SyncOrderedCommand"/>
+/// <inheritdoc cref="Sync.SyncOrderedCommand"/>
 [ExcludeFromDiscovery]
 public sealed class SyncOrderedCommand : ISyncPayloadCommand
 {
@@ -88,7 +92,7 @@ public sealed class SyncOrderedCommandHandler : SyncVoidHandlerBase<SyncOrderedC
 [Weight(8)]
 public sealed class OrderedAsyncHighPre() : AsyncOrderedPreBase<SyncOrderedCommand>("pre:async-high");
 
-/// <inheritdoc cref="Generated.OrderedSyncMidPre"/>
+/// <inheritdoc cref="Sync.OrderedSyncMidPre"/>
 [ExcludeFromDiscovery]
 [Weight(6)]
 public sealed class OrderedSyncMidPre() : SyncOrderedPreBase<SyncOrderedCommand>("pre:sync-mid");
@@ -110,7 +114,7 @@ public sealed class OrderedAsyncLowPost() : AsyncOrderedPostBase<SyncOrderedComm
 
 // --- the pre-Unit result key -----------------------------------------------
 
-/// <inheritdoc cref="Generated.StaleKeyCommand"/>
+/// <inheritdoc cref="Sync.StaleKeyCommand"/>
 [ExcludeFromDiscovery]
 public sealed class StaleKeyCommand : ISyncPayloadCommand
 {

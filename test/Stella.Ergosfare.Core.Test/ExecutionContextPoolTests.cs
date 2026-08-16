@@ -65,7 +65,7 @@ public class ExecutionContextPoolTests
     [Fact]
     public void EmptyContext_ReadPaths_DoNotAllocateTheItemsDictionary()
     {
-        var context = new ErgosfareContext(null, default);
+        var context = new ErgosfareContext();
 
         Assert.False(context.Has("missing"));
         Assert.False(context.TryGet<string>("missing", out _));

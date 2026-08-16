@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Commands.Abstractions;
+using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
@@ -6,6 +6,7 @@ using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Abstractions.StagedPlans;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
+using Stella.Ergosfare.Core.Abstractions.Results;
 
 namespace Stella.Ergosfare.Command.Test;
 
@@ -138,6 +139,8 @@ public class StagedPlanExecutionTests
         }
     }
 
+    // Declared to prove the shape compiles against the plan base; never registered, because the point is the fallback that runs without it.
+    // ReSharper disable once UnusedType.Local
     private sealed class FallbackCommandPlan : StagedVoidPlan<FallbackCommand>
     {
         public override StagedPlanKey Composition { get; } = new(
@@ -596,7 +599,7 @@ public class StagedPlanExecutionTests
             [],
             [],
             [],
-            typeof(Core.Abstractions.Results.ResultExceptionAdapter<int>));
+            typeof(ResultExceptionAdapter<int>));
 
         public override async ValueTask<Result<int>> Execute(AdapterMatchCommand message, ErgosfareContext context, IServiceProvider serviceProvider)
         {

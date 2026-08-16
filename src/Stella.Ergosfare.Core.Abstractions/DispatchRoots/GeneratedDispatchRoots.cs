@@ -295,8 +295,8 @@ public static class GeneratedDispatchRoots
         return builder.ToString();
     }
 
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, FrozenComposition> FrozenCompositions = new();
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, FrozenComposition?> FrozenCompositionLadder = new();
+    private static readonly ConcurrentDictionary<Type, FrozenComposition> FrozenCompositions = new();
+    private static readonly ConcurrentDictionary<Type, FrozenComposition?> FrozenCompositionLadder = new();
 
     /// <summary>
     /// Roots a message's frozen pipeline composition — the pipeline shape produced at

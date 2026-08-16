@@ -18,6 +18,7 @@ public class ResultAdapterPlanEmissionTests
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
+            using Stella.Ergosfare.Core.Abstractions.Results;
 
             namespace TestApp
             {
@@ -55,7 +56,7 @@ public class ResultAdapterPlanEmissionTests
 
         // The plan exists, bakes the built-in adapter's identity, and probes without any
         // adapter instance — the carrier is compiler knowledge.
-        Assert.Contains("AddStagedPlan<global::TestApp.CarrierPing, global::Stella.Ergosfare.Core.Abstractions.Result<string>>", result.GeneratedSource);
+        Assert.Contains("AddStagedPlan<global::TestApp.CarrierPing, global::Stella.Ergosfare.Core.Abstractions.Results.Result<string>>", result.GeneratedSource);
         Assert.Contains("typeof(global::Stella.Ergosfare.Core.Abstractions.Results.ResultExceptionAdapter<string>)", result.GeneratedSource);
         Assert.Contains("if (result.Exception is { } carriedException)", result.GeneratedSource);
         Assert.Contains("postCarrier0.Exception is { } postException0", result.GeneratedSource);
@@ -64,7 +65,7 @@ public class ResultAdapterPlanEmissionTests
         // A real throw materializes into a failed carrier; nothing ever rethrows, so the
         // unhandled-failure slot is not emitted at all. The filtered participant keeps
         // its compile-time filter, now testing the channel-agnostic exception local.
-        Assert.Contains("result = global::Stella.Ergosfare.Core.Abstractions.Result<string>.Fail(e);", result.GeneratedSource);
+        Assert.Contains("result = global::Stella.Ergosfare.Core.Abstractions.Results.Result<string>.Fail(e);", result.GeneratedSource);
         Assert.Contains("if (exception is global::System.ArgumentException)", result.GeneratedSource);
         Assert.DoesNotContain("unhandledException", result.GeneratedSource);
         Assert.DoesNotContain("ResultAdapter.TryGetException", result.GeneratedSource);
@@ -78,6 +79,7 @@ public class ResultAdapterPlanEmissionTests
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
+            using Stella.Ergosfare.Core.Abstractions.Results;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
 
             namespace TestApp
@@ -135,6 +137,7 @@ public class ResultAdapterPlanEmissionTests
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
+            using Stella.Ergosfare.Core.Abstractions.Results;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
 
             namespace TestApp
@@ -188,6 +191,7 @@ public class ResultAdapterPlanEmissionTests
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
+            using Stella.Ergosfare.Core.Abstractions.Results;
 
             namespace TestApp
             {
@@ -224,6 +228,7 @@ public class ResultAdapterPlanEmissionTests
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
+            using Stella.Ergosfare.Core.Abstractions.Results;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
 
             namespace TestApp
@@ -270,6 +275,7 @@ public class ResultAdapterPlanEmissionTests
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
+            using Stella.Ergosfare.Core.Abstractions.Results;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
 
             namespace TestApp
@@ -296,7 +302,7 @@ public class ResultAdapterPlanEmissionTests
 
         // The opt-out suppresses the native tier: the plan is still emitted, carries no
         // baked adapter, and probes nothing — the classic shape, byte for byte.
-        Assert.Contains("AddStagedPlan<global::TestApp.OptedOutPing, global::Stella.Ergosfare.Core.Abstractions.Result<string>>", result.GeneratedSource);
+        Assert.Contains("AddStagedPlan<global::TestApp.OptedOutPing, global::Stella.Ergosfare.Core.Abstractions.Results.Result<string>>", result.GeneratedSource);
         Assert.DoesNotContain("carriedException", result.GeneratedSource);
         Assert.DoesNotContain(".Fail(e);", result.GeneratedSource);
         Assert.DoesNotContain("typeof(global::Stella.Ergosfare.Core.Abstractions.Results.ResultExceptionAdapter", result.GeneratedSource);
@@ -307,6 +313,7 @@ public class ResultAdapterPlanEmissionTests
         using System.Threading.Tasks;
         using Stella.Ergosfare.Commands.Abstractions;
         using Stella.Ergosfare.Core.Abstractions;
+        using Stella.Ergosfare.Core.Abstractions.Results;
         using Stella.Ergosfare.Core.Abstractions.Attributes;
         using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 

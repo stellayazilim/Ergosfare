@@ -15,7 +15,7 @@ internal static class EmittedExpressions
     internal const string AsyncEnumerator = "global::System.Collections.Generic.IAsyncEnumerator";
 
     /// <summary>The framework's own <c>Result</c> carrier, and the adapter serving it.</summary>
-    internal const string NativeResult = "global::Stella.Ergosfare.Core.Abstractions.Result";
+    internal const string NativeResult = "global::Stella.Ergosfare.Core.Abstractions.Results.Result";
 
     internal const string NativeResultAdapter =
         "global::Stella.Ergosfare.Core.Abstractions.Results.ResultExceptionAdapter";

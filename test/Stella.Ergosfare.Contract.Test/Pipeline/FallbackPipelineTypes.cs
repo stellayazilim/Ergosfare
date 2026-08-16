@@ -7,11 +7,15 @@ using Stella.Ergosfare.Core.Abstractions.Attributes;
 // compile-time plans. The scenarios therefore exercise the reflective registration path
 // end to end, and any behavioral drift between it and the generated path shows up as one
 // axis failing while the other passes.
+// The sub-namespace is load-bearing: this file and its generated twin declare the same
+// type names on purpose, so one lane can be compared against the other. Flattening
+// either to its folder namespace collides.
+// ReSharper disable once CheckNamespace
 namespace Stella.Ergosfare.Contract.Test.Pipeline.Fallback;
 
 // --- void command, full pipeline -------------------------------------------
 
-/// <inheritdoc cref="Generated.PipelineCommand"/>
+/// <inheritdoc cref="Pipeline.PipelineCommand"/>
 [ExcludeFromDiscovery]
 public sealed class PipelineCommand : IPayloadCommand
 {
@@ -41,7 +45,7 @@ public sealed class PipelineCommandFinal : PayloadFinalBase<PipelineCommand>;
 
 // --- void command, handler only --------------------------------------------
 
-/// <inheritdoc cref="Generated.BarePipelineCommand"/>
+/// <inheritdoc cref="Pipeline.BarePipelineCommand"/>
 [ExcludeFromDiscovery]
 public sealed class BarePipelineCommand : IPayloadCommand
 {
@@ -55,7 +59,7 @@ public sealed class BarePipelineCommandHandler : PayloadHandlerBase<BarePipeline
 
 // --- string-result command, full pipeline ----------------------------------
 
-/// <inheritdoc cref="Generated.PipelineResultCommand"/>
+/// <inheritdoc cref="Pipeline.PipelineResultCommand"/>
 [ExcludeFromDiscovery]
 public sealed class PipelineResultCommand : IPayloadResultCommand
 {
@@ -85,7 +89,7 @@ public sealed class PipelineResultCommandFinal : PayloadResultFinalBase<Pipeline
 
 // --- string-result command, handler only -----------------------------------
 
-/// <inheritdoc cref="Generated.BarePipelineResultCommand"/>
+/// <inheritdoc cref="Pipeline.BarePipelineResultCommand"/>
 [ExcludeFromDiscovery]
 public sealed class BarePipelineResultCommand : IPayloadResultCommand
 {
@@ -99,7 +103,7 @@ public sealed class BarePipelineResultCommandHandler : PayloadResultHandlerBase<
 
 // --- value-typed query, full pipeline --------------------------------------
 
-/// <inheritdoc cref="Generated.PipelineValueQuery"/>
+/// <inheritdoc cref="Pipeline.PipelineValueQuery"/>
 [ExcludeFromDiscovery]
 public sealed class PipelineValueQuery : IPayloadValueQuery
 {
@@ -129,7 +133,7 @@ public sealed class PipelineValueQueryFinal : PayloadValueFinalBase<PipelineValu
 
 // --- value-typed query, handler only ---------------------------------------
 
-/// <inheritdoc cref="Generated.BarePipelineValueQuery"/>
+/// <inheritdoc cref="Pipeline.BarePipelineValueQuery"/>
 [ExcludeFromDiscovery]
 public sealed class BarePipelineValueQuery : IPayloadValueQuery
 {
@@ -143,7 +147,7 @@ public sealed class BarePipelineValueQueryHandler : PayloadValueHandlerBase<Bare
 
 // --- stage ordering ---------------------------------------------------------
 
-/// <inheritdoc cref="Generated.OrderedCommand"/>
+/// <inheritdoc cref="Pipeline.OrderedCommand"/>
 [ExcludeFromDiscovery]
 public sealed class OrderedCommand : ICommand;
 
@@ -183,7 +187,7 @@ public sealed class OrderedLowPost() : OrderedPostBase<OrderedCommand>("post:low
 
 // --- void command, async typed interceptors ---------------------------------
 
-/// <inheritdoc cref="Generated.AsyncTypedPipelineCommand"/>
+/// <inheritdoc cref="Pipeline.AsyncTypedPipelineCommand"/>
 [ExcludeFromDiscovery]
 public sealed class AsyncTypedPipelineCommand : IPayloadCommand
 {

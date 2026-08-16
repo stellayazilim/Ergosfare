@@ -296,15 +296,13 @@ internal static class Monomorphizer
 
         ParticipantAttributes.GetMarkers(openDefinition, out var isCommand, out var isQuery, out var isEvent);
 
-        var usesKeyedServices = false;
         var typeofExpression = SymbolNaming.VerbatimTypeExpression(closed);
-        var providerConstruction =
-            ConstructionAnalyzer.GetProviderConstructionExpression(closed, typeofExpression, currentAssembly, out usesKeyedServices);
+        var providerConstruction = ConstructionAnalyzer.GetProviderConstructionExpression(
+            closed, typeofExpression, currentAssembly, out var usesKeyedServices);
 
-        var stagedKeyedServices = false;
         var stagedConstruction = ConstructionAnalyzer.TryBuildConstructionExpression(
             closed, typeofExpression, currentAssembly, "serviceProvider",
-            allowParameterless: true, out stagedKeyedServices);
+            allowParameterless: true, out var stagedKeyedServices);
 
         return new RegistrableTypeModel
         {

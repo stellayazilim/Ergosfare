@@ -107,7 +107,7 @@ public class GroupedExecutorSlotTests
 
         static async Task<string> Dispatch(ICommandMediator mediator, params string[] groups)
         {
-            return await mediator.SendAsync(new RoutedEcho(), new ErgosfareContext(null), groups);
+            return await mediator.SendAsync(new RoutedEcho(), new ErgosfareContext(), groups);
         }
     }
 }

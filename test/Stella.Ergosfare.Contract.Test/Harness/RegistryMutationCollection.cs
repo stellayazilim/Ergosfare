@@ -1,4 +1,4 @@
-namespace Stella.Ergosfare.Contract.Test.Runtime;
+namespace Stella.Ergosfare.Contract.Test.Harness;
 
 /// <summary>
 /// Serializes the scenarios that reach process-wide state against each other; letting

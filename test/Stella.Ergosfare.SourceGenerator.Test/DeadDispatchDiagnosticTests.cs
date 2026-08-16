@@ -244,7 +244,7 @@ public class DeadDispatchDiagnosticTests
                 }
             }
             """,
-            outputKind: Microsoft.CodeAnalysis.OutputKind.ConsoleApplication);
+            outputKind: OutputKind.ConsoleApplication);
 
         Assert.Empty(result.CompilationErrors);
 
@@ -601,9 +601,9 @@ public class DeadDispatchDiagnosticTests
         Assert.Empty(silent.GeneratorDiagnostics);
 
         var raised = GeneratorTestHost.Run(source, buildProperties: CompositionRoot,
-            diagnosticOptions: new Dictionary<string, Microsoft.CodeAnalysis.ReportDiagnostic>
+            diagnosticOptions: new Dictionary<string, ReportDiagnostic>
             {
-                ["ERGO009"] = Microsoft.CodeAnalysis.ReportDiagnostic.Warn,
+                ["ERGO009"] = ReportDiagnostic.Warn,
             });
 
         Assert.Empty(raised.CompilationErrors);

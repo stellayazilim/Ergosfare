@@ -1,6 +1,5 @@
 using System.Runtime.CompilerServices;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Internal.Mediator;
 
@@ -62,7 +61,7 @@ public sealed class MessageDispatchEngine
 
     /// <summary>
     /// Broadcasts a message to every handler of its pipeline, renting a pooled context for
-    /// the delivery. The publishing counterpart of <see cref="DispatchAsync(object,IServiceProvider,IDictionary{object,object?},CancellationToken,IEnumerable{string})"/>,
+    /// the delivery. The publishing counterpart of <see cref="DispatchAsync(object, IServiceProvider, CancellationToken, IEnumerable{string})"/>,
     /// and the same shape: find this container's pipeline for the type, run it, return the
     /// context inline when the delivery completed synchronously.
     /// </summary>
@@ -202,7 +201,7 @@ public sealed class MessageDispatchEngine
     /// executor comes from a static-generic holder instead of the type-keyed dictionary —
     /// the last lookup on the group-less hot path. A base-typed generic call falls back to
     /// resolving by the runtime type, so dispatch semantics are identical to
-    /// <see cref="DispatchAsync(object, IServiceProvider, IDictionary{object, object?}?, CancellationToken, IEnumerable{string}?)"/>;
+    /// <see cref="DispatchAsync(object, IServiceProvider, CancellationToken, IEnumerable{string})"/>;
     /// group-filtered dispatches stay on that overload.
     /// </summary>
     /// <remarks>
@@ -265,7 +264,7 @@ public sealed class MessageDispatchEngine
 
     /// <summary>
     /// Result-producing counterpart of
-    /// <see cref="DispatchAsync(object, IServiceProvider, IDictionary{object, object?}?, CancellationToken, IEnumerable{string}?)"/>.
+    /// <see cref="DispatchAsync(object, IServiceProvider, CancellationToken, IEnumerable{string})"/>.
     /// </summary>
     /// <typeparam name="TResult">The expected result type of the message.</typeparam>
     public ValueTask<TResult> DispatchAsync<TResult>(object message, IServiceProvider serviceProvider,

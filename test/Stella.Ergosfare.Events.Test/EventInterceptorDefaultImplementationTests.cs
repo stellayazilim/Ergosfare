@@ -64,7 +64,9 @@ public class EventInterceptorDefaultImplementationTests
         }
     }
 
-    private static ErgosfareContext CreateContext() => new(null, default);
+    // ReSharper disable once RedundantArgumentDefaultValue
+    // ReSharper disable once PreferConcreteValueOverDefault
+    private static ErgosfareContext CreateContext() => new();
 
     [Fact]
     [Trait("Category", "Unit")]

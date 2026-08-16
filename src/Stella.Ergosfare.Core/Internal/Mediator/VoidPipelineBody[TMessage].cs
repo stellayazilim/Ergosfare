@@ -2,7 +2,6 @@ using System.Runtime.ExceptionServices;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
-using Stella.Ergosfare.Core.Abstractions.Results;
 using Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 
 namespace Stella.Ergosfare.Core.Internal.Mediator;

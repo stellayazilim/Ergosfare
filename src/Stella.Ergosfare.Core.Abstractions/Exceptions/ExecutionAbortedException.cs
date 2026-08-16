@@ -61,7 +61,8 @@ public class ExecutionAbortedException : Exception
     }
 
     /// <summary>Why the pipeline was stopped, as the aborting participant stated it.</summary>
-    public string? Reason => Message;
+    // ReSharper disable once UnusedMember.Global
+    public string Reason => Message;
 
     /// <summary>What the aborting participant attached to the signal, if anything.</summary>
     public object? Value { get; }

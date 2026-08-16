@@ -31,7 +31,6 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
 {
     // One copy per closed message type is deliberate — the dispatch itself is per type.
     // ReSharper disable once StaticMemberInGenericType
-    private static readonly string[] EmptyGroups = [];
 
     /// <summary>
     /// The compiled plan for this message type. Null when the generator modeled none — an
@@ -66,7 +65,7 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
     {
         _factory = dependenciesFactory;
 
-        var dependencies = dependenciesFactory.Find(typeof(TEvent), EmptyGroups);
+        var dependencies = dependenciesFactory.Find(typeof(TEvent), []);
 
         if (dependencies is null)
         {
@@ -227,7 +226,7 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
             _cachedGroupedSlot = slot;
         }
 
-        if (slot.Plan is { } plan)
+        if (slot.GroupedPlan is { } plan)
         {
             // A plan keyed by this set decided its participants at compile time; the
             // filtering plan decides them from the set it is handed.
@@ -467,7 +466,7 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
     /// single-handler pipelines apply.
     /// </summary>
     private static ValueTask Invoke(
-        IHandlerReference<Core.Abstractions.Handlers.IHandler> reference,
+        IHandlerReference<Abstractions.Handlers.IHandler> reference,
         TEvent message,
         ErgosfareContext context,
         IServiceProvider serviceProvider)
@@ -476,11 +475,11 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
 
         switch (handler)
         {
-            case Core.Abstractions.Handlers.IAsyncHandler<TEvent> asyncHandler:
+            case Abstractions.Handlers.IAsyncHandler<TEvent> asyncHandler:
                 return asyncHandler.HandleAsync(message, context);
-            case Core.Abstractions.Handlers.IHandler<TEvent, ValueTask> valueTaskShaped:
+            case Abstractions.Handlers.IHandler<TEvent, ValueTask> valueTaskShaped:
                 return valueTaskShaped.Handle(message, context);
-            case Core.Abstractions.Handlers.IHandler<TEvent, object> syncHandler:
+            case Abstractions.Handlers.IHandler<TEvent, object> syncHandler:
                 syncHandler.Handle(message, context);
                 return ValueTask.CompletedTask;
             default:
@@ -513,7 +512,7 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
         public readonly MessageDependencies? Fast = dependencies as MessageDependencies;
 
         /// <summary>The compiled plan of this group set, or <c>null</c> when none serves it.</summary>
-        public readonly StagedBroadcastPlan<TEvent>? Plan = plan;
+        public readonly StagedBroadcastPlan<TEvent>? GroupedPlan = plan;
 
         /// <summary>Whether the plan's direct-construction variant qualifies for this container.</summary>
         public readonly bool PlanDirect = planDirect;

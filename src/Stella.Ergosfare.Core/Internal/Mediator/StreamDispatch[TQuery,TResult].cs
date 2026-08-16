@@ -32,7 +32,6 @@ internal sealed class StreamDispatch<TQuery, TResult>(IMessageDependenciesFactor
 {
     // One copy per closed query type is deliberate — the dispatch itself is per type.
     // ReSharper disable once StaticMemberInGenericType
-    private static readonly string[] EmptyGroups = [];
 
     private IMessageDependencies? _cachedDependencies;
     private GroupedSlot? _cachedGroupedSlot;
@@ -62,7 +61,7 @@ internal sealed class StreamDispatch<TQuery, TResult>(IMessageDependenciesFactor
     {
         if (dependenciesFactory is not MessageDependenciesFactory typedFactory)
         {
-            return Build(dependenciesFactory, EmptyGroups);
+            return Build(dependenciesFactory, []);
         }
 
         var cached = _cachedDependencies;
@@ -72,7 +71,7 @@ internal sealed class StreamDispatch<TQuery, TResult>(IMessageDependenciesFactor
             return cached;
         }
 
-        var dependencies = Build(typedFactory, EmptyGroups);
+        var dependencies = Build(typedFactory, []);
         _cachedDependencies = dependencies;
         return dependencies;
     }

@@ -1,6 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Contract.Test.Sync.Fallback;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
 namespace Stella.Ergosfare.Contract.Test.Sync;

@@ -1,5 +1,3 @@
-using System.Linq;
-
 namespace Stella.Ergosfare.SourceGenerator.Test;
 
 /// <summary>

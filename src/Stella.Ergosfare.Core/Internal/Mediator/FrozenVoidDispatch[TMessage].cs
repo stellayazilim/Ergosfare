@@ -26,7 +26,6 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
     where TMessage : IMessage
 {
-    private static readonly string[] EmptyGroups = [];
 
     private readonly IMessageDependenciesFactory _factory;
     private readonly StagedVoidPlan<TMessage>? _plan;
@@ -56,6 +55,9 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
     private volatile int _verdict;
 
     private const int Foreign = -1;
+    // The verdict a freshly constructed dispatch carries: never compared against,
+    // because the field starts there — it names the zero the other three are offsets from.
+    // ReSharper disable once UnusedMember.Local
     private const int Undecided = 0;
     private const int UseBody = 1;
     private const int UsePlan = 2;
@@ -106,7 +108,7 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
         {
             EnsureResultAdapter(serviceProvider);
             return ExecuteRuntimeLane(
-                message, _factory.Create(typeof(TMessage), EmptyGroups), fast: null, context, serviceProvider);
+                message, _factory.Create(typeof(TMessage), []), fast: null, context, serviceProvider);
         }
 
         return ExecuteUndecided(message, context, serviceProvider);
@@ -124,7 +126,7 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
 
         // Throws NoHandlerFoundException for a message no composition serves — every
         // dispatch of such a message, since nothing is cached on the throw.
-        var dependencies = typedFactory.Create(typeof(TMessage), EmptyGroups);
+        var dependencies = typedFactory.Create(typeof(TMessage), []);
         var fastDependencies = dependencies as MessageDependencies;
         _cachedFastDependencies = fastDependencies;
         _cachedDependencies = dependencies;
@@ -277,6 +279,9 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
 
         var adapter = ResultAdapterBinding.For<TMessage, Unit>(serviceProvider);
         _resultAdapter = adapter;
+        // The materializer facet is optional and consumer-supplied: no adapter in this
+        // repository implements both, which is exactly what the probe is for.
+        // ReSharper disable once SuspiciousTypeConversion.Global
         _resultMaterializer = adapter as IResultMaterializer<Unit>;
         _resultAdapterResolved = true;
     }
