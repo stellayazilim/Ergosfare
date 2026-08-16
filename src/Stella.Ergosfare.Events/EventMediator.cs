@@ -9,7 +9,7 @@ namespace Stella.Ergosfare.Events;
 /// <summary>
 /// Mediates events through frozen publish pipelines closed over each event's runtime type,
 /// so handlers are always invoked through their typed members — including for the
-/// interface-erased <see cref="PublishAsync(IEvent, IEnumerable{string}, bool, CancellationToken)"/> overload.
+/// interface-erased <see cref="PublishAsync(IEvent, IEnumerable{string}, CancellationToken)"/> overload.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -58,17 +58,17 @@ public class EventMediator : IPublisher
     }
 
     /// <inheritdoc />
-    public ValueTask PublishAsync(IEvent @event, IEnumerable<string>? groups, bool throwIfNoHandlerFound,
+    public ValueTask PublishAsync(IEvent @event, IEnumerable<string>? groups,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(@event);
 
         return _broadcasts.Get(@event.GetType())
-            .PublishPooled(@event, _serviceProvider, cancellationToken, groups, throwIfNoHandlerFound);
+            .PublishPooled(@event, _serviceProvider, cancellationToken, groups);
     }
 
     /// <inheritdoc />
-    public ValueTask PublishAsync<TEvent>(TEvent @event, IEnumerable<string>? groups, bool throwIfNoHandlerFound,
+    public ValueTask PublishAsync<TEvent>(TEvent @event, IEnumerable<string>? groups,
         CancellationToken cancellationToken)
         where TEvent : notnull
     {
@@ -82,18 +82,17 @@ public class EventMediator : IPublisher
             ? _broadcasts.Get<TEvent>()
             : _broadcasts.Get(@event.GetType());
 
-        return dispatch.PublishPooled(@event, _serviceProvider, cancellationToken, groups, throwIfNoHandlerFound);
+        return dispatch.PublishPooled(@event, _serviceProvider, cancellationToken, groups);
     }
 
     /// <inheritdoc />
-    public ValueTask PublishAsync(IEvent @event, ErgosfareContext context, IEnumerable<string>? groups = null,
-        bool throwIfNoHandlerFound = false)
+    public ValueTask PublishAsync(IEvent @event, ErgosfareContext context, IEnumerable<string>? groups = null)
     {
         ArgumentNullException.ThrowIfNull(@event);
         ArgumentNullException.ThrowIfNull(context);
 
         return _broadcasts.Get(@event.GetType())
-            .Publish(@event, context, _serviceProvider, groups, throwIfNoHandlerFound);
+            .Publish(@event, context, _serviceProvider, groups);
     }
 
     /// <summary>Publishes an event through its default pipeline.</summary>
@@ -108,7 +107,7 @@ public class EventMediator : IPublisher
         ArgumentNullException.ThrowIfNull(@event);
 
         return _broadcasts.Get(@event.GetType())
-            .PublishPooled(@event, _serviceProvider, cancellationToken, null, throwIfNoHandlerFound: false);
+            .PublishPooled(@event, _serviceProvider, cancellationToken, null);
     }
 
 
@@ -120,16 +119,7 @@ public class EventMediator : IPublisher
 
         return _broadcasts.Get(@event.GetType()).PublishPooled(
             @event, _serviceProvider, cancellationToken,
-            groups.Count == 0 ? null : groups, throwIfNoHandlerFound: false);
-    }
-
-    /// <summary>Publishes under a group filter given as a plain array.</summary>
-    public ValueTask PublishAsync(IEvent @event, string[] groups, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(@event);
-
-        return _broadcasts.Get(@event.GetType())
-            .PublishPooled(@event, _serviceProvider, cancellationToken, groups, throwIfNoHandlerFound: false);
+            groups.Count == 0 ? null : groups);
     }
 
     /// <summary>Typed counterpart of <see cref="PublishAsync(IEvent, CancellationToken)"/>.</summary>
@@ -142,7 +132,7 @@ public class EventMediator : IPublisher
             ? _broadcasts.Get<TEvent>()
             : _broadcasts.Get(@event.GetType());
 
-        return dispatch.PublishPooled(@event, _serviceProvider, cancellationToken, null, throwIfNoHandlerFound: false);
+        return dispatch.PublishPooled(@event, _serviceProvider, cancellationToken, null);
     }
 
 
@@ -159,6 +149,6 @@ public class EventMediator : IPublisher
 
         return dispatch.PublishPooled(
             @event, _serviceProvider, cancellationToken,
-            groups.Count == 0 ? null : groups, throwIfNoHandlerFound: false);
+            groups.Count == 0 ? null : groups);
     }
 }

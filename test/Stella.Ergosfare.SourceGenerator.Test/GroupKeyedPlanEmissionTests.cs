@@ -105,7 +105,7 @@ public class GroupKeyedPlanEmissionTests
                 public static class Caller
                 {
                     public static ValueTask Publish(IEventMediator mediator, string[] runtimeGroups)
-                        => mediator.PublishAsync(new OrderPlaced(), runtimeGroups);
+                        => mediator.PublishAsync(new OrderPlaced(), runtimeGroups, System.Threading.CancellationToken.None);
                 }
             }
             """);

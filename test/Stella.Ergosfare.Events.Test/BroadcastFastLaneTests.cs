@@ -172,12 +172,9 @@ public class BroadcastFastLaneTests
         await using var provider = Build(e => e.Register<HandlerlessEvent>());
         var mediator = provider.GetRequiredService<IEventMediator>();
 
-        // Default: silent.
-        await mediator.PublishAsync(new HandlerlessEvent());
-
-        await Assert.ThrowsAsync<NoHandlerFoundException>(async () =>
-            await mediator.PublishAsync(
-                new HandlerlessEvent(), null, true, CancellationToken.None));
+        // Silent, and unconditionally so: the build is what reports a publish nobody serves.
+        Assert.Null(await Record.ExceptionAsync(
+            async () => await mediator.PublishAsync(new HandlerlessEvent())));
     }
 
     public sealed class SlowEvent : IEvent { }
@@ -383,9 +380,7 @@ public class BroadcastFastLaneTests
 
         // Default: silent, exactly as for a registered event nobody handles.
         await mediator.PublishAsync(new NeverRegisteredEvent());
-
-        await Assert.ThrowsAsync<NoHandlerFoundException>(async () =>
-            await mediator.PublishAsync(
-                new NeverRegisteredEvent(), null, true, CancellationToken.None));
+        Assert.Null(await Record.ExceptionAsync(
+            async () => await mediator.PublishAsync(new NeverRegisteredEvent())));
     }
 }
