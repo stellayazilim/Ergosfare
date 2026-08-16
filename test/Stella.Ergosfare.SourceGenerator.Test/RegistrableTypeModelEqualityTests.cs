@@ -91,6 +91,52 @@ public class RegistrableTypeModelEqualityTests
         }
     }
 
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void EveryCollection_IsComparedElementwise()
+    {
+        var baseline = Populated();
+
+        // The sweep above clears a collection outright, which the length checks catch on
+        // their own. These keep the length and change one element, so only the element loops
+        // can tell — an edit that renames a group or swaps a descriptor is exactly this shape.
+        Assert.NotEqual(baseline, Populated() with { AssignableKeys = ["global::TestApp.Pong"] });
+        Assert.NotEqual(baseline, Populated() with
+        {
+            ContractShapes = [new ContractShapeModel(DescriptorKind.MainHandler, true, true, "global::TestApp.Pong", "string")],
+        });
+        Assert.NotEqual(baseline, Populated() with
+        {
+            Descriptors = [new DescriptorModel(DescriptorKind.MainHandler, "global::TestApp.Pong", "global::System.Threading.Tasks.ValueTask")],
+        });
+        Assert.NotEqual(baseline, Populated() with { DiscoveryKeys = ["other"] });
+        Assert.NotEqual(baseline, Populated() with { ExcludedInterceptorGroups = ["other"] });
+        Assert.NotEqual(baseline, Populated() with { GroupNames = ["b"] });
+        Assert.NotEqual(baseline, Populated() with { DispatchResults = [new DispatchResultModel("int", false, false)] });
+
+        // The nested models are compared the same way, which is what makes a derived event
+        // message's own edit visible through its parent.
+        Assert.NotEqual(baseline, Populated() with
+        {
+            DerivedEventMessages = [Leaf() with { TypeofExpression = "global::TestApp.Pong" }],
+        });
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void TheBoxedOverloadAndTheHashCode_AgreeWithTypedEquality()
+    {
+        var baseline = Populated();
+
+        Assert.True(baseline.Equals((object) Populated()));
+        Assert.False(baseline.Equals("not a model"));
+        Assert.False(baseline.Equals(null));
+
+        // Equal models must hash equally or the incremental cache's dictionary would never
+        // reach the comparison at all.
+        Assert.Equal(baseline.GetHashCode(), Populated().GetHashCode());
+    }
+
     /// <summary>
     /// The empty value of a property's type: <c>null</c> for anything nullable, an empty
     /// array for the collections (a <c>default</c> <see cref="ImmutableArray{T}"/> throws when
