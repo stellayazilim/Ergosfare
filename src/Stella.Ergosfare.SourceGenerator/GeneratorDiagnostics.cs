@@ -87,8 +87,8 @@ internal static class GeneratorDiagnostics
         title: "Dispatch can never reach a handler",
         messageFormat:
             "This dispatch of '{0}' can never reach a handler: neither '{0}' nor any of its subtypes in the " +
-            "compiled closure has a covering handler registration, so the call is guaranteed to throw " +
-            "NoHandlerFoundException at runtime{1}. Register a handler for it or remove the dispatch.",
+            "compiled closure has a covering handler registration, so {1}{2}. Register a handler for it or " +
+            "remove the dispatch.",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);

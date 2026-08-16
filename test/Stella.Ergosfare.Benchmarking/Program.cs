@@ -903,7 +903,7 @@ public class MediationBenchmark
     public ValueTask Event_Publish_Intercepted_Unplanned() => _generatedEvents.PublishAsync(_unplannedPingEvent);
 
     [Benchmark, BenchmarkCategory("Root")]
-    public ValueTask Event_Publish_Grouped() => _events.PublishAsync(_groupedPingEvent, BenchGroups);
+    public ValueTask Event_Publish_Grouped() => _events.PublishAsync(_groupedPingEvent, BenchGroups, CancellationToken.None);
 
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask Event_Publish_Grouped_GroupSet() => _events.PublishAsync(_groupedPingEvent, BenchGroupSet);

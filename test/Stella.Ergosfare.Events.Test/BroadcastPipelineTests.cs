@@ -29,35 +29,25 @@ public class BroadcastPipelineTests
     }
 
     /// <summary>
-    /// Tests that <see cref="EventMediator.PublishAsync(IEvent, IEnumerable{string}, bool, CancellationToken)"/> throws an exception
-    /// when <c>ThrowIfNoHandlerFound</c> is set to true and no handler is found.
+    /// A publish with no pipeline at all returns. There is nothing for the caller to ask
+    /// about any more: a publish no subscriber in the compilation serves fails the build,
+    /// and what is left at run time is a selection the container made.
     /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task ShouldThrowWhenNoHandlerFound()
+    public async Task ShouldReturnWhenNoHandlerFound()
     {
-        // A container that composed nothing: the event has no pipeline at all, which is
-        // exactly the "nothing will handle this" the flag under test decides about.
+        // A container that composed nothing: the event has no pipeline at all.
         var services = new ServiceCollection().BuildServiceProvider();
         var mediator = new EventMediator(Engine(services), services);
-        Exception? exception = null;
-        try
-        {
-           await mediator.PublishAsync(new StubNonGenericEvent(), null, true, CancellationToken.None);
 
-        }
-        catch (Exception ex)
-        {
-            exception = ex;
-        }
-        testOutputHelper.WriteLine(typeof(StubNonGenericEvent).FullName);
-        Assert.NotNull(exception);
-         
+        Assert.Null(await Record.ExceptionAsync(
+            async () => await mediator.PublishAsync(new StubNonGenericEvent())));
     }
     
     /// <summary>
-    /// Tests that <see cref="EventMediator.PublishAsync(IEvent, IEnumerable{string}, bool, CancellationToken)"/> does not throw an exception
+    /// Tests that <see cref="EventMediator.PublishAsync(IEvent, IEnumerable{string}, CancellationToken)"/> does not throw an exception
     /// when <c>ThrowIfNoHandlerFound</c> is false and no handler is found.
     /// </summary>
     [Fact]
@@ -70,7 +60,7 @@ public class BroadcastPipelineTests
         Exception? exception = null;
         try
         {
-            await mediator.PublishAsync(new StubNonGenericEvent(), null, false, CancellationToken.None);
+            await mediator.PublishAsync(new StubNonGenericEvent(), (IEnumerable<string>?)null, CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -81,7 +71,7 @@ public class BroadcastPipelineTests
     }
 
     /// <summary>
-    /// Tests that <see cref="EventMediator.PublishAsync(IEvent, IEnumerable{string}, bool, CancellationToken)"/> correctly runs registered handlers.
+    /// Tests that <see cref="EventMediator.PublishAsync(IEvent, IEnumerable{string}, CancellationToken)"/> correctly runs registered handlers.
     /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
@@ -99,7 +89,7 @@ public class BroadcastPipelineTests
     }
 
     /// <summary>
-    /// Tests that exceptions are correctly intercepted when a handler throws during <see cref="EventMediator.PublishAsync(IEvent, IEnumerable{string}, bool, CancellationToken)"/>.
+    /// Tests that exceptions are correctly intercepted when a handler throws during <see cref="EventMediator.PublishAsync(IEvent, IEnumerable{string}, CancellationToken)"/>.
     /// </summary>
     [Fact]
     [Trait("Category", "Unit")]

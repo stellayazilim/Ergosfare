@@ -106,28 +106,13 @@ public sealed class EventPublishTests
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task Publishing_a_registered_event_nobody_handles_throws_when_the_caller_asks_it_to()
-    {
-        await using var provider = CreateProvider();
-        var mediator = provider.GetRequiredService<IEventMediator>();
-        await Assert.ThrowsAsync<NoHandlerFoundException>(
-            async () => await mediator.PublishAsync(
-                new NobodyListens(), null, true, CancellationToken.None));
-    }
-
-    [Fact]
-    [Trait("Category", "Contract")]
     public async Task Publishing_an_unregistered_event_type_is_a_no_op_like_a_registered_one()
     {
         await using var provider = CreateProvider();
-        var recorder = new PipelineRecorder();
+        var mediator = provider.GetRequiredService<IEventMediator>();
 
-        // UnknownEvent is not in the registry at all, NobodyListens is registered with no
-        // handlers. Both reach nobody, and both are silent unless the caller asks — the
-        // flag used to govern only the second.
-        await provider.GetRequiredService<IEventMediator>().PublishAsync(new UnknownEvent(), recorder.Events());
-
-        recorder.AssertStages();
+        Assert.Null(await Record.ExceptionAsync(
+            async () => await mediator.PublishAsync(new UnknownEvent())));
     }
 
     [Fact]
@@ -152,21 +137,6 @@ public sealed class EventPublishTests
             new StockChanged(), recorder.Events(), [Reporting]);
 
         recorder.AssertStages("reporting");
-    }
-
-    [Fact]
-    [Trait("Category", "Contract")]
-    public async Task Publishing_an_unregistered_event_type_throws_when_the_caller_asks_it_to()
-    {
-        await using var provider = CreateProvider();
-        var mediator = provider.GetRequiredService<IEventMediator>();
-        // The other half of the flag's new reach: what the unregistered case used to do
-        // unconditionally, it now does on request — the same as the registered-but-unhandled
-        // case two scenarios up. Appended rather than placed beside its sibling: a member
-        // inserted above renumbers the state machines below it and churns the lane map.
-        await Assert.ThrowsAsync<NoHandlerFoundException>(
-            async () => await mediator.PublishAsync(
-                new UnknownEvent(), null, true, CancellationToken.None));
     }
 
     // -----------------------------------------------------------------------

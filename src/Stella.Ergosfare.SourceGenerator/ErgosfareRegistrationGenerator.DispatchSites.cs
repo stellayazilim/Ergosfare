@@ -1183,9 +1183,15 @@ public sealed partial class ErgosfareRegistrationGenerator
     {
         foreach (var site in sites)
         {
-            // Publishing to zero subscribers is a legal no-op, and generic descriptor
-            // matching is definition-fuzzy — neither shape can carry a sound verdict.
-            if (site.Kind == DispatchSiteKind.Event || site.IsGenericMessage)
+            // Generic descriptor matching is definition-fuzzy, so it carries no sound verdict.
+            //
+            // A publish used to be exempt too, on the reasoning that reaching zero subscribers
+            // is a legal no-op. That answers a different question: the runtime default decides
+            // what happens when no handler matched on this call, while this judgment asks
+            // whether any handler can ever match. In a closed world a publish nothing in the
+            // compilation subscribes to is provably dead, and writing the event while
+            // forgetting the subscriber is the ordinary way to arrive there.
+            if (site.IsGenericMessage)
             {
                 continue;
             }
@@ -1224,6 +1230,12 @@ public sealed partial class ErgosfareRegistrationGenerator
                     GeneratorDiagnostics.DeadDispatch,
                     site.Location?.ToLocation(),
                     site.DisplayName,
+                    // A publish reaching nobody returns; every other lane throws. The verdict
+                    // is the same either way — the consequence is not, and the message says
+                    // which one the caller is getting.
+                    site.Kind == DispatchSiteKind.Event
+                        ? "the publish is guaranteed to reach nobody"
+                        : "the call is guaranteed to throw NoHandlerFoundException at runtime",
                     originSuffix));
             }
             else if (modelsByKey.TryGetValue(siteKey, out var selfModel) && selfModel.IsDispatchableMessage)

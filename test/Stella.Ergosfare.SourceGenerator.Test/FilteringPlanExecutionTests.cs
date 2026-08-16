@@ -80,7 +80,7 @@ public class FilteringPlanExecutionTests
                 // The set is a parameter, so no call site proves it — this is exactly the
                 // shape the filtering plan exists for.
                 public static ValueTask Publish(IEventMediator mediator, GenFilteredEvent @event, string[] groups)
-                    => mediator.PublishAsync(@event, groups);
+                    => mediator.PublishAsync(@event, groups, System.Threading.CancellationToken.None);
             }
         }
         """;
@@ -120,7 +120,7 @@ public class FilteringPlanExecutionTests
         var @event = (IEvent)Activator.CreateInstance(
             assembly.GetType("TestApp.GenFilteredEvent", throwOnError: true)!)!;
 
-        await provider.GetRequiredService<IEventMediator>().PublishAsync(@event, groups);
+        await provider.GetRequiredService<IEventMediator>().PublishAsync(@event, groups, System.Threading.CancellationToken.None);
 
         return [.. Entries];
     }

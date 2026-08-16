@@ -24,8 +24,7 @@ internal abstract class FrozenBroadcastDispatch
         object message,
         ErgosfareContext context,
         IServiceProvider serviceProvider,
-        IEnumerable<string>? groups,
-        bool throwIfNoHandlerFound);
+        IEnumerable<string>? groups);
 
     /// <summary>
     /// The pooled publish in one frame — rent, execute, return — so the hot path carries no
@@ -35,6 +34,5 @@ internal abstract class FrozenBroadcastDispatch
         object message,
         IServiceProvider serviceProvider,
         CancellationToken cancellationToken,
-        IEnumerable<string>? groups,
-        bool throwIfNoHandlerFound);
+        IEnumerable<string>? groups);
 }

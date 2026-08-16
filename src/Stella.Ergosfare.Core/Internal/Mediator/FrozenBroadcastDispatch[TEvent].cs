@@ -98,24 +98,22 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
         object message,
         ErgosfareContext context,
         IServiceProvider serviceProvider,
-        IEnumerable<string>? groups,
-        bool throwIfNoHandlerFound)
-        => PublishCore(message, context, serviceProvider, groups, throwIfNoHandlerFound);
+        IEnumerable<string>? groups)
+        => PublishCore(message, context, serviceProvider, groups);
 
     /// <inheritdoc />
     internal override ValueTask PublishPooled(
         object message,
         IServiceProvider serviceProvider,
         CancellationToken cancellationToken,
-        IEnumerable<string>? groups,
-        bool throwIfNoHandlerFound)
+        IEnumerable<string>? groups)
     {
         var context = ErgosfareContextPool.Rent(null, cancellationToken);
         ValueTask task;
 
         try
         {
-            task = PublishCore(message, context, serviceProvider, groups, throwIfNoHandlerFound);
+            task = PublishCore(message, context, serviceProvider, groups);
         }
         catch
         {
@@ -153,12 +151,11 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
         object message,
         ErgosfareContext context,
         IServiceProvider serviceProvider,
-        IEnumerable<string>? groups,
-        bool throwIfNoHandlerFound)
+        IEnumerable<string>? groups)
     {
         if (groups is not (null or List<string> { Count: 0 } or string[] { Length: 0 } or GroupSet { Count: 0 }))
         {
-            return PublishGrouped(message, context, serviceProvider, groups, throwIfNoHandlerFound);
+            return PublishGrouped(message, context, serviceProvider, groups);
         }
 
         // Ordered by heat: the interceptorless broadcast is the lane the whole design
@@ -169,7 +166,7 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
 
         if (mode == StraightMode)
         {
-            return PublishStraightThrough((TEvent)message, _fast!, context, serviceProvider, throwIfNoHandlerFound);
+            return PublishStraightThrough((TEvent)message, _fast!, context, serviceProvider);
         }
 
         if (mode >= PlanMode)
@@ -181,10 +178,10 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
 
         if (mode == StagedMode)
         {
-            return PublishThroughStages((TEvent)message, _dependencies!, context, serviceProvider, throwIfNoHandlerFound);
+            return PublishThroughStages((TEvent)message, _dependencies!, context, serviceProvider);
         }
 
-        return NoPipeline(throwIfNoHandlerFound);
+        return NoPipeline();
     }
 
     /// <summary>
@@ -198,8 +195,7 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
         object message,
         ErgosfareContext context,
         IServiceProvider serviceProvider,
-        IEnumerable<string> groups,
-        bool throwIfNoHandlerFound)
+        IEnumerable<string> groups)
     {
         var slot = _cachedGroupedSlot;
 
@@ -218,7 +214,7 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
                 // Not slotted: the catalog already caches its own negative lookup per type,
                 // so the repeat cost is a dictionary hit — and an empty slot cannot be
                 // confused with a served set.
-                return NoPipeline(throwIfNoHandlerFound);
+                return NoPipeline();
             }
 
             var admitted = AdmitGroupedPlan(materialized, dependencies, out var planDirect);
@@ -243,8 +239,8 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
         }
 
         return slot.Fast is { HasNoInterceptors: true } fast
-            ? PublishStraightThrough((TEvent)message, fast, context, serviceProvider, throwIfNoHandlerFound)
-            : PublishThroughStages((TEvent)message, slot.Dependencies, context, serviceProvider, throwIfNoHandlerFound);
+            ? PublishStraightThrough((TEvent)message, fast, context, serviceProvider)
+            : PublishThroughStages((TEvent)message, slot.Dependencies, context, serviceProvider);
     }
 
     /// <summary>
@@ -301,17 +297,17 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
         TEvent message,
         MessageDependencies plan,
         ErgosfareContext context,
-        IServiceProvider serviceProvider,
-        bool throwIfNoHandlerFound)
+        IServiceProvider serviceProvider)
     {
         var direct = plan.HandlerArray;
         var indirect = plan.IndirectHandlerArray;
 
         if (direct.Length == 0 && indirect.Length == 0)
         {
-            return throwIfNoHandlerFound
-                ? ValueTask.FromException(new NoHandlerFoundException(typeof(TEvent)))
-                : default;
+            // Reaching nobody is not an error to raise here: a publish no subscriber in the
+            // compilation serves fails the build (ERGO005), and what is left at run time is a
+            // selection the container made — which the caller asked for.
+            return default;
         }
 
         for (var i = 0; i < direct.Length; i++)
@@ -373,19 +369,13 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
         TEvent message,
         IMessageDependencies dependencies,
         ErgosfareContext context,
-        IServiceProvider serviceProvider,
-        bool throwIfNoHandlerFound)
+        IServiceProvider serviceProvider)
     {
         var handlers = dependencies.Handlers;
         var indirectHandlers = dependencies.IndirectHandlers;
 
         if (handlers.Count == 0 && indirectHandlers.Count == 0)
         {
-            if (throwIfNoHandlerFound)
-            {
-                throw new NoHandlerFoundException(typeof(TEvent));
-            }
-
             return;
         }
 
@@ -494,10 +484,7 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
     /// and it decides the same way whether the event type is unregistered or merely
     /// unhandled.
     /// </summary>
-    private static ValueTask NoPipeline(bool throwIfNoHandlerFound)
-        => throwIfNoHandlerFound
-            ? ValueTask.FromException(new NoHandlerFoundException(typeof(TEvent)))
-            : default;
+    private static ValueTask NoPipeline() => default;
 
     private sealed class GroupedSlot(
         string[] groups,

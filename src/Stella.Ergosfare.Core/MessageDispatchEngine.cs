@@ -69,15 +69,14 @@ public sealed class MessageDispatchEngine
     /// <param name="serviceProvider">The scope provider handlers resolve against.</param>
     /// <param name="cancellationToken">Cancellation token for the delivery.</param>
     /// <param name="groups">Optional group filters applied to the pipeline.</param>
-    /// <param name="throwIfNoHandlerFound">Whether reaching nobody is an error.</param>
     public ValueTask BroadcastAsync(object message, IServiceProvider serviceProvider,
         CancellationToken cancellationToken = default,
-        IEnumerable<string>? groups = null, bool throwIfNoHandlerFound = false)
+        IEnumerable<string>? groups = null)
     {
         ArgumentNullException.ThrowIfNull(message);
 
         return _broadcasts.Get(message.GetType())
-            .PublishPooled(message, serviceProvider, cancellationToken, groups, throwIfNoHandlerFound);
+            .PublishPooled(message, serviceProvider, cancellationToken, groups);
     }
 
     /// <summary>
@@ -88,7 +87,7 @@ public sealed class MessageDispatchEngine
     /// </summary>
     public ValueTask BroadcastAsync<TMessage>(TMessage message, IServiceProvider serviceProvider,
         CancellationToken cancellationToken = default,
-        IEnumerable<string>? groups = null, bool throwIfNoHandlerFound = false)
+        IEnumerable<string>? groups = null)
         where TMessage : notnull
     {
         ArgumentNullException.ThrowIfNull(message);
@@ -98,7 +97,7 @@ public sealed class MessageDispatchEngine
             : _broadcasts.Get(message.GetType());
 
         // The pool logic rides inside the dispatch's own frame — no renting frame here.
-        return dispatch.PublishPooled(message, serviceProvider, cancellationToken, groups, throwIfNoHandlerFound);
+        return dispatch.PublishPooled(message, serviceProvider, cancellationToken, groups);
     }
 
     /// <summary>
@@ -106,12 +105,12 @@ public sealed class MessageDispatchEngine
     /// the context's lifetime, so nothing is rented and nothing is returned.
     /// </summary>
     public ValueTask BroadcastAsync(object message, ErgosfareContext context, IServiceProvider serviceProvider,
-        IEnumerable<string>? groups = null, bool throwIfNoHandlerFound = false)
+        IEnumerable<string>? groups = null)
     {
         ArgumentNullException.ThrowIfNull(message);
 
         return _broadcasts.Get(message.GetType())
-            .Publish(message, context, serviceProvider, groups, throwIfNoHandlerFound);
+            .Publish(message, context, serviceProvider, groups);
     }
 
     /// <summary>
