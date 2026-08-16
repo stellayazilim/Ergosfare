@@ -97,10 +97,9 @@ internal static class RegistrationPipeline
             types, excludedShadows, availability,
             defaultResultAdapter, pluginInvocations, dispatchSites, referencedSites.Sites).Build();
 
-        // A hand-written Register collects what RegisterGenerated() would have collected for
-        // the same construct — messages included. So a hidden message a registration reaches
-        // is rooted like a discovered one.
-        var registeredShadows = CollectRegisteredShadows(excludedShadows, registrationSites);
+        // Hidden messages are rooted like discovered ones: rooting is not registering, and
+        // hiding a type from bulk collection does not stop it from being dispatched.
+        var registeredShadows = CollectRootableShadows(excludedShadows);
 
         var source = RegistrationEmitter.Emit(types, registeredShadows, availability,
             plans.VoidPlans, plans.ResultPlans, plans.StagedPlans, plans.FrozenCompositions,
@@ -111,10 +110,9 @@ internal static class RegistrationPipeline
     }
 
     /// <summary>
-    ///     The hidden messages a registration reaches, so they can be rooted alongside the
+    ///     Every hidden message the compilation can name, so it is rooted alongside the
     ///     discovered ones. <c>[ExcludeFromDiscovery]</c> keeps a type out of bulk collection;
-    ///     it does not make it invisible, and a <c>Register</c> naming it — or naming a
-    ///     handler that serves it — collects it exactly as <c>RegisterGenerated()</c> would.
+    ///     it does not make it invisible, and it does not stop the type from being dispatched.
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -126,43 +124,41 @@ internal static class RegistrationPipeline
     ///     dispatch works in development and fails under NativeAOT.
     ///     </para>
     ///     <para>
-    ///     Decidable at compile time only because ERGO018 requires every <c>Register</c> to
-    ///     name its type: a site contributes either its own metadata name or, when it names a
-    ///     handler, the messages that handler's main-handler descriptors serve.
+    ///     This used to ask whether a registration named the message, on the reasoning that a
+    ///     hand-written <c>Register</c> collects what <c>RegisterGenerated()</c> would. That
+    ///     reasoning is about <em>registration</em>, and rooting is not that: the question a
+    ///     root answers is whether a dispatch can close its generic, which does not depend on
+    ///     who selected what. Measured, the narrower rule left five shapes on the reflective
+    ///     arm — the deliberate no-handler fixtures, and a subtype only a base-typed handler
+    ///     knows about — none of which a registration can name, and all of which are dispatched.
+    ///     </para>
+    ///     <para>
+    ///     What the wider rule costs is one empty object per hidden message that is never
+    ///     dispatched. What it buys is that a dispatch of a type the compilation declared
+    ///     never depends on a JIT, which is the whole point of the table.
     ///     </para>
     /// </remarks>
-    private static List<RegistrableTypeModel> CollectRegisteredShadows(
-        List<RegistrableTypeModel> excludedShadows,
-        ImmutableArray<RegistrationSiteModel> registrationSites)
+    private static List<RegistrableTypeModel> CollectRootableShadows(
+        List<RegistrableTypeModel> excludedShadows)
     {
-        if (excludedShadows.Count == 0 || registrationSites.IsEmpty)
+        if (excludedShadows.Count == 0)
         {
             return [];
-        }
-
-        var registeredTypes = new HashSet<string>(StringComparer.Ordinal);
-        var reachedMessages = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach (var site in registrationSites)
-        {
-            if (site.TypeMetadataName is { } metadataName)
-            {
-                registeredTypes.Add(metadataName);
-            }
-
-            foreach (var message in site.MainHandlerMessageKeys)
-            {
-                reachedMessages.Add(message);
-            }
         }
 
         var rooted = new List<RegistrableTypeModel>();
 
         foreach (var shadow in excludedShadows)
         {
-            if (shadow is { IsDispatchableMessage: true, IsAccessible: true }
-                && (registeredTypes.Contains(shadow.MetadataSortKey)
-                    || reachedMessages.Contains(shadow.TypeofExpression)))
+            // Accessibility is emission's own requirement — the root names the type — and a
+            // non-dispatchable shape has no generic for a dispatch to close.
+            //
+            // Source-declared only. A referenced assembly carrying [assembly:
+            // ExcludeFromDiscovery] said "do not look here at all", which is a wider
+            // statement than a type's own "keep me out of bulk registration": its types are
+            // not ours to name, and its internals are not ours to reach. This compilation's
+            // own hidden types are a different matter — it declared them, so it can name them.
+            if (shadow is { IsDispatchableMessage: true, IsAccessible: true, ReferencedAssemblyName: null })
             {
                 rooted.Add(shadow);
             }

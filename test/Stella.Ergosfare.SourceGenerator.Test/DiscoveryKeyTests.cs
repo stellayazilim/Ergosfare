@@ -183,7 +183,15 @@ public class DiscoveryKeyTests
             referenceModuleBuilders: false);
 
         Assert.Empty(result.GeneratorDiagnostics);
-        Assert.DoesNotContain("ManuallyWired", result.GeneratedSource);
+
+        // No registration — which is what the exclusion promises, and what this asserts.
+        // It does get a dispatch root: rooting only lets a dispatch close its generic
+        // without MakeGenericType and selects nothing into any container, so a hidden type
+        // being dispatchable at all is reason enough. Asserting the name appeared nowhere
+        // was a stronger claim than the exclusion makes.
+        Assert.DoesNotContain("participants.Add(typeof(global::TestApp.ManuallyWired)", result.GeneratedSource);
+        Assert.DoesNotContain("Register(typeof(global::TestApp.ManuallyWired)", result.GeneratedSource);
+        Assert.Contains("AddMessage<global::TestApp.ManuallyWired>();", result.GeneratedSource);
 
         var harness = new DiscoveryHarness(result);
         Assert.Equal(["PlainCommand"], harness.Run("*"));
