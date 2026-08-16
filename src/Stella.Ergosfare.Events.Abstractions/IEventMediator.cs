@@ -59,7 +59,7 @@ public interface IEventMediator
 
     /// <summary>Publishes an event through its default pipeline.</summary>
     ValueTask PublishAsync(IEvent @event, CancellationToken cancellationToken = default)
-        => PublishAsync(@event, (IEnumerable<string>?)null, false, cancellationToken);
+        => PublishAsync(@event, null, false, cancellationToken);
 
 
     /// <summary>
@@ -72,12 +72,12 @@ public interface IEventMediator
 
     /// <summary>Publishes under a group filter given as a plain array.</summary>
     ValueTask PublishAsync(IEvent @event, string[] groups, CancellationToken cancellationToken = default)
-        => PublishAsync(@event, (IEnumerable<string>?)groups, false, cancellationToken);
+        => PublishAsync(@event, groups, false, cancellationToken);
 
     /// <summary>Typed counterpart of <see cref="PublishAsync(IEvent, CancellationToken)"/>.</summary>
     ValueTask PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
         where TEvent : notnull
-        => PublishAsync(@event, (IEnumerable<string>?)null, false, cancellationToken);
+        => PublishAsync(@event, null, false, cancellationToken);
 
 
     /// <summary>Typed counterpart of <see cref="PublishAsync(IEvent, GroupSet, CancellationToken)"/>.</summary>

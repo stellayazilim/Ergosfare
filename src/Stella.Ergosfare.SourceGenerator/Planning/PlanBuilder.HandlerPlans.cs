@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+
 using Stella.Ergosfare.SourceGenerator.Models;
 
 namespace Stella.Ergosfare.SourceGenerator.Planning;

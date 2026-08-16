@@ -70,7 +70,7 @@ public class MonomorphizedParticipantTests
         Assert.Empty(result.CompilationErrors);
 
         var compositions = result.GeneratedSource
-            .Split("AddFrozenComposition", StringSplitOptions.None)
+            .Split("AddFrozenComposition")
             .Skip(1)
             .ToList();
 

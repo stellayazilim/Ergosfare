@@ -15,6 +15,7 @@ public class ResultAdapterDiagnosticsTests
         using System.Threading.Tasks;
         using Stella.Ergosfare.Commands.Abstractions;
         using Stella.Ergosfare.Core.Abstractions;
+        using Stella.Ergosfare.Core.Abstractions.Results;
         using Stella.Ergosfare.Core.Abstractions.Attributes;
 
         namespace TestApp
@@ -277,6 +278,7 @@ public class ResultAdapterDiagnosticsTests
         using System.Threading.Tasks;
         using Stella.Ergosfare.Commands.Abstractions;
         using Stella.Ergosfare.Core.Abstractions;
+        using Stella.Ergosfare.Core.Abstractions.Results;
         using Stella.Ergosfare.Core.Abstractions.Attributes;
         using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 

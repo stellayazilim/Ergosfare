@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 

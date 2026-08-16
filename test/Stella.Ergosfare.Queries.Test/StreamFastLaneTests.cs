@@ -56,7 +56,7 @@ public class StreamFastLaneTests
             var context = new ErgosfareContext();
             var items = new List<int>();
 
-            await foreach (var item in mediator.StreamAsync(new NumberStream(), context, null))
+            await foreach (var item in mediator.StreamAsync(new NumberStream(), context))
             {
                 items.Add(item);
             }

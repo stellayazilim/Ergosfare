@@ -1,3 +1,5 @@
+using Stella.Ergosfare.Core.Abstractions.Results;
+
 namespace Stella.Ergosfare.Core.Abstractions;
 
 /// <summary>

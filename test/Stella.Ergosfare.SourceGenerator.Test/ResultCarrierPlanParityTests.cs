@@ -1,7 +1,6 @@
 using System.Reflection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Abstractions.Results;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -26,6 +25,7 @@ public class ResultCarrierPlanParityTests
         using System.Threading.Tasks;
         using Stella.Ergosfare.Commands.Abstractions;
         using Stella.Ergosfare.Core.Abstractions;
+        using Stella.Ergosfare.Core.Abstractions.Results;
         using Stella.Ergosfare.Core.Abstractions.Attributes;
 
         namespace TestApp
@@ -245,7 +245,7 @@ public class ResultCarrierPlanParityTests
         Assert.NotNull(plan);
 
         // The baked adapter identity is the executor gate's admission ticket.
-        Assert.Equal(typeof(ResultExceptionAdapter<string>), plan!.Composition.ResultAdapterType);
+        Assert.Equal(typeof(ResultExceptionAdapter<string>), plan.Composition.ResultAdapterType);
 
         Entries.Clear();
 
@@ -311,7 +311,7 @@ public class ResultCarrierPlanParityTests
         var commandType = assembly.GetType("TestApp.GenForeignCommand", throwOnError: true)!;
         var plan = GeneratedDispatchRoots.FindStagedResultPlan(commandType, assembly.GetType("TestApp.ForeignOutcome", throwOnError: true)!);
         Assert.NotNull(plan);
-        Assert.Equal(assembly.GetType("TestApp.ForeignOutcomeAdapter"), plan!.Composition.ResultAdapterType);
+        Assert.Equal(assembly.GetType("TestApp.ForeignOutcomeAdapter"), plan.Composition.ResultAdapterType);
 
         Entries.Clear();
 
@@ -343,7 +343,7 @@ public class ResultCarrierPlanParityTests
 
         var error = (Exception?)outcomeType.GetProperty("Error")!.GetValue(outcome);
         Assert.NotNull(error);
-        Assert.Equal("absorbed", error!.Message);
+        Assert.Equal("absorbed", error.Message);
         Assert.Equal(["handler", "final:absorbed"], Entries);
     }
 

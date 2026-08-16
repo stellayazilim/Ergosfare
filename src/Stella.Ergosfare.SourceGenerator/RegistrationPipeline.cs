@@ -126,7 +126,7 @@ internal static class RegistrationPipeline
     ///     dispatch works in development and fails under NativeAOT.
     ///     </para>
     ///     <para>
-    ///     Decidable at compile time only because ERGOSG018 requires every <c>Register</c> to
+    ///     Decidable at compile time only because ERGO018 requires every <c>Register</c> to
     ///     name its type: a site contributes either its own metadata name or, when it names a
     ///     handler, the messages that handler's main-handler descriptors serve.
     ///     </para>

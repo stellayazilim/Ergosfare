@@ -248,9 +248,9 @@ public sealed class FrozenComposition(
         return merged;
     }
 
-    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("AOT", "IL3050",
+    [UnconditionalSuppressMessage("AOT", "IL3050",
         Justification = "Open participants only close over generic message dispatches, which generated apps root at compile time.")]
-    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("Trimming", "IL2055",
+    [UnconditionalSuppressMessage("Trimming", "IL2055",
         Justification = "The closed participant serves a live pipeline; the pipeline roots it.")]
     private static Type Close(Type handlerType, Type runtimeMessageType)
         => handlerType.IsGenericTypeDefinition && runtimeMessageType.IsGenericType

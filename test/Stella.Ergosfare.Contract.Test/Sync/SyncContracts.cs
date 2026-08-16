@@ -227,7 +227,7 @@ public abstract class SyncResultExceptionBase<TCommand> : ICommand, IExceptionIn
     where TCommand : class, ISyncPayloadResultCommand
 {
     /// <inheritdoc />
-    public object? Handle(TCommand message, string? messageResult, Exception exception, ErgosfareContext context)
+    public object Handle(TCommand message, string? messageResult, Exception exception, ErgosfareContext context)
     {
         context.Mark("exception",
             $"{message.Payload}|{SyncVocabulary.Describe(messageResult)}|{SyncVocabulary.Describe(exception)}");

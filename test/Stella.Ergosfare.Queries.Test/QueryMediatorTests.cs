@@ -4,7 +4,6 @@
 
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Queries.Test.__stubs__;
@@ -32,7 +31,9 @@ public class QueryMediatorTests
             )).BuildServiceProvider();
         var mediator = new QueryMediator(
             services.GetRequiredService<MessageDispatchEngine>(), services);
-        var result = mediator.QueryAsync(new StubNonGenericStringResultQuery(), new ErgosfareContext(null), null);
+        // ReSharper disable once RedundantArgumentDefaultValue
+        // ReSharper disable once RedundantArgumentDefaultValue
+        var result = mediator.QueryAsync(new StubNonGenericStringResultQuery(), new ErgosfareContext());
         Assert.Equal(string.Empty, await result);
     }
     

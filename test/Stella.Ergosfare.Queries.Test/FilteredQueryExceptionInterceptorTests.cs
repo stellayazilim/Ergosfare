@@ -45,7 +45,7 @@ public class FilteredQueryExceptionInterceptorTests
             TestQuery query, object? messageResult, TestFault exception, ErgosfareContext context)
         {
             Received = exception;
-            return ValueTask.FromResult<object>(messageResult ?? Unit.Value);
+            return ValueTask.FromResult(messageResult ?? Unit.Value);
         }
     }
 

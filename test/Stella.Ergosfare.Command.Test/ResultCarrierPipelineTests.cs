@@ -2,9 +2,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
-using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
+using Stella.Ergosfare.Core.Abstractions.Results;
 
 namespace Stella.Ergosfare.Command.Test;
 
@@ -56,7 +56,7 @@ public class ResultCarrierPipelineTests
 
         var failed = await mediator.SendAsync(new CarrierCommand(Fail: true));
         Assert.NotNull(CarrierExceptionObserver.Observed);
-        Assert.Equal("carried", CarrierExceptionObserver.Observed!.Message);
+        Assert.Equal("carried", CarrierExceptionObserver.Observed.Message);
         Assert.False(failed.IsSuccess);
     }
 
@@ -112,7 +112,7 @@ public class ResultCarrierPipelineTests
         Assert.False(failed.IsSuccess);
         Assert.Equal("thrown", failed.Exception!.Message);
         Assert.NotNull(ThrowingCarrierFinalObserver.Observed);
-        Assert.Equal("thrown", ThrowingCarrierFinalObserver.Observed!.Message);
+        Assert.Equal("thrown", ThrowingCarrierFinalObserver.Observed.Message);
     }
 
     public sealed record FilteredCarrierCommand : ICommand<Result<string>>;
@@ -255,7 +255,7 @@ public class ResultCarrierPipelineTests
 
         Assert.Equal("foreign-carried", thrown.Message);
         Assert.NotNull(ForeignCarrierFinalObserver.Observed);
-        Assert.Equal("foreign-carried", ForeignCarrierFinalObserver.Observed!.Message);
+        Assert.Equal("foreign-carried", ForeignCarrierFinalObserver.Observed.Message);
     }
 
     public sealed class DefaultBoundOutcome
@@ -310,7 +310,7 @@ public class ResultCarrierPipelineTests
         var result = await provider.GetRequiredService<ICommandMediator>().SendAsync(new DefaultBoundCommand());
 
         Assert.NotNull(DefaultBoundObserver.Observed);
-        Assert.Equal("default-carried", DefaultBoundObserver.Observed!.Message);
+        Assert.Equal("default-carried", DefaultBoundObserver.Observed.Message);
         Assert.Equal("recovered", result.Value);
     }
 
@@ -350,7 +350,7 @@ public class ResultCarrierPipelineTests
         public ValueTask<object> HandleAsync(OptedOutCommand message, object? messageResult, Exception exception, ErgosfareContext context)
         {
             Ran = true;
-            return ValueTask.FromResult<object>(messageResult!);
+            return ValueTask.FromResult(messageResult!);
         }
     }
 
@@ -447,7 +447,7 @@ public class ResultCarrierPipelineTests
         // and the exception interceptors run — swallowing it, exactly as always.
         var handled = await mediator.SendAsync(new OptedOutThrowingCommand(Throw: true));
         Assert.NotNull(OptedOutThrowingObserver.Observed);
-        Assert.Equal("classic-thrown", OptedOutThrowingObserver.Observed!.Message);
+        Assert.Equal("classic-thrown", OptedOutThrowingObserver.Observed.Message);
         Assert.Equal("handled", handled.Value);
 
         // The classic lane, half two: a failure carried inside the result is never

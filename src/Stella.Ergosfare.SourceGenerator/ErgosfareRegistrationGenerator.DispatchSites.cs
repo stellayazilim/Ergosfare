@@ -161,7 +161,7 @@ public sealed partial class ErgosfareRegistrationGenerator
     ///     Builds the evidence model of a provably registered type: its main-handler
     ///     message expressions. Generic registrations stay opaque — the runtime builds
     ///     their descriptors reflectively, which the compile-time model cannot mirror
-    ///     (<see cref="BuildDescriptors"/> deliberately returns nothing for them).
+    ///     (<see cref="ContractReader.BuildDescriptors"/> deliberately returns nothing for them).
     /// </summary>
     private static RegistrationSiteModel EvidenceRegistration(INamedTypeSymbol registered)
     {
@@ -484,6 +484,10 @@ public sealed partial class ErgosfareRegistrationGenerator
             ? ctx
             : default;
 
+        // GeneratorSyntaxContext is a struct, so the default above really does carry a null
+        // SemanticModel — the annotation says otherwise and is wrong here. Dropping the guard
+        // dereferences that null one line later.
+        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
         if (initializerContext.SemanticModel is null)
         {
             return false;

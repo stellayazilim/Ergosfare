@@ -1,6 +1,5 @@
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
-using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Events.Abstractions;
@@ -139,7 +138,7 @@ public class FilteringPlanExecutionTests
 
         // It covers every group its participants declare — the set the gate validates it
         // against, and the reason one body can answer any request.
-        Assert.Equal(["audit", "billing", "default"], filtering!.FilterGroups);
+        Assert.Equal(["audit", "billing", "default"], filtering.FilterGroups!);
 
         // And no set is keyed, because no call site proved one.
         Assert.Null(GeneratedDispatchRoots.FindBroadcastPlan(eventType, ["audit"]));

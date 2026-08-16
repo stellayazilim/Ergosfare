@@ -1,5 +1,4 @@
-﻿using Stella.Ergosfare.Core;
-using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core;
 
 namespace Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
 

@@ -1,5 +1,6 @@
-﻿using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
+using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Queries.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
@@ -36,8 +37,8 @@ internal class QueryModule(
         // nothing for most callers and everything for a hot loop — so the choice belongs to
         // the caller, and both spellings resolve the one object graph.
         configuration.Services.TryAddTransient<QueryMediator>(
-            static provider => global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<IQueryMediator>(provider) as QueryMediator
-                ?? throw new global::System.InvalidOperationException(
+            static provider => provider.GetRequiredService<IQueryMediator>() as QueryMediator
+                ?? throw new InvalidOperationException(
                     "The registered IQueryMediator is not a QueryMediator; a replacement registration cannot serve the concrete facade."));
     }
 }

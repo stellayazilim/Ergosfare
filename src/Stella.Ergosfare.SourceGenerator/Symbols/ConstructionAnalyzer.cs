@@ -1,7 +1,6 @@
 using System.Globalization;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Stella.Ergosfare.SourceGenerator.Models;
 
 namespace Stella.Ergosfare.SourceGenerator.Symbols;
 

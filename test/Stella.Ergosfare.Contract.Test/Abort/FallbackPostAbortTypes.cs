@@ -7,6 +7,10 @@ using Stella.Ergosfare.Core.Abstractions.Attributes;
 // the generator's descriptor catalog is filled by a module initializer for every type it
 // models, so a discoverable type would keep its pre-computed descriptors even when
 // registered with Register<T>().
+// The sub-namespace is load-bearing: this file and its Generated twin declare the same
+// type names on purpose, so one lane can be compared against the other. Flattening
+// either to its folder namespace collides.
+// ReSharper disable once CheckNamespace
 namespace Stella.Ergosfare.Contract.Test.Abort.Fallback;
 
 // --- void command -----------------------------------------------------------

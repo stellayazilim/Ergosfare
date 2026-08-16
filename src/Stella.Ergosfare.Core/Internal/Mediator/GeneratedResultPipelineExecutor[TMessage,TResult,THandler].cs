@@ -1,5 +1,4 @@
-﻿using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Exceptions;
+using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Results;
@@ -24,7 +23,6 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
     where TMessage : IMessage
     where THandler : class, IAsyncHandler<TMessage, TResult>
 {
-    private static readonly string[] EmptyGroups = [];
 
     /// <summary>
     /// The grouped compositions of this pipeline; see
@@ -162,7 +160,7 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
                 return cached;
             }
 
-            var dependencies = typedFactory.Create(typeof(TMessage), EmptyGroups);
+            var dependencies = typedFactory.Create(typeof(TMessage), []);
             var fastDependencies = dependencies as MessageDependencies;
             _cachedFastDependencies = fastDependencies;
             _cachedDependencies = dependencies;
@@ -177,7 +175,7 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
         }
 
         _useDirectConstruction = false;
-        return dependenciesFactory.Create(typeof(TMessage), EmptyGroups);
+        return dependenciesFactory.Create(typeof(TMessage), []);
     }
 }
 #pragma warning restore CS8714

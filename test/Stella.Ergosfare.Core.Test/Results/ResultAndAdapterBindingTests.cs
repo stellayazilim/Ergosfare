@@ -39,6 +39,8 @@ public class ResultAndAdapterBindingTests
 
     private sealed record DerivedFromIgnoredMessage : IgnoredBaseMessage;
 
+    // The parameter is the scenario: the type exists to be generic, not to use T.
+    // ReSharper disable once UnusedTypeParameter
     private sealed class Box<T>
     {
         public Exception? Error { get; init; }
@@ -91,13 +93,13 @@ public class ResultAndAdapterBindingTests
         Assert.NotNull(voidAdapter);
 
         var failure = new InvalidOperationException("boom");
-        Assert.True(voidAdapter!.TryGetException(Result.Fail(failure), out var carried));
+        Assert.True(voidAdapter.TryGetException(Result.Fail(failure), out var carried));
         Assert.Same(failure, carried);
         Assert.False(voidAdapter.TryGetException(Result.Ok(), out _));
 
         var valueAdapter = ResultAdapterBinding.For<PlainMessage, Result<string>>();
         Assert.NotNull(valueAdapter);
-        Assert.True(valueAdapter!.TryGetException(Result<string>.Fail(failure), out carried));
+        Assert.True(valueAdapter.TryGetException(Result<string>.Fail(failure), out carried));
         Assert.Same(failure, carried);
         Assert.False(valueAdapter.TryGetException(Result<string>.Ok("ok"), out _));
     }
@@ -125,6 +127,8 @@ public class ResultAndAdapterBindingTests
 
         // A foreign adapter without the facet stays non-materializable: real throws keep
         // the classic unhandled-rethrow contract for its carrier.
+        // Asserting the facet is absent — the check being "suspicious" is the assertion.
+        // ReSharper disable once SuspiciousTypeConversion.Global
         Assert.False(ResultAdapterBinding.For<AnnotatedMessage, CustomOutcome>() is IResultMaterializer<CustomOutcome>);
     }
 
@@ -135,7 +139,7 @@ public class ResultAndAdapterBindingTests
         Assert.IsType<CustomOutcomeAdapter>(bound);
 
         var failure = new InvalidOperationException("boom");
-        Assert.True(bound!.TryGetException(new CustomOutcome { Error = failure }, out var carried));
+        Assert.True(bound.TryGetException(new CustomOutcome { Error = failure }, out var carried));
         Assert.Same(failure, carried);
 
         // The annotation targets the declared result; other slots of the same message
@@ -188,7 +192,7 @@ public class ResultAndAdapterBindingTests
         Assert.IsType<BoxAdapter<int>>(bound);
 
         var failure = new InvalidOperationException("boom");
-        Assert.True(bound!.TryGetException(new Box<int> { Error = failure }, out var carried));
+        Assert.True(bound.TryGetException(new Box<int> { Error = failure }, out var carried));
         Assert.Same(failure, carried);
 
         // The closed instance is cached per slot; a slot the definition cannot unify
@@ -205,9 +209,16 @@ public class ResultAndAdapterBindingTests
         Assert.Throws<ArgumentException>(() => new DefaultResultAdapter(typeof(DependentAdapter)));
     }
 
+    /// <summary>
+    ///     An adapter with no parameterless constructor. The argument is never read — its
+    ///     only job is to make the type one <see cref="DefaultResultAdapter"/> cannot
+    ///     activate, which is what the assertion above pins.
+    /// </summary>
     private sealed class DependentAdapter(string dependency) : IResultAdapter<CustomOutcome>
     {
-        private readonly string _dependency = dependency;
+        private string Dependency { get; } = dependency;
+
+        public override string ToString() => Dependency;
 
         public bool TryGetException(in CustomOutcome result, out Exception? exception)
         {

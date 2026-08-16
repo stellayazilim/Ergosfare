@@ -68,7 +68,7 @@ public class GenericParticipantDiagnosticTests
 
         // ...and yet no frozen composition names it, which is the whole finding.
         var compositions = result.GeneratedSource
-            .Split("AddFrozenComposition", StringSplitOptions.None)
+            .Split("AddFrozenComposition")
             .Skip(1);
 
         Assert.All(compositions, composition =>
@@ -109,7 +109,7 @@ public class GenericParticipantDiagnosticTests
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO016");
 
         var composition = result.GeneratedSource
-            .Split("AddFrozenComposition", StringSplitOptions.None)
+            .Split("AddFrozenComposition")
             .Skip(1)
             .Single();
 
@@ -154,7 +154,7 @@ public class GenericParticipantDiagnosticTests
 
         // And it really does bind: the message's own composition names both participants.
         var composition = result.GeneratedSource
-            .Split("AddFrozenComposition", StringSplitOptions.None)
+            .Split("AddFrozenComposition")
             .Skip(1)
             .Single();
 

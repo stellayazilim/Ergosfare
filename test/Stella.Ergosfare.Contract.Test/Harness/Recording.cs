@@ -1,7 +1,4 @@
-using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Events.Abstractions;
-using Stella.Ergosfare.Queries.Abstractions;
 
 namespace Stella.Ergosfare.Contract.Test.Harness;
 

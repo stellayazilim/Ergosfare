@@ -49,6 +49,7 @@ public sealed class BasicDispatchTests
     }
 
     [DiscoveryKey(Key)]
+    // ReSharper disable once ClassNeverInstantiated.Global
     public sealed class EchoHandler : ICommandHandler<Echo, string>
     {
         /// <summary>The message instance the last dispatch handed this handler.</summary>
