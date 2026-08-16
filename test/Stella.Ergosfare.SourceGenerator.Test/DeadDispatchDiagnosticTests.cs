@@ -176,8 +176,15 @@ public class DeadDispatchDiagnosticTests
         Assert.Empty(result.GeneratorDiagnostics);
     }
 
+    /// <summary>
+    /// A publish nothing subscribes to is dead like any other dispatch. It used to be exempt,
+    /// on the reasoning that reaching zero subscribers is a legal no-op — but that answers
+    /// what happens when no handler matched on a call, not whether any handler can ever
+    /// match. Declaring the event and forgetting the subscriber is the ordinary way to get
+    /// here, and it used to compile in silence.
+    /// </summary>
     [Fact]
-    public void PublishingAnEventWithoutSubscribers_IsALegalNoOp()
+    public void PublishingAnEventNobodySubscribesTo_IsReported()
     {
         var result = GeneratorTestHost.Run("""
             using System.Threading.Tasks;
@@ -196,7 +203,13 @@ public class DeadDispatchDiagnosticTests
             buildProperties: CompositionRoot);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.Empty(result.GeneratorDiagnostics);
+
+        var diagnostic = Assert.Single(result.GeneratorDiagnostics);
+        Assert.Equal("ERGO005", diagnostic.Id);
+
+        // The verdict is shared with every other lane; the consequence is not. A publish
+        // that reaches nobody returns rather than throwing, and the message says so.
+        Assert.Contains("reach nobody", diagnostic.GetMessage());
     }
 
     [Fact]
