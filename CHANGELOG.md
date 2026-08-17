@@ -1,3 +1,100 @@
+## v2.13.0-preview – '2026-08-17'
+
+Preview release. The theme: **what the compiler already knows, the runtime stops asking
+again.** The result adapter was answering at first dispatch a question the generator had
+resolved at build time, over `Type` objects and a second unifier kept in agreement by hand.
+It now reads a generated table, and the layer's reflection is gone.
+
+On the other side, a message can now arrive in chunks. Streaming meant one thing — a query
+whose result came over time — and the direction that matters for a converter or an upload was
+missing: a handler that has to read four gigabytes cannot be handed it as a single value.
+
+### The result adapter stops asking at run time what the generator already answered
+
+* The result adapter binding is a generated table. Three tiers used to be answered by
+  reflection at first dispatch: an annotated adapter was activated, the configured fallback was
+  closed over the slot by a second unifier living beside the generator's, and both attributes
+  were read off the message's base chain. The generator writes one entry per (message, result)
+  slot an annotation binds, one per message that opts out, and one per result type the fallback
+  serves — each passing its adapter as a type argument constrained to the slot's contract, so
+  an adapter that does not serve the slot is a compile error in the generated file. What
+  reaches the runtime is a dictionary read and one interface call.
+* `DefaultResultAdapter`'s constructor is internal. **Breaking.** A carrier built by hand
+  names an adapter no generated table answers for, which is the same hole `ERGO019` closes at
+  the call site; the fallback is declared through `UseDefaultResultAdapter`, the call the
+  generator reads. A container configured that way and reached by an application the generator
+  never ran for now says so on the first dispatch instead of serving nobody in silence.
+* This was reached even in a generated application: a staged plan bakes its adapter, but the
+  executor still had to bind one reflectively to compare identity against it, so the plan's
+  compile-time answer never removed the run-time one.
+* Measured the way the reflective arms were measured before: with each replaced by a throw and
+  the suite run, the shapes reaching the adapter layer drop from 18 to 0. Every trimming and
+  AOT suppression in the layer is gone with them.
+
+### A message can arrive in chunks
+
+* `ErgosfareStream<TChunk>` is a message whose payload arrives a chunk at a time, with
+  `ErgosfareCommandStream<TChunk, TMeta[, TResult]>` and `ErgosfareQueryStream<TChunk, TMeta,
+  TResult>` over it. What makes a dispatch streaming is the message's own type — not the verb
+  it is sent with, not the module it belongs to — so a command streams exactly the way a query
+  does, and there is no `StreamAsync`, no streaming handler contract and no lane of its own.
+* Streaming used to mean one thing only: a query whose *result* arrives over time. The other
+  direction was missing, and it is the one that matters for a converter or an upload — a
+  handler that must read four gigabytes cannot be handed it as a single value. The two are
+  independent axes now: chunks in is a property of the message, chunks out is a property of
+  the result (`TResult = IAsyncEnumerable<T>`), and either, neither or both may hold.
+* The channel is bounded, so a producer faster than the handler waits instead of filling
+  memory, and single-pass, so nothing is replayed — which is why a stream message has no retry
+  and no resume: the handler runs once for the whole sequence. It is also an
+  `IAsyncEnumerable<TChunk>`, so a handler writes `await foreach (var chunk in command)` and
+  nothing stands between it and the payload.
+* `AsStream()` and `Chunked()` bridge to and from `System.IO.Stream`, written against
+  `IAsyncEnumerable<ReadOnlyMemory<byte>>` rather than against the message: they belong to the
+  byte shape, and a sequence of frames should not carry a method claiming to be a stream. Each
+  chunk owns its bytes — handing out slices of one reused buffer would be cheaper by an
+  allocation and would leave a handler that kept a chunk reading memory the next read
+  overwrote.
+* `StreamInfo` is what a stream reports about itself: chunks taken, duration, and how it
+  ended. It describes one stream, so an operation that takes chunks in and hands chunks out
+  has two — the two directions start, end and fail independently.
+* A pipeline that stops ends the stream with it. The two are separate synchronisation
+  objects, so a stage refusing an upload or a handler failing said nothing to a caller
+  waiting on a full buffer — it would have waited for a reader that was never coming, and the
+  pump task would have leaked with the chunks it held. The executors now close the channel
+  however the dispatch turns out, and the next write fails with a message naming what to do:
+  await the dispatch to see why it ended.
+* The metadata is the half of the message that exists before the payload moves, and that is
+  what it is for: the stages that run before the handler see it and nothing else, so an upload
+  can be refused without a byte of it arriving.
+* The whole streaming surface is marked `[Experimental]` under `ERGOEXP003`. What a stream
+  message *is* — bounded, single-pass, a chunk at a time — is settled; what the pipeline does
+  around one is not: which stages it gets and what they are handed, and how a refused dispatch
+  reaches a caller that is still writing. Experimental rather than obsolete because none of it
+  has shipped, and in this repository experimental is an error by default — the honest default
+  for a surface nobody depends on yet. Opt in with `<NoWarn>$(NoWarn);ERGOEXP003</NoWarn>`.
+* Nothing on the dispatch path changed. A stream message is an ordinary `ICommand<TResult>`
+  with an ordinary handler, so it gets the same compiled plan, the same interceptor stages and
+  the same frozen composition every other message gets — measured rather than assumed: a
+  stream message with a pre- and a post-interceptor emits `AddStagedPlan<…>` with both baked
+  into it.
+
+### Diagnostics
+
+* `ERGO019`, `ERGO020` and `ERGO021` judge the `UseDefaultResultAdapter` call: the argument
+  must be a literal `typeof` the compilation resolves, a compilation names one default adapter,
+  and generated code must be able to name and construct it. **Breaking.** An unreadable or
+  duplicated call used to turn compile-time baking off for the whole compilation and leave the
+  answer to the runtime; there is no runtime answer any more, so what used to compile into a
+  slower path now fails the build. An adapter serving several result families does so through
+  several `IResultAdapter<TResult>` implementations.
+* `ERGO011` now also reports an annotated adapter the generated registration cannot name —
+  inaccessible from the compilation that declares the message. Same reason: the annotation's
+  binding lives in the generated table or nowhere.
+* `ERGO022` reports a published stream message. A publish delivers to every subscriber and a
+  chunk channel is consumed once, so whichever subscriber reads first takes the payload and
+  the rest see nothing — which one that is depending on registration order. An error: no
+  arrangement of subscribers makes it work.
+
 ## v2.12.0-preview – '2026-08-17'
 
 Preview release. The theme: **a pipeline stops failing in silence.** Four shapes compiled,
@@ -81,27 +178,9 @@ one that fails at publish keeps shrinking.
   container. Rooting the message while skipping `AddResult`/`AddStream` left a hidden
   `ICommand<string>` closing one generic from the table and the other through
   `MakeGenericType`.
-* The result adapter binding is a generated table. Three tiers used to be answered by
-  reflection at first dispatch: an annotated adapter was activated, the configured fallback was
-  closed over the slot by a second unifier living beside the generator's, and both attributes
-  were read off the message's base chain. The generator writes one entry per (message, result)
-  slot an annotation binds, one per message that opts out, and one per result type the fallback
-  serves — each passing its adapter as a type argument constrained to the slot's contract, so
-  an adapter that does not serve the slot is a compile error in the generated file. What
-  reaches the runtime is a dictionary read and one interface call.
-* `DefaultResultAdapter`'s constructor is internal. **Breaking.** A carrier built by hand
-  names an adapter no generated table answers for, which is the same hole `ERGO019` closes at
-  the call site; the fallback is declared through `UseDefaultResultAdapter`, the call the
-  generator reads. A container configured that way and reached by an application the generator
-  never ran for now says so on the first dispatch instead of serving nobody in silence.
-* This was reached even in a generated application: a staged plan bakes its adapter, but the
-  executor still had to bind one reflectively to compare identity against it, so the plan's
-  compile-time answer never removed the run-time one.
 * Measured by making the reflective arms throw and running the suite: the shapes reaching them
-  drop from 25 to 2 on the dispatch path, and from 18 to 0 in the adapter layer. What remains
-  on the dispatch path is generic messages, whose closed forms are never rooted because an open
-  definition is not a dispatchable message — tracked separately. The adapter layer's trimming
-  and AOT suppressions are gone entirely.
+  drop from 25 to 2. What remains is generic messages, whose closed forms are never rooted
+  because an open definition is not a dispatchable message — tracked separately.
 
 ### The plan gates stop disqualifying legal pipelines
 
@@ -132,59 +211,7 @@ one that fails at publish keeps shrinking.
 * The event variant was also the odd one out: alone among the pre-interceptor contracts it did
   not carry `IEvent`, so module discovery never found it and it had to be registered by hand.
 
-### A message can arrive in chunks
-
-* `ErgosfareStream<TChunk>` is a message whose payload arrives a chunk at a time, with
-  `ErgosfareCommandStream<TChunk, TMeta[, TResult]>` and `ErgosfareQueryStream<TChunk, TMeta,
-  TResult>` over it. What makes a dispatch streaming is the message's own type — not the verb
-  it is sent with, not the module it belongs to — so a command streams exactly the way a query
-  does, and there is no `StreamAsync`, no streaming handler contract and no lane of its own.
-* Streaming used to mean one thing only: a query whose *result* arrives over time. The other
-  direction was missing, and it is the one that matters for a converter or an upload — a
-  handler that must read four gigabytes cannot be handed it as a single value. The two are
-  independent axes now: chunks in is a property of the message, chunks out is a property of
-  the result (`TResult = IAsyncEnumerable<T>`), and either, neither or both may hold.
-* The channel is bounded, so a producer faster than the handler waits instead of filling
-  memory, and single-pass, so nothing is replayed — which is why a stream message has no retry
-  and no resume: the handler runs once for the whole sequence. It is also an
-  `IAsyncEnumerable<TChunk>`, so a handler writes `await foreach (var chunk in command)` and
-  nothing stands between it and the payload.
-* `AsStream()` and `Chunked()` bridge to and from `System.IO.Stream`, written against
-  `IAsyncEnumerable<ReadOnlyMemory<byte>>` rather than against the message: they belong to the
-  byte shape, and a sequence of frames should not carry a method claiming to be a stream. Each
-  chunk owns its bytes — handing out slices of one reused buffer would be cheaper by an
-  allocation and would leave a handler that kept a chunk reading memory the next read
-  overwrote.
-* `StreamInfo` is what a stream reports about itself: chunks taken, duration, and how it
-  ended. It describes one stream, so an operation that takes chunks in and hands chunks out
-  has two — the two directions start, end and fail independently.
-* A pipeline that stops ends the stream with it. The two are separate synchronisation
-  objects, so a stage refusing an upload or a handler failing said nothing to a caller
-  waiting on a full buffer — it would have waited for a reader that was never coming, and the
-  pump task would have leaked with the chunks it held. The executors now close the channel
-  however the dispatch turns out, and the next write fails with a message naming what to do:
-  await the dispatch to see why it ended.
-* The metadata is the half of the message that exists before the payload moves, and that is
-  what it is for: the stages that run before the handler see it and nothing else, so an upload
-  can be refused without a byte of it arriving.
-* The whole streaming surface is marked `[Experimental]` under `ERGOEXP003`. What a stream
-  message *is* — bounded, single-pass, a chunk at a time — is settled; what the pipeline does
-  around one is not: which stages it gets and what they are handed, and how a refused dispatch
-  reaches a caller that is still writing. Experimental rather than obsolete because none of it
-  has shipped, and in this repository experimental is an error by default — the honest default
-  for a surface nobody depends on yet. Opt in with `<NoWarn>$(NoWarn);ERGOEXP003</NoWarn>`.
-* Nothing on the dispatch path changed. A stream message is an ordinary `ICommand<TResult>`
-  with an ordinary handler, so it gets the same compiled plan, the same interceptor stages and
-  the same frozen composition every other message gets — measured rather than assumed: a
-  stream message with a pre- and a post-interceptor emits `AddStagedPlan<…>` with both baked
-  into it.
-
 ### Diagnostics
-
-* `ERGO022` reports a published stream message. A publish delivers to every subscriber and a
-  chunk channel is consumed once, so whichever subscriber reads first takes the payload and
-  the rest see nothing — which one that is depending on registration order. An error: no
-  arrangement of subscribers makes it work.
 
 * `ERGOSG001`–`ERGOSG018` become `ERGO001`–`ERGO018`. **Breaking.** Numbers are preserved, so
   the mapping is one rule: drop the `SG`. The scheme stays coherent — `ERGO###` for analyzer
@@ -194,16 +221,6 @@ one that fails at publish keeps shrinking.
   diagnostic comes back — as a build failure for the error-severity rules. This repository's
   own suppressions are the demonstration: two test projects carried
   `<NoWarn>ERGOSG005</NoWarn>` and their builds broke until updated.
-* `ERGO019`, `ERGO020` and `ERGO021` judge the `UseDefaultResultAdapter` call: the argument
-  must be a literal `typeof` the compilation resolves, a compilation names one default adapter,
-  and generated code must be able to name and construct it. **Breaking.** An unreadable or
-  duplicated call used to turn compile-time baking off for the whole compilation and leave the
-  answer to the runtime; there is no runtime answer any more, so what used to compile into a
-  slower path now fails the build. An adapter serving several result families does so through
-  several `IResultAdapter<TResult>` implementations.
-* `ERGO011` now also reports an annotated adapter the generated registration cannot name —
-  inaccessible from the compilation that declares the message. Same reason: the annotation's
-  binding lives in the generated table or nowhere.
 * `ERGO018` reports a `Register` call naming its type at run time, rather than quietly
   suspending the reachability judgment. The closed world compiles a construct's pipeline,
   freezes its composition and bakes its plan from what the compilation can see, and a type only
