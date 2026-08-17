@@ -452,4 +452,30 @@ internal static class GeneratorDiagnostics
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// ERGO023: a group set selects two main handlers for one message.
+    /// </summary>
+    /// <remarks>
+    /// A send delivers to one handler, so a set that selects two cannot be satisfied — every
+    /// dispatch under it throws <c>MultipleHandlerFoundException</c>. Reported where the set
+    /// is one this compilation can read; a set computed at run time is answered by the
+    /// filtering plan instead. An error, and the fix is a modelling decision rather than a
+    /// tweak: two handlers claiming one command usually means the message is an event, or
+    /// that the two are different messages.
+    /// <para>
+    /// The ungrouped case belongs to ERGO010, which judges main handlers contesting at the
+    /// same level.
+    /// </para>
+    /// </remarks>
+    public static readonly DiagnosticDescriptor ContestedInGroupSet = new(
+        id: "ERGO023",
+        title: "Group set selects two main handlers",
+        messageFormat:
+            "Group set [{1}] selects both '{2}' and '{3}' for message '{0}' — a send delivers to one handler, so " +
+            "every dispatch under that set throws MultipleHandlerFoundException. Keep one handler in the set, or " +
+            "publish the message to both as an event.",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

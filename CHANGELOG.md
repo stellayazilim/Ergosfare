@@ -1,3 +1,17 @@
+## Unreleased
+
+### A plan the compiler cannot build is a build error, not a quieter path
+
+* A group set that selects two main handlers for one message fails the build with `ERGO023`.
+  A send delivers to one handler, so the set cannot be satisfied — every dispatch under it
+  threw `MultipleHandlerFoundException`, and the build said nothing. The ungrouped case stays
+  with `ERGO010`, which judges main handlers contesting at the same level.
+* The planner had no way to say what it saw. Its vocabulary for a shape it could not plan was
+  a bare `return`, because it has no `SourceProductionContext` and returned only plans — so a
+  lost plan never appeared in a build, and the dispatch found out at run time instead. It now
+  returns findings alongside plans, and the pipeline reports them. That channel is what the
+  remaining silent disqualifications need; `ERGO023` is the first through it.
+
 ## v2.13.0-preview – '2026-08-17'
 
 Preview release. The theme: **what the compiler already knows, the runtime stops asking

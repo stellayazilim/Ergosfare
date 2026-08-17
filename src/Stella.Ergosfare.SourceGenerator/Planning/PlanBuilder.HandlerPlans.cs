@@ -174,6 +174,7 @@ internal sealed partial class PlanBuilder
     /// runtime group path.
     /// </remarks>
     private static bool TrySelectPlanHandler(
+        List<PlanFinding> findings,
         RegistrableTypeModel type,
         Dictionary<string, List<(RegistrableTypeModel Model, DescriptorModel Descriptor)>> handlersByMessage,
         PlanGroupFilter filter,
@@ -198,9 +199,23 @@ internal sealed partial class PlanBuilder
             }
 
             // A second candidate means the plan cannot say which handler serves the
-            // dispatch, so it is not built at all.
+            // dispatch. Where the set is one this compilation can read, that is not a shape
+            // to plan around — a send delivers to one handler, so the dispatch throws every
+            // time it runs, and the build should say so. The default set is left to ERGO010,
+            // which judges ungrouped handlers at the same level.
             if (selected)
             {
+                if (!filter.Filtering && !filter.Target.IsEmpty)
+                {
+                    findings.Add(new PlanFinding(
+                        PlanFindingKind.ContestedInGroupSet,
+                        type.DisplayName,
+                        filter.Target,
+                        handler.DisplayName,
+                        candidate.Model.DisplayName,
+                        type.InfoLocation));
+                }
+
                 return false;
             }
 
