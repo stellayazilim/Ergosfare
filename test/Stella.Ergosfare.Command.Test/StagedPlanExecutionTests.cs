@@ -670,15 +670,6 @@ public class StagedPlanExecutionTests
         public int Value { get; init; }
     }
 
-    public sealed class DefaultGateOutcomeAdapter : IResultAdapter<DefaultGateOutcome>
-    {
-        public bool TryGetException(in DefaultGateOutcome result, out Exception? exception)
-        {
-            exception = result.Error;
-            return exception is not null;
-        }
-    }
-
     [ExcludeFromDiscovery]
     public sealed class DefaultGateCommand : ICommand<DefaultGateOutcome>
     {
@@ -733,7 +724,7 @@ public class StagedPlanExecutionTests
 
         var provider = new ServiceCollection()
             .AddErgosfare(x => x
-                .UseDefaultResultAdapter(typeof(DefaultGateOutcomeAdapter))
+                .UseDefaultResultAdapter(typeof(CommandTestDefaultResultAdapter))
                 .AddCommandModule(c =>
                 {
                     c.Register<DefaultGateCommandHandler>();

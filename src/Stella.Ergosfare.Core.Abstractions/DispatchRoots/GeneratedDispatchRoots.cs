@@ -27,6 +27,10 @@ public static class GeneratedDispatchRoots
     private static readonly ConcurrentDictionary<(Type MessageType, string Groups), StagedVoidPlan> StagedVoidPlans = new();
     private static readonly ConcurrentDictionary<(Type MessageType, string Groups), StagedBroadcastPlan> BroadcastPlans = new();
     private static readonly ConcurrentDictionary<(Type MessageType, Type ResultType, string Groups), StagedResultPlan> StagedResultPlans = new();
+    private static readonly ConcurrentDictionary<(Type MessageType, Type ResultType), object> ResultAdapters = new();
+    private static readonly ConcurrentDictionary<Type, object> DefaultResultAdapters = new();
+    private static readonly ConcurrentDictionary<Type, object?> IgnoredResultAdapters = new();
+    private static volatile bool _resultAdaptersSealed;
 
     /// <summary>
     /// Roots the void dispatch generics of a message type. Repeated calls do nothing.
@@ -77,6 +81,98 @@ public static class GeneratedDispatchRoots
     /// <param name="resultType">The streamed item type to look up.</param>
     public static MessageResultRoot? FindStream(Type messageType, Type resultType)
         => Streams.TryGetValue((messageType, resultType), out var root) ? root : null;
+
+    /// <summary>
+    /// Roots the adapter a message's <c>[ResultAdapter]</c> annotation binds to one of its
+    /// result slots. Repeated calls do nothing.
+    /// </summary>
+    /// <typeparam name="TMessage">The message carrying the annotation.</typeparam>
+    /// <typeparam name="TResult">The result slot the adapter serves.</typeparam>
+    /// <typeparam name="TAdapter">The annotated adapter.</typeparam>
+    /// <remarks>
+    /// The constraints are the whole point: naming an adapter that does not serve the slot,
+    /// or that cannot be constructed, is a compile error in the generated file rather than a
+    /// reflective test at first dispatch. What reaches the runtime is an instance already
+    /// typed as the slot's adapter, so binding is a dictionary read and the pipeline's use of
+    /// it is one interface call.
+    /// </remarks>
+    public static void AddResultAdapter<TMessage, TResult, TAdapter>()
+        where TAdapter : IResultAdapter<TResult>, new()
+        => ResultAdapters.TryAdd((typeof(TMessage), typeof(TResult)), new TAdapter());
+
+    /// <summary>
+    /// Roots a message's opt-out of result adaptation. Repeated calls do nothing.
+    /// </summary>
+    /// <typeparam name="TMessage">The message carrying <c>[IgnoreResultAdapter]</c>.</typeparam>
+    /// <remarks>
+    /// The opt-out is inherited, so what is written here is the verdict of the generator's
+    /// walk up the base chain rather than one attribute — which is why the runtime never has
+    /// to walk it again.
+    /// </remarks>
+    public static void AddIgnoredResultAdapter<TMessage>()
+        => IgnoredResultAdapters.TryAdd(typeof(TMessage), null);
+
+    /// <summary>
+    /// Whether the message opted out of result adaptation.
+    /// </summary>
+    /// <typeparam name="TMessage">The message to look up.</typeparam>
+    public static bool IsResultAdapterIgnored<TMessage>()
+        => IgnoredResultAdapters.ContainsKey(typeof(TMessage));
+
+    /// <summary>
+    /// Roots the container-wide default adapter's answer for one result type. Repeated calls
+    /// do nothing.
+    /// </summary>
+    /// <typeparam name="TResult">The result type served.</typeparam>
+    /// <typeparam name="TAdapter">
+    /// The adapter serving it — the configured type itself, or the closing of an open
+    /// definition over this result type.
+    /// </typeparam>
+    /// <remarks>
+    /// A compilation names one default adapter, so this table needs no key for which adapter
+    /// answered: the unification an open definition needs is done at compile time, and the
+    /// closed form arrives here already built.
+    /// </remarks>
+    public static void AddDefaultResultAdapter<TResult, TAdapter>()
+        where TAdapter : IResultAdapter<TResult>, new()
+        => DefaultResultAdapters.TryAdd(typeof(TResult), new TAdapter());
+
+    /// <summary>
+    /// Declares that generated registration filled the adapter tables, so a slot missing
+    /// from them is an answer rather than an absence.
+    /// </summary>
+    /// <remarks>
+    /// Without it the two are indistinguishable: a pair with no entry could be a message
+    /// whose adapter serves another slot, or an application the generator never ran for. The
+    /// seal makes the first case a silent <c>null</c> and the second an actionable throw.
+    /// </remarks>
+    public static void SealResultAdapters() => _resultAdaptersSealed = true;
+
+    /// <summary>
+    /// Whether generated registration has filled the adapter tables in this process.
+    /// </summary>
+    public static bool ResultAdaptersSealed => _resultAdaptersSealed;
+
+    /// <summary>
+    /// Returns the adapter a message's annotation binds to a result slot, or <c>null</c>
+    /// when the annotation serves another slot or the message carries none.
+    /// </summary>
+    /// <typeparam name="TMessage">The message to look up.</typeparam>
+    /// <typeparam name="TResult">The result slot to look up.</typeparam>
+    public static IResultAdapter<TResult>? FindResultAdapter<TMessage, TResult>()
+        => ResultAdapters.TryGetValue((typeof(TMessage), typeof(TResult)), out var adapter)
+            ? (IResultAdapter<TResult>)adapter
+            : null;
+
+    /// <summary>
+    /// Returns the default adapter's answer for a result type, or <c>null</c> when the
+    /// configured default does not serve it.
+    /// </summary>
+    /// <typeparam name="TResult">The result type to look up.</typeparam>
+    public static IResultAdapter<TResult>? FindDefaultResultAdapter<TResult>()
+        => DefaultResultAdapters.TryGetValue(typeof(TResult), out var adapter)
+            ? (IResultAdapter<TResult>)adapter
+            : null;
 
     /// <summary>
     /// Roots a plan for a void message whose whole pipeline is one asynchronous handler,

@@ -33,6 +33,14 @@ public interface IModuleRegistry
     /// adapter cannot serve, a message carrying <c>[IgnoreResultAdapter]</c>, and an
     /// application that never calls this all keep the default behavior of throwing failures
     /// rather than returning them.
+    /// <para>
+    /// This is the call the generator reads, and it reads it at compile time: the argument
+    /// must be a literal <c>typeof</c> it can resolve (<c>ERGO019</c>), a compilation names
+    /// one fallback adapter (<c>ERGO020</c>), and the adapter must be one generated code can
+    /// name and construct (<c>ERGO021</c>). Which result types it serves — and what closes an
+    /// open definition over each of them — is answered there and written into the generated
+    /// adapter table, which is where the runtime reads it back.
+    /// </para>
     /// </remarks>
     [Experimental(ExperimentalIds.ResultAdapterSurface)]
     IModuleRegistry UseDefaultResultAdapter(

@@ -23,16 +23,17 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 /// </param>
 /// <param name="IsBakeable">
 /// Whether generated code can name and construct the adapter — accessible, concrete, and
-/// with a public parameterless constructor. An adapter that is not gets written into no
-/// plan, and the runtime resolves it instead.
+/// with a public parameterless constructor. An adapter that is not can reach no generated
+/// table, which is what ERGO021 reports.
 /// </param>
+/// <param name="Location">Where the call sits, for the diagnostics that judge it.</param>
 /// <remarks>
-/// A literal <c>typeof</c> argument lets staged plans be compiled against the adapter.
-/// Anything else is opaque, and one opaque call — or two calls naming different adapters —
-/// turns that off for the whole compilation; the affected dispatches then go through the
-/// general strategy, which asks the container. Whether the adapter fits a given message is
-/// never judged here: a fallback that serves none of a message's result types simply does
-/// not bind to it, and that message keeps throwing its failures.
+/// The argument must be a literal <c>typeof</c> the compilation resolves, and a compilation
+/// names one adapter: anything else is ERGO019 or ERGO020. Both are errors because the
+/// answer this model feeds — which result types the fallback serves, and what closes an open
+/// definition over each of them — is the only answer the runtime has. Whether the adapter
+/// fits a given message is never judged here: a fallback that serves none of a message's
+/// result types simply does not bind to it, and that message keeps throwing its failures.
 /// </remarks>
 internal sealed record DefaultResultAdapterSiteModel(
     bool IsOpaque,
@@ -42,12 +43,15 @@ internal sealed record DefaultResultAdapterSiteModel(
     string ParameterNamesKey,
     string AdapterSlotsKey,
     string MaterializerSlotsKey,
-    bool IsBakeable)
+    bool IsBakeable,
+    LocationInfo? Location)
 {
     /// <summary>
-    /// The single instance every opaque call is reduced to.
+    /// The model of a call whose argument could not be read.
     /// </summary>
-    public static readonly DefaultResultAdapterSiteModel Opaque = new(
+    /// <param name="location">Where the call sits.</param>
+    /// <returns>The opaque model.</returns>
+    public static DefaultResultAdapterSiteModel OpaqueAt(LocationInfo? location) => new(
         IsOpaque: true,
         BaseTypeExpression: string.Empty,
         IsOpenGeneric: false,
@@ -55,5 +59,25 @@ internal sealed record DefaultResultAdapterSiteModel(
         ParameterNamesKey: string.Empty,
         AdapterSlotsKey: string.Empty,
         MaterializerSlotsKey: string.Empty,
-        IsBakeable: false);
+        IsBakeable: false,
+        Location: location);
+
+    /// <summary>
+    /// Whether another call names the same adapter as this one.
+    /// </summary>
+    /// <param name="other">The call to compare with.</param>
+    /// <returns><c>true</c> when the two agree on every read fact.</returns>
+    /// <remarks>
+    /// Compared field by field rather than by record equality, which would count two calls
+    /// naming one adapter from different lines as a disagreement.
+    /// </remarks>
+    public bool NamesSameAdapterAs(DefaultResultAdapterSiteModel other)
+        => IsOpaque == other.IsOpaque
+           && IsOpenGeneric == other.IsOpenGeneric
+           && Arity == other.Arity
+           && BaseTypeExpression == other.BaseTypeExpression
+           && ParameterNamesKey == other.ParameterNamesKey
+           && AdapterSlotsKey == other.AdapterSlotsKey
+           && MaterializerSlotsKey == other.MaterializerSlotsKey
+           && IsBakeable == other.IsBakeable;
 }

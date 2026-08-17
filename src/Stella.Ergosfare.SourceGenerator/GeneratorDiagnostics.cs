@@ -367,4 +367,68 @@ internal static class GeneratorDiagnostics
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// ERGO019: a <c>UseDefaultResultAdapter</c> call names its adapter with something other
+    /// than a literal <c>typeof</c>.
+    /// </summary>
+    /// <remarks>
+    /// A variable, a conditional, a type that does not resolve, or a definition nested inside
+    /// a generic type. An error: which result types the fallback serves — and what closes an
+    /// open definition over each of them — is decided here and written into the generated
+    /// table, and a call this cannot read leaves every pipeline in the application without a
+    /// fallback with nothing to say so.
+    /// </remarks>
+    public static readonly DiagnosticDescriptor OpaqueDefaultResultAdapter = new(
+        id: "ERGO019",
+        title: "Default result adapter is not named at compile time",
+        messageFormat:
+            "This UseDefaultResultAdapter call does not name its adapter with a literal typeof, so the fallback it " +
+            "configures reaches no compiled pipeline. Name the adapter directly — 'UseDefaultResultAdapter(" +
+            "typeof(MyAdapter))', or 'typeof(MyAdapter<>)' for an open definition — declared outside any generic " +
+            "type.",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// ERGO020: a compilation configures two different default result adapters.
+    /// </summary>
+    /// <remarks>
+    /// The fallback is the application's answer for every result type nothing more specific
+    /// serves, and a message's pipeline is compiled once. Two answers leave no way to say
+    /// which one a given dispatch was compiled against, so the disagreement is settled here
+    /// rather than by whichever container happened to be built.
+    /// </remarks>
+    public static readonly DiagnosticDescriptor ConflictingDefaultResultAdapters = new(
+        id: "ERGO020",
+        title: "Conflicting default result adapters",
+        messageFormat:
+            "This UseDefaultResultAdapter call names '{0}', and another in the same compilation names '{1}' — a " +
+            "compilation configures one fallback adapter, because the pipelines compiled from it are compiled once. " +
+            "Name one adapter, or have it serve both result families through several " +
+            "IResultAdapter<TResult> implementations.",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// ERGO021: the configured default result adapter cannot be named by generated code.
+    /// </summary>
+    /// <remarks>
+    /// Inaccessible from this compilation, abstract, without a public parameterless
+    /// constructor, or otherwise unspellable. An error for the same reason ERGO019 is: the
+    /// generated table is where the fallback's answers live, and an adapter that cannot be
+    /// written into it has no other way to reach a dispatch.
+    /// </remarks>
+    public static readonly DiagnosticDescriptor UnbakeableDefaultResultAdapter = new(
+        id: "ERGO021",
+        title: "Default result adapter cannot be constructed by generated code",
+        messageFormat:
+            "The default result adapter '{0}' cannot be named and constructed by the generated registration: a " +
+            "concrete type, accessible from this compilation and with a public parameterless constructor, is " +
+            "required.",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

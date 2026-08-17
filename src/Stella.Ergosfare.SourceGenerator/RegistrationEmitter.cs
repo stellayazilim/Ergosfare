@@ -3,6 +3,7 @@ using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis.CSharp;
 using Stella.Ergosfare.SourceGenerator.Models;
+using Stella.Ergosfare.SourceGenerator.ResultAdapters;
 
 namespace Stella.Ergosfare.SourceGenerator;
 
@@ -59,6 +60,8 @@ internal static class RegistrationEmitter
     /// <param name="frozenCompositions">The baked composition table.</param>
     /// <param name="dispatchSites">The dispatches to record in the manifest.</param>
     /// <param name="registrationSites">The registrations to record in the manifest.</param>
+    /// <param name="defaultResultAdapter">The container's fallback result adapter, if it names one.</param>
+    /// <param name="defaultResultAdapter">The container's fallback result adapter, if it names one.</param>
     /// <param name="emitDispatchManifest">Whether this assembly carries a manifest.</param>
     /// <param name="generatorVersion">The version stamped on the generated code.</param>
     /// <returns>The generated source.</returns>
@@ -72,6 +75,7 @@ internal static class RegistrationEmitter
         IReadOnlyList<FrozenCompositionModel> frozenCompositions,
         IReadOnlyList<DispatchSiteModel> dispatchSites,
         IReadOnlyList<RegistrationSiteModel> registrationSites,
+        DefaultResultAdapterSiteModel? defaultResultAdapter,
         bool emitDispatchManifest,
         string generatorVersion)
     {
@@ -151,7 +155,8 @@ internal static class RegistrationEmitter
             EmitDispatchRoots(sb, ref wroteMember, types, registeredShadows, voidPlans, resultPlans, stagedPlans,
                 builders.DispatchRootsHasPlanFactories,
                 builders.DispatchRootsHasProviderPlanFactories,
-                builders.HasKeyedServiceExtensions);
+                builders.HasKeyedServiceExtensions,
+                defaultResultAdapter);
 
             EmitStagedPlanClasses(sb, ref wroteMember, stagedPlans, builders.StagedPlansSupportDirectConstruction);
         }
@@ -642,6 +647,7 @@ internal static class RegistrationEmitter
     /// <param name="hasKeyedServiceExtensions">
     /// Whether the consuming compilation can resolve the keyed-service extensions.
     /// </param>
+    /// <param name="defaultResultAdapter">The container's fallback result adapter, if it names one.</param>
     /// <remarks>
     /// One <c>AddMessage</c> per dispatchable message, plus an <c>AddResult</c> or
     /// <c>AddStream</c> per closed result contract. Those closures let the runtime's dispatch
@@ -659,7 +665,8 @@ internal static class RegistrationEmitter
         IReadOnlyList<StagedPlanModel> stagedPlans,
         bool emitPlanFactories,
         bool emitProviderPlanFactories,
-        bool hasKeyedServiceExtensions)
+        bool hasKeyedServiceExtensions,
+        DefaultResultAdapterSiteModel? defaultResultAdapter)
     {
         StartMember(sb, ref wroteMember);
         // A module initializer rather than something a registration call does: the roots and
@@ -692,6 +699,8 @@ internal static class RegistrationEmitter
         {
             AppendMessageRoot(sb, shadow);
         }
+
+        AppendResultAdapterTable(sb, types, registeredShadows, defaultResultAdapter);
 
         // The single-handler plans. The executor checks each one against the pipeline the
         // container actually composed, so a plan can only lose its speedup, never change
@@ -2136,6 +2145,112 @@ internal static class RegistrationEmitter
         }
 
         sb.AppendLine("                return result;");
+    }
+
+    /// <summary>
+    /// Writes the compilation's result-adapter table.
+    /// </summary>
+    /// <param name="sb">The buffer to write to.</param>
+    /// <param name="types">The discovered types.</param>
+    /// <param name="registeredShadows">The hidden messages a registration reaches.</param>
+    /// <param name="defaultResultAdapter">The container's fallback adapter, if it names one.</param>
+    /// <remarks>
+    /// <para>
+    /// One entry per (message, result) slot an annotation binds, one per message that opts
+    /// out, and one per result type the fallback serves — the same three tiers the runtime
+    /// binding consults, answered here where the types are still types. Each entry passes its
+    /// adapter as a type argument constrained to the slot's contract, so an adapter that does
+    /// not serve the slot, or cannot be constructed, is a compile error in this file rather
+    /// than a reflective test at first dispatch.
+    /// </para>
+    /// <para>
+    /// The seal closes it: past that call a slot missing from the table means the tier bound
+    /// nothing, and a configured fallback in a process that never got a table says so instead
+    /// of silently serving no one.
+    /// </para>
+    /// </remarks>
+    private static void AppendResultAdapterTable(
+        StringBuilder sb,
+        IReadOnlyList<RegistrableTypeModel> types,
+        IReadOnlyList<RegistrableTypeModel> registeredShadows,
+        DefaultResultAdapterSiteModel? defaultResultAdapter)
+    {
+        var defaultSlots = new SortedSet<string>(StringComparer.Ordinal);
+
+        foreach (var type in types.Concat(registeredShadows))
+        {
+            if (!type.IsDispatchableMessage)
+            {
+                continue;
+            }
+
+            if (type.HasIgnoredResultAdapter)
+            {
+                // The opt-out outranks every tier, so the slots below are not written for it
+                // at all — the one entry is the whole answer.
+                sb.Append("            ").Append(DispatchRootsFullName)
+                  .Append(".AddIgnoredResultAdapter<").Append(type.TypeofExpression).AppendLine(">();");
+                continue;
+            }
+
+            foreach (var slot in ResultSlots(type))
+            {
+                if (type.ResultAdapter is { IsBakeable: true } annotation && annotation.Fits(slot))
+                {
+                    sb.Append("            ").Append(DispatchRootsFullName)
+                      .Append(".AddResultAdapter<").Append(type.TypeofExpression)
+                      .Append(", ").Append(slot)
+                      .Append(", ").Append(annotation.TypeofExpression).AppendLine(">();");
+                    continue;
+                }
+
+                // The fallback answers per result type rather than per message, so the slots
+                // are collected and written once each.
+                defaultSlots.Add(slot);
+            }
+        }
+
+        if (defaultResultAdapter is { IsBakeable: true })
+        {
+            var binder = new DefaultResultAdapterBinder(defaultResultAdapter);
+
+            foreach (var slot in defaultSlots)
+            {
+                if (binder.TryBind(slot, out var adapterTypeExpression, out _))
+                {
+                    sb.Append("            ").Append(DispatchRootsFullName)
+                      .Append(".AddDefaultResultAdapter<").Append(slot)
+                      .Append(", ").Append(adapterTypeExpression).AppendLine(">();");
+                }
+            }
+        }
+
+        sb.Append("            ").Append(DispatchRootsFullName).AppendLine(".SealResultAdapters();");
+    }
+
+    /// <summary>
+    /// The result slots a message's dispatches bind an adapter for.
+    /// </summary>
+    /// <param name="type">The message to read.</param>
+    /// <returns>Each slot's type expression.</returns>
+    /// <remarks>
+    /// A command's void dispatch binds over <c>Unit</c>, a stream's over its enumerator, and
+    /// everything else over the declared result type — which is the set of slots the runtime
+    /// asks the binding about.
+    /// </remarks>
+    private static IEnumerable<string> ResultSlots(RegistrableTypeModel type)
+    {
+        if (type.IsCommand)
+        {
+            yield return EmittedExpressions.Unit;
+        }
+
+        foreach (var result in type.DispatchResults)
+        {
+            yield return result.IsStream
+                ? EmittedExpressions.AsyncEnumerator + "<" + result.ResultTypeExpression + ">"
+                : result.ResultTypeExpression;
+        }
     }
 
     /// <summary>

@@ -196,11 +196,17 @@ internal static class ResultAdapterReader
             return null;
         }
 
+        // The argument itself where there is one, so ERGO019 underlines what could not be
+        // read rather than the whole call chain.
+        var location = LocationInfo.From(invocation.ArgumentList.Arguments.Count > 0
+            ? invocation.ArgumentList.Arguments[0].Expression
+            : (SyntaxNode)invocation);
+
         if (invocation.ArgumentList.Arguments[0].Expression is not TypeOfExpressionSyntax typeOf
             || ctx.SemanticModel.GetTypeInfo(typeOf.Type, ct).Type is not INamedTypeSymbol adapterSymbol
             || adapterSymbol.TypeKind == TypeKind.Error)
         {
-            return DefaultResultAdapterSiteModel.Opaque;
+            return DefaultResultAdapterSiteModel.OpaqueAt(location);
         }
 
         // The unbound form, typeof(X<>), carries no interfaces, so the definition is read
@@ -212,7 +218,7 @@ internal static class ResultAdapterReader
         {
             if (container.Arity > 0)
             {
-                return DefaultResultAdapterSiteModel.Opaque;
+                return DefaultResultAdapterSiteModel.OpaqueAt(location);
             }
         }
 
@@ -256,7 +262,7 @@ internal static class ResultAdapterReader
 
             if (angle < 0)
             {
-                return DefaultResultAdapterSiteModel.Opaque;
+                return DefaultResultAdapterSiteModel.OpaqueAt(location);
             }
 
             baseExpression = baseExpression.Substring(0, angle);
@@ -274,7 +280,8 @@ internal static class ResultAdapterReader
             ParameterNamesKey: parameterNamesKey,
             AdapterSlotsKey: BuildAdapterSlotsKey(definition, "IResultAdapter"),
             MaterializerSlotsKey: BuildAdapterSlotsKey(definition, "IResultMaterializer"),
-            IsBakeable: isBakeable);
+            IsBakeable: isBakeable,
+            Location: location);
     }
 
     /// <summary>
@@ -320,10 +327,9 @@ internal static class ResultAdapterReader
     /// they name different adapters.
     /// </returns>
     /// <remarks>
-    /// Answering <c>null</c> costs correctness nothing: the runtime tier still serves the
-    /// default, the identity gate keeps unbaked plans off served slots, and no ERGO013
-    /// verdict is reached over facts that could not be read. Baking asks for
-    /// <c>IsBakeable</c> on top of an answer here.
+    /// The last two answers are also a failed build — ERGO019 and ERGO020 —  so nothing
+    /// downstream has to serve them; answering <c>null</c> only keeps the rest of the
+    /// generator from reasoning over facts it could not read.
     /// </remarks>
     internal static DefaultResultAdapterSiteModel? ReduceDefaultResultAdapter(
         ImmutableArray<DefaultResultAdapterSiteModel> sites)
@@ -343,13 +349,64 @@ internal static class ResultAdapterReader
                 continue;
             }
 
-            if (!reduced.Equals(site))
+            if (!reduced.NamesSameAdapterAs(site))
             {
                 return null;
             }
         }
 
         return reduced;
+    }
+
+    /// <summary>
+    /// Judges the compilation's <c>UseDefaultResultAdapter</c> calls.
+    /// </summary>
+    /// <param name="context">The context diagnostics are reported to.</param>
+    /// <param name="sites">The calls collected from this compilation.</param>
+    /// <remarks>
+    /// Three things have to hold for the fallback to reach a generated table, and each is an
+    /// error rather than a quieter path: the argument is a literal <c>typeof</c> the
+    /// compilation resolves (ERGO019), the compilation names one adapter (ERGO020), and
+    /// generated code can name and construct it (ERGO021). What the compiler cannot read
+    /// here, nothing can answer at run time.
+    /// </remarks>
+    internal static void ReportDefaultResultAdapterSites(
+        SourceProductionContext context, ImmutableArray<DefaultResultAdapterSiteModel> sites)
+    {
+        DefaultResultAdapterSiteModel? first = null;
+
+        foreach (var site in sites)
+        {
+            if (site.IsOpaque)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    GeneratorDiagnostics.OpaqueDefaultResultAdapter, site.Location?.ToLocation()));
+                continue;
+            }
+
+            if (!site.IsBakeable)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    GeneratorDiagnostics.UnbakeableDefaultResultAdapter,
+                    site.Location?.ToLocation(),
+                    site.BaseTypeExpression));
+            }
+
+            if (first is null)
+            {
+                first = site;
+                continue;
+            }
+
+            if (!first.NamesSameAdapterAs(site))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    GeneratorDiagnostics.ConflictingDefaultResultAdapters,
+                    site.Location?.ToLocation(),
+                    site.BaseTypeExpression,
+                    first.BaseTypeExpression));
+            }
+        }
     }
 
     /// <summary>

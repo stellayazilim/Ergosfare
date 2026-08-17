@@ -4,4 +4,13 @@
         <IsPackable>true</IsPackable>
     </PropertyGroup>
 
+    <ItemGroup>
+        <!-- UseDefaultResultAdapter is the one door to the fallback carrier: the call the
+             generator reads, and so the only one whose adapter reaches a generated table. -->
+        <InternalsVisibleTo Include="Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection" />
+        <!-- The binding and carrier suites live with the core's tests rather than in a
+             project of their own. -->
+        <InternalsVisibleTo Include="Stella.Ergosfare.Core.Test" />
+    </ItemGroup>
+
 </Project>

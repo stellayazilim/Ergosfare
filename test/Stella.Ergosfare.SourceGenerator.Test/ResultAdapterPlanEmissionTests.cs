@@ -1,3 +1,5 @@
+using Microsoft.CodeAnalysis;
+
 namespace Stella.Ergosfare.SourceGenerator.Test;
 
 /// <summary>
@@ -216,8 +218,13 @@ public class ResultAdapterPlanEmissionTests
 
         Assert.Contains("AddStagedPlan<global::TestApp.PlainPing, string>", result.GeneratedSource);
         Assert.DoesNotContain("carriedException", result.GeneratedSource);
-        Assert.DoesNotContain("ResultAdapter", result.GeneratedSource);
         Assert.DoesNotContain("unhandledException", result.GeneratedSource);
+
+        // Nothing binds the slot, so the adapter table holds no entry for it — only the
+        // seal, which every generated registration writes.
+        Assert.DoesNotContain("AddResultAdapter<", result.GeneratedSource);
+        Assert.DoesNotContain("AddDefaultResultAdapter<", result.GeneratedSource);
+        Assert.DoesNotContain("ResultAdapter.TryGetException", result.GeneratedSource);
     }
 
     [Fact]
@@ -445,7 +452,83 @@ public class ResultAdapterPlanEmissionTests
     }
 
     [Fact]
-    public void OpaqueOrDisagreeingDefaultCallsites_BakeNothing()
+    public void EveryTier_ReachesTheGeneratedAdapterTable()
+    {
+        var result = GeneratorTestHost.Run(DefaultAdapterBoot + """
+
+            // The fallback serves this one.
+            public sealed record BoxTablePing : ICommand<Box<int>>;
+
+            public sealed class BoxTablePingHandler : ICommandHandler<BoxTablePing, Box<int>>
+            {
+                public ValueTask<Box<int>> HandleAsync(BoxTablePing message, ErgosfareContext context)
+                    => new(new Box<int>());
+            }
+
+            // An annotation names its own, for its own slot.
+            public sealed class Outcome
+            {
+                public Exception? Error { get; set; }
+            }
+
+            public sealed class OutcomeAdapter : IResultAdapter<Outcome>
+            {
+                public bool TryGetException(in Outcome result, out Exception? exception)
+                {
+                    exception = result.Error;
+                    return exception is not null;
+                }
+            }
+
+            [ResultAdapter(typeof(OutcomeAdapter))]
+            public sealed record AnnotatedTablePing : ICommand<Outcome>;
+
+            public sealed class AnnotatedTablePingHandler : ICommandHandler<AnnotatedTablePing, Outcome>
+            {
+                public ValueTask<Outcome> HandleAsync(AnnotatedTablePing message, ErgosfareContext context)
+                    => new(new Outcome());
+            }
+
+            // And this one wants no tier at all.
+            [IgnoreResultAdapter]
+            public sealed record OptedOutTablePing : ICommand<Box<string>>;
+
+            public sealed class OptedOutTablePingHandler : ICommandHandler<OptedOutTablePing, Box<string>>
+            {
+                public ValueTask<Box<string>> HandleAsync(OptedOutTablePing message, ErgosfareContext context)
+                    => new(new Box<string>());
+            }
+        }
+        """);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.CompilationErrors);
+
+        // The annotation tier, per (message, slot). The adapter is a type argument, so the
+        // compiler is what checks that it serves the slot.
+        Assert.Contains(
+            "AddResultAdapter<global::TestApp.AnnotatedTablePing, global::TestApp.Outcome, global::TestApp.OutcomeAdapter>();",
+            result.GeneratedSource);
+
+        // The opt-out, per message — and no slot entry for it, the entry being the whole
+        // answer.
+        Assert.Contains("AddIgnoredResultAdapter<global::TestApp.OptedOutTablePing>();", result.GeneratedSource);
+        Assert.DoesNotContain("AddDefaultResultAdapter<global::TestApp.Box<string>", result.GeneratedSource);
+
+        // The fallback tier, per result type, already closed over the slot.
+        Assert.Contains(
+            "AddDefaultResultAdapter<global::TestApp.Box<int>, global::TestApp.BoxAdapter<int>>();",
+            result.GeneratedSource);
+
+        // A command's void dispatch binds over Unit, and nothing here serves it.
+        Assert.DoesNotContain("AddDefaultResultAdapter<global::Stella.Ergosfare.Core.Abstractions.Unit", result.GeneratedSource);
+
+        // Sealed: past this, a slot missing from the table is an answer.
+        Assert.Contains("SealResultAdapters();", result.GeneratedSource);
+    }
+
+    [Fact]
+    public void OpaqueDefaultCallsite_FailsTheBuild()
     {
         var result = GeneratorTestHost.Run(DefaultAdapterBoot.Replace(
             "=> registry.UseDefaultResultAdapter(typeof(BoxAdapter<>));",
@@ -472,14 +555,61 @@ public class ResultAdapterPlanEmissionTests
         }
         """);
 
-        Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
 
-        // The callsite's argument is a variable — invisible to the mirror. The plan is
-        // emitted without an adapter; at runtime the identity gate keeps it off the slot
-        // and the strategy serves the default.
-        Assert.Contains("AddStagedPlan<global::TestApp.OpaqueBoxPing, global::TestApp.Box<int>>", result.GeneratedSource);
+        // The argument is a variable, so which result types the fallback serves cannot be
+        // read here — and nothing reads it anywhere else. The call is the error.
+        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGO019");
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+
+        // Nothing is bound for the slot: no plan adapter, and no table entry.
         Assert.DoesNotContain("typeof(global::TestApp.BoxAdapter<int>)", result.GeneratedSource);
-        Assert.DoesNotContain("ResultAdapter.TryGetException", result.GeneratedSource);
+        Assert.DoesNotContain("AddDefaultResultAdapter<", result.GeneratedSource);
+    }
+
+    [Fact]
+    public void DisagreeingDefaultCallsites_FailTheBuild()
+    {
+        var result = GeneratorTestHost.Run(DefaultAdapterBoot.Replace(
+            "=> registry.UseDefaultResultAdapter(typeof(BoxAdapter<>));",
+            """
+            {
+                registry.UseDefaultResultAdapter(typeof(BoxAdapter<>));
+                registry.UseDefaultResultAdapter(typeof(OtherAdapter));
+            }
+            """) + """
+
+            public sealed class Other
+            {
+                public Exception? Error { get; set; }
+            }
+
+            public sealed class OtherAdapter : IResultAdapter<Other>
+            {
+                public bool TryGetException(in Other result, out Exception? exception)
+                {
+                    exception = result.Error;
+                    return exception is not null;
+                }
+            }
+
+            public sealed record TwoDefaultsPing : ICommand<Box<int>>;
+
+            public sealed class TwoDefaultsPingHandler : ICommandHandler<TwoDefaultsPing, Box<int>>
+            {
+                public ValueTask<Box<int>> HandleAsync(TwoDefaultsPing message, ErgosfareContext context)
+                    => new(new Box<int>());
+            }
+        }
+        """);
+
+        Assert.Empty(result.CompilationErrors);
+
+        // Two answers to one question. The second call is where it is reported, and the
+        // message names both adapters so either site can be the one that moves.
+        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGO020");
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Contains("OtherAdapter", diagnostic.GetMessage());
+        Assert.Contains("BoxAdapter", diagnostic.GetMessage());
     }
 }
