@@ -7,18 +7,46 @@ using Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 /// <summary>
-/// The result-producing pipeline's runtime body; the counterpart of
-/// <see cref="VoidPipelineBody{TMessage}"/> with a real result slot: the value channel can
-/// carry a failure inside the result, post and exception stages may replace the result, and
-/// a materializable carrier absorbs failures instead of throwing.
+/// Runs a result-producing message through the single handler that serves it and the
+/// interceptor stages around it.
 /// </summary>
+/// <typeparam name="TMessage">The message type being dispatched.</typeparam>
+/// <typeparam name="TResult">The result type the pipeline produces.</typeparam>
+/// <remarks>
+/// The counterpart of <see cref="VoidPipelineBody{TMessage}"/>, with a result that means
+/// something: the result can carry a failure, the post and exception stages can replace it,
+/// and a result type that can be built from an exception absorbs failures rather than
+/// letting them reach the caller.
+/// </remarks>
 #pragma warning disable CS8714 // TResult is used as a pattern type argument; handler contracts declare notnull results
 internal static class ResultPipelineBody<TMessage, TResult> where TMessage : notnull
 {
     /// <summary>
-    /// Runs the pipeline; see <see cref="VoidPipelineBody{TMessage}.Run"/> for the stage
-    /// contract — the differences here are the typed result slot and its adaptation.
+    /// Runs the pipeline for <paramref name="message"/> and returns its result.
     /// </summary>
+    /// <param name="message">The message to dispatch.</param>
+    /// <param name="messageDependencies">The message's participants, per stage.</param>
+    /// <param name="resultAdapter">
+    /// The result type's adapter, used to spot a failure carried in the result; <c>null</c>
+    /// when there is none.
+    /// </param>
+    /// <param name="resultMaterializer">
+    /// The result type's materializer. When present, a thrown failure comes back inside the
+    /// result instead of reaching the caller; <c>null</c> keeps the default of throwing.
+    /// </param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <param name="serviceProvider">The provider participants are resolved from.</param>
+    /// <returns>The result the pipeline produced.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="messageDependencies"/> is <c>null</c>.</exception>
+    /// <exception cref="MultipleHandlerFoundException">
+    /// The level of handlers that serves the message holds more than one.
+    /// </exception>
+    /// <exception cref="NoHandlerFoundException">No handler is registered for the message.</exception>
+    /// <exception cref="ExecutionAbortedException">A participant stopped the pipeline.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// An exception interceptor handled the failure but produced no result, leaving the
+    /// dispatch with nothing to return.
+    /// </exception>
     internal static async ValueTask<TResult> Run(
         TMessage message,
         IMessageDependencies messageDependencies,
@@ -29,7 +57,8 @@ internal static class ResultPipelineBody<TMessage, TResult> where TMessage : not
     {
         ArgumentNullException.ThrowIfNull(messageDependencies);
 
-        // The main-handler priority ladder; see the void body for the reasoning.
+        // Handlers registered for the message type itself win outright, and only when there
+        // are none does the covariant level come into play; see the void body.
         var handlers = messageDependencies.Handlers;
         var indirectHandlers = messageDependencies.IndirectHandlers;
 
@@ -55,35 +84,30 @@ internal static class ResultPipelineBody<TMessage, TResult> where TMessage : not
         var exceptionInterceptorCount = messageDependencies.ExceptionInterceptors.Count;
         var finalInterceptorCount = messageDependencies.FinalInterceptors.Count;
 
-        // Fast path: with no interceptors registered, none of the invocation strategies can
-        // observe or transform anything — invoke the handler directly. Exceptions propagate
-        // unchanged, matching the zero-interceptor rethrow behavior of the full pipeline.
+        // With no interceptors at all there is nobody to observe or change anything, so the
+        // handler is called on its own and a failure propagates untouched.
         if ((preInterceptorCount | postInterceptorCount | exceptionInterceptorCount | finalInterceptorCount) == 0)
         {
-            // Typed seam: when the dispatch TMessage is the handler's message type (or a
-            // derived one — IHandler's `in TMessage` variance covers that), invoke the typed
-            // member directly and skip the object-typed DIM bridge. Interface-erased
-            // dispatches (TMessage = ICommand<T> etc.) fall back to the bridge.
             var fastHandler = soleHandler.Resolve(serviceProvider);
 
             TResult fastResult;
 
             try
             {
-                // No abort arm here: a handler that stops its own dispatch has nothing left
-                // to tell and no stage left to skip, so the signal travels to the caller.
+                // No abort arm: a handler that stops its own dispatch has no stage left to
+                // skip and nothing left to report, so the signal goes straight to the caller.
                 fastResult = await InvokeHandler(fastHandler, message, context);
             }
             catch (Exception e) when (resultMaterializer is not null && e is not ExecutionAbortedException)
             {
-                // Catch-materialization: a materializable carrier type never lets a real
-                // throw reach the caller — the failure comes back inside the carrier.
+                // A result type that can be built from an exception never lets one reach the
+                // caller: the failure comes back inside the result.
                 return resultMaterializer.Materialize(e);
             }
 
-            // A carried failure with nobody to tell: no interceptor stages exist here. A
-            // materializable carrier flows out as-is for the caller to inspect; any other
-            // carrier keeps the classic contract — an unhandled failure surfaces as a throw.
+            // A failure carried in the result, with no interceptor to hand it to. A result
+            // type that can hold it flows out as it is for the caller to inspect; any other
+            // keeps the default and throws.
             if (resultMaterializer is null
                 && resultAdapter is not null
                 && resultAdapter.TryGetException(in fastResult, out var fastEx) && fastEx is not null)
@@ -112,8 +136,8 @@ internal static class ResultPipelineBody<TMessage, TResult> where TMessage : not
 
                 result = await InvokeHandler(handler, message, context);
 
-                // The value channel: a failure carried inside the result enters the
-                // exception stage below without a throw being paid anywhere.
+                // A failure carried in the result reaches the exception stage below without
+                // anything being thrown.
                 if (resultAdapter is not null && resultAdapter.TryGetException(in result, out var carried) && carried is not null)
                 {
                     exception = carried;
@@ -126,8 +150,8 @@ internal static class ResultPipelineBody<TMessage, TResult> where TMessage : not
 
                     if (postCarried is not null)
                     {
-                        // The failed carrier a post-interceptor produced IS the pipeline's
-                        // result from here on; the stage already skipped the remaining posts.
+                        // The failed result a post-interceptor produced is the pipeline's
+                        // result from here on; the stage already skipped the ones after it.
                         result = (TResult)postResult!;
                         exception = postCarried;
                     }
@@ -140,7 +164,8 @@ internal static class ResultPipelineBody<TMessage, TResult> where TMessage : not
             }
             catch (Exception e) when (e is not ExecutionAbortedException)
             {
-                // The classic zero-interceptor, no-adapter rethrow keeps its exact shape.
+                // With no exception interceptors and no adapter, the failure keeps its
+                // original path out of the pipeline.
                 if (exceptionInterceptorCount == 0 && resultAdapter is null)
                 {
                     exception = e;
@@ -151,9 +176,9 @@ internal static class ResultPipelineBody<TMessage, TResult> where TMessage : not
 
                 if (resultMaterializer is not null)
                 {
-                    // Catch-materialization: the failure is absorbed into a failed carrier
-                    // before the exception stage sees it — a declining stage then leaves
-                    // the materialized failure standing, and the caller never sees a throw.
+                    // The failure becomes a failed result before the exception stage sees
+                    // it, so a stage that declines leaves that result standing and the
+                    // caller still never sees a throw.
                     result = resultMaterializer.Materialize(e);
                 }
                 else
@@ -173,17 +198,11 @@ internal static class ResultPipelineBody<TMessage, TResult> where TMessage : not
 
                     if (matched)
                     {
-                        // A matched interceptor handled the failure, so its answer IS the
-                        // result — there is nothing to fall back to. This used to keep the
-                        // previous result when the stage returned null, which reads as
-                        // defensive and is not: the handler threw, so the previous result is
-                        // still `default!`, and the dispatch answered null for a type that
-                        // promised a value while the failure disappeared.
-                        //
-                        // Nullability belongs to the message. A dispatch of ICommand<User>
-                        // locked User at the call site and no stage may downgrade that. The
-                        // contracts say so now; this is what an assembly compiled against the
-                        // older ones meets instead of the silent default.
+                        // An interceptor that handled the failure owns the result: there is
+                        // nothing to fall back on, because the handler threw and the result
+                        // is still its default. Answering null here would hand the caller
+                        // nothing for a type that promised a value, with the failure gone
+                        // too — so the pipeline says what happened instead.
                         if (stageResult is null)
                         {
                             throw new InvalidOperationException(
@@ -202,19 +221,18 @@ internal static class ResultPipelineBody<TMessage, TResult> where TMessage : not
                 }
                 else if (resultMaterializer is null)
                 {
-                    // Nobody accepted the failure and the carrier cannot absorb one: it
-                    // surfaces as a throw — after the final stage, like every unhandled
-                    // failure. A carried failure was never thrown, so capturing it here
-                    // is where its dispatch stack begins.
+                    // Nobody accepted the failure and the result type cannot hold one, so it
+                    // is thrown after the final stage. A carried failure was never thrown, so
+                    // this is where its dispatch stack starts.
                     unhandledException ??= ExceptionDispatchInfo.Capture(exception);
                 }
             }
         }
         catch (ExecutionAbortedException)
         {
-            // A participant stopped the pipeline. Nothing else runs — not the exception
-            // stage, not the final stage below — and the signal continues to the caller,
-            // which is why nothing is returned from here either.
+            // A participant stopped the pipeline. Nothing else runs — neither the exception
+            // stage nor the final stage below — and the signal continues to the caller,
+            // which is why no result leaves here either.
             aborted = true;
             throw;
         }
@@ -233,12 +251,17 @@ internal static class ResultPipelineBody<TMessage, TResult> where TMessage : not
     }
 
     /// <summary>
-    /// Invokes the handler through its typed contract. There is no object-typed bridge:
-    /// asynchronous handlers are called via <c>IAsyncHandler</c>, synchronous handlers via
-    /// <see cref="IHandler{TMessage, TResult}"/> (`in TMessage` variance admits handlers
-    /// registered for base message types). Interface-erased dispatch is unsupported —
-    /// dispatch with the concrete message type (the executor path) instead.
+    /// Calls the handler through whichever main-handler contract it implements.
     /// </summary>
+    /// <param name="handler">The resolved handler.</param>
+    /// <param name="message">The message to hand it.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <returns>The result the handler produced.</returns>
+    /// <exception cref="NotSupportedException">
+    /// The handler implements no main-handler contract accepting
+    /// <typeparamref name="TMessage"/> and producing <typeparamref name="TResult"/>, which
+    /// happens when a message is dispatched through a static type that erases its own.
+    /// </exception>
     private static ValueTask<TResult> InvokeHandler(object handler, TMessage message, ErgosfareContext context)
         => handler switch
         {

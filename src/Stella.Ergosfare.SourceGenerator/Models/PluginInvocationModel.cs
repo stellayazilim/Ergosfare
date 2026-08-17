@@ -3,24 +3,32 @@ using System.Collections.Immutable;
 namespace Stella.Ergosfare.SourceGenerator.Models;
 
 /// <summary>
-///     One <c>[PipelineInvokable]</c> method discovered on a plugin service: everything
-///     emission needs to write the call, plus the filters deciding which plans it is written
-///     into.
+/// One <c>[PipelineInvokable]</c> method found on a plugin service: what writing the call
+/// needs, and the filters deciding which pipelines it is written into.
 /// </summary>
+/// <param name="ServiceTypeExpression">The declaring service's fully qualified type.</param>
+/// <param name="ServiceDisplayName">The service as a diagnostic would name it.</param>
+/// <param name="MethodName">The method to call.</param>
+/// <param name="Hook">Where in the pipeline to call it.</param>
+/// <param name="IsAsync">Whether the call must be awaited.</param>
+/// <param name="IsStatic">Whether the method is called on the type rather than an instance.</param>
+/// <param name="Modules">The message families the method applies to.</param>
+/// <param name="Keys">The discovery keys the method applies to.</param>
+/// <param name="Parameters">What to pass for each parameter.</param>
+/// <param name="Constraints">The constraints a message must satisfy for the call to be written.</param>
+/// <param name="Location">Where the method is declared, for diagnostics.</param>
 /// <remarks>
-///     <para>
-///         The method is an observer — it returns <c>void</c> or <c>ValueTask</c> and does
-///         not rewrite the message or produce a result. <see cref="IsAsync"/> selects between
-///         a plain call and an awaited one; a <c>void</c> method never enters an async state
-///         machine, which is the whole point of the cheap shape.
-///     </para>
-///     <para>
-///         The method is generic over the message alone — no hook carries a result, so there
-///         is one signature shape and one arity. The generator closes it over the plan's
-///         concrete message type at each emission site, so a value-typed message is never
-///         boxed on the way in; a method of any other arity is not a hook this emission can
-///         write and is dropped at discovery.
-///     </para>
+/// <para>
+/// The method observes: it returns nothing or a task, and neither rewrites the message nor
+/// produces a result. A method returning nothing is called plainly and never enters an async
+/// state machine, which is what makes that shape cheap.
+/// </para>
+/// <para>
+/// It is generic over the message alone, since no hook carries a result — one signature,
+/// one arity. It is closed over each pipeline's own message type where the call is written,
+/// so a value-typed message is never boxed on the way in; a method of any other arity is not
+/// something this can write and is dropped as it is discovered.
+/// </para>
 /// </remarks>
 internal readonly record struct PluginInvocationModel(
     string ServiceTypeExpression,
@@ -36,12 +44,25 @@ internal readonly record struct PluginInvocationModel(
     LocationInfo? Location)
 {
     /// <summary>
-    ///     Whether the filter says nothing about discovery keys, which selects the default
-    ///     key alone — a keyed construct is opted out of default discovery by its author and
-    ///     a silent plugin should not opt it back in.
+    /// Whether the method says nothing about discovery keys, which selects the default key
+    /// alone.
     /// </summary>
+    /// <remarks>
+    /// A keyed construct was kept out of default discovery by its author, and a plugin
+    /// saying nothing should not put it back in.
+    /// </remarks>
     public bool SelectsDefaultKeyOnly => Keys.IsDefaultOrEmpty;
 
+    /// <summary>
+    /// Compares everything that changes where and how the call is written.
+    /// </summary>
+    /// <param name="other">The model to compare against.</param>
+    /// <returns><c>true</c> when both would produce the same calls.</returns>
+    /// <remarks>
+    /// The display name and location are left out, since they only affect diagnostic text.
+    /// Written by hand because the generated comparison would compare the arrays by
+    /// reference.
+    /// </remarks>
     public bool Equals(PluginInvocationModel other)
         => ServiceTypeExpression == other.ServiceTypeExpression
            && MethodName == other.MethodName
@@ -53,6 +74,9 @@ internal readonly record struct PluginInvocationModel(
            && Keys.SequenceEqualOrBothEmpty(other.Keys)
            && Parameters.SequenceEqualOrBothEmpty(other.Parameters);
 
+    /// <summary>
+    /// Returns a hash over the service, the method, the hook and the filters.
+    /// </summary>
     public override int GetHashCode()
     {
         var hash = ServiceTypeExpression.GetHashCode();

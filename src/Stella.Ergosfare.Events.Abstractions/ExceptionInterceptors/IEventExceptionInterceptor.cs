@@ -3,20 +3,26 @@ using Stella.Ergosfare.Core.Abstractions.Handlers;
 
 namespace Stella.Ergosfare.Events.Abstractions;
 
-
 /// <summary>
-/// Exception interceptor for every event: the untyped counterpart of
-/// <see cref="IEventExceptionInterceptor{TEvent}"/>, reached for any published message.
+/// Handles failures raised while publishing an event that implements <see cref="IEvent"/>.
 /// </summary>
 /// <remarks>
-/// Carries its own member rather than inheriting the stage contract's, so the resultless
-/// slot the machinery threads never reaches an implementor — a publish has no result, and a
-/// parameter that can only ever hold one fixed value is not a parameter.
+/// Running is what marks the failure handled, and a failure no interceptor accepts reaches
+/// the publisher unchanged. Because a publish has no result, there is nothing to produce —
+/// handling here means the publish completes rather than throwing. Use
+/// <see cref="IEventExceptionInterceptorFor{TException}"/> to accept only certain failures.
 /// </remarks>
 // ReSharper disable once UnusedType.Global
 public interface IEventExceptionInterceptor : IEvent, IAsyncExceptionInterceptor<IEvent, Unit>
 {
-    /// <inheritdoc cref="IAsyncExceptionInterceptor{TEvent, TResult}.HandleAsync"/>
+    /// <summary>
+    /// Forwards the core contract to the method below.
+    /// </summary>
+    /// <param name="event">The event whose publish failed.</param>
+    /// <param name="result">Ignored; a publish has no result.</param>
+    /// <param name="exception">The failure being handled.</param>
+    /// <param name="context">The execution context of this publish.</param>
+    /// <returns>The value a resultless pipeline carries.</returns>
     async ValueTask<object?> IAsyncExceptionInterceptor<IEvent, Unit>.HandleAsync(IEvent @event, Unit? result,
         Exception exception, ErgosfareContext context)
     {
@@ -25,11 +31,11 @@ public interface IEventExceptionInterceptor : IEvent, IAsyncExceptionInterceptor
     }
 
     /// <summary>
-    /// Handles an exception asynchronously that occurred during the processing of the event.
+    /// Handles <paramref name="exception"/>.
     /// </summary>
-    /// <param name="event">The event being processed.</param>
-    /// <param name="exception">The exception thrown during event handling.</param>
-    /// <param name="context">The execution context for the current mediation pipeline.</param>
-    /// <returns>A <see cref="ValueTask"/> representing the asynchronous exception handling operation.</returns>
+    /// <param name="event">The event whose publish failed.</param>
+    /// <param name="exception">The failure being handled.</param>
+    /// <param name="context">The execution context of this publish.</param>
+    /// <returns>A task that completes when the interceptor is done.</returns>
     ValueTask HandleAsync(IEvent @event, Exception exception, ErgosfareContext context);
 }

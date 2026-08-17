@@ -3,23 +3,29 @@ using Stella.Ergosfare.Core.Abstractions;
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 /// <summary>
-/// One container's frozen publish pipeline for one event type, carried erased so the table
-/// can hold every type in one dictionary.
+/// One container's publish pipeline for one event type, held without its type argument so
+/// one table can hold every type.
 /// </summary>
 /// <remarks>
-/// Frozen is the contract: every decision a publish needs — plan or runtime body, bare loop
-/// or staged pipeline, nothing at all — is made once, at construction, from the container's
-/// settled composition. A dispatch reads no verdict, consults no gate, and materializes no
-/// dependencies; it finds this object and executes what it holds. The runtime delivery
-/// bodies live inside the typed closure as the plan family's N-handler base case — not as a
-/// separate strategy lane a dispatch could fall into.
+/// Everything a publish needs is decided at construction, from the participants the
+/// container settled on: whether to run a compiled plan or a general body, and which body.
+/// A publish reads no verdict and resolves no participants — it finds this object and runs
+/// what it holds. The general bodies live inside the closed subclass.
 /// </remarks>
 internal abstract class FrozenBroadcastDispatch
 {
     /// <summary>
-    /// Publishes under an externally owned context — the nested-publish path. The caller
-    /// owns the context's lifetime, so nothing is rented and nothing is returned.
+    /// Publishes under an execution context the caller owns — the shape a nested publish
+    /// uses.
     /// </summary>
+    /// <param name="message">The event to publish.</param>
+    /// <param name="context">The caller's execution context.</param>
+    /// <param name="serviceProvider">The provider handlers are resolved from.</param>
+    /// <param name="groups">The groups to deliver to, or <c>null</c> for the default.</param>
+    /// <returns>A task that completes when every handler has run.</returns>
+    /// <remarks>
+    /// The caller keeps ownership of the context, so nothing here creates or releases one.
+    /// </remarks>
     internal abstract ValueTask Publish(
         object message,
         ErgosfareContext context,
@@ -27,9 +33,17 @@ internal abstract class FrozenBroadcastDispatch
         IEnumerable<string>? groups);
 
     /// <summary>
-    /// The pooled publish in one frame — rent, execute, return — so the hot path carries no
-    /// separate renting frame between the caller and the delivery.
+    /// Publishes under a context of its own, creating it and releasing it in the same frame.
     /// </summary>
+    /// <param name="message">The event to publish.</param>
+    /// <param name="serviceProvider">The provider handlers are resolved from.</param>
+    /// <param name="cancellationToken">Token for the delivery.</param>
+    /// <param name="groups">The groups to deliver to, or <c>null</c> for the default.</param>
+    /// <returns>A task that completes when every handler has run.</returns>
+    /// <remarks>
+    /// Doing both here keeps a separate frame off the path between the caller and the
+    /// delivery.
+    /// </remarks>
     internal abstract ValueTask PublishPooled(
         object message,
         IServiceProvider serviceProvider,

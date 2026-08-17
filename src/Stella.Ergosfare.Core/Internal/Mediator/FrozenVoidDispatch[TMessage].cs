@@ -9,19 +9,17 @@ using Stella.Ergosfare.Core.Internal.Factories;
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 /// <summary>
-/// One container's frozen void pipeline for one message type: the compiled staged plan when
-/// the container's composition is the one it was baked against, the runtime body otherwise —
-/// one type for both, because they are the same pipeline filled two ways, not two mechanism
-/// families.
+/// One container's void pipeline for one message type: it runs the compiled plan when this
+/// container's participants are the ones the plan was compiled against, and the general
+/// body otherwise.
 /// </summary>
+/// <typeparam name="TMessage">The message type this pipeline serves.</typeparam>
 /// <remarks>
-/// Everything is decided once. The composition resolves on the first dispatch (the adapter
-/// tier needs a provider, which construction does not have), the plan is admitted or refused
-/// against it there, and from then on every dispatch reads one field and executes what it
-/// names: the plan, or the frozen composition through
-/// <see cref="VoidPipelineBody{TMessage}"/>. No gate, no strategy instance, and no
-/// dependency materialization ever runs again — a group-filtered dispatch selects its own
-/// frozen composition through the per-set slot and runs the same body.
+/// Both are the same pipeline reached two ways, so one type covers them. Everything is
+/// settled on the first dispatch — the participants are resolved, the adapter is bound, and
+/// the plan is accepted or rejected against them — after which every dispatch reads one
+/// field and runs what it names. A group-filtered dispatch picks its own participants
+/// through a per-set slot and runs the same body.
 /// </remarks>
 internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
     where TMessage : IMessage
@@ -31,10 +29,9 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
     private readonly StagedVoidPlan<TMessage>? _plan;
     private readonly GroupedCompositions _grouped;
 
-    // The effective adapter of the void pipeline's Unit slot — the attribute tiers plus
-    // the container's default, resolved once on the first dispatch (the default tier
-    // needs the provider) and published through the volatile flag; null unless a Unit
-    // adapter is deliberately bound.
+    // The adapter bound to this pipeline's Unit slot, together with its materializer facet.
+    // Resolved on the first dispatch because the container's default tier needs a provider,
+    // and null unless a Unit adapter was deliberately bound.
     private IResultAdapter<Unit>? _resultAdapter;
     private IResultMaterializer<Unit>? _resultMaterializer;
     private volatile bool _resultAdapterResolved;
@@ -43,28 +40,55 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
     private MessageDependencies? _cachedFastDependencies;
 
     /// <summary>
-    /// The frozen decision: which arm every group-less dispatch takes, decided with the
-    /// composition on the first dispatch and never revisited.
+    /// Which route an ungrouped dispatch takes, decided on the first one and never
+    /// revisited.
     /// </summary>
     /// <remarks>
-    /// Volatile because the decision publishes its companions: a reader that observes
-    /// <see cref="UseBody"/> must also observe the cached composition and the resolved
-    /// adapter fields written before it. The acquiring read costs what the old lane's
-    /// per-dispatch volatile adapter flag cost — nothing was added to the hot path.
+    /// Volatile because writing it publishes everything decided alongside it: a reader that
+    /// sees a settled verdict must also see the cached participants and the resolved
+    /// adapter, which are written first.
     /// </remarks>
     private volatile int _verdict;
 
+    /// <summary>
+    /// The factory came from outside, so nothing is settled and every dispatch asks it
+    /// again.
+    /// </summary>
     private const int Foreign = -1;
-    // The verdict a freshly constructed dispatch carries: never compared against,
-    // because the field starts there — it names the zero the other three are offsets from.
+
+    /// <summary>
+    /// Nothing has been decided yet — the value a new instance starts at, which is why it is
+    /// never compared against.
+    /// </summary>
     // ReSharper disable once UnusedMember.Local
     private const int Undecided = 0;
+
+    /// <summary>
+    /// Run the general body over the resolved participants.
+    /// </summary>
     private const int UseBody = 1;
+
+    /// <summary>
+    /// Run the compiled plan.
+    /// </summary>
     private const int UsePlan = 2;
+
+    /// <summary>
+    /// Run the compiled plan and let it construct participants itself.
+    /// </summary>
     private const int UsePlanDirect = 3;
 
-    // Public within the internal type: the reflective fallback for unrooted runtime types
-    // constructs through Activator, which only binds public constructors.
+    /// <summary>
+    /// Initializes the pipeline over a container's factory and the plan compiled for this
+    /// message, if any.
+    /// </summary>
+    /// <param name="dependenciesFactory">The factory participants are resolved through.</param>
+    /// <param name="plan">The compiled plan for this message, or <c>null</c>.</param>
+    /// <remarks>
+    /// Public despite the type being internal: the reflective fallback for message types
+    /// without a generated root constructs through <c>Activator</c>, which only binds public
+    /// constructors.
+    /// </remarks>
     public FrozenVoidDispatch(IMessageDependenciesFactory dependenciesFactory, StagedVoidPlan<TMessage>? plan)
     {
         _factory = dependenciesFactory;
@@ -73,12 +97,13 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
 
         if (dependenciesFactory is not MessageDependenciesFactory)
         {
-            // A foreign factory promises nothing about answering the same twice, so nothing
-            // is frozen: every dispatch asks it and runs the body — the original contract.
+            // A factory from outside promises nothing about answering the same twice, so
+            // nothing is settled: every dispatch asks it and runs the body.
             _verdict = Foreign;
         }
     }
 
+    /// <inheritdoc />
     public ValueTask Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider,
         IEnumerable<string>? groups)
     {
@@ -89,14 +114,11 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
 
         var verdict = _verdict;
 
-        // The runtime lane's steady state: the frozen composition, through the fast
-        // single-handler seam when it applies and the full body when it does not.
         if (verdict == UseBody)
         {
             return ExecuteRuntimeLane(message, _cachedDependencies!, _cachedFastDependencies, context, serviceProvider);
         }
 
-        // The planned lane's steady state: one field read, then the plan.
         if (verdict >= UsePlan)
         {
             return verdict == UsePlanDirect
@@ -115,24 +137,28 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
     }
 
     /// <summary>
-    /// The first dispatch: resolve the adapter slot and the composition, admit or refuse
-    /// the plan against them — once — then take whichever arm was decided.
+    /// Runs the first dispatch: binds the adapter, resolves the participants, decides
+    /// whether the plan may be used, then takes the route it settled on.
     /// </summary>
+    /// <param name="message">The message to dispatch.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <param name="serviceProvider">The provider participants are resolved from.</param>
+    /// <returns>A task that completes when the pipeline has run.</returns>
     private ValueTask ExecuteUndecided(object message, ErgosfareContext context, IServiceProvider serviceProvider)
     {
         EnsureResultAdapter(serviceProvider);
 
         var typedFactory = (MessageDependenciesFactory)_factory;
 
-        // Throws NoHandlerFoundException for a message no composition serves — every
-        // dispatch of such a message, since nothing is cached on the throw.
+        // Throws for a message no composition serves — and on every dispatch of such a
+        // message, since nothing is cached when this throws.
         var dependencies = typedFactory.Create(typeof(TMessage), []);
         var fastDependencies = dependencies as MessageDependencies;
         _cachedFastDependencies = fastDependencies;
         _cachedDependencies = dependencies;
 
-        // Void plans never model an adapter (a Unit carrier is a deliberate oddity), so
-        // any bound adapter keeps the dispatch on the runtime body, which probes it.
+        // Void plans never assume an adapter, so any adapter bound here keeps the dispatch
+        // on the general body, which knows how to consult one.
         var usePlan = _plan is not null
             && _resultAdapter is null
             && fastDependencies is { MemoizedInstances: false }
@@ -156,12 +182,23 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
     }
 
     /// <summary>
-    /// The frozen composition's delivery: the zero-interceptor single-handler seam invokes
-    /// the handler's typed member directly — no async state machine, no interface-dispatched
-    /// Count checks — and everything else runs the full body. The abort arm lives in the
-    /// engine's dispatch frame; an exception-handling region here would keep this method out
-    /// of its caller on every dispatch.
+    /// Runs the resolved participants: the handler on its own when the pipeline is a single
+    /// handler with no interceptors, and the general body otherwise.
     /// </summary>
+    /// <param name="message">The message to dispatch.</param>
+    /// <param name="dependencies">The participants to run.</param>
+    /// <param name="fast">
+    /// The same participants as their concrete type, when they are one; <c>null</c> rules
+    /// out the single-handler route.
+    /// </param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <param name="serviceProvider">The provider participants are resolved from.</param>
+    /// <returns>A task that completes when the pipeline has run.</returns>
+    /// <remarks>
+    /// There is no abort handling here on purpose: the engine's own frame owns that, and an
+    /// exception-handling region in this method would stop it being inlined into its caller
+    /// on every dispatch.
+    /// </remarks>
     private ValueTask ExecuteRuntimeLane(
         object message, IMessageDependencies dependencies, MessageDependencies? fast,
         ErgosfareContext context, IServiceProvider serviceProvider)
@@ -181,8 +218,8 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
                     return ValueTask.CompletedTask;
             }
 
-            // Unsupported handler contract: fall through so the body raises its canonical
-            // NotSupportedException.
+            // The handler implements no contract this route can call; falling through lets
+            // the body raise the one exception that says so.
         }
 
         return VoidPipelineBody<TMessage>.Run(
@@ -190,11 +227,13 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
     }
 
     /// <summary>
-    /// The group-filtered dispatch: the composition the filter selects — one frozen
-    /// composition per set, through the per-set slot — delivered by the same runtime lane.
-    /// A plan is baked against the unfiltered composition, so a filter that could exclude
-    /// a planned participant never takes it.
+    /// Runs a dispatch that named groups, over the participants those groups select.
     /// </summary>
+    /// <param name="message">The message to dispatch.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <param name="serviceProvider">The provider participants are resolved from.</param>
+    /// <param name="groups">The groups the dispatch asked for.</param>
+    /// <returns>A task that completes when the pipeline has run.</returns>
     private ValueTask ExecuteGrouped(object message, ErgosfareContext context, IServiceProvider serviceProvider,
         IEnumerable<string> groups)
     {
@@ -204,8 +243,8 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
 
         if (composition.Admission.Plan is StagedVoidPlan<TMessage> groupedPlan)
         {
-            // A plan keyed by this set decided its participants at compile time; the
-            // filtering plan decides them from the set it is handed.
+            // A plan compiled for this exact set already knows its participants; the
+            // filtering plan works them out from the set it is handed.
             if (groupedPlan.FilterGroups is not null)
             {
                 return composition.Admission.Direct
@@ -222,10 +261,15 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
     }
 
     /// <summary>
-    /// The compiled plan for one group set, admitted against that set's own composition —
-    /// the same question <see cref="ExecuteUndecided"/> answers for the default set, asked
-    /// once per set when its entry is built rather than per dispatch.
+    /// Decides which compiled plan, if any, may serve one group set.
     /// </summary>
+    /// <param name="groups">The group set being decided for.</param>
+    /// <param name="dependencies">The participants that set selects.</param>
+    /// <returns>The plan and whether it may construct participants itself.</returns>
+    /// <remarks>
+    /// The same question <see cref="ExecuteUndecided"/> answers for the default set, asked
+    /// once per set as its entry is built rather than on every dispatch.
+    /// </remarks>
     private GroupedPlanAdmission AdmitGroupedPlan(string[] groups, IMessageDependencies dependencies)
     {
         if (_resultAdapter is not null)
@@ -245,9 +289,9 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
         }
         else
         {
-            // No plan is keyed by this set. The filtering plan answers any set, gated
-            // against the composition over the groups it covers — the only set that
-            // reproduces the participants its body holds.
+            // No plan was compiled for this set. The filtering plan can serve any set, but
+            // only if it is checked against the participants of the groups it covers —
+            // the one set that reproduces everything its body holds.
             plan = GeneratedDispatchRoots.FindFilteredVoidPlan(typeof(TMessage)) as StagedVoidPlan<TMessage>;
 
             if (plan?.FilterGroups is not { } covered
@@ -266,10 +310,14 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
     }
 
     /// <summary>
-    /// Resolves the slot's effective adapter once. The container is sealed after build, so
-    /// the resolution can never change; a duplicate-resolution race is benign — both
-    /// writers publish equivalent state, and the volatile flag orders the publication.
+    /// Binds this pipeline's result adapter, once.
     /// </summary>
+    /// <param name="serviceProvider">The provider the container's default adapter comes from.</param>
+    /// <remarks>
+    /// The container is sealed once built, so the binding can never change afterwards. Two
+    /// threads racing here both publish the same thing, and the volatile flag orders the
+    /// publication.
+    /// </remarks>
     private void EnsureResultAdapter(IServiceProvider serviceProvider)
     {
         if (_resultAdapterResolved)
@@ -279,8 +327,8 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
 
         var adapter = ResultAdapterBinding.For<TMessage, Unit>(serviceProvider);
         _resultAdapter = adapter;
-        // The materializer facet is optional and consumer-supplied: no adapter in this
-        // repository implements both, which is exactly what the probe is for.
+        // Whether an adapter can also build a failed result is up to whoever wrote it; none
+        // in this repository does, which is what the test is for.
         // ReSharper disable once SuspiciousTypeConversion.Global
         _resultMaterializer = adapter as IResultMaterializer<Unit>;
         _resultAdapterResolved = true;

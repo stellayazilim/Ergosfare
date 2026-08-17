@@ -5,15 +5,44 @@ namespace Stella.Ergosfare.SourceGenerator.Planning;
 internal sealed partial class PlanBuilder
 {
     /// <summary>
-    ///     The participant's staged construction expression, or <c>null</c> when keyed
-    ///     resolutions are needed but the keyed-service extensions are not resolvable in
-    ///     the consuming compilation.
+    /// Gives the expression that constructs a participant inside a staged plan.
     /// </summary>
+    /// <param name="participant">The participant to construct.</param>
+    /// <param name="hasKeyedServiceExtensions">
+    /// Whether the consuming compilation can resolve the keyed-service extensions.
+    /// </param>
+    /// <returns>
+    /// The construction expression, or <c>null</c> when it would need keyed resolution the
+    /// consuming compilation cannot spell — the call then goes through the container.
+    /// </returns>
     private static string? GatedConstructionExpression(RegistrableTypeModel participant, bool hasKeyedServiceExtensions)
         => participant.StagedConstructionUsesKeyedServices && !hasKeyedServiceExtensions
             ? null
             : participant.StagedConstructionExpression;
 
+    /// <summary>
+    /// Builds the four interceptor stages of one staged plan.
+    /// </summary>
+    /// <param name="message">The message the plan serves.</param>
+    /// <param name="types">The discovered types.</param>
+    /// <param name="resultTypeExpression">The pipeline's result, or <c>null</c> for a void pipeline.</param>
+    /// <param name="resultIsValueType">Whether that result is a value type.</param>
+    /// <param name="hasKeyedServiceExtensions">
+    /// Whether the consuming compilation can resolve the keyed-service extensions.
+    /// </param>
+    /// <param name="filter">The plan's group set.</param>
+    /// <param name="preCalls">The pre-interceptor calls, when this returns <c>true</c>.</param>
+    /// <param name="postCalls">The post-interceptor calls, when this returns <c>true</c>.</param>
+    /// <param name="exceptionCalls">The exception-interceptor calls, when this returns <c>true</c>.</param>
+    /// <param name="finalCalls">The final-interceptor calls, when this returns <c>true</c>.</param>
+    /// <returns><c>true</c> when every stage could be assembled.</returns>
+    /// <remarks>
+    /// A single participant whose place in the pipeline the plan cannot pin down takes the
+    /// whole plan with it: a staged plan runs a fixed list of calls, so it is built only when
+    /// every one of them is settled here. Each stage comes back in the order the runtime
+    /// would run it — direct registrations before covariant ones, then by descending weight,
+    /// then by type name.
+    /// </remarks>
     private static bool TryAssembleStagedStages(
         RegistrableTypeModel message,
         List<RegistrableTypeModel> types,
@@ -28,9 +57,9 @@ internal sealed partial class PlanBuilder
     {
         preCalls = postCalls = exceptionCalls = finalCalls = ImmutableArray<StagedCallModel>.Empty;
 
-        // The pipeline result the arms match against: the declared result for result
-        // pipelines, Unit for void ones — a reference type, so a void pipeline is on the
-        // variance-bearing side of the checks below just like a class-typed result.
+        // What the arms match against: the declared result for a result pipeline, Unit for a
+        // void one. Unit is a reference type, which puts a void pipeline on the
+        // variance-bearing side of the checks below alongside a class-typed result.
         var pipelineResultExpression = resultTypeExpression ?? EmittedExpressions.Unit;
         var pipelineResultIsValueType = resultTypeExpression is not null && resultIsValueType;
 
@@ -47,9 +76,9 @@ internal sealed partial class PlanBuilder
             {
                 var kind = (DescriptorKind)(kindIndex + 1);
 
-                // Deduped registrations of this candidate that reach the message —
-                // mirrors the descriptor builders' first-wins (message, result) dedupe,
-                // where result-agnostic async contracts carry `object`.
+                // This candidate's registrations that reach the message, deduped the way the
+                // descriptor builders do it: first one wins per (message, result), with a
+                // result-agnostic async contract counting as `object`.
                 string? matchedMessageKey = null;
                 var matchedDirect = false;
                 var registrationCount = 0;
@@ -87,22 +116,22 @@ internal sealed partial class PlanBuilder
                     continue;
                 }
 
-                // More than one registration would put the type into the stage more than
-                // once; the order among them is not worth modeling — disqualify.
+                // More than one registration puts the type into the stage more than once,
+                // and the order among those runs is not worth modeling here.
                 if (registrationCount > 1)
                 {
                     return false;
                 }
 
-                // Out of this plan's group: the set it is keyed by does not select this
-                // participant, so the stage simply does not carry it. The filtering plan
-                // carries it behind a guard instead.
+                // The plan's set does not select this participant, so the stage simply does
+                // not carry it. The filtering plan carries it behind a guard instead.
                 if (!filter.TryInclude(candidate, out var candidateGuard))
                 {
                     continue;
                 }
 
-                // Participation established. The participant itself must be modelable.
+                // It participates; now it must be nameable. A keyed or nested participant is
+                // not something the plan can call directly.
                 if (!candidate.IsAccessible
                     || !candidate.DiscoveryKeys.IsEmpty
                     || candidate.IsNestedType)
@@ -129,12 +158,24 @@ internal sealed partial class PlanBuilder
     }
 
     /// <summary>
-    ///     Selects the pattern-match arm the runtime invoker would take for the
-    ///     interceptor, or fails when none resolves (the runtime would throw
-    ///     <c>NotSupportedException</c> — the strategy fallback preserves that) or when a
-    ///     reference-typed pipeline result meets an inexactly-typed contract (possible
-    ///     runtime result variance the string model cannot decide).
+    /// Selects the contract the runtime invoker would call an interceptor through.
     /// </summary>
+    /// <param name="candidate">The interceptor to call.</param>
+    /// <param name="kind">The stage it is being called in.</param>
+    /// <param name="message">The message being dispatched.</param>
+    /// <param name="pipelineResultExpression">The pipeline's result type.</param>
+    /// <param name="pipelineResultIsValueType">Whether that result is a value type.</param>
+    /// <param name="arm">The selected contract, when this returns <c>true</c>.</param>
+    /// <param name="exceptionFilter">
+    /// The interceptor's exception filter, when it declares one; <c>null</c> otherwise.
+    /// </param>
+    /// <returns><c>true</c> when exactly one contract is the answer.</returns>
+    /// <remarks>
+    /// Fails when no contract resolves — the runtime throws <c>NotSupportedException</c>
+    /// there, and letting the plan go keeps that — and when a reference-typed result meets
+    /// an inexactly typed contract, where variance decides the answer at run time and type
+    /// names alone cannot say what it will be.
+    /// </remarks>
     private static bool TrySelectArm(
         RegistrableTypeModel candidate,
         DescriptorKind kind,
@@ -158,9 +199,9 @@ internal sealed partial class PlanBuilder
                 continue;
             }
 
-            // A filter the string model cannot reproduce takes the whole plan down: an
-            // emitted call with no guard runs an interceptor that declined the exception,
-            // and — worse — makes the stage count it as having handled one.
+            // A filter that cannot be reproduced here takes the whole plan down. An emitted
+            // call carrying no guard runs an interceptor that declined the exception, and
+            // has the stage count it as having handled one.
             if (shape.HasUndecidableExceptionFilter)
             {
                 return false;
@@ -168,8 +209,8 @@ internal sealed partial class PlanBuilder
 
             exceptionFilter = shape.ExceptionFilterExpression;
 
-            // Message-side variance: exact match always works; a base/interface
-            // registration matches only for reference-typed messages.
+            // Message-side variance: an exact match always works, while a registration
+            // against a base type or interface matches reference-typed messages only.
             var messageMatches = shape.MessageTypeExpression == message.TypeofExpression
                 || (!message.IsValueType && message.AssignableKeys.Contains(shape.MessageTypeExpression));
 
@@ -180,10 +221,10 @@ internal sealed partial class PlanBuilder
 
             if (shape.IsResultTyped)
             {
-                // Exact result match always works. An `object`-typed contract (the
-                // flavored marker interfaces' shape) matches any reference-typed result
-                // through the runtime's `in TResult` variance; value-typed results have
-                // no variance, so the contract is simply invisible to the pattern match.
+                // An exact result match always works. An `object`-typed contract, the shape
+                // the flavored marker interfaces have, reaches any reference-typed result
+                // through the runtime's `in TResult` variance; a value-typed result has no
+                // variance to reach through, so that contract is invisible to it.
                 if (shape.ResultTypeExpression == pipelineResultExpression
                     || (!pipelineResultIsValueType && shape.ResultTypeExpression == "object"))
                 {
@@ -198,8 +239,8 @@ internal sealed partial class PlanBuilder
                 }
                 else if (!pipelineResultIsValueType)
                 {
-                    // Any other base-of relationship the variance could admit is
-                    // undecidable in the string model — disqualify.
+                    // Any other base-of relationship the variance might admit cannot be
+                    // decided from type names alone.
                     return false;
                 }
             }
@@ -209,7 +250,7 @@ internal sealed partial class PlanBuilder
             }
             else
             {
-                // Sync pre carries no result typing.
+                // A synchronous pre-interceptor carries no result typing at all.
                 hasSync = true;
             }
         }
@@ -252,6 +293,18 @@ internal sealed partial class PlanBuilder
         return false;
     }
 
+    /// <summary>
+    /// Puts one stage's participants in the order the runtime would run them.
+    /// </summary>
+    /// <param name="entries">The stage's participants, or <c>null</c> when it has none.</param>
+    /// <param name="hasKeyedServiceExtensions">
+    /// Whether the consuming compilation can resolve the keyed-service extensions.
+    /// </param>
+    /// <returns>The stage's calls, in order.</returns>
+    /// <remarks>
+    /// Directly registered participants run before covariantly matched ones, then heavier
+    /// weights before lighter, and equal weights by type name.
+    /// </remarks>
     private static ImmutableArray<StagedCallModel> OrderStage(
         List<(RegistrableTypeModel Type, StagedCallArm Arm, bool Direct, string? ExceptionFilter, string? Guard)>? entries,
         bool hasKeyedServiceExtensions)

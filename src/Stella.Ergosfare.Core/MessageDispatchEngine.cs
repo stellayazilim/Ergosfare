@@ -6,28 +6,24 @@ using Stella.Ergosfare.Core.Internal.Mediator;
 namespace Stella.Ergosfare.Core;
 
 /// <summary>
-/// The scope-free dispatch engine behind every mediator facade: the pipeline-executor
-/// lookup, pooled execution context, and completion handling of the
-/// <see cref="IMessageMediator"/> executor path, with the calling scope's provider supplied
-/// per call instead of being captured per instance. One process-wide singleton serves every
-/// scope, so resolving an engine-backed facade builds exactly one object per resolution.
+/// The dispatch machinery behind every mediator: it finds the pipeline for a message, runs
+/// it under an execution context, and hands back the result.
 /// </summary>
 /// <remarks>
-/// Construction is internal: the engine only makes sense wired to the process-wide
-/// <see cref="PipelineExecutorCache"/> and dependencies factory that the DI registration
-/// supplies. Dispatch behavior matches <see cref="IMessageMediator"/>'s executor overloads
-/// exactly — the mediator delegates here, passing its own captured provider.
+/// The engine holds no scope of its own — the calling scope's provider is passed in per
+/// call — so one instance serves the whole process and resolving a mediator builds a single
+/// object. Its constructor is internal because the engine only makes sense wired to the
+/// executor cache and dependencies factory that registration supplies.
 /// </remarks>
 public sealed class MessageDispatchEngine
 {
     /// <summary>
-    /// Process-wide executor cache; one closed executor per message (and result) type.
+    /// The pipeline executors, one per message type and per (message, result) pair.
     /// </summary>
     private readonly PipelineExecutorCache _executorCache;
 
     /// <summary>
-    /// This container's frozen publish pipelines, one per message type — the publishing
-    /// counterpart of the executor cache above.
+    /// This container's publish pipelines, one per event type.
     /// </summary>
     private readonly FrozenBroadcastTable _broadcasts;
 
@@ -37,10 +33,16 @@ public sealed class MessageDispatchEngine
     private readonly StreamDispatchTable _streams;
 
     /// <summary>
-    /// The dependencies factory the executors build their pipeline plans against.
+    /// The factory the pipelines resolve their participants through.
     /// </summary>
     private readonly IMessageDependenciesFactory _dependenciesFactory;
 
+    /// <summary>
+    /// Initializes the engine over a container's executor cache and dependencies factory.
+    /// </summary>
+    /// <param name="executorCache">The container's pipeline executors.</param>
+    /// <param name="dependenciesFactory">The container's dependencies factory.</param>
+    /// <exception cref="ArgumentNullException">Either argument is <c>null</c>.</exception>
     internal MessageDispatchEngine(PipelineExecutorCache executorCache, IMessageDependenciesFactory dependenciesFactory)
     {
         _executorCache = executorCache ?? throw new ArgumentNullException(nameof(executorCache));
@@ -54,21 +56,24 @@ public sealed class MessageDispatchEngine
 
     /// <inheritdoc cref="_broadcasts"/>
     /// <remarks>
-    /// Exposed to the event facade so a typed publish is one body: guard, slot read,
-    /// pooled execute — no relay frames between the facade and the frozen pipeline.
+    /// Exposed to the event facade so a typed publish is one call into the pipeline, with
+    /// no relay frames in between.
     /// </remarks>
     internal FrozenBroadcastTable Broadcasts => _broadcasts;
 
     /// <summary>
-    /// Broadcasts a message to every handler of its pipeline, renting a pooled context for
-    /// the delivery. The publishing counterpart of <see cref="DispatchAsync(object, IServiceProvider, CancellationToken, IEnumerable{string})"/>,
-    /// and the same shape: find this container's pipeline for the type, run it, return the
-    /// context inline when the delivery completed synchronously.
+    /// Publishes <paramref name="message"/> to every handler of its pipeline.
     /// </summary>
-    /// <param name="message">The message to broadcast.</param>
-    /// <param name="serviceProvider">The scope provider handlers resolve against.</param>
-    /// <param name="cancellationToken">Cancellation token for the delivery.</param>
-    /// <param name="groups">Optional group filters applied to the pipeline.</param>
+    /// <param name="message">The event to publish. Cannot be <c>null</c>.</param>
+    /// <param name="serviceProvider">The provider handlers are resolved against.</param>
+    /// <param name="cancellationToken">Token for the delivery.</param>
+    /// <param name="groups">The groups to deliver to; <c>null</c> uses the default group.</param>
+    /// <returns>A task that completes when every handler has run.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="message"/> is <c>null</c>.</exception>
+    /// <remarks>
+    /// The execution context is created and released here, so a delivery that completes
+    /// synchronously releases it without an async continuation.
+    /// </remarks>
     public ValueTask BroadcastAsync(object message, IServiceProvider serviceProvider,
         CancellationToken cancellationToken = default,
         IEnumerable<string>? groups = null)
@@ -80,11 +85,21 @@ public sealed class MessageDispatchEngine
     }
 
     /// <summary>
-    /// Typed broadcast: when the compile-time <typeparamref name="TMessage"/> is the message's
-    /// runtime type (the overwhelmingly common concrete-typed publish), the pipeline comes
-    /// from a static-generic slot instead of the type-keyed dictionary. A base-typed generic
-    /// call falls back to resolving by the runtime type.
+    /// Publishes <paramref name="message"/>, naming its type at compile time.
     /// </summary>
+    /// <typeparam name="TMessage">The event's compile-time type.</typeparam>
+    /// <param name="message">The event to publish. Cannot be <c>null</c>.</param>
+    /// <param name="serviceProvider">The provider handlers are resolved against.</param>
+    /// <param name="cancellationToken">Token for the delivery.</param>
+    /// <param name="groups">The groups to deliver to; <c>null</c> uses the default group.</param>
+    /// <returns>A task that completes when every handler has run.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="message"/> is <c>null</c>.</exception>
+    /// <remarks>
+    /// When <typeparamref name="TMessage"/> is the event's runtime type — the usual case —
+    /// the pipeline comes from a static generic slot instead of a type-keyed lookup.
+    /// Publishing through a base type falls back to looking the runtime type up, so
+    /// delivery is the same either way.
+    /// </remarks>
     public ValueTask BroadcastAsync<TMessage>(TMessage message, IServiceProvider serviceProvider,
         CancellationToken cancellationToken = default,
         IEnumerable<string>? groups = null)
@@ -96,14 +111,21 @@ public sealed class MessageDispatchEngine
             ? _broadcasts.Get<TMessage>()
             : _broadcasts.Get(message.GetType());
 
-        // The pool logic rides inside the dispatch's own frame — no renting frame here.
+        // The context is created and released inside the dispatch's own frame, so this
+        // method adds none of its own.
         return dispatch.PublishPooled(message, serviceProvider, cancellationToken, groups);
     }
 
     /// <summary>
-    /// Broadcasts under an externally owned context — the nested-publish path. The caller owns
-    /// the context's lifetime, so nothing is rented and nothing is returned.
+    /// Publishes <paramref name="message"/> under an execution context the caller owns —
+    /// the shape a nested publish uses.
     /// </summary>
+    /// <param name="message">The event to publish. Cannot be <c>null</c>.</param>
+    /// <param name="context">The caller's execution context.</param>
+    /// <param name="serviceProvider">The provider handlers are resolved against.</param>
+    /// <param name="groups">The groups to deliver to; <c>null</c> uses the default group.</param>
+    /// <returns>A task that completes when every handler has run.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="message"/> is <c>null</c>.</exception>
     public ValueTask BroadcastAsync(object message, ErgosfareContext context, IServiceProvider serviceProvider,
         IEnumerable<string>? groups = null)
     {
@@ -114,10 +136,20 @@ public sealed class MessageDispatchEngine
     }
 
     /// <summary>
-    /// Streams a query through this container's pipeline for it. The context is fresh and
-    /// unpooled: enumeration happens after this call returns, so its completion is not
-    /// observable here and the context cannot go back to the pool.
+    /// Streams the results of <paramref name="query"/> through its pipeline.
     /// </summary>
+    /// <typeparam name="TResult">The type of the streamed items.</typeparam>
+    /// <param name="query">The query to stream. Cannot be <c>null</c>.</param>
+    /// <param name="serviceProvider">The provider handlers are resolved against.</param>
+    /// <param name="cancellationToken">Token for the enumeration.</param>
+    /// <param name="groups">The groups to run; <c>null</c> uses the default group.</param>
+    /// <returns>The streamed results.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="query"/> is <c>null</c>.</exception>
+    /// <remarks>
+    /// The context for a stream is created fresh and never released back: enumeration
+    /// happens after this method returns, so there is no point at which the context is
+    /// known to be finished with.
+    /// </remarks>
     public IAsyncEnumerable<TResult> StreamAsync<TResult>(object query, IServiceProvider serviceProvider,
         CancellationToken cancellationToken = default,
         IEnumerable<string>? groups = null)
@@ -129,9 +161,16 @@ public sealed class MessageDispatchEngine
     }
 
     /// <summary>
-    /// Streams under a caller-owned context — the shape that lets a caller read back what the
-    /// pipeline wrote. A streaming context is never pooled either way.
+    /// Streams the results of <paramref name="query"/> under an execution context the
+    /// caller owns, so the caller can read back what the pipeline recorded.
     /// </summary>
+    /// <typeparam name="TResult">The type of the streamed items.</typeparam>
+    /// <param name="query">The query to stream. Cannot be <c>null</c>.</param>
+    /// <param name="context">The caller's execution context, whose token is used.</param>
+    /// <param name="serviceProvider">The provider handlers are resolved against.</param>
+    /// <param name="groups">The groups to run; <c>null</c> uses the default group.</param>
+    /// <returns>The streamed results.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="query"/> is <c>null</c>.</exception>
     public IAsyncEnumerable<TResult> StreamAsync<TResult>(object query, ErgosfareContext context,
         IServiceProvider serviceProvider, IEnumerable<string>? groups = null)
     {
@@ -142,13 +181,14 @@ public sealed class MessageDispatchEngine
     }
 
     /// <summary>
-    /// Dispatches a void message through its cached pipeline executor, resolving handlers
-    /// against <paramref name="serviceProvider"/> — the caller's scope.
+    /// Dispatches <paramref name="message"/> through its void pipeline.
     /// </summary>
-    /// <param name="message">The message to dispatch.</param>
-    /// <param name="serviceProvider">The scope provider handlers resolve against.</param>
-    /// <param name="cancellationToken">Cancellation token for the dispatch.</param>
-    /// <param name="groups">Optional group filters applied to the pipeline.</param>
+    /// <param name="message">The message to dispatch. Cannot be <c>null</c>.</param>
+    /// <param name="serviceProvider">The provider participants are resolved against.</param>
+    /// <param name="cancellationToken">Token for the dispatch.</param>
+    /// <param name="groups">The groups to run; <c>null</c> uses the default group.</param>
+    /// <returns>A task that completes when the pipeline has run.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="message"/> is <c>null</c>.</exception>
     public ValueTask DispatchAsync(object message, IServiceProvider serviceProvider,
         CancellationToken cancellationToken = default,
         IEnumerable<string>? groups = null)
@@ -169,9 +209,9 @@ public sealed class MessageDispatchEngine
             throw;
         }
 
-        // Synchronously completed dispatches (the common case) return the context inline —
-        // no async state machine on the hot path. Only a genuinely suspended pipeline pays
-        // for the awaiting helper.
+        // A pipeline that finished synchronously — the common case — releases its context
+        // here, so no async state machine is built for it. Only a pipeline that actually
+        // suspended pays for the helper below.
         if (task.IsCompletedSuccessfully)
         {
             ErgosfareContextPool.Return(context);
@@ -195,28 +235,32 @@ public sealed class MessageDispatchEngine
     }
 
     /// <summary>
-    /// Typed void dispatch: when the compile-time <typeparamref name="TMessage"/> is the
-    /// message's runtime type (the overwhelmingly common concrete-typed call), the
-    /// executor comes from a static-generic holder instead of the type-keyed dictionary —
-    /// the last lookup on the group-less hot path. A base-typed generic call falls back to
-    /// resolving by the runtime type, so dispatch semantics are identical to
-    /// <see cref="DispatchAsync(object, IServiceProvider, CancellationToken, IEnumerable{string})"/>;
-    /// group-filtered dispatches stay on that overload.
+    /// Dispatches <paramref name="message"/> through its void pipeline, naming its type at
+    /// compile time.
     /// </summary>
+    /// <typeparam name="TMessage">The message's compile-time type.</typeparam>
+    /// <param name="message">The message to dispatch. Cannot be <c>null</c>.</param>
+    /// <param name="serviceProvider">The provider participants are resolved against.</param>
+    /// <param name="cancellationToken">Token for the dispatch.</param>
+    /// <returns>A task that completes when the pipeline has run.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="message"/> is <c>null</c>.</exception>
     /// <remarks>
-    /// Deliberately NOT a <c>DispatchAsync</c> overload: a same-name generic would join
-    /// the candidate set of every explicit <c>DispatchAsync&lt;T&gt;(msg, ...)</c> call, and
-    /// whenever the message expression is convertible to the type argument (an echo-typed
-    /// result dispatch — legal since <c>ICommand&lt;TResult&gt; : ICommand : IMessage</c>) the
-    /// identity conversion would out-rank the result overload's <c>object</c> parameter,
-    /// silently rerouting a result dispatch through the void pipeline or breaking the
-    /// caller with a return-type mismatch. The distinct name keeps the typed fast path
-    /// out of that candidate set entirely.
+    /// <para>
+    /// When <typeparamref name="TMessage"/> is the message's runtime type — the usual case
+    /// — the executor comes from a static generic slot rather than a type-keyed lookup.
+    /// Dispatching through a base type falls back to the runtime type, so behavior matches
+    /// <see cref="DispatchAsync(object, IServiceProvider, CancellationToken, IEnumerable{string})"/>
+    /// exactly. Group-filtered dispatches use that overload.
+    /// </para>
+    /// <para>
+    /// The name differs from <c>DispatchAsync</c> deliberately. A same-named generic would
+    /// join the candidates of every explicit <c>DispatchAsync&lt;T&gt;(msg, …)</c> call, and
+    /// wherever the message converts to the type argument — which it does for a
+    /// result-producing dispatch, since <c>ICommand&lt;TResult&gt;</c> derives from
+    /// <c>ICommand</c> — it would outrank the result overload and quietly send the dispatch
+    /// down the void path.
+    /// </para>
     /// </remarks>
-    /// <typeparam name="TMessage">The compile-time message type.</typeparam>
-    /// <param name="message">The message to dispatch.</param>
-    /// <param name="serviceProvider">The scope provider handlers resolve against.</param>
-    /// <param name="cancellationToken">Cancellation token for the dispatch.</param>
     public ValueTask DispatchVoidAsync<TMessage>(TMessage message, IServiceProvider serviceProvider,
         CancellationToken cancellationToken = default)
         where TMessage : IMessage
@@ -262,10 +306,15 @@ public sealed class MessageDispatchEngine
     }
 
     /// <summary>
-    /// Result-producing counterpart of
-    /// <see cref="DispatchAsync(object, IServiceProvider, CancellationToken, IEnumerable{string})"/>.
+    /// Dispatches <paramref name="message"/> and returns the result its pipeline produced.
     /// </summary>
-    /// <typeparam name="TResult">The expected result type of the message.</typeparam>
+    /// <typeparam name="TResult">The result type the pipeline produces.</typeparam>
+    /// <param name="message">The message to dispatch. Cannot be <c>null</c>.</param>
+    /// <param name="serviceProvider">The provider participants are resolved against.</param>
+    /// <param name="cancellationToken">Token for the dispatch.</param>
+    /// <param name="groups">The groups to run; <c>null</c> uses the default group.</param>
+    /// <returns>The result the pipeline produced.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="message"/> is <c>null</c>.</exception>
     public ValueTask<TResult> DispatchAsync<TResult>(object message, IServiceProvider serviceProvider,
         CancellationToken cancellationToken = default,
         IEnumerable<string>? groups = null)
@@ -310,27 +359,24 @@ public sealed class MessageDispatchEngine
     }
 
     /// <summary>
-    /// Dispatches a void message under a caller-owned execution context (typically a
-    /// scope's child): the caller controls the context's lifetime, so nothing is rented or
-    /// returned here.
+    /// Dispatches <paramref name="message"/> through its void pipeline under an execution
+    /// context the caller owns, naming the message type at compile time.
     /// </summary>
-    /// <param name="message">The message to dispatch.</param>
-    /// <param name="context">The externally owned execution context.</param>
-    /// <param name="serviceProvider">The scope provider handlers resolve against.</param>
-    /// <param name="groups">Optional group filters applied to the pipeline.</param>
-    /// <summary>
-    /// Typed counterpart of the context dispatch: the executor comes from the static-generic
-    /// slot when <typeparamref name="TMessage"/> is the message's runtime type. The caller owns
-    /// the context, so nothing is rented and nothing is returned.
-    /// </summary>
+    /// <typeparam name="TMessage">The message's compile-time type.</typeparam>
+    /// <param name="message">The message to dispatch. Cannot be <c>null</c>.</param>
+    /// <param name="context">The caller's execution context.</param>
+    /// <param name="serviceProvider">The provider participants are resolved against.</param>
+    /// <param name="groups">The groups to run; <c>null</c> uses the default group.</param>
+    /// <returns>A task that completes when the pipeline has run.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="message"/> is <c>null</c>.</exception>
     public ValueTask DispatchVoidAsync<TMessage>(TMessage message, ErgosfareContext context,
         IServiceProvider serviceProvider, IEnumerable<string>? groups = null)
         where TMessage : IMessage
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        // The filter no longer selects the executor, so the typed slot serves a filtered
-        // dispatch too — only the runtime-type guard stands between a call and the field read.
+        // Groups no longer pick the executor, so the compile-time slot serves a filtered
+        // dispatch too; only the runtime-type check stands between the call and the field.
         var executor = message.GetType() == typeof(TMessage)
             ? _executorCache.GetVoidExecutor<TMessage>()
             : _executorCache.GetVoidExecutor(message.GetType());
@@ -338,6 +384,18 @@ public sealed class MessageDispatchEngine
         return executor.Execute(message, context, serviceProvider, groups);
     }
 
+    /// <summary>
+    /// Dispatches <paramref name="message"/> through its void pipeline under an execution
+    /// context the caller owns.
+    /// </summary>
+    /// <param name="message">The message to dispatch. Cannot be <c>null</c>.</param>
+    /// <param name="context">The caller's execution context. Cannot be <c>null</c>.</param>
+    /// <param name="serviceProvider">The provider participants are resolved against.</param>
+    /// <param name="groups">The groups to run; <c>null</c> uses the default group.</param>
+    /// <returns>A task that completes when the pipeline has run.</returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="message"/> or <paramref name="context"/> is <c>null</c>.
+    /// </exception>
     public ValueTask DispatchAsync(object message, ErgosfareContext context, IServiceProvider serviceProvider,
         IEnumerable<string>? groups = null)
     {
@@ -350,10 +408,18 @@ public sealed class MessageDispatchEngine
     }
 
     /// <summary>
-    /// Result-producing counterpart of
-    /// <see cref="DispatchAsync(object, ErgosfareContext, IServiceProvider, IEnumerable{string}?)"/>.
+    /// Dispatches <paramref name="message"/> under a caller-owned execution context and
+    /// returns the result its pipeline produced.
     /// </summary>
-    /// <typeparam name="TResult">The expected result type of the message.</typeparam>
+    /// <typeparam name="TResult">The result type the pipeline produces.</typeparam>
+    /// <param name="message">The message to dispatch. Cannot be <c>null</c>.</param>
+    /// <param name="context">The caller's execution context. Cannot be <c>null</c>.</param>
+    /// <param name="serviceProvider">The provider participants are resolved against.</param>
+    /// <param name="groups">The groups to run; <c>null</c> uses the default group.</param>
+    /// <returns>The result the pipeline produced.</returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="message"/> or <paramref name="context"/> is <c>null</c>.
+    /// </exception>
     public ValueTask<TResult> DispatchAsync<TResult>(object message, ErgosfareContext context, IServiceProvider serviceProvider,
         IEnumerable<string>? groups = null)
     {
@@ -366,27 +432,31 @@ public sealed class MessageDispatchEngine
     }
 
     /// <summary>
-    /// Typed result dispatch: the message is the type argument, not an <c>object</c> whose
-    /// type is read back per call. What that removes is the whole lookup — the
-    /// <c>GetType()</c>, the <c>(message, result)</c> tuple hash, the slot refresh, and the
-    /// root-table walk behind them — leaving a static generic field read the JIT and Native
-    /// AOT both resolve to a direct static access.
+    /// Dispatches <paramref name="message"/> and returns its result, naming both the
+    /// message and result types at compile time.
     /// </summary>
+    /// <typeparam name="TMessage">The message's compile-time type.</typeparam>
+    /// <typeparam name="TResult">The result type the pipeline produces.</typeparam>
+    /// <param name="message">The message to dispatch. Cannot be <c>null</c>.</param>
+    /// <param name="serviceProvider">The provider participants are resolved against.</param>
+    /// <param name="cancellationToken">Token for the dispatch.</param>
+    /// <param name="groups">The groups to run; <c>null</c> uses the default group.</param>
+    /// <returns>The result the pipeline produced.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="message"/> is <c>null</c>.</exception>
     /// <remarks>
     /// <para>
-    /// Safe to overload rather than name apart, unlike <see cref="DispatchVoidAsync{TMessage}(TMessage, IServiceProvider, CancellationToken)"/>:
-    /// <typeparamref name="TResult"/> appears only in the constraint the callers apply, so it
-    /// cannot be inferred and this member never joins a candidate set the caller did not ask
-    /// for by naming both arguments.
+    /// Naming the message type removes the whole lookup — the <c>GetType()</c>, the
+    /// (message, result) hash, and the table walk behind them — leaving a static field read
+    /// that both the JIT and Native AOT resolve directly.
     /// </para>
     /// <para>
-    /// The runtime-type guard stays for the same reason the void lane keeps one: naming a
-    /// base type as <typeparamref name="TMessage"/> is legal, and the pipeline that runs is
-    /// the runtime type's.
+    /// Unlike <see cref="DispatchVoidAsync{TMessage}(TMessage, IServiceProvider, CancellationToken)"/>
+    /// this can safely be an overload: <typeparamref name="TResult"/> cannot be inferred, so
+    /// the member never joins a candidate set unless the caller named both arguments. The
+    /// runtime-type check stays for the same reason the void path keeps one — naming a base
+    /// type is legal, and the pipeline that runs belongs to the runtime type.
     /// </para>
     /// </remarks>
-    /// <typeparam name="TMessage">The compile-time message type.</typeparam>
-    /// <typeparam name="TResult">The expected result type of the message.</typeparam>
     public ValueTask<TResult> DispatchAsync<TMessage, TResult>(TMessage message, IServiceProvider serviceProvider,
         CancellationToken cancellationToken = default,
         IEnumerable<string>? groups = null)
@@ -434,9 +504,19 @@ public sealed class MessageDispatchEngine
     }
 
     /// <summary>
-    /// Typed counterpart of the context result dispatch. The caller owns the context, so
-    /// nothing is rented and nothing is returned.
+    /// Dispatches <paramref name="message"/> under a caller-owned execution context and
+    /// returns its result, naming both types at compile time.
     /// </summary>
+    /// <typeparam name="TMessage">The message's compile-time type.</typeparam>
+    /// <typeparam name="TResult">The result type the pipeline produces.</typeparam>
+    /// <param name="message">The message to dispatch. Cannot be <c>null</c>.</param>
+    /// <param name="context">The caller's execution context. Cannot be <c>null</c>.</param>
+    /// <param name="serviceProvider">The provider participants are resolved against.</param>
+    /// <param name="groups">The groups to run; <c>null</c> uses the default group.</param>
+    /// <returns>The result the pipeline produced.</returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="message"/> or <paramref name="context"/> is <c>null</c>.
+    /// </exception>
     public ValueTask<TResult> DispatchAsync<TMessage, TResult>(TMessage message, ErgosfareContext context,
         IServiceProvider serviceProvider, IEnumerable<string>? groups = null)
         where TMessage : IMessage

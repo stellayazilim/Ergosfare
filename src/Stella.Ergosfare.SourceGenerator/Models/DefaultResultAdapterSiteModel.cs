@@ -1,40 +1,39 @@
 namespace Stella.Ergosfare.SourceGenerator.Models;
 
 /// <summary>
-///     Value-equatable projection of one <c>UseDefaultResultAdapter(...)</c> callsite in
-///     the current compilation — the compile-time view of the container's fallback
-///     adapter. A literal <c>typeof</c> argument projects the adapter's served slots so
-///     staged plans can bake the binding; anything else is opaque, and an opaque site (or
-///     two sites disagreeing on the type) turns baking off for the whole compilation —
-///     the hosting executor's adapter-identity gate then routes affected dispatches to
-///     the runtime strategy, which resolves the default through the container. Fit is
-///     never judged: a default that serves no slot of a message simply does not bind
-///     there, and the classic try/catch semantics stand.
+/// One <c>UseDefaultResultAdapter(...)</c> call in this compilation — the compile-time view
+/// of the container's fallback adapter.
 /// </summary>
-/// <param name="IsOpaque">Whether the argument was not a resolvable <c>typeof</c> literal.</param>
+/// <param name="IsOpaque">Whether the argument was something other than a resolvable <c>typeof</c>.</param>
 /// <param name="BaseTypeExpression">
-///     Closed adapters: the full type expression. Open definitions: the expression's base
-///     name without the type argument list, completed per bound slot.
+/// The full type for a closed adapter; for an open definition, the name without its type
+/// argument list, completed per result type it is bound to.
 /// </param>
 /// <param name="IsOpenGeneric">Whether the adapter is an open generic definition.</param>
-/// <param name="Arity">The definition's type parameter count; 0 for closed adapters.</param>
+/// <param name="Arity">How many type parameters the definition has; zero for a closed adapter.</param>
 /// <param name="ParameterNamesKey">
-///     The definition's type parameter names in position order, joined with <c>\x1f</c>.
+/// The definition's type parameter names in order, flattened into one string.
 /// </param>
 /// <param name="AdapterSlotsKey">
-///     The carrier expressions of the adapter's <c>IResultAdapter&lt;TResult&gt;</c>
-///     implementations, joined with <c>\x1f</c> — exact slot expressions for closed
-///     adapters, patterns with bare type parameter names for open definitions.
+/// The result types the adapter can read, flattened into one string: exact types for a
+/// closed adapter, and patterns naming type parameters for an open definition.
 /// </param>
 /// <param name="MaterializerSlotsKey">
-///     The same projection of the adapter's <c>IResultMaterializer&lt;TResult&gt;</c>
-///     implementations.
+/// The same, for the result types the adapter can also build.
 /// </param>
 /// <param name="IsBakeable">
-///     Whether emitted plan code can name and construct the adapter — accessible,
-///     concrete, with a public parameterless constructor. Unbakeable defaults bake
-///     nothing; the runtime tier still serves them.
+/// Whether generated code can name and construct the adapter — accessible, concrete, and
+/// with a public parameterless constructor. An adapter that is not gets written into no
+/// plan, and the runtime resolves it instead.
 /// </param>
+/// <remarks>
+/// A literal <c>typeof</c> argument lets staged plans be compiled against the adapter.
+/// Anything else is opaque, and one opaque call — or two calls naming different adapters —
+/// turns that off for the whole compilation; the affected dispatches then go through the
+/// general strategy, which asks the container. Whether the adapter fits a given message is
+/// never judged here: a fallback that serves none of a message's result types simply does
+/// not bind to it, and that message keeps throwing its failures.
+/// </remarks>
 internal sealed record DefaultResultAdapterSiteModel(
     bool IsOpaque,
     string BaseTypeExpression,
@@ -45,7 +44,9 @@ internal sealed record DefaultResultAdapterSiteModel(
     string MaterializerSlotsKey,
     bool IsBakeable)
 {
-    /// <summary>The one opaque-site instance; every non-literal callsite projects to it.</summary>
+    /// <summary>
+    /// The single instance every opaque call is reduced to.
+    /// </summary>
     public static readonly DefaultResultAdapterSiteModel Opaque = new(
         IsOpaque: true,
         BaseTypeExpression: string.Empty,

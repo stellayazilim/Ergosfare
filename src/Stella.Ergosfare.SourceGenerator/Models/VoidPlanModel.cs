@@ -1,28 +1,29 @@
 namespace Stella.Ergosfare.SourceGenerator.Models;
 
 /// <summary>
-///     A compile-time void pipeline plan: a dispatchable command message whose entire
-///     discovered pipeline is a single default-discovery, default-group async handler.
-///     Emitted as <c>GeneratedDispatchRoots.AddVoidPlan&lt;TMessage, THandler&gt;()</c> so
-///     the runtime executor closes over both types and calls the handler devirtualized.
-///     The runtime validates the pipeline against the container's selected frozen
-///     composition, so a plan that does not match only loses the speedup, never behavior.
+/// A plan for a message that produces no result and whose whole pipeline is a single
+/// asynchronous handler, discovered by default and in the default group.
 /// </summary>
-/// <param name="MessageTypeExpression">Fully qualified expression of the closed message type.</param>
-/// <param name="HandlerTypeExpression">Fully qualified expression of the sole handler type.</param>
+/// <param name="MessageTypeExpression">The closed message type.</param>
+/// <param name="HandlerTypeExpression">The one handler that serves it.</param>
 /// <param name="HasDirectConstruction">
-///     Whether the handler qualifies for the plan's direct-construction factory
-///     (<c>static () => new THandler()</c>); see
-///     <see cref="RegistrableTypeModel.IsDirectlyConstructible"/>.
+/// Whether the handler can be constructed without the container; see
+/// <see cref="RegistrableTypeModel.IsDirectlyConstructible"/>.
 /// </param>
 /// <param name="ProviderConstructionExpression">
-///     The provider-taking construction factory for a dependency-injected handler, or
-///     <c>null</c>; see <see cref="RegistrableTypeModel.ProviderConstructionExpression"/>.
+/// How to construct a handler that takes constructor dependencies, resolving them from the
+/// dispatching provider, or <c>null</c>; see
+/// <see cref="RegistrableTypeModel.ProviderConstructionExpression"/>.
 /// </param>
 /// <param name="UsesKeyedServices">
-///     Whether the provider factory needs the keyed-service extensions; see
-///     <see cref="RegistrableTypeModel.ProviderConstructionUsesKeyedServices"/>.
+/// Whether that construction needs the keyed-service extensions; see
+/// <see cref="RegistrableTypeModel.ProviderConstructionUsesKeyedServices"/>.
 /// </param>
+/// <remarks>
+/// Written out so the executor closes over both types and calls the handler directly. The
+/// runtime still checks the plan against the composition the container selected, so a plan
+/// that no longer matches loses its speedup and nothing else.
+/// </remarks>
 internal readonly record struct VoidPlanModel(
     string MessageTypeExpression,
     string HandlerTypeExpression,

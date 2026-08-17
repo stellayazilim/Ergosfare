@@ -1,27 +1,33 @@
 ﻿namespace Stella.Ergosfare.Core.Abstractions.Factories;
 
 /// <summary>
-/// Factory interface for creating <see cref="IMessageDependencies"/> instances.
+/// Builds the <see cref="IMessageDependencies"/> of a message type and group set.
 /// </summary>
 public interface IMessageDependenciesFactory
 {
     /// <summary>
-    /// Creates a <see cref="IMessageDependencies"/> for the given message type.
+    /// Returns the participants that serve <paramref name="messageType"/> under
+    /// <paramref name="groups"/>.
     /// </summary>
-    /// <param name="messageType">The type of the message.</param>
-    /// <param name="groups">The groups to filter handlers by.</param>
-    /// <returns>A <see cref="IMessageDependencies"/> instance for the specified message.</returns>
+    /// <param name="messageType">The message type to build for.</param>
+    /// <param name="groups">The groups to filter participants by.</param>
+    /// <returns>The message's participants, per stage and in invocation order.</returns>
     /// <exception cref="Exceptions.NoHandlerFoundException">
-    /// No compiled composition serves the message type, nor any of its ancestors.
+    /// No compiled composition serves the message type or any of its ancestors.
     /// </exception>
     public IMessageDependencies Create(Type messageType, IEnumerable<string> groups);
 
     /// <summary>
-    /// The non-throwing counterpart of <see cref="Create"/>: <c>null</c> when no compiled
-    /// composition serves the message type or any of its ancestors. Events use it — an
-    /// event with no subscribers is a legitimate outcome, not a failure.
+    /// Returns the participants that serve <paramref name="messageType"/> under
+    /// <paramref name="groups"/>, or <c>null</c> when nothing serves it.
     /// </summary>
-    /// <param name="messageType">The type of the message.</param>
-    /// <param name="groups">The groups to filter handlers by.</param>
+    /// <param name="messageType">The message type to build for.</param>
+    /// <param name="groups">The groups to filter participants by.</param>
+    /// <returns>The message's participants, or <c>null</c>.</returns>
+    /// <remarks>
+    /// The counterpart of <see cref="Create"/> for callers to whom an empty pipeline is a
+    /// legitimate outcome rather than a failure — publishing an event nobody subscribes to,
+    /// for instance.
+    /// </remarks>
     public IMessageDependencies? Find(Type messageType, IEnumerable<string> groups);
 }

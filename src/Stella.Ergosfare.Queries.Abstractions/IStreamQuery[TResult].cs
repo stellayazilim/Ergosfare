@@ -2,17 +2,13 @@
 
 
 /// <summary>
-/// Represents a stream query message that produces multiple results of type <typeparamref name="TResult"/> over time.
+/// Marks a type as a query whose handler streams <typeparamref name="TResult"/> items back
+/// to the caller.
 /// </summary>
-/// <typeparam name="TResult">The type of results produced by the stream query.</typeparam>
+/// <typeparam name="TResult">The type of each streamed item.</typeparam>
 /// <remarks>
-/// <para>
-/// This interface extends <see cref="IQuery"/> and is intended for reactive or streaming scenarios,
-/// where the query yields multiple results asynchronously instead of a single value.
-/// </para>
-/// <para>
-/// Implementing <see cref="IStreamQuery{TResult}"/> allows the query to be registered within
-/// the query module and handled by <see cref="IStreamQueryHandler{TQuery, TResult}"/> implementations.
-/// </para>
+/// Use this where results arrive over time rather than all at once. Such a query is served
+/// by an <see cref="IStreamQueryHandler{TQuery, TResult}"/>, and items are produced as the
+/// caller enumerates them.
 /// </remarks>
 public interface IStreamQuery<out TResult>: IQuery;

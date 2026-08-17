@@ -3,86 +3,104 @@ using System.Collections.Immutable;
 namespace Stella.Ergosfare.SourceGenerator.Models;
 
 /// <summary>
-///     Value-equatable projection of one dispatch site: a mediator dispatch invocation
-///     (<c>SendAsync</c>, <c>QueryAsync</c>, <c>StreamAsync</c>, <c>PublishAsync</c>,
-///     <c>DispatchAsync</c>, <c>Mediate</c>) together with the static type of its message
-///     argument, casts and conversions looked through. The static type is the compile-time
-///     evidence the reachability judgment works from: its assignable keys mirror the
-///     runtime's actual-or-first-assignable resolution, and its subtypes in the compiled
-///     closure bound what a runtime instance could actually be.
+/// One dispatch site: a call to a mediator, together with the static type of the message it
+/// was given.
 /// </summary>
+/// <remarks>
+/// Casts and conversions are looked through to find that static type, and it is the only
+/// evidence reachability judgment has: the types it is assignable to mirror how the runtime
+/// picks a handler, and its subtypes in the compiled program bound what the message could
+/// actually be.
+/// </remarks>
 internal readonly struct DispatchSiteModel : IEquatable<DispatchSiteModel>
 {
     /// <summary>
-    ///     Normalized type expression of the static message type (generics reduced to
-    ///     their unbound definitions), comparable against the registrable models'
-    ///     <c>TypeofExpression</c>/<c>AssignableKeys</c> strings.
+    /// The static message type, normalized so a constructed generic and its definition
+    /// compare equal — which is what makes it comparable against a registered type's own
+    /// expressions.
     /// </summary>
     public required string MessageTypeExpression { get; init; }
 
     /// <summary>
-    ///     CLR metadata name of the static message type — the manifest attribute's
-    ///     payload, resolvable back to a symbol by an aggregating compilation.
+    /// The static message type's CLR metadata name, which is what a manifest records and
+    /// what another compilation resolves back to a symbol.
     /// </summary>
     public required string MessageTypeMetadataName { get; init; }
 
-    /// <summary>Human-readable type name used in diagnostics.</summary>
+    /// <summary>
+    /// The message type as a diagnostic would name it.
+    /// </summary>
     public required string DisplayName { get; init; }
 
-    /// <summary>The dispatch surface the site goes through.</summary>
+    /// <summary>
+    /// Which mediator surface the site calls.
+    /// </summary>
     public required DispatchSiteKind Kind { get; init; }
 
     /// <summary>
-    ///     Whether the static type proves nothing about the concrete message: the bare
-    ///     module marker, <c>IMessage</c>, <c>object</c>, or an unconstrained type
-    ///     parameter. Opaque sites still contribute to reachability conservatively;
-    ///     opacity only drives the strict-mode ERGO009 diagnostic.
+    /// Whether the static type proves nothing about the concrete message — a bare module
+    /// marker, <c>IMessage</c>, <c>object</c>, or an unconstrained type parameter.
     /// </summary>
+    /// <remarks>
+    /// Such a site still counts towards reachability, conservatively; being opaque only
+    /// matters to the strict-mode ERGO009 diagnostic.
+    /// </remarks>
     public required bool IsOpaque { get; init; }
 
     /// <summary>
-    ///     Whether the static type is a value type — runtime contract variance never
-    ///     applies to it, so coverage through assignable keys is off for the site itself.
+    /// Whether the static type is a value type, which cannot be reached through a base type
+    /// — so coverage through assignable types does not apply to this site.
     /// </summary>
     public required bool IsValueType { get; init; }
 
     /// <summary>
-    ///     Whether the static type is (or constructs) a generic type. Generic dispatch
-    ///     descriptor matching is definition-fuzzy, so such sites contribute to
-    ///     reachability but never receive dead-dispatch verdicts.
+    /// Whether the static type is generic or constructs a generic.
     /// </summary>
+    /// <remarks>
+    /// Handlers for a generic message are matched by definition rather than exactly, so such
+    /// a site counts towards reachability but is never reported as a dead dispatch.
+    /// </remarks>
     public required bool IsGenericMessage { get; init; }
 
     /// <summary>
-    ///     Normalized type expressions of the static type's base types and interfaces —
-    ///     the compile-time domain of the runtime's assignable-handler resolution.
+    /// The static type's base types and interfaces, normalized — the types a handler could
+    /// be registered against and still serve this message.
     /// </summary>
     public required ImmutableArray<string> AssignableKeys { get; init; }
 
     /// <summary>
-    ///     The group names this site dispatches under, normalized (ordinal-sorted,
-    ///     deduplicated) so two spellings of one set compare equal. Empty means the site
-    ///     names no group and runs the default one — which is also what
-    ///     <see cref="HasUnprovableGroups"/> sites fall back to for keying purposes.
+    /// The groups this site dispatches under, sorted and deduplicated so two spellings of
+    /// one set compare equal. Empty means the site names none and runs the default group.
     /// </summary>
     public required ImmutableArray<string> Groups { get; init; }
 
     /// <summary>
-    ///     Whether the site passes a group filter the generator could not read — a variable,
-    ///     a computed set, a non-literal element. Such a site keys no plan; its message keeps
-    ///     the runtime group lane, which filters the live composition per dispatch.
+    /// Whether the site's groups could not be read — a variable, a computed set, or a
+    /// non-literal element.
     /// </summary>
+    /// <remarks>
+    /// Such a site keys no plan; its message keeps the runtime group path, which filters the
+    /// live composition on each dispatch.
+    /// </remarks>
     public required bool HasUnprovableGroups { get; init; }
 
-    /// <summary>Invocation location; <c>null</c> for sites rehydrated from a referenced manifest.</summary>
+    /// <summary>
+    /// Where the call is, or <c>null</c> for a site read back from a referenced assembly's
+    /// manifest.
+    /// </summary>
     public required LocationInfo? Location { get; init; }
 
     /// <summary>
-    ///     Name of the referenced assembly whose manifest carried the site, or <c>null</c>
-    ///     when the site is an invocation in the current compilation.
+    /// The referenced assembly whose manifest recorded this site, or <c>null</c> when the
+    /// call is in the current compilation.
     /// </summary>
     public required string? ReferencedAssemblyName { get; init; }
 
+    /// <summary>
+    /// Compares every recorded fact about the site.
+    /// </summary>
+    /// <param name="other">The site to compare against.</param>
+    /// <returns><c>true</c> when both describe the same dispatch.</returns>
     public bool Equals(DispatchSiteModel other)
     {
         if (MessageTypeExpression != other.MessageTypeExpression
@@ -120,8 +138,17 @@ internal readonly struct DispatchSiteModel : IEquatable<DispatchSiteModel>
         return true;
     }
 
+    /// <summary>
+    /// Compares against another dispatch site.
+    /// </summary>
+    /// <param name="obj">The object to compare against.</param>
+    /// <returns><c>true</c> when it is an equal site.</returns>
     public override bool Equals(object? obj) => obj is DispatchSiteModel other && Equals(other);
 
+    /// <summary>
+    /// Returns a hash over the message type, the surface called, and how many assignable
+    /// types and groups the site carries.
+    /// </summary>
     public override int GetHashCode()
     {
         unchecked

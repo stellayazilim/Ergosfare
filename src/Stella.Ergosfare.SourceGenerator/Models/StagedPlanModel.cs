@@ -3,20 +3,39 @@ using System.Collections.Immutable;
 namespace Stella.Ergosfare.SourceGenerator.Models;
 
 /// <summary>
-///     A staged pipeline plan ready for emission: a message whose whole discovered
-///     pipeline — its main handlers plus at least one interceptor stage or plugin call —
-///     could be modeled exactly, with every stage in the runtime shape-builder's execution
-///     order (direct first, then indirect, each segment weight-descending then ordinal by
-///     type name) and every call's pattern-match arm resolved at compile time. Advisory like
-///     every plan: the hosting executor re-validates the baked composition per registry
-///     version and falls back to the runtime strategy on any mismatch.
+/// A plan for a message whose whole pipeline — its main handlers plus at least one
+/// interceptor stage or plugin call — could be modelled exactly.
 /// </summary>
+/// <param name="MessageTypeExpression">The message this plan serves.</param>
+/// <param name="Groups">The group set this plan was compiled for, empty for the default one.</param>
+/// <param name="IsBroadcast">Whether the plan delivers to every handler rather than one.</param>
+/// <param name="ResultTypeExpression">The result type, or <c>null</c> when there is none.</param>
+/// <param name="ResultIsValueType">Whether that result is a value type.</param>
+/// <param name="Handlers">Main handlers registered for the message type itself.</param>
+/// <param name="IndirectHandlers">Main handlers registered for a base type.</param>
+/// <param name="PreCalls">The pre-interceptor stage.</param>
+/// <param name="PostCalls">The post-interceptor stage.</param>
+/// <param name="ExceptionCalls">The exception-interceptor stage.</param>
+/// <param name="FinalCalls">The final-interceptor stage.</param>
+/// <param name="AdapterKind">Which kind of result adapter the plan was compiled against.</param>
+/// <param name="ResultAdapterTypeExpression">That adapter's type, when it has one.</param>
+/// <param name="ResultAdapterMaterializes">Whether the adapter can also build a failed result.</param>
+/// <param name="PluginCalls">The plugin methods called from inside this plan.</param>
+/// <param name="GroupGuards">The group tests a filtering plan computes once at the top.</param>
 /// <remarks>
-///     Handlers are two segments because a broadcast serves all of them, directly registered
-///     ones first and covariantly matched ones after. A command or query plan is the same
-///     shape with one direct handler, which is what lets one emission path and one runtime
-///     gate serve both — it carries its covariant segment too, for the gate, and delivers to
-///     the direct handler alone as the priority ladder prescribes.
+/// <para>
+/// Every stage is in invocation order — participants registered for the message type first,
+/// then those registered for a base type, each by descending weight and then type name — and
+/// the contract each call goes through was chosen at compile time. Like every plan it is a
+/// proposal: the executor checks it against the composition the container selected and falls
+/// back to the general strategy if they differ.
+/// </para>
+/// <para>
+/// Handlers are two segments because a broadcast runs all of them. A command or query plan
+/// is the same shape with a single direct handler, which is what lets one emission path and
+/// one runtime check serve both: it carries its covariant segment for the check, and
+/// delivers only to the direct handler.
+/// </para>
 /// </remarks>
 internal sealed record StagedPlanModel(
     string MessageTypeExpression,
@@ -37,24 +56,33 @@ internal sealed record StagedPlanModel(
     ImmutableArray<StagedGroupGuardModel> GroupGuards)
 {
     /// <summary>
-    ///     Whether this is the plan that serves dispatches whose group filter is a runtime
-    ///     value: every participant is present and each call carries a guard, so one body
-    ///     answers any set. A plan keyed by a proven set carries no guards — participation
-    ///     there is a compile-time fact.
+    /// Whether this is the plan that serves dispatches whose groups are only known at
+    /// runtime: it holds every participant and guards each call, so one body answers any
+    /// set. A plan compiled for a known set has no guards, because participation was already
+    /// decided.
     /// </summary>
     public bool IsGroupFiltering => !GroupGuards.IsEmpty;
 
-    /// <summary>The sole main handler's type; meaningful only when the plan is not a broadcast.</summary>
+    /// <summary>
+    /// The one main handler's type. Meaningful only when the plan is not a broadcast.
+    /// </summary>
     public string HandlerTypeExpression => Handlers[0].TypeExpression;
 
-    /// <summary>The sole main handler's construction expression; see <see cref="HandlerTypeExpression"/>.</summary>
+    /// <summary>
+    /// How to construct that handler without the container, when it qualifies; see
+    /// <see cref="HandlerTypeExpression"/>.
+    /// </summary>
     public string? HandlerConstructionExpression => Handlers[0].ConstructionExpression;
 
-    /// <summary>Whether any plugin method is emitted at the given hook of this plan.</summary>
+    /// <summary>
+    /// Reports whether any plugin method is called at a given point of this plan.
+    /// </summary>
+    /// <param name="hook">The point to ask about.</param>
+    /// <returns><c>true</c> when at least one call is written there.</returns>
     /// <remarks>
-    ///     Every hook is a straight-line position, so this only ever decides whether a line
-    ///     is written — never whether the plan grows a guard. A plugin cannot change the
-    ///     shape of a pipeline it observes.
+    /// Every point is on the straight-line path, so this only ever decides whether a line is
+    /// written — never whether the plan grows a guard. A plugin cannot change the shape of
+    /// the pipeline it observes.
     /// </remarks>
     public bool HasPluginCalls(PluginHook hook)
     {
@@ -70,9 +98,8 @@ internal sealed record StagedPlanModel(
     }
 
     /// <summary>
-    ///     Whether every participant — each handler and each interceptor — carries a
-    ///     construction expression, making the plan eligible for the emitted
-    ///     direct-construction variant (<c>ExecuteDirect</c>).
+    /// Whether every participant can be constructed without the container, which is what
+    /// makes the plan's direct-construction variant worth writing.
     /// </summary>
     public bool SupportsDirectConstruction
         => AllHandlersConstructible(Handlers)
@@ -82,6 +109,11 @@ internal sealed record StagedPlanModel(
            && AllConstructible(ExceptionCalls)
            && AllConstructible(FinalCalls);
 
+    /// <summary>
+    /// Reports whether every handler in a segment carries a construction.
+    /// </summary>
+    /// <param name="handlers">The segment to check.</param>
+    /// <returns><c>true</c> when all of them do.</returns>
     private static bool AllHandlersConstructible(ImmutableArray<StagedHandlerModel> handlers)
     {
         foreach (var handler in handlers)
@@ -95,6 +127,11 @@ internal sealed record StagedPlanModel(
         return true;
     }
 
+    /// <summary>
+    /// Reports whether every interceptor in a stage carries a construction.
+    /// </summary>
+    /// <param name="calls">The stage to check.</param>
+    /// <returns><c>true</c> when all of them do.</returns>
     private static bool AllConstructible(ImmutableArray<StagedCallModel> calls)
     {
         foreach (var call in calls)

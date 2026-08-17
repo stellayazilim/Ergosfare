@@ -3,36 +3,47 @@ using System.Diagnostics.CodeAnalysis;
 namespace Stella.Ergosfare.Plugins.Abstractions;
 
 /// <summary>
-/// The message families a plugin method applies to, as a filter on emission
-/// (<see cref="PluginServiceFilterAttribute"/>).
+/// The message families a plugin method applies to, used by
+/// <see cref="PluginServiceFilterAttribute"/>.
 /// </summary>
 /// <remarks>
-/// Family is not expressible as a generic constraint — there is no type a plugin can
-/// constrain on to mean "every command" without naming the module's marker — so it gets its
-/// own flag. Shape filtering stays with the constraint: a method declared
-/// <c>where TMessage : ICacheableQuery</c> is emitted only into plans whose message
+/// Family needs its own flag because it cannot be said as a generic constraint — there is no
+/// type to constrain on that means "every command" without naming the module's marker.
+/// Filtering by message shape stays with the constraint: a method declared
+/// <c>where TMessage : ICacheableQuery</c> reaches only the pipelines whose message
 /// satisfies it.
 /// </remarks>
 [Experimental(ExperimentalSurface.Id)]
 [Flags]
 public enum Module
 {
-    /// <summary>No family — a filter that selects nothing.</summary>
+    /// <summary>
+    /// No family, which selects nothing.
+    /// </summary>
     None = 0,
 
-    /// <summary>Command dispatch plans, both the resultless and result-returning shapes.</summary>
+    /// <summary>
+    /// Command pipelines, both those that return a result and those that do not.
+    /// </summary>
     Command = 1 << 0,
 
     /// <summary>
-    /// Query dispatch plans. Streaming queries are named by this family but not yet served
-    /// by it: the stream lane has no compiled plan, and a plugin call lives only in a plan
-    /// body. A stream dispatch therefore observes nothing until that lane joins the family.
+    /// Query pipelines.
     /// </summary>
+    /// <remarks>
+    /// Streaming queries belong to this family by name but are not served by it yet: a
+    /// plugin call lives inside a compiled plan, and the streaming path has none. A stream
+    /// dispatch therefore reaches no plugin until it does.
+    /// </remarks>
     Query = 1 << 1,
 
-    /// <summary>Event broadcast plans.</summary>
+    /// <summary>
+    /// Event broadcast pipelines.
+    /// </summary>
     Event = 1 << 2,
 
-    /// <summary>Every family — the default when no family filter is declared.</summary>
+    /// <summary>
+    /// Every family — what applies when no family filter is declared.
+    /// </summary>
     All = Command | Query | Event,
 }

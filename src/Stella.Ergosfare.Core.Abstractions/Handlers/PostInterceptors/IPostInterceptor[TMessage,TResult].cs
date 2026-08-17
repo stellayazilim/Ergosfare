@@ -3,17 +3,15 @@ namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 
 
 /// <summary>
-/// Synchronous post-interceptor contract for messages of type <typeparamref name="TMessage"/>
-/// producing results of type <typeparamref name="TResult"/>. Executes after the main handler
-/// and may observe or replace the result.
+/// Runs after the main handler of a <typeparamref name="TMessage"/> and decides what
+/// result the rest of the pipeline sees.
 /// </summary>
-/// <typeparam name="TMessage">The type of message this interceptor handles. Must be non-nullable.</typeparam>
-/// <typeparam name="TResult">The type of result produced by the handler. Must be non-nullable.</typeparam>
+/// <typeparam name="TMessage">The message type this interceptor accepts.</typeparam>
+/// <typeparam name="TResult">The result type this interceptor accepts.</typeparam>
 /// <remarks>
-/// This is a standalone synchronous contract — asynchronous post-interceptors implement
-/// <see cref="IAsyncPostInterceptor{TMessage}"/> or
-/// <see cref="IAsyncPostInterceptor{TMessage, TResult}"/> instead; the pipeline dispatches
-/// each through its own typed member with no object-typed bridge between them.
+/// Implement <see cref="IAsyncPostInterceptor{TMessage}"/> or
+/// <see cref="IAsyncPostInterceptor{TMessage, TResult}"/> instead when the work involves
+/// awaiting; an interceptor implements one of these contracts.
 /// </remarks>
 public interface IPostInterceptor<in TMessage, in TResult>
     : IPostInterceptor
@@ -21,13 +19,18 @@ public interface IPostInterceptor<in TMessage, in TResult>
         where TResult : notnull
 {
     /// <summary>
-    /// Handles a message after it has been processed by the main handler.
+    /// Processes the result of handling <paramref name="message"/>.
     /// </summary>
-    /// <param name="message">The message that was handled by the main handler.</param>
-    /// <param name="messageResult">The result produced by the main handler.</param>
-    /// <param name="context">The current execution context.</param>
+    /// <param name="message">The message that was handled.</param>
+    /// <param name="messageResult">The result as the previous stage left it.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
     /// <returns>
-    /// The (possibly replaced) result that continues through the pipeline.
+    /// The result the rest of the pipeline receives — either
+    /// <paramref name="messageResult"/> or a replacement. The returned value must be a
+    /// <typeparamref name="TResult"/>; the pipeline casts it before passing it on. If the
+    /// returned result carries a failure that the result type's adapter can read, the
+    /// remaining post-interceptors are skipped and the pipeline moves to its exception
+    /// stage.
     /// </returns>
     object Handle(TMessage message, TResult messageResult, ErgosfareContext context);
 }

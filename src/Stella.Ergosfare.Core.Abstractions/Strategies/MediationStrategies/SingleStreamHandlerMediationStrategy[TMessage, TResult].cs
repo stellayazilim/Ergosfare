@@ -7,45 +7,67 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies;
 
 
 /// <summary>
-/// Implements a mediation strategy for a single asynchronous streaming handler.
-/// Ensures that only one handler is executed for the message, invokes pre- and post-interceptors,
-/// handles exceptions, and applies final interceptors. Supports chunked streaming results with optional result adaptation.
+/// Mediates a message to the single stream handler that serves it, running the interceptor
+/// stages around the stream: the pre-stage before the handler is invoked, the post-,
+/// exception- and final stages after enumeration ends.
 /// </summary>
-/// <typeparam name="TMessage">The type of the message being handled.</typeparam>
-/// <typeparam name="TResult">The type of the elements returned by the asynchronous stream.</typeparam>
-public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>( 
+/// <typeparam name="TMessage">The message type being mediated.</typeparam>
+/// <typeparam name="TResult">The type of the items the handler streams.</typeparam>
+/// <remarks>
+/// An instance carries the state of one enumeration and serves a single dispatch.
+/// </remarks>
+/// <param name="cancellationToken">The token the stream is enumerated under.</param>
+public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
     CancellationToken cancellationToken) : IMessageMediationStrategy<TMessage, IAsyncEnumerable<TResult>>
     where TMessage : notnull
 {
-        
-    // an unknown exception occurred that Stella.Ergosfare doesn't recognize through pipeline
-    Exception? _unknownException;
-        
-    // is execution aborted at any path of pipeline
-    bool _executionAborted;
-        
-    // async enumerable still consumable, ie all _consumed, exception happened
-    bool _consume = true;
-    
-    
+
     /// <summary>
-    /// Mediates the message by invoking the streaming handler along with pre-, post-, exception-, and final interceptors.
-    /// Supports chunked streaming results with early abortion or exception handling.
+    /// The failure to hand to the exception stage: thrown by the handler, raised while
+    /// enumerating, or carried inside a post-interceptor's result.
     /// </summary>
-    /// <param name="message">The message to be handled.</param>
-    /// <param name="messageDependencies">The dependencies of the message, including the registered handlers and interceptors.</param>
-    /// <param name="context">The current execution context.</param>
-    /// <param name="serviceProvider">The provider of the scope this dispatch runs in; handlers and interceptors resolve from it.</param>
+    Exception? _unknownException;
+
+    /// <summary>
+    /// Whether a participant stopped the pipeline. An aborted dispatch runs no final
+    /// interceptors.
+    /// </summary>
+    bool _executionAborted;
+
+    /// <summary>
+    /// Whether enumeration should continue — cleared when the stream ends and when a
+    /// failure makes further items pointless.
+    /// </summary>
+    bool _consume = true;
+
+
+    /// <summary>
+    /// Streams the results of handling <paramref name="message"/>, running the interceptor
+    /// stages around the enumeration.
+    /// </summary>
+    /// <param name="message">The message to mediate.</param>
+    /// <param name="messageDependencies">The message's participants, per stage.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <param name="serviceProvider">The provider participants are resolved from.</param>
     /// <returns>
-    /// An <see cref="IAsyncEnumerable{TResult}"/> representing the asynchronous stream of results produced by the handler.
+    /// The streamed items. Nothing runs until the caller begins enumerating, and the
+    /// stages after the handler run once enumeration ends.
     /// </returns>
-    /// <exception cref="MultipleHandlerFoundException">Thrown if more than one handler is registered for the message.</exception>
-    /// <exception cref="NoHandlerFoundException">Thrown if no handler is registered for the message.</exception>
+    /// <exception cref="MultipleHandlerFoundException">
+    /// Several handlers are registered at the level that serves the message.
+    /// </exception>
+    /// <exception cref="NoHandlerFoundException">No handler is registered for the message.</exception>
+    /// <exception cref="ExecutionAbortedException">A participant stopped the pipeline.</exception>
+    /// <exception cref="NotSupportedException">
+    /// The selected handler implements no stream-handler contract for
+    /// <typeparamref name="TMessage"/>.
+    /// </exception>
     public async IAsyncEnumerable<TResult> Mediate(TMessage message, IMessageDependencies messageDependencies,
         ErgosfareContext context, IServiceProvider serviceProvider)
     {
-        // The main-handler priority ladder; see SingleAsyncHandlerMediationStrategy{TMessage}
-        // for the reasoning.
+        // Handlers registered for the message type itself decide the dispatch on their own;
+        // only when there are none do handlers registered for a base type get considered.
+        // Either level must hold exactly one handler.
         var handlers = messageDependencies.Handlers;
         var indirectHandlers = messageDependencies.IndirectHandlers;
 
@@ -66,43 +88,40 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
 
         var handler = (handlers.Count == 1 ? handlers[0] : indirectHandlers[0]).Resolve(serviceProvider);
 
-        // enumerator to consume
         IAsyncEnumerable<TResult>? enumerable = null;
 
         try
         {
-            // run pre interceptors
             message = (TMessage) await PreInterceptorInvocationStrategy<TMessage>.Invoke(
                 messageDependencies, serviceProvider, message, context);
 
 
-            // Typed dispatch only — no object bridge. `in TMessage` variance admits handlers
-            // registered for base message types; IAsyncEnumerable<out T> covariance admits
-            // derived elements.
+            // Calling Handle only builds the sequence; the handler body runs as the caller
+            // enumerates it below.
             enumerable = handler is IHandler<TMessage, IAsyncEnumerable<TResult>> typed
                 ? typed.Handle(message, context)
                 : throw new NotSupportedException(
                     $"'{handler.GetType()}' does not implement a supported stream handler contract for message '{typeof(TMessage)}'. " +
                     "Interface-erased dispatch is not supported; dispatch with the concrete message type.");
-           
+
 
         }
         catch (ExecutionAbortedException)
         {
-            // A participant stopped the pipeline before a single chunk existed. Nothing
-            // else runs — the final stage below included — and the signal reaches whoever
-            // is enumerating.
+            // Stopped before a single item existed. Nothing else runs, the final stage
+            // included, and the signal reaches whoever is enumerating.
             _executionAborted = true;
             throw;
         }
         catch (Exception exception) when (exception is not ExecutionAbortedException)
         {
-            // exception happened no need to _consume
+            // The stream never came to be, so there is nothing to enumerate; the failure
+            // goes straight to the stages below.
             _consume = false;
             _unknownException = exception;
         }
 
-     
+
 
         enumerable ??= Empty<TResult>();
         await using var enumerator = enumerable.GetAsyncEnumerator(cancellationToken);
@@ -116,7 +135,7 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
             }
             catch (ExecutionAbortedException)
             {
-                // Stopped mid-stream: the chunks already yielded stand, nothing further is
+                // Stopped mid-stream: the items already yielded stand, nothing further is
                 // produced, and the signal reaches the enumerating caller.
                 _executionAborted = true;
                 throw;
@@ -126,10 +145,9 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
                 _consume = false;
                 _unknownException = exception;
             }
-            // `_consume` is the answer to "did MoveNextAsync produce an element", and the
-            // only one: `null` is a legitimate element of an IAsyncEnumerable<T?>, so
-            // testing the item for null would silently drop it from the middle of the
-            // sequence — the caller receiving a well-formed but shorter stream.
+            // Whether MoveNextAsync produced an item is the only thing that decides this:
+            // null is a legitimate element of an IAsyncEnumerable<T?>, so testing the item
+            // itself would drop it and hand the caller a shorter, well-formed sequence.
             if (_consume && _unknownException is null)
                 yield return item;
             if (!_consume || _unknownException is not null)
@@ -142,18 +160,19 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         {
             if (_unknownException is null)
             {
-                // we can't override result since its chunked
+                // The stage receives the enumerator rather than a result: the items are
+                // already with the caller, so there is nothing for an interceptor to
+                // replace.
                 var (_, postCarried) = await PostInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>.Invoke(
                     messageDependencies, Results.ResultAdapterBinding.For<TMessage, IAsyncEnumerator<TResult>>(serviceProvider), serviceProvider, message, enumerator, context).ConfigureAwait(false);
 
-                // A failure carried inside a post result enters the exception stage below
-                // without a throw — the stream's value channel.
+                // A failure carried inside a post-interceptor's result reaches the exception
+                // stage below without anything being thrown.
                 _unknownException = postCarried;
             }
         }
         catch (ExecutionAbortedException)
         {
-            // A post-interceptor stopped the pipeline; see the arms above.
             _executionAborted = true;
             throw;
         }
@@ -165,15 +184,14 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
         {
             if (_unknownException is not null)
             {
-                // we can't override result since its chunked
                 var (matched, _) = await ExceptionInterceptorInvocationStrategy<TMessage, IAsyncEnumerator<TResult>>.Invoke(
                     messageDependencies, serviceProvider, message, enumerator,
                     _unknownException, context).ConfigureAwait(false);
 
                 if (!matched)
                 {
-                    // Nobody accepted the failure: it surfaces with its original stack,
-                    // exactly as the stage's own rethrow used to.
+                    // Nobody accepted the failure, so it reaches the caller with its
+                    // original stack rather than one rooted here.
                     ExceptionDispatchInfo.Capture(_unknownException).Throw();
                 }
             }
@@ -191,20 +209,20 @@ public sealed class SingleStreamHandlerMediationStrategy<TMessage, TResult>(
             }
         }
     }
-    
-    
+
+
     /// <summary>
-    /// Returns an empty asynchronous sequence of type <typeparamref name="T"/>.
+    /// Returns a sequence with no elements.
     /// </summary>
-    /// <typeparam name="T">The type of elements in the sequence.</typeparam>
-    /// <returns>An <see cref="IAsyncEnumerable{T}"/> that contains no elements.</returns>
+    /// <typeparam name="T">The element type of the sequence.</typeparam>
+    /// <returns>An empty asynchronous sequence.</returns>
     /// <remarks>
-    /// This method is used internally to provide an empty async enumerable when no data is available,
-    /// avoiding null checks for asynchronous iteration.
+    /// Stands in for the stream when the handler never produced one, so the enumeration
+    /// below needs no null check.
     /// </remarks>
-    #pragma warning disable CS1998 
+    #pragma warning disable CS1998
     private static async IAsyncEnumerable<T> Empty<T>()
-    #pragma warning restore 
+    #pragma warning restore
     {
         yield break;
     }

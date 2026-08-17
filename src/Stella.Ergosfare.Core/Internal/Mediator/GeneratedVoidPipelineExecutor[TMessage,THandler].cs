@@ -7,16 +7,26 @@ using Stella.Ergosfare.Core.Internal.Factories;
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 /// <summary>
-/// Void pipeline closed over both the message and its compile-time-known sole handler —
-/// the executor a generated void plan constructs. The fast path resolves the handler
-/// reference exactly like <see cref="FrozenVoidDispatch{TMessage}"/> but invokes it
-/// through the closed <typeparamref name="THandler"/> type, so the call devirtualizes
-/// (and inlines for sealed handlers) instead of walking the contract pattern match. The
-/// plan is advisory: the dependency cache validates the pipeline on the first dispatch,
-/// and any mismatch — a differently-typed handler instance, configured adapters — falls
-/// back to the runtime dispatch shape, preserving semantics exactly. The validated shape
-/// is frozen; a registration after the first dispatch is not observed.
+/// The void pipeline a single-handler plan produces: closed over the message and the one
+/// handler the plan named, so the handler is called through its own type rather than found
+/// by testing contracts.
 /// </summary>
+/// <typeparam name="TMessage">The message type this pipeline serves.</typeparam>
+/// <typeparam name="THandler">The handler the plan named.</typeparam>
+/// <param name="dependenciesFactory">The factory participants are resolved through.</param>
+/// <param name="directHandlerFactory">
+/// Constructs the handler without the container, when the plan carries a way to.
+/// </param>
+/// <param name="providerHandlerFactory">
+/// Constructs the handler with its dependencies resolved from a provider, when the plan
+/// carries a way to.
+/// </param>
+/// <remarks>
+/// The plan is a proposal: the first dispatch checks it against the participants this
+/// container actually resolved, and anything unexpected — a different handler, a bound
+/// adapter — falls back to the general pipeline with identical behavior. What that first
+/// dispatch settles is kept; a registration made afterwards is not noticed.
+/// </remarks>
 internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
     IMessageDependenciesFactory dependenciesFactory,
     Func<THandler>? directHandlerFactory = null,
@@ -26,24 +36,23 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
 {
 
     /// <summary>
-    /// The grouped compositions of this pipeline. The plan names one handler as the whole
-    /// pipeline; a filter may exclude that handler or admit another, so a filtered
-    /// dispatch selects its own frozen composition and runs the runtime body.
+    /// This pipeline's participants per group set. The plan describes the unfiltered
+    /// pipeline only — groups may exclude its handler or bring in another — so a filtered
+    /// dispatch resolves its own participants and runs the general body.
     /// </summary>
     private readonly GroupedCompositions _grouped = new(dependenciesFactory, typeof(TMessage));
 
-    // The effective adapter of the pipeline's Unit slot — the attribute tiers plus the
-    // container's default, resolved once on the first dispatch, so the fast paths below
-    // pay nothing when (as almost always) there is none.
+    // The adapter bound to this pipeline's Unit slot, resolved on the first dispatch so the
+    // routes below cost nothing when there is none, which is nearly always.
     private IResultAdapter<Unit>? _resultAdapter;
     private IResultMaterializer<Unit>? _resultMaterializer;
     private volatile bool _resultAdapterResolved;
 
-    // Compile-time construction paths for the planned handler; discarded up front for
-    // disposable handlers — the container tracks transient disposables in the resolving
-    // scope, direct construction would not. The provider-taking shape covers handlers
-    // with constructor dependencies: it resolves them from the dispatching scope's
-    // provider, exactly where container activation would resolve them.
+    // A disposable handler is never constructed here: the container tracks transient
+    // disposables in the scope that resolved them, and constructing one directly would
+    // leave nothing to dispose it. The provider-taking form covers handlers with
+    // constructor dependencies, resolving those from the dispatching scope exactly as
+    // container activation would.
     private static readonly bool HandlerIsDisposable =
         typeof(IDisposable).IsAssignableFrom(typeof(THandler)) || typeof(IAsyncDisposable).IsAssignableFrom(typeof(THandler));
 
@@ -53,17 +62,18 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
     private IMessageDependencies? _cachedDependencies;
     private MessageDependencies? _cachedFastDependencies;
 
-    // Re-validated with the dependency cache: true only while the registry's sole handler
-    // is the planned type, instances are not memoized, and the handler's effective DI
-    // registration is the module's own plain transient one — the exact conditions under
-    // which GetRequiredService is observably nothing but a constructor call.
+    // Whether the handler may be constructed here instead of resolved: true only while the
+    // pipeline's sole handler is the planned type, instances are not memoized, and the
+    // handler's registration is the module's own plain transient one — the conditions under
+    // which resolving is observably just a constructor call.
     private bool _useDirectConstruction;
 
-    // True once the first dispatch has validated the entire fast lane — planned handler
-    // type, direct construction, no adapters. From then on the planned handler is
-    // constructed and invoked without touching dependencies at all.
+    // Whether the whole short route is available — planned handler, direct construction, no
+    // adapter — settled by the first dispatch. From then on the handler is constructed and
+    // called without the participants being consulted at all.
     private bool _fastDirect;
 
+    /// <inheritdoc />
     public ValueTask Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider,
         IEnumerable<string>? groups)
     {
@@ -85,20 +95,18 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
         if (_cachedFastDependencies?.FastSingleHandler is { } handlerReference
             && _resultAdapter is null)
         {
-            // The handler-type re-check pins the racy flag to the reference actually in
-            // hand: a version transition observed halfway can only route back through the
-            // container, never construct a type the registry no longer plans.
+            // Re-checking the handler type ties the decision to the reference actually in
+            // hand, so this can only ever fall back to the container — never construct a
+            // type the pipeline no longer names.
             IHandler handler = _useDirectConstruction && handlerReference.HandlerType == typeof(THandler)
                 ? _directHandlerFactory is not null ? _directHandlerFactory() : _providerHandlerFactory!(serviceProvider)
                 : handlerReference.Resolve(serviceProvider);
 
-            // The compile-time plan's handler type: a devirtualized call, no pattern
-            // match. A runtime re-registration can put a differently-typed handler here;
-            // the contract switch below then dispatches it exactly as the runtime
-            // executor would.
-            // The strategy is skipped here, and with it its abort handling. That arm lives
-            // in the engine's dispatch frame — an exception-handling region here would keep
-            // Execute out of its caller on every dispatch; see MessageDispatchEngine.
+            // The planned type: a direct call, with no contract testing. If something else
+            // is in hand, the switch below calls it exactly as the general pipeline would.
+            // Abort handling is absent on purpose — the engine's frame owns it, and an
+            // exception-handling region here would stop this method being inlined into its
+            // caller on every dispatch.
             if (handler is THandler planned)
             {
                 return planned.HandleAsync((TMessage)message, context);
@@ -121,10 +129,16 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
     }
 
     /// <summary>
-    /// The group-filtered dispatch: the composition the filter selects, delivered by the
-    /// runtime lane — the plan named one handler for the unfiltered pipeline and has
-    /// nothing to say about a filtered one.
+    /// Runs a dispatch that named groups, over the participants those groups select.
     /// </summary>
+    /// <param name="message">The message to dispatch.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <param name="serviceProvider">The provider participants are resolved from.</param>
+    /// <param name="groups">The groups the dispatch asked for.</param>
+    /// <returns>A task that completes when the pipeline has run.</returns>
+    /// <remarks>
+    /// The plan has nothing to say here, since it describes the unfiltered pipeline.
+    /// </remarks>
     private ValueTask ExecuteGrouped(object message, ErgosfareContext context, IServiceProvider serviceProvider,
         IEnumerable<string> groups)
     {
@@ -152,10 +166,7 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
             (TMessage)message, composition.Dependencies, _resultAdapter, _resultMaterializer, context, serviceProvider);
     }
 
-    /// <summary>
-    /// Resolves the slot's effective adapter once; see
-    /// <see cref="FrozenVoidDispatch{TMessage}.EnsureResultAdapter"/>.
-    /// </summary>
+    /// <inheritdoc cref="FrozenVoidDispatch{TMessage}.EnsureResultAdapter"/>
     private void EnsureResultAdapter(IServiceProvider serviceProvider)
     {
         if (_resultAdapterResolved)
@@ -165,19 +176,24 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
 
         var adapter = ResultAdapterBinding.For<TMessage, Unit>(serviceProvider);
         _resultAdapter = adapter;
-        // The materializer facet is optional and consumer-supplied: no adapter in this
-        // repository implements both, which is exactly what the probe is for.
+        // Whether an adapter can also build a failed result is up to whoever wrote it; none
+        // in this repository does, which is what the test is for.
         // ReSharper disable once SuspiciousTypeConversion.Global
         _resultMaterializer = adapter as IResultMaterializer<Unit>;
         _resultAdapterResolved = true;
     }
 
+    /// <summary>
+    /// Returns this pipeline's participants, resolving and settling the plan's conditions on
+    /// the first call.
+    /// </summary>
+    /// <returns>The participants for the ungrouped pipeline.</returns>
     private IMessageDependencies GetDependencies()
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
-            // Frozen registry: dependencies resolve once per executor and are never
-            // re-validated — a registration after the first dispatch is not observed.
+            // Resolved once and kept: a registration made after the first dispatch is not
+            // noticed.
             var cached = _cachedDependencies;
 
             if (cached is not null)
@@ -193,8 +209,8 @@ internal sealed class GeneratedVoidPipelineExecutor<TMessage, THandler>(
                 && fastDependencies is { MemoizedInstances: false, FastSingleHandler.HandlerType: var plannedType }
                 && plannedType == typeof(THandler)
                 && typedFactory.IsPlainTransientRegistration(typeof(THandler));
-            // Execute resolves the adapter slot before the first GetDependencies call, so
-            // the answer is already in hand here.
+            // Execute binds the adapter before it first calls this, so that answer is
+            // already available here.
             _fastDirect = _useDirectConstruction && _resultAdapter is null;
             return dependencies;
         }

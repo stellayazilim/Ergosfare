@@ -1,11 +1,15 @@
 namespace Stella.Ergosfare.Core.Abstractions.Results;
 
 /// <summary>
-/// The framework's default value-carried outcome: a successful <typeparamref name="TValue"/>,
-/// or a failure wrapping the <see cref="Exception"/> that describes it — without throwing.
-/// See <see cref="Result"/> for the zero-allocation rationale.
+/// The outcome of a pipeline that produces a <typeparamref name="TValue"/>: either that
+/// value, or a failure carrying the <see cref="Exception"/> that describes it.
 /// </summary>
-/// <typeparam name="TValue">The successful payload type.</typeparam>
+/// <typeparam name="TValue">The payload type of a successful outcome.</typeparam>
+/// <remarks>
+/// The payload counterpart of <see cref="Result"/>, with the same properties: failures are
+/// carried as data rather than thrown, neither outcome allocates, and the framework reads
+/// the carrier without any registration.
+/// </remarks>
 public readonly record struct Result<TValue> : INativeAdapterCarrier
 {
     private readonly TValue? _value;
@@ -16,52 +20,81 @@ public readonly record struct Result<TValue> : INativeAdapterCarrier
         Exception = exception;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// The adapter that reads this carrier, named by the carrier itself.
+    /// </summary>
     object INativeAdapterCarrier.NativeAdapter => ResultExceptionAdapter<TValue>.Instance;
 
-    /// <summary>The carried failure, or <c>null</c> on success.</summary>
+    /// <summary>
+    /// The carried failure, or <c>null</c> on success.
+    /// </summary>
     public Exception? Exception { get; }
 
-    /// <summary>Whether the outcome is a success.</summary>
+    /// <summary>
+    /// Whether this outcome is a success.
+    /// </summary>
     public bool IsSuccess => Exception is null;
 
     /// <summary>
-    /// The successful payload. Throws <see cref="InvalidOperationException"/> when the
-    /// outcome is a failure — read <see cref="Exception"/> or use
-    /// <see cref="TryGetValue"/>/<see cref="GetValueOrDefault"/> on paths where failure is
-    /// possible.
+    /// The payload of a successful outcome.
     /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// The outcome is a failure. Use <see cref="TryGetValue"/> or
+    /// <see cref="GetValueOrDefault"/> where failure is possible.
+    /// </exception>
     public TValue Value
         => Exception is null
             ? _value!
             : throw new InvalidOperationException(
                 $"The result is a failure ({Exception.GetType().Name}); it carries no value.");
 
-    /// <summary>The successful payload, or <c>default</c> on failure. Never throws.</summary>
+    /// <summary>
+    /// Returns the payload, or the default of <typeparamref name="TValue"/> on failure.
+    /// </summary>
+    /// <returns>The payload, or its default.</returns>
     public TValue? GetValueOrDefault() => _value;
 
-    /// <summary>Pattern-friendly access: <c>true</c> with the payload on success.</summary>
+    /// <summary>
+    /// Reads the payload when this outcome is a success.
+    /// </summary>
+    /// <param name="value">
+    /// The payload when this method returns <c>true</c>; otherwise the default of
+    /// <typeparamref name="TValue"/>.
+    /// </param>
+    /// <returns><c>true</c> when the outcome is a success.</returns>
     public bool TryGetValue(out TValue value)
     {
         value = _value!;
         return Exception is null;
     }
 
-    /// <summary>A successful outcome carrying <paramref name="value"/>. Allocation-free.</summary>
+    /// <summary>
+    /// Returns a successful outcome carrying <paramref name="value"/>.
+    /// </summary>
+    /// <param name="value">The payload.</param>
+    /// <returns>The successful outcome.</returns>
     public static Result<TValue> Ok(TValue value) => new(value, null);
 
     /// <summary>
-    /// A failed outcome carrying <paramref name="exception"/> — without throwing it, so no
-    /// stack trace is captured and no unwind runs.
+    /// Returns a failed outcome carrying <paramref name="exception"/>, without throwing it.
     /// </summary>
-    /// <param name="exception">The failure to carry. Must not be null.</param>
+    /// <param name="exception">The failure to carry. Cannot be <c>null</c>.</param>
+    /// <returns>The failed outcome.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="exception"/> is <c>null</c>.</exception>
     public static Result<TValue> Fail(Exception exception)
         => new(default, exception ?? throw new ArgumentNullException(nameof(exception)));
 
-    /// <summary>Success values convert implicitly, keeping handler returns terse.</summary>
+    /// <summary>
+    /// Converts a payload into a successful outcome, so a handler can return the value
+    /// directly.
+    /// </summary>
+    /// <param name="value">The payload.</param>
     public static implicit operator Result<TValue>(TValue value) => Ok(value);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Returns <c>Ok</c> with the payload, or <c>Fail</c> with the carried exception's type
+    /// name.
+    /// </summary>
     public override string ToString()
         => Exception is null ? $"Ok({_value})" : $"Fail({Exception.GetType().Name})";
 }

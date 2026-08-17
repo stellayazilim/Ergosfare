@@ -4,29 +4,29 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 
 
 /// <summary>
-/// Executes the pre-merged pre-interceptor list (direct first, then indirect) for a message,
-/// dispatching every interceptor through its typed contract — asynchronous interceptors via
-/// <see cref="IAsyncPreInterceptor{TMessage}"/>, synchronous ones via
-/// <see cref="IPreInterceptor{TMessage}"/>. There is no object-typed bridge and no boxed
-/// awaitable: `in TMessage` variance admits interceptors registered for base message types.
-/// Static: the pipeline state travels as arguments, so a dispatch allocates no invoker object.
+/// Runs a message's pre-interceptor stage, threading the message through each interceptor
+/// in turn.
 /// </summary>
-/// <typeparam name="TMessage">The dispatch message type (the runtime type on executor paths).</typeparam>
+/// <typeparam name="TMessage">
+/// The message type the stage dispatches as; on executor paths this is the message's
+/// runtime type.
+/// </typeparam>
 internal static class PreInterceptorInvocationStrategy<TMessage>
     where TMessage : notnull
 {
     /// <summary>
-    /// Executes all pre-interceptors for the specified message.
+    /// Runs every pre-interceptor of the message, passing each the message the previous one
+    /// returned.
     /// </summary>
-    /// <param name="messageDependencies">The message's pipeline composition, supplying the pre-interceptor list.</param>
-    /// <param name="serviceProvider">The provider of the scope this dispatch runs in; interceptors resolve from it.</param>
-    /// <param name="message">The message being processed.</param>
-    /// <param name="executionContext">The execution context for the current pipeline invocation.</param>
-    /// <returns>
-    /// The transformed message after all pre-interceptors have executed. Interceptors return
-    /// the message as <see cref="object"/>; each subsequent interceptor receives it cast back
-    /// to <typeparamref name="TMessage"/>.
-    /// </returns>
+    /// <param name="messageDependencies">The message's participants; supplies the stage list.</param>
+    /// <param name="serviceProvider">The provider interceptors are resolved from.</param>
+    /// <param name="message">The message as it enters the stage.</param>
+    /// <param name="executionContext">The execution context of this dispatch.</param>
+    /// <returns>The message the stage produced, for the main handler to receive.</returns>
+    /// <exception cref="NotSupportedException">
+    /// An interceptor in the list implements no pre-interceptor contract for
+    /// <typeparamref name="TMessage"/>.
+    /// </exception>
     public static async ValueTask<object> Invoke(
         IMessageDependencies messageDependencies,
         IServiceProvider serviceProvider,
@@ -41,6 +41,9 @@ internal static class PreInterceptorInvocationStrategy<TMessage>
         {
             var interceptor = interceptors[i].Resolve(serviceProvider);
 
+            // The asynchronous contract is tested first, so an interceptor implementing
+            // both is dispatched as asynchronous. The cast of `current` is what requires
+            // each interceptor to return a TMessage.
             current = interceptor switch
             {
                 IAsyncPreInterceptor<TMessage> asyncInterceptor =>

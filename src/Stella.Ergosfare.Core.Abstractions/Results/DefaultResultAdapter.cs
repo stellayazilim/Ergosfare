@@ -4,43 +4,47 @@ using System.Diagnostics.CodeAnalysis;
 namespace Stella.Ergosfare.Core.Abstractions.Results;
 
 /// <summary>
-/// The application-wide fallback adapter, configured once inside <c>AddErgosfare</c> and
-/// registered into the container as a normal singleton service. A result slot that binds
-/// nothing more specific — no <see cref="Attributes.ResultAdapterAttribute"/> on the
-/// message, not a native <see cref="Result"/>/<see cref="Result{TValue}"/> carrier —
-/// falls back to this adapter when it can serve the slot; a slot it cannot serve keeps
-/// the classic try/catch semantics. Nobody is forced onto the value channel: with no
-/// default configured and no annotation, pipelines behave exactly as before.
+/// The adapter an application falls back to for result types that bind nothing more
+/// specific. Configured once in <c>AddErgosfare</c> and registered as a container
+/// singleton.
 /// </summary>
 /// <remarks>
-/// The adapter type may be a closed type implementing <see cref="IResultAdapter{TResult}"/>
-/// for one or more carrier types, or an open generic definition (e.g. an adapter for a
-/// foreign <c>Result&lt;T&gt;</c> family): the slot's result type is unified against the
-/// definition's <see cref="IResultAdapter{TResult}"/> implementations and the definition
-/// is closed accordingly. One instance is created per served result type and cached for
-/// the container's lifetime, so resolution runs once per slot. Adapters are expected to
-/// be stateless; a public parameterless constructor is required.
+/// <para>
+/// It applies only where nothing else does: after the message's own
+/// <see cref="Attributes.ResultAdapterAttribute"/> and after the built-in
+/// <see cref="Result"/> and <see cref="Result{TValue}"/> carriers. A result type it cannot
+/// serve keeps the default behavior — failures are thrown rather than returned — and with
+/// no default configured, nothing changes for any pipeline.
+/// </para>
+/// <para>
+/// The configured type may be closed, implementing <see cref="IResultAdapter{TResult}"/>
+/// for one or more result types, or an open generic definition covering a family of them;
+/// an open definition is closed by matching a result type against its
+/// <see cref="IResultAdapter{TResult}"/> implementations. One instance is created per
+/// result type served and kept for the container's lifetime. Adapters must be concrete,
+/// have a public parameterless constructor, and are expected to hold no state.
+/// </para>
 /// </remarks>
 [Experimental(ExperimentalIds.ResultAdapterSurface)]
 public sealed class DefaultResultAdapter
 {
     private readonly ConcurrentDictionary<Type, object?> _closedAdapters = new();
 
-    /// <summary>The configured adapter type — closed, or an open generic definition.</summary>
-    /// <remarks>
-    /// The annotations carry through from the constructor's parameter: closing an open
-    /// generic definition over a result slot walks the type's interfaces, and activating
-    /// the closed adapter needs its parameterless constructor.
-    /// </remarks>
+    /// <summary>
+    /// The configured adapter type: closed, or an open generic definition.
+    /// </summary>
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)]
     public Type AdapterType { get; }
 
-    /// <summary>Wraps and validates the configured adapter type.</summary>
-    /// <param name="adapterType">The adapter type; closed or an open generic definition.</param>
-    /// <exception cref="ArgumentNullException"><paramref name="adapterType"/> is null.</exception>
+    /// <summary>
+    /// Validates <paramref name="adapterType"/> and takes it as the application's fallback
+    /// adapter.
+    /// </summary>
+    /// <param name="adapterType">The adapter type: closed, or an open generic definition.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="adapterType"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">
     /// The type implements no <see cref="IResultAdapter{TResult}"/> contract, is abstract,
-    /// or lacks a public parameterless constructor.
+    /// or has no public parameterless constructor.
     /// </exception>
     public DefaultResultAdapter(
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.Interfaces)]
@@ -80,12 +84,20 @@ public sealed class DefaultResultAdapter
     }
 
     /// <summary>
-    /// The adapter serving the given result slot, or <c>null</c> when the configured type
-    /// cannot serve it — resolved once per slot and cached.
+    /// Returns the adapter for <typeparamref name="TResult"/>, or <c>null</c> when the
+    /// configured type cannot serve it. Resolved once per result type and cached.
     /// </summary>
+    /// <typeparam name="TResult">The result type to serve.</typeparam>
+    /// <returns>The adapter, or <c>null</c>.</returns>
     public IResultAdapter<TResult>? For<TResult>()
         => (IResultAdapter<TResult>?)_closedAdapters.GetOrAdd(typeof(TResult), static (resultType, self) => self.Close(resultType), this);
 
+    /// <summary>
+    /// Builds the adapter instance serving <paramref name="resultType"/>, or returns
+    /// <c>null</c> when the configured type cannot serve it.
+    /// </summary>
+    /// <param name="resultType">The result type to serve.</param>
+    /// <returns>The adapter instance, or <c>null</c>.</returns>
     [UnconditionalSuppressMessage("Trimming", "IL2055",
         Justification = "The definition is closed over a live pipeline's result payload type; the pipeline roots it.")]
     [UnconditionalSuppressMessage("Trimming", "IL2072",
@@ -122,8 +134,8 @@ public sealed class DefaultResultAdapter
             }
             catch (ArgumentException)
             {
-                // A generic constraint rejected the closing — this implementation cannot
-                // serve the slot; another of the definition's contracts still might.
+                // A generic constraint refused the closing. This implementation cannot serve
+                // the result type, but another of the definition's contracts still might.
             }
         }
 
@@ -131,10 +143,19 @@ public sealed class DefaultResultAdapter
     }
 
     /// <summary>
-    /// Unifies the definition's declared carrier pattern with a concrete result type,
-    /// binding the definition's type parameters by position. Structural and one adapter
-    /// parameter per position: a parameter bound twice must bind identically.
+    /// Matches the result type an adapter implementation declares against a concrete result
+    /// type, binding the definition's type parameters by position.
     /// </summary>
+    /// <param name="pattern">The declared result type, which may contain type parameters.</param>
+    /// <param name="concrete">The concrete result type to match against.</param>
+    /// <param name="arguments">
+    /// The bindings collected so far, indexed by parameter position; filled in as the match
+    /// proceeds.
+    /// </param>
+    /// <returns>
+    /// <c>true</c> when the two match. A parameter appearing more than once must bind to
+    /// the same type each time.
+    /// </returns>
     private static bool TryUnify(Type pattern, Type concrete, Type?[] arguments)
     {
         if (pattern.IsGenericParameter)

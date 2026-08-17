@@ -6,33 +6,39 @@ using Microsoft.CodeAnalysis.CSharp;
 namespace Stella.Ergosfare.SourceGenerator.Symbols;
 
 /// <summary>
-///     Everything the Ergosfare attributes say about a participant: its weight, its groups,
-///     its discovery keys, and the two exclusions. Read once per type into the model, so the
-///     rest of the generator never touches an <c>AttributeData</c> again.
+/// Reads what the Ergosfare attributes say about a type: its weight, its groups, its
+/// discovery keys, and the two exclusions.
 /// </summary>
-
+/// <remarks>
+/// Read once per type into its model, so nothing downstream touches an
+/// <see cref="AttributeData"/> again.
+/// </remarks>
 internal static class ParticipantAttributes
 {
     /// <summary>
-    ///     Binds the compilation's default adapter to a result slot: a closed adapter by
-    ///     exact slot fit, an open definition by unifying the slot against its declared
-    ///     carrier patterns and closing over the bound arguments — the compile-time
-    ///     mirror of the runtime <c>DefaultResultAdapter</c>'s closing.
+    /// Reports whether a type opts out of discovery.
     /// </summary>
-    /// <summary>
-    ///     Whether the type — or its containing assembly — opts out of discovery via
-    ///     <c>[ExcludeFromDiscovery]</c>. Excluded types produce no registration and no
-    ///     diagnostics: the exclusion is deliberate, unlike an inaccessible type.
-    /// </summary>
+    /// <param name="symbol">The type to test.</param>
+    /// <returns>
+    /// <c>true</c> when the type or its assembly declares <c>[ExcludeFromDiscovery]</c>.
+    /// </returns>
+    /// <remarks>
+    /// An excluded type produces no registration and no diagnostic: unlike an inaccessible
+    /// one, its absence is what the author asked for.
+    /// </remarks>
     internal static bool IsExcludedFromDiscovery(INamedTypeSymbol symbol)
         => HasExcludeFromDiscovery(symbol.GetAttributes())
            || HasExcludeFromDiscovery(symbol.ContainingAssembly.GetAttributes());
 
     /// <summary>
-    ///     Whether the type declares <c>[ExcludeFromPipeline]</c>. The attribute shapes the
-    ///     indirect interceptor stages at runtime; staged plans conservatively skip such
-    ///     messages instead of modeling the exclusion.
+    /// Reports whether a type declares <c>[ExcludeFromPipeline]</c>.
     /// </summary>
+    /// <param name="symbol">The type to test.</param>
+    /// <returns><c>true</c> when the attribute is declared on the type itself.</returns>
+    /// <remarks>
+    /// The attribute narrows which covariantly matched interceptors reach the message. A
+    /// message carrying it gets no staged plan and keeps the general path.
+    /// </remarks>
     internal static bool HasPipelineExclusionAttribute(INamedTypeSymbol symbol)
     {
         foreach (var attribute in symbol.GetAttributes())
@@ -48,10 +54,17 @@ internal static class ParticipantAttributes
     }
 
     /// <summary>
-    ///     The group names a type's <c>[ExcludeFromPipeline]</c> names, or empty for the
-    ///     parameterless (blanket) form and for types without the attribute. Mirrors
-    ///     <c>MessageDescriptor</c>, which reads the attribute non-inherited.
+    /// Reads the groups a type's <c>[ExcludeFromPipeline]</c> names.
     /// </summary>
+    /// <param name="symbol">The type to read.</param>
+    /// <returns>
+    /// The named groups; empty both for the parameterless form, which excludes every group,
+    /// and for a type without the attribute.
+    /// </returns>
+    /// <remarks>
+    /// Only the type's own declaration is read, never a base type's — the same reach
+    /// <c>MessageDescriptor</c> gives the attribute.
+    /// </remarks>
     internal static ImmutableArray<string> GetPipelineExclusionGroups(INamedTypeSymbol symbol)
     {
         foreach (var attribute in symbol.GetAttributes())
@@ -87,10 +100,16 @@ internal static class ParticipantAttributes
     }
 
     /// <summary>
-    ///     The normalized type expressions of every base type and implemented interface —
-    ///     the compile-time domain of the runtime's <c>IsAssignableTo</c> checks that admit
-    ///     indirect (covariantly registered) interceptors into a message's pipeline.
+    /// Collects every type a message is assignable to.
     /// </summary>
+    /// <param name="symbol">The message to read.</param>
+    /// <returns>
+    /// The normalized expressions of its base types and implemented interfaces.
+    /// </returns>
+    /// <remarks>
+    /// This is the compile-time domain of the runtime's assignability check — the one that
+    /// admits covariantly registered interceptors into a message's pipeline.
+    /// </remarks>
     internal static ImmutableArray<string> GetAssignableKeys(INamedTypeSymbol symbol)
     {
         var keys = ImmutableArray.CreateBuilder<string>();
@@ -108,6 +127,11 @@ internal static class ParticipantAttributes
         return keys.ToImmutable();
     }
 
+    /// <summary>
+    /// Reports whether a list of attributes contains <c>[ExcludeFromDiscovery]</c>.
+    /// </summary>
+    /// <param name="attributes">The attributes to search.</param>
+    /// <returns><c>true</c> when the attribute is among them.</returns>
     internal static bool HasExcludeFromDiscovery(ImmutableArray<AttributeData> attributes)
     {
         foreach (var attribute in attributes)
@@ -123,10 +147,17 @@ internal static class ParticipantAttributes
     }
 
     /// <summary>
-    ///     The type's effective discovery keys: its own <c>[DiscoveryKey]</c> keys when
-    ///     declared, else its assembly's. Empty means default discovery (the implicit
-    ///     empty-string key) — mirroring the runtime <c>Discovery</c> helper.
+    /// Reads the discovery keys a type is registered under.
     /// </summary>
+    /// <param name="symbol">The type to read.</param>
+    /// <returns>
+    /// Its own <c>[DiscoveryKey]</c> keys when it declares any, otherwise its assembly's;
+    /// empty means default discovery.
+    /// </returns>
+    /// <remarks>
+    /// The same precedence the runtime <c>Discovery</c> helper applies: a type's own keys
+    /// replace its assembly's rather than adding to them.
+    /// </remarks>
     internal static ImmutableArray<string> GetDiscoveryKeys(INamedTypeSymbol symbol)
     {
         var keys = GetDeclaredDiscoveryKeys(symbol.GetAttributes());
@@ -134,6 +165,11 @@ internal static class ParticipantAttributes
         return keys.IsEmpty ? GetDeclaredDiscoveryKeys(symbol.ContainingAssembly.GetAttributes()) : keys;
     }
 
+    /// <summary>
+    /// Reads the keys a <c>[DiscoveryKey]</c> among these attributes names.
+    /// </summary>
+    /// <param name="attributes">The attributes to search.</param>
+    /// <returns>The declared keys, or empty when none are declared.</returns>
     internal static ImmutableArray<string> GetDeclaredDiscoveryKeys(ImmutableArray<AttributeData> attributes)
     {
         foreach (var attribute in attributes)
@@ -169,11 +205,17 @@ internal static class ParticipantAttributes
     }
 
     /// <summary>
-    ///     Determines which module markers (<c>ICommand</c>, <c>IQuery</c>, <c>IEvent</c>)
-    ///     the type is assignable to. Handlers and interceptors inherit the marker through
-    ///     their contract interfaces, so a single check covers messages, handlers and
-    ///     interceptors alike.
+    /// Determines which module markers a type reaches.
     /// </summary>
+    /// <param name="symbol">The type to test.</param>
+    /// <param name="isCommand">Set when it reaches <c>ICommand</c>.</param>
+    /// <param name="isQuery">Set when it reaches <c>IQuery</c>.</param>
+    /// <param name="isEvent">Set when it reaches <c>IEvent</c>.</param>
+    /// <remarks>
+    /// One test covers messages, handlers and interceptors alike: a message declares a marker
+    /// itself, and a participant inherits one through the contract it implements. A type can
+    /// reach several markers.
+    /// </remarks>
     internal static void GetMarkers(INamedTypeSymbol symbol, out bool isCommand, out bool isQuery, out bool isEvent)
     {
         isCommand = false;
@@ -202,7 +244,11 @@ internal static class ParticipantAttributes
         }
     }
 
-    /// <summary>Reads the <c>[Weight]</c> attribute value, or 0 when undeclared.</summary>
+    /// <summary>
+    /// Reads a type's <c>[Weight]</c>.
+    /// </summary>
+    /// <param name="symbol">The type to read.</param>
+    /// <returns>The declared weight, or <c>0</c> when it declares none.</returns>
     internal static uint GetWeight(INamedTypeSymbol symbol)
     {
         foreach (var attribute in symbol.GetAttributes())
@@ -220,9 +266,14 @@ internal static class ParticipantAttributes
     }
 
     /// <summary>
-    ///     The declared <c>[Group]</c> names, empty when the type declares none; the name
-    ///     source behind <see cref="GetGroupsExpression"/>.
+    /// Reads the groups a type's <c>[Group]</c> names.
     /// </summary>
+    /// <param name="symbol">The type to read.</param>
+    /// <returns>The declared names, or empty when it declares none.</returns>
+    /// <remarks>
+    /// The names behind <see cref="GetGroupsExpression"/>, kept readable for the decisions
+    /// planning makes about group membership.
+    /// </remarks>
     internal static ImmutableArray<string> GetGroupNames(INamedTypeSymbol symbol)
     {
         foreach (var attribute in symbol.GetAttributes())
@@ -258,10 +309,13 @@ internal static class ParticipantAttributes
     }
 
     /// <summary>
-    ///     Builds the emitted C# array expression for the <c>[Group]</c> names, or
-    ///     <c>null</c> when the type declares none (the descriptor factory then applies the
-    ///     default group, matching the reflection path).
+    /// Writes a type's <c>[Group]</c> names as the array expression the registration emits.
     /// </summary>
+    /// <param name="symbol">The type to read.</param>
+    /// <returns>
+    /// The array expression, or <c>null</c> when the type declares no groups — the descriptor
+    /// then applies the default group, as it does on the reflection path.
+    /// </returns>
     internal static string? GetGroupsExpression(INamedTypeSymbol symbol)
     {
         foreach (var attribute in symbol.GetAttributes())

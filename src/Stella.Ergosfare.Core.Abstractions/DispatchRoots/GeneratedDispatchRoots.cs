@@ -6,15 +6,17 @@ using Stella.Ergosfare.Core.Abstractions.StagedPlans;
 namespace Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 
 /// <summary>
-/// Process-wide store of generically instantiated dispatch roots, populated by
-/// source-generated registration code. Each root closes a dispatch generic over a concrete
-/// message (and result) type at compile time, letting the dispatch caches construct their
-/// pipeline executors and invokers without <see cref="Type.MakeGenericType"/> — and giving
-/// Native AOT and trimming a static anchor for every instantiation, value-type messages
-/// and results included, which shared generic code cannot cover. The reflective
-/// <c>MakeGenericType</c> paths remain as the fallback for types without a root (open
-/// generics, runtime-only registrations).
+/// The process-wide store of everything the source generator compiled for dispatch:
+/// generic instantiations closed over concrete message and result types, pipeline plans,
+/// and message compositions. Generated registration code fills it as assemblies load.
 /// </summary>
+/// <remarks>
+/// A generated root lets the dispatch caches build their executors without
+/// <see cref="Type.MakeGenericType"/>, and gives trimming and Native AOT a static anchor
+/// for every instantiation — including ones over value types, which shared generic code
+/// cannot cover. Types without a root, such as open generics and runtime-only
+/// registrations, fall back to reflective construction.
+/// </remarks>
 public static class GeneratedDispatchRoots
 {
     private static readonly ConcurrentDictionary<Type, MessageRoot> Messages = new();
@@ -26,237 +28,372 @@ public static class GeneratedDispatchRoots
     private static readonly ConcurrentDictionary<(Type MessageType, string Groups), StagedBroadcastPlan> BroadcastPlans = new();
     private static readonly ConcurrentDictionary<(Type MessageType, Type ResultType, string Groups), StagedResultPlan> StagedResultPlans = new();
 
-    /// <summary>Roots the void dispatch generics of a message type. Idempotent.</summary>
+    /// <summary>
+    /// Roots the void dispatch generics of a message type. Repeated calls do nothing.
+    /// </summary>
+    /// <typeparam name="TMessage">The message type to root.</typeparam>
     public static void AddMessage<TMessage>() where TMessage : IMessage
         => Messages.TryAdd(typeof(TMessage), new MessageRoot<TMessage>());
 
-    /// <summary>Roots the result-producing dispatch generics of a message type. Idempotent.</summary>
+    /// <summary>
+    /// Roots the result-producing dispatch generics of a message type. Repeated calls do
+    /// nothing.
+    /// </summary>
+    /// <typeparam name="TMessage">The message type to root.</typeparam>
+    /// <typeparam name="TResult">The result type to root it with.</typeparam>
     public static void AddResult<TMessage, TResult>() where TMessage : IMessage
         => Results.TryAdd((typeof(TMessage), typeof(TResult)), new MessageResultRoot<TMessage, TResult>());
 
-    /// <summary>Roots the streaming dispatch generics of a message type. Idempotent.</summary>
+    /// <summary>
+    /// Roots the streaming dispatch generics of a message type. Repeated calls do nothing.
+    /// </summary>
+    /// <typeparam name="TMessage">The message type to root.</typeparam>
+    /// <typeparam name="TResult">The streamed item type.</typeparam>
     public static void AddStream<TMessage, TResult>() where TMessage : IMessage
         => Streams.TryAdd((typeof(TMessage), typeof(TResult)), new MessageResultRoot<TMessage, TResult>());
 
-    /// <summary>The void dispatch root of the message type, or <c>null</c> when none was generated.</summary>
+    /// <summary>
+    /// Returns the void dispatch root of <paramref name="messageType"/>, or <c>null</c>
+    /// when none was generated.
+    /// </summary>
+    /// <param name="messageType">The message type to look up.</param>
     public static MessageRoot? FindMessage(Type messageType)
         => Messages.TryGetValue(messageType, out var root) ? root : null;
 
-    /// <summary>The result dispatch root of the (message, result) pair, or <c>null</c> when none was generated.</summary>
+    /// <summary>
+    /// Returns the result dispatch root of the pair, or <c>null</c> when none was
+    /// generated.
+    /// </summary>
+    /// <param name="messageType">The message type to look up.</param>
+    /// <param name="resultType">The result type to look up.</param>
     public static MessageResultRoot? FindResult(Type messageType, Type resultType)
         => Results.TryGetValue((messageType, resultType), out var root) ? root : null;
 
-    /// <summary>The stream dispatch root of the (message, result) pair, or <c>null</c> when none was generated.</summary>
+    /// <summary>
+    /// Returns the stream dispatch root of the pair, or <c>null</c> when none was
+    /// generated.
+    /// </summary>
+    /// <param name="messageType">The query type to look up.</param>
+    /// <param name="resultType">The streamed item type to look up.</param>
     public static MessageResultRoot? FindStream(Type messageType, Type resultType)
         => Streams.TryGetValue((messageType, resultType), out var root) ? root : null;
 
     /// <summary>
-    /// Roots a compile-time pipeline plan for a void message whose entire pipeline is a
-    /// single async handler: the dispatch executor closes over both the message and the
-    /// handler type, so the handler is invoked devirtualized — no contract pattern match.
-    /// The plan is advisory: the executor validates it against the container's selected
-    /// frozen composition and falls back to the general dispatch shape whenever the
-    /// composition does not match. Idempotent.
+    /// Roots a plan for a void message whose whole pipeline is one asynchronous handler,
+    /// letting the executor invoke that handler directly. Repeated calls do nothing.
     /// </summary>
+    /// <typeparam name="TMessage">The message the plan serves.</typeparam>
+    /// <typeparam name="THandler">The handler the plan invokes.</typeparam>
+    /// <remarks>
+    /// The plan is a proposal, not an instruction: the executor checks it against the
+    /// composition this container actually selected and falls back to the general dispatch
+    /// path whenever the two differ.
+    /// </remarks>
     public static void AddVoidPlan<TMessage, THandler>()
         where TMessage : IMessage
         where THandler : class, IAsyncHandler<TMessage>
         => VoidPlans.TryAdd(typeof(TMessage), new VoidHandlerPlan<TMessage, THandler>());
 
     /// <summary>
-    /// Variant of <see cref="AddVoidPlan{TMessage, THandler}()"/> carrying a compile-time
-    /// construction path for the handler: the generator emits
-    /// <c>static () => new THandler()</c> for handlers with an accessible parameterless
-    /// constructor that are not disposable. The factory is advisory like the plan itself —
-    /// the executor uses it only after verifying at runtime that the handler's DI
-    /// registration is the module's own plain transient one (no user factory, no lifetime
-    /// override, not memoized), where container resolution and direct construction are
-    /// semantically identical. Idempotent.
+    /// Roots a void plan that also carries a way to construct the handler without asking
+    /// the container. Repeated calls do nothing.
     /// </summary>
+    /// <typeparam name="TMessage">The message the plan serves.</typeparam>
+    /// <typeparam name="THandler">The handler the plan invokes.</typeparam>
+    /// <param name="directHandlerFactory">Constructs the handler.</param>
+    /// <remarks>
+    /// Emitted for handlers that have an accessible parameterless constructor and are not
+    /// disposable. Like the plan itself the factory is a proposal: the executor uses it only
+    /// after confirming the handler's registration is the module's own plain transient one —
+    /// no user factory, no lifetime override, not memoized — where constructing and
+    /// resolving mean the same thing.
+    /// </remarks>
     public static void AddVoidPlan<TMessage, THandler>(Func<THandler> directHandlerFactory)
         where TMessage : IMessage
         where THandler : class, IAsyncHandler<TMessage>
         => VoidPlans.TryAdd(typeof(TMessage), new VoidHandlerPlan<TMessage, THandler>(directHandlerFactory));
 
     /// <summary>
-    /// Variant of <see cref="AddVoidPlan{TMessage, THandler}()"/> carrying a compile-time
-    /// construction path for handlers with constructor dependencies: the generator emits
-    /// <c>static provider =&gt; new THandler(provider.GetRequiredService&lt;TDep&gt;(), ...)</c>
-    /// for handlers whose single public constructor takes only plain (or
-    /// <c>[FromKeyedServices]</c>) service parameters — the one shape where the container's
-    /// own constructor selection and the emitted construction provably coincide. The same
-    /// advisory contract applies: the executor uses the factory only after verifying the
-    /// handler's DI registration is the module's own plain transient one, and the
-    /// dependencies resolve from the dispatching scope's provider exactly as container
-    /// activation would resolve them. Idempotent.
+    /// Roots a void plan carrying a construction path for a handler that takes constructor
+    /// dependencies. Repeated calls do nothing.
     /// </summary>
+    /// <typeparam name="TMessage">The message the plan serves.</typeparam>
+    /// <typeparam name="THandler">The handler the plan invokes.</typeparam>
+    /// <param name="directHandlerFactory">
+    /// Constructs the handler, resolving its dependencies from the dispatching scope's
+    /// provider.
+    /// </param>
+    /// <remarks>
+    /// Emitted only for handlers with a single public constructor taking plain or
+    /// <c>[FromKeyedServices]</c> service parameters — the shape where the container's own
+    /// constructor selection and this construction provably agree. The same conditions as
+    /// the parameterless overload apply before the executor uses it.
+    /// </remarks>
     public static void AddVoidPlan<TMessage, THandler>(Func<IServiceProvider, THandler> directHandlerFactory)
         where TMessage : IMessage
         where THandler : class, IAsyncHandler<TMessage>
         => VoidPlans.TryAdd(typeof(TMessage), new VoidHandlerPlan<TMessage, THandler>(directHandlerFactory));
 
-    /// <summary>The void pipeline plan of the message type, or <c>null</c> when none was generated.</summary>
+    /// <summary>
+    /// Returns the void pipeline plan of <paramref name="messageType"/>, or <c>null</c>
+    /// when none was generated.
+    /// </summary>
+    /// <param name="messageType">The message type to look up.</param>
     public static VoidHandlerPlan? FindVoidPlan(Type messageType)
         => VoidPlans.TryGetValue(messageType, out var root) ? root : null;
 
     /// <summary>
-    /// Result-producing counterpart of <see cref="AddVoidPlan{TMessage, THandler}()"/>:
-    /// roots a compile-time pipeline plan for a message whose entire pipeline is a single
-    /// async result handler, so the dispatch executor invokes it devirtualized. The plan
-    /// is advisory and validated against the container's selected frozen composition,
-    /// exactly like the void plan.
-    /// Idempotent.
+    /// Roots a plan for a message whose whole pipeline is one asynchronous result handler;
+    /// the result-producing counterpart of
+    /// <see cref="AddVoidPlan{TMessage, THandler}()"/>. Repeated calls do nothing.
     /// </summary>
+    /// <typeparam name="TMessage">The message the plan serves.</typeparam>
+    /// <typeparam name="TResult">The result the handler produces.</typeparam>
+    /// <typeparam name="THandler">The handler the plan invokes.</typeparam>
     public static void AddResultPlan<TMessage, TResult, THandler>()
         where TMessage : IMessage
         where THandler : class, IAsyncHandler<TMessage, TResult>
         => ResultPlans.TryAdd((typeof(TMessage), typeof(TResult)), new ResultHandlerPlan<TMessage, TResult, THandler>());
 
     /// <summary>
-    /// Variant of <see cref="AddResultPlan{TMessage, TResult, THandler}()"/> carrying the
-    /// compile-time handler construction path; see
-    /// <see cref="AddVoidPlan{TMessage, THandler}(Func{THandler})"/> for the contract.
-    /// Idempotent.
+    /// Roots a result plan that also carries a way to construct the handler; see
+    /// <see cref="AddVoidPlan{TMessage, THandler}(Func{THandler})"/> for when the factory
+    /// is used. Repeated calls do nothing.
     /// </summary>
+    /// <typeparam name="TMessage">The message the plan serves.</typeparam>
+    /// <typeparam name="TResult">The result the handler produces.</typeparam>
+    /// <typeparam name="THandler">The handler the plan invokes.</typeparam>
+    /// <param name="directHandlerFactory">Constructs the handler.</param>
     public static void AddResultPlan<TMessage, TResult, THandler>(Func<THandler> directHandlerFactory)
         where TMessage : IMessage
         where THandler : class, IAsyncHandler<TMessage, TResult>
         => ResultPlans.TryAdd((typeof(TMessage), typeof(TResult)), new ResultHandlerPlan<TMessage, TResult, THandler>(directHandlerFactory));
 
     /// <summary>
-    /// Variant of <see cref="AddResultPlan{TMessage, TResult, THandler}()"/> carrying the
-    /// compile-time construction path for handlers with constructor dependencies; see
+    /// Roots a result plan carrying a construction path for a handler with constructor
+    /// dependencies; see
     /// <see cref="AddVoidPlan{TMessage, THandler}(Func{IServiceProvider, THandler})"/> for
-    /// the contract. Idempotent.
+    /// the conditions. Repeated calls do nothing.
     /// </summary>
+    /// <typeparam name="TMessage">The message the plan serves.</typeparam>
+    /// <typeparam name="TResult">The result the handler produces.</typeparam>
+    /// <typeparam name="THandler">The handler the plan invokes.</typeparam>
+    /// <param name="directHandlerFactory">
+    /// Constructs the handler, resolving its dependencies from the dispatching scope's
+    /// provider.
+    /// </param>
     public static void AddResultPlan<TMessage, TResult, THandler>(Func<IServiceProvider, THandler> directHandlerFactory)
         where TMessage : IMessage
         where THandler : class, IAsyncHandler<TMessage, TResult>
         => ResultPlans.TryAdd((typeof(TMessage), typeof(TResult)), new ResultHandlerPlan<TMessage, TResult, THandler>(directHandlerFactory));
 
-    /// <summary>The result pipeline plan of the (message, result) pair, or <c>null</c> when none was generated.</summary>
+    /// <summary>
+    /// Returns the result pipeline plan of the pair, or <c>null</c> when none was
+    /// generated.
+    /// </summary>
+    /// <param name="messageType">The message type to look up.</param>
+    /// <param name="resultType">The result type to look up.</param>
     public static ResultHandlerPlan? FindResultPlan(Type messageType, Type resultType)
         => ResultPlans.TryGetValue((messageType, resultType), out var root) ? root : null;
 
     /// <summary>
-    /// Roots a staged pipeline plan for a void message whose pipeline carries interceptor
-    /// stages: bespoke straight-line code for the whole pipeline, replacing the runtime
-    /// strategy's generic machinery. Advisory exactly like the single-handler plans — the
-    /// hosting executor validates the plan's <see cref="StagedPlanKey"/> against
-    /// the container's selected frozen composition and falls back to the general strategy
-    /// on any mismatch.
-    /// Idempotent.
+    /// Roots a staged plan for a void message whose pipeline has interceptor stages: the
+    /// whole pipeline as straight-line generated code. Repeated calls do nothing.
     /// </summary>
+    /// <typeparam name="TMessage">The message the plan serves.</typeparam>
+    /// <param name="plan">The generated plan.</param>
+    /// <remarks>
+    /// A proposal like the single-handler plans: the executor checks the plan's
+    /// <see cref="StagedPlanKey"/> against the composition this container selected and falls
+    /// back to the general strategy on any difference.
+    /// </remarks>
     public static void AddStagedPlan<TMessage>(StagedVoidPlan<TMessage> plan)
         where TMessage : IMessage
         => StagedVoidPlans.TryAdd((typeof(TMessage), string.Empty), plan);
 
     /// <summary>
-    /// Group-keyed counterpart: the plan of the same message under one filter. A dispatch
-    /// names a group set, and the set is part of what decides the pipeline — so it is part
-    /// of what keys the plan, exactly like the message type. Idempotent.
+    /// Roots a staged void plan for one group set. Repeated calls do nothing.
     /// </summary>
+    /// <typeparam name="TMessage">The message the plan serves.</typeparam>
+    /// <param name="plan">The generated plan.</param>
+    /// <param name="groups">The groups the plan was compiled for.</param>
+    /// <remarks>
+    /// The requested groups help decide which participants run, so they are part of what
+    /// identifies a plan, just as the message type is.
+    /// </remarks>
     public static void AddStagedPlan<TMessage>(StagedVoidPlan<TMessage> plan, string[] groups)
         where TMessage : IMessage
         => StagedVoidPlans.TryAdd((typeof(TMessage), GroupKey(groups)), plan);
 
     /// <summary>
-    /// Result-producing counterpart of <see cref="AddStagedPlan{TMessage}(StagedVoidPlan{TMessage})"/>. Idempotent.
+    /// Roots a staged plan for a result-producing message. Repeated calls do nothing.
     /// </summary>
+    /// <typeparam name="TMessage">The message the plan serves.</typeparam>
+    /// <typeparam name="TResult">The result the pipeline produces.</typeparam>
+    /// <param name="plan">The generated plan.</param>
     public static void AddStagedPlan<TMessage, TResult>(StagedResultPlan<TMessage, TResult> plan)
         where TMessage : IMessage
         => StagedResultPlans.TryAdd((typeof(TMessage), typeof(TResult), string.Empty), plan);
 
-    /// <summary>Group-keyed counterpart of the result plan; see the void overload. Idempotent.</summary>
+    /// <summary>
+    /// Roots a staged result plan for one group set; see the void overload. Repeated calls
+    /// do nothing.
+    /// </summary>
+    /// <typeparam name="TMessage">The message the plan serves.</typeparam>
+    /// <typeparam name="TResult">The result the pipeline produces.</typeparam>
+    /// <param name="plan">The generated plan.</param>
+    /// <param name="groups">The groups the plan was compiled for.</param>
     public static void AddStagedPlan<TMessage, TResult>(StagedResultPlan<TMessage, TResult> plan, string[] groups)
         where TMessage : IMessage
         => StagedResultPlans.TryAdd((typeof(TMessage), typeof(TResult), GroupKey(groups)), plan);
 
     /// <summary>
-    /// Roots a staged pipeline plan for a broadcast. Its own store rather than a shape of the
-    /// void one: a publish asks here and a send asks there, so which store answered settles
-    /// the delivery difference and nothing has to branch on the message.
-    /// Idempotent.
+    /// Roots a staged plan for a broadcast. Repeated calls do nothing.
     /// </summary>
+    /// <typeparam name="TEvent">The event the plan serves.</typeparam>
+    /// <param name="plan">The generated plan.</param>
+    /// <remarks>
+    /// Broadcast plans have their own store rather than sharing the void one: a publish
+    /// looks here and a send looks there, so which store answered already settles how
+    /// delivery differs.
+    /// </remarks>
     public static void AddBroadcastPlan<TEvent>(StagedBroadcastPlan<TEvent> plan)
         where TEvent : notnull
         => BroadcastPlans.TryAdd((typeof(TEvent), string.Empty), plan);
 
-    /// <summary>Group-keyed counterpart of the broadcast plan; see the void overload. Idempotent.</summary>
+    /// <summary>
+    /// Roots a broadcast plan for one group set; see the ungrouped overload. Repeated calls
+    /// do nothing.
+    /// </summary>
+    /// <typeparam name="TEvent">The event the plan serves.</typeparam>
+    /// <param name="plan">The generated plan.</param>
+    /// <param name="groups">The groups the plan was compiled for.</param>
     public static void AddBroadcastPlan<TEvent>(StagedBroadcastPlan<TEvent> plan, string[] groups)
         where TEvent : notnull
         => BroadcastPlans.TryAdd((typeof(TEvent), GroupKey(groups)), plan);
 
-    /// <summary>The staged void plan of the message type's default pipeline, or <c>null</c> when none was generated.</summary>
+    /// <summary>
+    /// Returns the staged void plan for the message's default pipeline, or <c>null</c> when
+    /// none was generated.
+    /// </summary>
+    /// <param name="messageType">The message type to look up.</param>
     public static StagedVoidPlan? FindStagedVoidPlan(Type messageType)
         => StagedVoidPlans.TryGetValue((messageType, string.Empty), out var plan) ? plan : null;
 
-    /// <summary>The staged void plan for a filtered dispatch, or <c>null</c> when none was generated.</summary>
+    /// <summary>
+    /// Returns the staged void plan for a group set, or <c>null</c> when none was
+    /// generated.
+    /// </summary>
+    /// <param name="messageType">The message type to look up.</param>
+    /// <param name="groups">The groups the dispatch asked for.</param>
     public static StagedVoidPlan? FindStagedVoidPlan(Type messageType, IReadOnlyList<string> groups)
         => StagedVoidPlans.TryGetValue((messageType, GroupKey(groups)), out var plan) ? plan : null;
 
-    /// <summary>The broadcast plan of the message type's default pipeline, or <c>null</c> when none was generated.</summary>
+    /// <summary>
+    /// Returns the broadcast plan for the event's default pipeline, or <c>null</c> when
+    /// none was generated.
+    /// </summary>
+    /// <param name="messageType">The event type to look up.</param>
     public static StagedBroadcastPlan? FindBroadcastPlan(Type messageType)
         => BroadcastPlans.TryGetValue((messageType, string.Empty), out var plan) ? plan : null;
 
-    /// <summary>The broadcast plan for a filtered publish, or <c>null</c> when none was generated.</summary>
+    /// <summary>
+    /// Returns the broadcast plan for a group set, or <c>null</c> when none was generated.
+    /// </summary>
+    /// <param name="messageType">The event type to look up.</param>
+    /// <param name="groups">The groups the publish asked for.</param>
     public static StagedBroadcastPlan? FindBroadcastPlan(Type messageType, IReadOnlyList<string> groups)
         => BroadcastPlans.TryGetValue((messageType, GroupKey(groups)), out var plan) ? plan : null;
 
-    /// <summary>The staged result plan of the (message, result) pair, or <c>null</c> when none was generated.</summary>
+    /// <summary>
+    /// Returns the staged result plan for the pair's default pipeline, or <c>null</c> when
+    /// none was generated.
+    /// </summary>
+    /// <param name="messageType">The message type to look up.</param>
+    /// <param name="resultType">The result type to look up.</param>
     public static StagedResultPlan? FindStagedResultPlan(Type messageType, Type resultType)
         => StagedResultPlans.TryGetValue((messageType, resultType, string.Empty), out var plan) ? plan : null;
 
-    /// <summary>The staged result plan for a filtered dispatch, or <c>null</c> when none was generated.</summary>
+    /// <summary>
+    /// Returns the staged result plan for a group set, or <c>null</c> when none was
+    /// generated.
+    /// </summary>
+    /// <param name="messageType">The message type to look up.</param>
+    /// <param name="resultType">The result type to look up.</param>
+    /// <param name="groups">The groups the dispatch asked for.</param>
     public static StagedResultPlan? FindStagedResultPlan(Type messageType, Type resultType, IReadOnlyList<string> groups)
         => StagedResultPlans.TryGetValue((messageType, resultType, GroupKey(groups)), out var plan) ? plan : null;
 
     /// <summary>
-    /// The key the group-filtering plan is stored under. A control character keeps it out of
-    /// the space of real group keys: no group set can spell it, so the filtering plan and the
-    /// keyed ones never collide.
+    /// The key the group-filtering plans are stored under. It opens with a control
+    /// character no group name can contain, so it never collides with a real group key.
     /// </summary>
     private const string FilteredPlanKey = "\u0000filtered";
 
     /// <summary>
-    /// Roots the plan that serves dispatches whose group filter is a runtime value: one body
-    /// carrying every participant, each call guarded by its own group test. Idempotent.
+    /// Roots the plan that serves dispatches whose group filter is only known at runtime:
+    /// one body holding every participant, each call guarded by its own group test.
+    /// Repeated calls do nothing.
     /// </summary>
+    /// <typeparam name="TMessage">The message the plan serves.</typeparam>
+    /// <param name="plan">The generated plan.</param>
     public static void AddFilteredPlan<TMessage>(StagedVoidPlan<TMessage> plan)
         where TMessage : IMessage
         => StagedVoidPlans.TryAdd((typeof(TMessage), FilteredPlanKey), plan);
 
-    /// <summary>Result-producing counterpart of <see cref="AddFilteredPlan{TMessage}"/>. Idempotent.</summary>
+    /// <summary>
+    /// Roots the group-filtering plan for a result-producing message; see
+    /// <see cref="AddFilteredPlan{TMessage}"/>. Repeated calls do nothing.
+    /// </summary>
+    /// <typeparam name="TMessage">The message the plan serves.</typeparam>
+    /// <typeparam name="TResult">The result the pipeline produces.</typeparam>
+    /// <param name="plan">The generated plan.</param>
     public static void AddFilteredPlan<TMessage, TResult>(StagedResultPlan<TMessage, TResult> plan)
         where TMessage : IMessage
         => StagedResultPlans.TryAdd((typeof(TMessage), typeof(TResult), FilteredPlanKey), plan);
 
-    /// <summary>Broadcast counterpart of <see cref="AddFilteredPlan{TMessage}"/>. Idempotent.</summary>
+    /// <summary>
+    /// Roots the group-filtering plan for a broadcast; see
+    /// <see cref="AddFilteredPlan{TMessage}"/>. Repeated calls do nothing.
+    /// </summary>
+    /// <typeparam name="TEvent">The event the plan serves.</typeparam>
+    /// <param name="plan">The generated plan.</param>
     public static void AddFilteredBroadcastPlan<TEvent>(StagedBroadcastPlan<TEvent> plan)
         where TEvent : notnull
         => BroadcastPlans.TryAdd((typeof(TEvent), FilteredPlanKey), plan);
 
-    /// <summary>The group-filtering void plan, or <c>null</c> when none was generated.</summary>
+    /// <summary>
+    /// Returns the group-filtering void plan, or <c>null</c> when none was generated.
+    /// </summary>
+    /// <param name="messageType">The message type to look up.</param>
     public static StagedVoidPlan? FindFilteredVoidPlan(Type messageType)
         => StagedVoidPlans.TryGetValue((messageType, FilteredPlanKey), out var plan) ? plan : null;
 
-    /// <summary>The group-filtering result plan, or <c>null</c> when none was generated.</summary>
+    /// <summary>
+    /// Returns the group-filtering result plan, or <c>null</c> when none was generated.
+    /// </summary>
+    /// <param name="messageType">The message type to look up.</param>
+    /// <param name="resultType">The result type to look up.</param>
     public static StagedResultPlan? FindFilteredResultPlan(Type messageType, Type resultType)
         => StagedResultPlans.TryGetValue((messageType, resultType, FilteredPlanKey), out var plan) ? plan : null;
 
-    /// <summary>The group-filtering broadcast plan, or <c>null</c> when none was generated.</summary>
+    /// <summary>
+    /// Returns the group-filtering broadcast plan, or <c>null</c> when none was generated.
+    /// </summary>
+    /// <param name="messageType">The event type to look up.</param>
     public static StagedBroadcastPlan? FindFilteredBroadcastPlan(Type messageType)
         => BroadcastPlans.TryGetValue((messageType, FilteredPlanKey), out var plan) ? plan : null;
 
     /// <summary>
-    /// The canonical key of a group set: ordinal-sorted, deduplicated and joined, so the
-    /// spelling a dispatch happens to use finds the plan the generator baked. Group
-    /// selection is an any-of test, which makes order and repetition meaningless — a key
-    /// that honored them would miss the plan for no reason.
+    /// Builds the canonical key of a group set: sorted ordinally, deduplicated and joined.
     /// </summary>
+    /// <param name="groups">The groups to key, or <c>null</c> for the default pipeline.</param>
+    /// <returns>The key the matching plan is stored under.</returns>
     /// <remarks>
-    /// Only ever reached on a lookup that misses a per-message slot, so the sort is paid
-    /// once per (pipeline, group set) rather than per dispatch.
+    /// Group selection is an any-of test, so order and repetition carry no meaning; a key
+    /// that preserved them would miss the plan the generator compiled for the same set
+    /// spelled differently. Only reached when a per-message slot misses, so the sort is
+    /// paid once per (pipeline, group set) rather than per dispatch.
     /// </remarks>
     private static string GroupKey(IReadOnlyList<string>? groups)
     {
@@ -288,7 +425,7 @@ public static class GeneratedDispatchRoots
                 continue;
             }
 
-            // The unit separator keeps {"ab"} and {"a","b"} distinct.
+            // The unit separator keeps {"ab"} and {"a","b"} from producing the same key.
             builder.Append('\u001f').Append(names[i]);
         }
 
@@ -299,33 +436,38 @@ public static class GeneratedDispatchRoots
     private static readonly ConcurrentDictionary<Type, FrozenComposition?> FrozenCompositionLadder = new();
 
     /// <summary>
-    /// Roots a message's frozen pipeline composition — the pipeline shape produced at
-    /// compile time. Generated module initializers populate the process-wide table as
-    /// assemblies load; each entry is immutable after publication. Idempotent.
+    /// Roots a message's compiled pipeline composition. Generated module initializers call
+    /// this as assemblies load, and an entry never changes afterwards. Repeated calls do
+    /// nothing.
     /// </summary>
+    /// <param name="composition">The composition to add.</param>
     public static void AddFrozenComposition(FrozenComposition composition)
         => FrozenCompositions.TryAdd(composition.MessageType, composition);
 
     /// <summary>
-    /// Every compiled table entry. The one enumeration the table offers, and only for
-    /// setup-time questions a per-message lookup cannot answer — chiefly "which
-    /// participant types exist at all", which container registration intersects with its
-    /// own selection to decide what to register for resolution.
+    /// Every composition in the table.
     /// </summary>
+    /// <remarks>
+    /// The only enumeration offered, and meant for setup-time questions a per-message
+    /// lookup cannot answer — chiefly which participant types exist at all, which container
+    /// registration intersects with its own selection.
+    /// </remarks>
     public static IEnumerable<FrozenComposition> FrozenCompositionEntries => FrozenCompositions.Values;
 
     /// <summary>
-    /// The frozen composition serving a runtime message type. An exact entry wins; on a
-    /// miss the type's ancestor chain is walked and the nearest frozen entry serves it —
-    /// how runtime-generated subtypes (EF/Castle proxies, mocks) are served without any
-    /// registry — with the outcome cached per runtime type, misses included. A type whose
-    /// whole ancestor chain is foreign resolves to <c>null</c>: the caller's
-    /// no-handler guard, the one deliberately remaining corner.
+    /// Returns the composition serving a runtime message type.
     /// </summary>
+    /// <param name="messageType">The dispatched message's runtime type.</param>
+    /// <returns>
+    /// The exact entry when there is one; otherwise the nearest entry up the type's
+    /// ancestor chain, which is how runtime-generated subtypes such as ORM proxies and
+    /// mocks are served. <c>null</c> when no ancestor has an entry either.
+    /// </returns>
     /// <remarks>
-    /// Generic runtime types normalize to their definitions, mirroring the runtime
-    /// message-resolve strategy. The ladder cache assumes the load-time-append contract:
-    /// entries appended after a type's first miss resolution are not re-consulted for it.
+    /// A generic runtime type is looked up by its generic definition. Outcomes are cached
+    /// per runtime type, misses included, so an entry added after a type was first resolved
+    /// is not picked up for that type — which holds because entries are only added as
+    /// assemblies load.
     /// </remarks>
     public static FrozenComposition? FindFrozenComposition(Type messageType)
     {

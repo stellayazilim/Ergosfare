@@ -5,32 +5,15 @@ namespace Stella.Ergosfare.SourceGenerator.Planning;
 internal sealed partial class PlanBuilder
 {
     /// <summary>
-    ///     Computes the staged pipeline plans: a dispatchable command (void) or
-    ///     command/query (single closed result) qualifies when its sole discovered handler
-    ///     is the matching async contract AND at least one discovered interceptor
-    ///     participates in its pipeline AND every part of that pipeline could be modeled
-    ///     exactly — the composition (membership and order) replicates the runtime
-    ///     shape-builder, and every call's pattern-match arm is decidable at compile time.
-    ///     Anything unmodelable disqualifies the message rather than risking divergence;
-    ///     the runtime gate then simply never sees a staged plan for it. The plan stays
-    ///     advisory regardless: the hosting executor validates it against the container's
-    ///     selected frozen composition.
+    /// Collects the messages that some dispatch site asks for under a group set this
+    /// compilation cannot read.
     /// </summary>
-    /// <summary>
-    ///     The group sets each dispatch site names, indexed by the static message key the
-    ///     site dispatches through. A message's own key and every key it is assignable to
-    ///     both count: a site typed as a base (or a marker) delivers the subtype too, so its
-    ///     filter is one the subtype's pipeline can be asked for.
-    /// </summary>
+    /// <param name="sourceSites">The dispatch sites in this compilation.</param>
+    /// <param name="referencedSites">The dispatch sites referenced assemblies recorded.</param>
+    /// <returns>The message keys such a site names.</returns>
     /// <remarks>
-    ///     Only readable filters land here. A site whose set the scan could not fold names
-    ///     no key — its message keeps the runtime group lane, which filters the live
-    ///     composition per dispatch and is always correct, merely not straight-line.
+    /// Those messages get the filtering plan — the one body that can answer any set.
     /// </remarks>
-    /// <summary>
-    ///     The message keys some dispatch site names under a filter this compilation cannot
-    ///     read. Those messages get the filtering plan — the body that answers any set.
-    /// </summary>
     private static HashSet<string> CollectUnprovableGroupKeys(
         ImmutableArray<DispatchSiteModel> sourceSites,
         ImmutableArray<DispatchSiteModel> referencedSites)
@@ -55,9 +38,15 @@ internal sealed partial class PlanBuilder
     }
 
     /// <summary>
-    ///     Whether any unreadable filter can reach this message — through its own type or
-    ///     through a base a site was typed as, the same reach a keyed set has.
+    /// Reports whether an unreadable group set can reach a message.
     /// </summary>
+    /// <param name="type">The message to test.</param>
+    /// <param name="unprovableKeys">The messages named by unreadable sets.</param>
+    /// <returns><c>true</c> when such a set reaches this message.</returns>
+    /// <remarks>
+    /// Reached either through the message's own type or through a base type some site was
+    /// written against — the same reach a readable set has.
+    /// </remarks>
     private static bool HasUnprovableGroupSite(RegistrableTypeModel type, HashSet<string> unprovableKeys)
     {
         if (unprovableKeys.Count == 0)
@@ -81,6 +70,17 @@ internal sealed partial class PlanBuilder
         return false;
     }
 
+    /// <summary>
+    /// Collects the group sets dispatch sites name, indexed by the message they dispatch.
+    /// </summary>
+    /// <param name="sourceSites">The dispatch sites in this compilation.</param>
+    /// <param name="referencedSites">The dispatch sites referenced assemblies recorded.</param>
+    /// <returns>The distinct sets named for each message key.</returns>
+    /// <remarks>
+    /// Only readable sets are collected. A site whose set could not be read names no key
+    /// here; its message keeps the runtime group path, which filters the live composition on
+    /// each dispatch — always correct, just not a straight line.
+    /// </remarks>
     private static Dictionary<string, List<ImmutableArray<string>>> CollectGroupSets(
         ImmutableArray<DispatchSiteModel> sourceSites,
         ImmutableArray<DispatchSiteModel> referencedSites)
@@ -96,8 +96,8 @@ internal sealed partial class PlanBuilder
         {
             foreach (var site in sites)
             {
-                // The default set needs no site to prove it: every message gets that plan
-                // attempt anyway, so recording it here would only duplicate work.
+                // The default set needs no site to name it: every message is tried against
+                // that plan anyway, so recording it would only duplicate the work.
                 if (site.HasUnprovableGroups || site.Groups.IsEmpty)
                 {
                     continue;
@@ -130,11 +130,16 @@ internal sealed partial class PlanBuilder
     }
 
     /// <summary>
-    ///     Every group set a dispatch could ask this message's pipeline for: the sets sites
-    ///     named for the message itself, plus the ones named for a type it is assignable to
-    ///     — a publish typed as a base reaches the subtype, and reaches it under that
-    ///     filter.
+    /// Collects every group set a dispatch could ask one message's pipeline for.
     /// </summary>
+    /// <param name="type">The message whose plans are being built.</param>
+    /// <param name="groupSetsByKey">The sets named for each message key.</param>
+    /// <param name="into">The list to add the distinct sets to.</param>
+    /// <remarks>
+    /// Both the sets named for the message itself and those named for a type it is
+    /// assignable to: a publish written against a base type reaches the derived message, and
+    /// reaches it under that set.
+    /// </remarks>
     private static void CollectTargetSets(
         RegistrableTypeModel type,
         Dictionary<string, List<ImmutableArray<string>>> groupSetsByKey,
@@ -180,6 +185,16 @@ internal sealed partial class PlanBuilder
         }
     }
 
+    /// <summary>
+    /// Compares two group sets.
+    /// </summary>
+    /// <param name="left">The first set.</param>
+    /// <param name="right">The second set.</param>
+    /// <returns><c>true</c> when both name the same groups in the same order.</returns>
+    /// <remarks>
+    /// Order can be compared directly because every set reaching here is already in its
+    /// canonical form.
+    /// </remarks>
     private static bool GroupSetsEqual(ImmutableArray<string> left, ImmutableArray<string> right)
     {
         if (left.Length != right.Length)

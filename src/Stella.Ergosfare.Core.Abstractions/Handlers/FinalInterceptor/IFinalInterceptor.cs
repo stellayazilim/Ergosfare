@@ -2,11 +2,12 @@ namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 
 
 /// <summary>
-/// Non-generic marker root for final interceptors. Carries no members — the pipeline invokes
-/// final interceptors exclusively through their typed contracts
-/// (<see cref="IFinalInterceptor{TMessage, TResult}"/> /
-/// <see cref="IAsyncFinalInterceptor{TMessage}"/> /
-/// <see cref="IAsyncFinalInterceptor{TMessage, TResult}"/>);
-/// this root exists for storage typing and registration.
+/// Marks a type as a final interceptor, for registration and storage.
 /// </summary>
+/// <remarks>
+/// The interface declares no members. Final interceptors are invoked through the typed
+/// member of <see cref="IFinalInterceptor{TMessage, TResult}"/>,
+/// <see cref="IAsyncFinalInterceptor{TMessage}"/> or
+/// <see cref="IAsyncFinalInterceptor{TMessage, TResult}"/>.
+/// </remarks>
 public interface IFinalInterceptor;

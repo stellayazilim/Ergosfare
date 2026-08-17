@@ -4,42 +4,45 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 
 
 /// <summary>
-/// Executes the pre-merged post-interceptor list (direct first, then indirect) for a message,
-/// dispatching every interceptor through its typed contract — result-typed asynchronous
-/// interceptors via <see cref="IAsyncPostInterceptor{TMessage, TResult}"/>, result-agnostic
-/// ones via <see cref="IAsyncPostInterceptor{TMessage}"/>, synchronous ones via
-/// <see cref="IPostInterceptor{TMessage, TResult}"/>. There is no object-typed bridge and no
-/// boxed awaitable; `in` variance on both type parameters admits interceptors registered for
-/// base message or result types.
+/// Runs a message's post-interceptor stage, threading the result through each interceptor
+/// in turn and stopping early on a failure carried inside one of their results.
 /// </summary>
-/// <typeparam name="TMessage">The dispatch message type (the runtime type on executor paths).</typeparam>
-/// <typeparam name="TResult">
-/// The pipeline's result type — <see cref="ValueTask"/> for void pipelines, where the
-/// completed-task box stands in as the (meaningless) result object.
+/// <typeparam name="TMessage">
+/// The message type the stage dispatches as; on executor paths this is the message's
+/// runtime type.
 /// </typeparam>
-/// <remarks>
-/// Static: the pipeline state travels as arguments, so a dispatch allocates no invoker object.
-/// </remarks>
+/// <typeparam name="TResult">
+/// The pipeline's result type. Void pipelines pass <see cref="ValueTask"/>, whose value
+/// stands in for a result that carries no meaning.
+/// </typeparam>
 #pragma warning disable CS8714 // TResult is used as a pattern type argument; interceptor contracts declare notnull results
 internal static class PostInterceptorInvocationStrategy<TMessage, TResult>
     where TMessage : notnull
 {
     /// <summary>
-    /// Executes all post-interceptors for the specified message and result.
+    /// Runs the post-interceptors of the message, passing each the result the previous one
+    /// returned.
     /// </summary>
-    /// <param name="messageDependencies">The message's pipeline composition, supplying the post-interceptor list.</param>
-    /// <param name="resultAdapter">The result type's bound adapter, surfacing a failure carried inside an interceptor's result; null when the type has none.</param>
-    /// <param name="serviceProvider">The provider of the scope this dispatch runs in; interceptors resolve from it.</param>
+    /// <param name="messageDependencies">The message's participants; supplies the stage list.</param>
+    /// <param name="resultAdapter">
+    /// The result type's adapter, used to spot a failure carried inside an interceptor's
+    /// result; <c>null</c> when the result type has no adapter, in which case results are
+    /// never inspected.
+    /// </param>
+    /// <param name="serviceProvider">The provider interceptors are resolved from.</param>
     /// <param name="message">The message that was handled.</param>
-    /// <param name="result">The result produced by the pipeline so far.</param>
-    /// <param name="context">The execution context for the current pipeline invocation.</param>
+    /// <param name="result">The result as it enters the stage.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
     /// <returns>
-    /// The (possibly replaced) result after the executed post-interceptors, and the failure
-    /// carried inside one of their results, if any — a carried failure stops the stage at
-    /// the interceptor that produced it (the remaining post-interceptors never run, exactly
-    /// as a thrown failure would skip them) and the returned result is that failed carrier.
-    /// The caller owns the transition into the exception stage; nothing is thrown here.
+    /// The result the stage produced, and the failure carried inside it, if any. A carried
+    /// failure ends the stage at the interceptor that produced it, leaving the remaining
+    /// interceptors unrun, exactly as a thrown failure would. Nothing is thrown here; the
+    /// caller decides how to enter the exception stage.
     /// </returns>
+    /// <exception cref="NotSupportedException">
+    /// An interceptor in the list implements no post-interceptor contract for
+    /// <typeparamref name="TMessage"/> and <typeparamref name="TResult"/>.
+    /// </exception>
     public static async ValueTask<(object? Result, Exception? CarriedException)> Invoke(
         IMessageDependencies messageDependencies,
         IResultAdapter<TResult>? resultAdapter,
@@ -55,6 +58,8 @@ internal static class PostInterceptorInvocationStrategy<TMessage, TResult>
         {
             var interceptor = interceptors[i].Resolve(serviceProvider);
 
+            // Most specific contract first: an interceptor implementing several is
+            // dispatched through the result-typed asynchronous one.
             result = interceptor switch
             {
                 IAsyncPostInterceptor<TMessage, TResult> typedAsyncInterceptor =>

@@ -3,37 +3,56 @@ using System.Collections.Immutable;
 namespace Stella.Ergosfare.SourceGenerator.Models;
 
 /// <summary>
-///     The generic constraints on a plugin method's message type parameter — the shape
-///     filter of the design: the generator closes the method over each plan's concrete
-///     message, so a plan whose message does not satisfy them must not get the call. Both
-///     because it would be wrong and because it would not compile.
+/// The constraints on a plugin method's message type parameter, which are also what filters
+/// the method by message shape.
 /// </summary>
 /// <param name="MessageTypes">
-///     The normalized type expressions the message must be assignable to; matched against
-///     the message's own base-and-interface chain.
+/// The types the message must be assignable to, matched against its own base types and
+/// interfaces.
 /// </param>
-/// <param name="RequiresReferenceType"><c>where TMessage : class</c>.</param>
-/// <param name="RequiresValueType"><c>where TMessage : struct</c>.</param>
+/// <param name="RequiresReferenceType">Whether the method requires a reference type.</param>
+/// <param name="RequiresValueType">Whether the method requires a value type.</param>
 /// <param name="IsUnmodelable">
-///     A constraint the string model cannot decide — a <c>new()</c> or <c>unmanaged</c>
-///     constraint, or one naming a constructed generic. Such a method is left out of every
-///     plan: emitting it risks a broken consumer build, which is worse than the miss.
+/// Whether the method carries a constraint this model cannot decide — a <c>new()</c> or
+/// <c>unmanaged</c> constraint, or one naming a constructed generic. Such a method is left
+/// out of every plan: writing the call anyway risks breaking the consumer's build, which is
+/// worse than missing the call.
 /// </param>
+/// <remarks>
+/// The method is closed over each pipeline's own message type, so a message that does not
+/// satisfy the constraints must not get the call — it would be wrong, and it would not
+/// compile.
+/// </remarks>
 internal readonly record struct PluginConstraintModel(
     ImmutableArray<string> MessageTypes,
     bool RequiresReferenceType,
     bool RequiresValueType,
     bool IsUnmodelable)
 {
+    /// <summary>
+    /// The constraints of a method that declares none, which every message satisfies.
+    /// </summary>
     public static readonly PluginConstraintModel None =
         new(ImmutableArray<string>.Empty, false, false, false);
 
+    /// <summary>
+    /// Compares every constraint.
+    /// </summary>
+    /// <param name="other">The model to compare against.</param>
+    /// <returns><c>true</c> when both admit the same messages.</returns>
+    /// <remarks>
+    /// Written by hand because the generated comparison would compare the type array by
+    /// reference, which would defeat the incremental caching this model exists for.
+    /// </remarks>
     public bool Equals(PluginConstraintModel other)
         => RequiresReferenceType == other.RequiresReferenceType
            && RequiresValueType == other.RequiresValueType
            && IsUnmodelable == other.IsUnmodelable
            && MessageTypes.SequenceEqualOrBothEmpty(other.MessageTypes);
 
+    /// <summary>
+    /// Returns a hash over the flags and the number of constrained types.
+    /// </summary>
     public override int GetHashCode()
     {
         var hash = RequiresReferenceType ? 1 : 0;

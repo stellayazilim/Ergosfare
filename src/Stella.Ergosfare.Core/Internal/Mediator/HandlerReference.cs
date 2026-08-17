@@ -4,18 +4,26 @@ using Stella.Ergosfare.Core.Abstractions;
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 /// <summary>
-/// Process-wide handler reference. In the default mode every <see cref="Resolve"/> call
-/// asks the dispatching scope's provider (from the execution context), so DI lifetimes
-/// are honored per dispatch. In memoized mode the instance is resolved once from the
-/// pinned provider (the root) and cached for the lifetime of the process.
+/// A reference to one participant type, shared across dispatches.
 /// </summary>
+/// <typeparam name="THandler">The participant contract this reference resolves to.</typeparam>
+/// <param name="handlerType">The participant type to resolve.</param>
+/// <param name="memoizedProvider">
+/// The provider to resolve from once and keep the instance of, or <c>null</c> to resolve
+/// per dispatch.
+/// </param>
+/// <remarks>
+/// By default every <see cref="Resolve"/> asks the provider the dispatcher passes in, so
+/// registered lifetimes apply per dispatch. Given a memoized provider — the root — the
+/// instance is resolved once and reused for the life of the process.
+/// </remarks>
 internal sealed class HandlerReference<THandler>(
     Type handlerType,
     IServiceProvider? memoizedProvider)
     : IHandlerReference<THandler>
 {
     /// <summary>
-    /// Cached instance; only ever set in memoized mode.
+    /// The kept instance; only ever set when memoizing.
     /// </summary>
     private object? _instance;
 
@@ -39,7 +47,8 @@ internal sealed class HandlerReference<THandler>(
 
         var created = memoizedProvider.GetRequiredService(HandlerType);
 
-        // Losing the race is benign: everyone converges on the first published instance.
+        // Two threads may both construct one; whoever publishes first wins and both return
+        // that instance, so callers never see two.
         existing = Interlocked.CompareExchange(ref _instance, created, null) ?? created;
 
         return (THandler) existing;

@@ -4,12 +4,13 @@ namespace Stella.Ergosfare.Commands.Abstractions;
 
 
 /// <summary>
-/// Represents a handler for commands implementing <see cref="ICommand"/>.
+/// Handles commands of type <typeparamref name="TCommand"/> that return nothing.
 /// </summary>
-/// <typeparam name="TCommand">The type of command this handler processes. Must implement <see cref="ICommand"/>.</typeparam>
+/// <typeparam name="TCommand">The command type this handler accepts.</typeparam>
 /// <remarks>
-/// This interface is non-generic regarding the result type; the command may or may not produce a result.
-/// For commands with a strongly typed result, consider using <see cref="ICommandHandler{TCommand, TResult}"/>.
+/// A command is sent to exactly one handler, so registering two for the same command type
+/// fails the dispatch. Implement <see cref="ICommandHandler{TCommand, TResult}"/> for a
+/// command that returns a value.
 /// </remarks>
 public interface ICommandHandler<in TCommand> : ICommand, IAsyncHandler<TCommand>
     where TCommand : ICommand;

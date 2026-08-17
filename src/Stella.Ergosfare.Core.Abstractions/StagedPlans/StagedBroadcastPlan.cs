@@ -1,48 +1,44 @@
 namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 
 /// <summary>
-/// A compile-time staged pipeline plan for a broadcast: bespoke code that runs a published
-/// message's entire pipeline — pre stages, every matched handler in order, post stages, with
-/// exception and final semantics — as straight-line typed calls instead of the runtime
-/// machinery.
+/// A compiled plan that runs a published message's whole pipeline — pre-interceptors, every
+/// matched handler in order, post-interceptors, and the exception and final behavior around
+/// them — as straight-line typed calls.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Its own family rather than a shape of the resultless plan, even though the emitted body is
-/// the same one with a loop where the other has a call. Keeping them apart means nothing ever
-/// has to ask which kind of pipeline it is holding: a publish looks here, a send looks at the
-/// resultless plans, and the delivery difference is settled by which store answered rather
-/// than by a branch on the message. It is also where a delivery shape — sequential today,
-/// possibly a declared parallel one later — can be expressed without touching the
-/// single-handler families.
+/// Broadcast plans are their own family rather than a shape of the void plans, even though
+/// the compiled body differs only in having a loop where the other has a call. Keeping them
+/// apart means nothing has to ask which kind of pipeline it holds: a publish looks here, a
+/// send looks at the void plans, and which store answered settles how delivery works. It is
+/// also where a delivery shape other than today's sequential one could be expressed without
+/// disturbing the single-handler families.
 /// </para>
 /// <para>
-/// The plan is advisory: the publishing lane validates <see cref="Composition"/> against the
-/// container's live pipeline and falls back to the runtime delivery on a mismatch, so a stale
-/// plan only loses its speedup, never changes behavior.
+/// Like the other plans this one is a proposal: the publishing path compares
+/// <see cref="Composition"/> with the live pipeline and falls back to the general delivery
+/// if they differ, so an out-of-date plan costs its speedup and nothing else.
 /// </para>
 /// </remarks>
 public abstract class StagedBroadcastPlan
 {
-    /// <summary>The pipeline composition the plan was baked against.</summary>
+    /// <summary>
+    /// The pipeline this plan was compiled against.
+    /// </summary>
     public abstract StagedPlanKey Composition { get; }
 
     /// <summary>
-    /// Whether the plan carries a direct-construction variant of its pipeline
-    /// (<c>ExecuteDirect</c>): every participant constructed with <c>new</c> instead of a
-    /// container resolution. The publishing lane uses that variant only after verifying at
-    /// runtime that every participant's effective DI registration is the module's own plain
-    /// transient one — the single shape where container resolution and direct construction
-    /// are observably identical.
+    /// Whether the plan can also run with every participant constructed directly instead of
+    /// resolved from the container.
     /// </summary>
+    /// <remarks>
+    /// The publishing path takes that route only after confirming that every participant's
+    /// registration is the module's own plain transient one — the one case where
+    /// constructing and resolving cannot be told apart.
+    /// </remarks>
     public virtual bool SupportsDirectConstruction => false;
 
-    /// <summary>
-    /// The union of the groups this plan bakes a filter for, or <c>null</c> when the plan is
-    /// keyed by one set and needs no filter. A group-filtering plan serves a dispatch whose
-    /// set is a runtime value: it carries every participant and decides per call, so what the
-    /// gate must validate is the composition over exactly these groups.
-    /// </summary>
+    /// <inheritdoc cref="StagedVoidPlan.FilterGroups"/>
     public virtual string[]? FilterGroups => null;
 
 }

@@ -5,13 +5,13 @@ namespace Stella.Ergosfare.Commands.Abstractions;
 
 
 /// <summary>
-/// Represents a post-processing interceptor for commands. 
-/// This non-generic, non-type-safe version returns <see cref="object"/> from the pipeline.
+/// Runs after the handler of a <typeparamref name="TCommand"/>, without naming the result
+/// type.
 /// </summary>
-/// <typeparam name="TCommand">The type of command this interceptor handles. Must implement <see cref="ICommand"/>.</typeparam>
+/// <typeparam name="TCommand">The command type this interceptor accepts.</typeparam>
 /// <remarks>
-/// Use this interface to register post-interceptors in the command pipeline without specifying a strongly-typed result. 
-/// For type-safe scenarios, prefer using the generic version:
+/// Use this where the work applies to any result — logging or metrics, say — and the result
+/// arrives as <see cref="object"/>. To read or replace a typed result, implement
 /// <see cref="ICommandPostInterceptor{TCommand, TResult}"/>.
 /// </remarks>
 // ReSharper disable once UnusedType.Global

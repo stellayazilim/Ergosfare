@@ -3,22 +3,25 @@ using Stella.Ergosfare.Core.Abstractions.Attributes;
 namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 
 /// <summary>
-/// The group test a group-filtering plan bakes around each participant — the runtime
-/// shape-builder's <c>MatchesAnyGroup</c>, called from generated code instead of being
-/// walked over a materialized composition.
+/// The group tests generated plans call before each participant.
 /// </summary>
 /// <remarks>
-/// A plan keyed by a proven group set needs none of this: its participants are decided at
-/// compile time. This serves the other case — a dispatch whose filter is a runtime value —
-/// where the set cannot key a plan but the pipeline can still be straight-line code with a
-/// boolean in front of each call.
+/// A plan compiled for a known group set needs none of these — which participants run was
+/// decided at compile time. These serve the other case, a dispatch whose groups are only
+/// known at runtime, where the pipeline can still be straight-line code with a test in
+/// front of each call.
 /// </remarks>
 public static class PlanGroups
 {
     /// <summary>
-    /// Whether a participant declaring no <c>[Group]</c> runs under the requested set: it
-    /// belongs to the default group, and an empty request IS the default group.
+    /// Reports whether a participant that declares no groups runs under
+    /// <paramref name="requested"/>.
     /// </summary>
+    /// <param name="requested">The groups the dispatch asked for.</param>
+    /// <returns>
+    /// <c>true</c> when the default group was asked for, either by naming it or by asking
+    /// for nothing.
+    /// </returns>
     public static bool MatchesDefault(IReadOnlyList<string> requested)
     {
         if (requested.Count == 0)
@@ -38,15 +41,22 @@ public static class PlanGroups
     }
 
     /// <summary>
-    /// Whether a participant declaring exactly one group runs under the requested set — the
-    /// overwhelmingly common shape, spelled without an array so the emitted guard is a
-    /// string compare over the request.
+    /// Reports whether a participant that declares one group runs under
+    /// <paramref name="requested"/>.
     /// </summary>
+    /// <param name="requested">The groups the dispatch asked for.</param>
+    /// <param name="declared">The group the participant declared.</param>
+    /// <returns><c>true</c> when the declared group was asked for.</returns>
+    /// <remarks>
+    /// Declaring a single group is the common shape, so it is spelled without an array and
+    /// the generated guard is a string comparison over the request.
+    /// </remarks>
     public static bool Matches(IReadOnlyList<string> requested, string declared)
     {
         if (requested.Count == 0)
         {
-            // The default group was asked for; a participant that named a group is not in it.
+            // Asking for nothing asks for the default group, which a participant that named
+            // a group is only in if it named that one.
             return string.Equals(declared, GroupAttribute.DefaultGroupName, StringComparison.Ordinal);
         }
 
@@ -61,7 +71,13 @@ public static class PlanGroups
         return false;
     }
 
-    /// <summary>Any-of × any-of, for a participant declaring several groups.</summary>
+    /// <summary>
+    /// Reports whether a participant that declares several groups runs under
+    /// <paramref name="requested"/>.
+    /// </summary>
+    /// <param name="requested">The groups the dispatch asked for.</param>
+    /// <param name="declared">The groups the participant declared.</param>
+    /// <returns><c>true</c> when any declared group was asked for.</returns>
     public static bool Matches(IReadOnlyList<string> requested, string[] declared)
     {
         for (var i = 0; i < declared.Length; i++)

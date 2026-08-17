@@ -2,35 +2,27 @@
 namespace Stella.Ergosfare.Core.Abstractions;
 
 /// <summary>
-/// A message pipeline closed over its concrete message type, built once per message type
-/// and cached process-wide. <see cref="Execute"/> receives the message as
-/// <see cref="object"/> and performs a single cast to the concrete type internally, so the
-/// handler is always invoked through its typed member — no object-typed bridge, no boxing
-/// of the handler's <see cref="ValueTask"/>.
+/// A void message pipeline closed over one concrete message type, built once for that type
+/// and reused for every dispatch of it.
 /// </summary>
 /// <remarks>
-/// The group filter is a dispatch argument, not part of the executor's identity: one
-/// executor per message type serves every filter, choosing its composition per call. The
-/// filter used to be baked in at construction, which meant the lookup in front of this
-/// interface had to carry the group set in its key — a second dictionary and a joined
-/// string key on a path that already knew the message type. The publishing and streaming
-/// tables never keyed that way; this is the same shape.
-/// </remarks>
-/// <remarks>
-/// This is the dispatch seam source-generated code will eventually implement directly;
-/// the runtime builds executors reflectively (one generic instantiation per message type)
-/// as the fallback.
+/// The group filter is a per-call argument rather than part of the executor's identity: a
+/// single executor serves every filter and selects the matching composition on each call.
 /// </remarks>
 public interface IPipelineExecutor
 {
     /// <summary>
-    /// Executes the void pipeline for <paramref name="message"/>.
+    /// Runs the pipeline for <paramref name="message"/> and completes once every
+    /// participant has run.
     /// </summary>
-    /// <param name="message">The message instance; its runtime type is the executor's closed message type (or derived).</param>
+    /// <param name="message">
+    /// The message to run. Its runtime type is the executor's message type, or a type
+    /// derived from it.
+    /// </param>
     /// <param name="context">The execution context for this dispatch.</param>
-    /// <param name="serviceProvider">The provider of the scope the dispatch runs in.</param>
+    /// <param name="serviceProvider">The provider participants are resolved against.</param>
     /// <param name="groups">
-    ///     The group filter for this dispatch, or <c>null</c> for the default pipeline.
+    /// The groups to run; <c>null</c> runs the default group.
     /// </param>
     ValueTask Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider,
         IEnumerable<string>? groups);

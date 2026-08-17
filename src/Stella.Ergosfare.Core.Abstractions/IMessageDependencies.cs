@@ -3,45 +3,52 @@
 namespace Stella.Ergosfare.Core.Abstractions;
 
 /// <summary>
-/// Represents the resolved pipeline of a message type: the fixed set of handler and
-/// interceptor references per stage, ordered and ready to resolve per dispatch.
+/// The participants resolved for one message type, grouped by pipeline stage and ordered
+/// as they will be invoked.
 /// </summary>
 /// <remarks>
-/// Instances are provider-independent and cached process-wide. Interceptor stages contain
-/// both direct and indirect (assignable message type) registrations merged into a single
-/// list — direct entries first, then indirect, each segment ordered by weight and handler
-/// type name. Main handlers keep the direct/indirect split because mediation strategies
-/// treat them differently (e.g. single-handler validation applies to direct handlers only).
+/// <para>
+/// An instance holds no provider and is cached per message type, so the same instance
+/// serves every dispatch of that type; the participant instances themselves are resolved
+/// per dispatch through <see cref="IHandlerReference{THandler}.Resolve"/>.
+/// </para>
+/// <para>
+/// A participant is <em>direct</em> when it was registered for the dispatched message type
+/// itself, and <em>indirect</em> when it was registered for a type the message is
+/// assignable to. Interceptor stages merge both into one list — every direct entry first,
+/// then every indirect one, each run ordered by descending weight and then by type name.
+/// Main handlers keep the two apart, because mediation strategies treat them differently.
+/// </para>
 /// </remarks>
 public interface IMessageDependencies
 {
     /// <summary>
-    /// Gets the direct main handlers for the message.
+    /// The main handlers registered for the message type itself.
     /// </summary>
     IReadOnlyList<IHandlerReference<IHandler>> Handlers { get; }
 
     /// <summary>
-    /// Gets the indirect main handlers for the message (registered for an assignable message type).
+    /// The main handlers registered for a type the message is assignable to.
     /// </summary>
     IReadOnlyList<IHandlerReference<IHandler>> IndirectHandlers { get; }
 
     /// <summary>
-    /// Gets the pre-interceptors for the message (direct first, then indirect).
+    /// The pre-interceptors to run before the main handlers, direct entries first.
     /// </summary>
     IReadOnlyList<IHandlerReference<IPreInterceptor>> PreInterceptors { get; }
 
     /// <summary>
-    /// Gets the post-interceptors for the message (direct first, then indirect).
+    /// The post-interceptors to run after the main handlers, direct entries first.
     /// </summary>
     IReadOnlyList<IHandlerReference<IPostInterceptor>> PostInterceptors { get; }
 
     /// <summary>
-    /// Gets the exception interceptors for the message (direct first, then indirect).
+    /// The exception interceptors to run when a stage throws, direct entries first.
     /// </summary>
     IReadOnlyList<IHandlerReference<IExceptionInterceptor>> ExceptionInterceptors { get; }
 
     /// <summary>
-    /// Gets the final interceptors for the message (direct first, then indirect).
+    /// The final interceptors to run once the pipeline settles, direct entries first.
     /// </summary>
     IReadOnlyList<IHandlerReference<IFinalInterceptor>> FinalInterceptors { get; }
 }

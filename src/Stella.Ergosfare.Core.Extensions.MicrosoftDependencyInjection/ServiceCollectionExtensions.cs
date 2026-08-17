@@ -4,47 +4,38 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
 /// <summary>
-/// Provides extension methods for registering and configuring the Stella.Ergosfare framework
-/// with the ASP.NET Core dependency injection system.
+/// Adds Ergosfare to a dependency injection container.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
-    
+
     /// <summary>
-    /// Adds and configures the Stella.Ergosfare framework to the application's
-    /// <see cref="IServiceCollection"/>.
+    /// Registers Ergosfare and the modules configured in
+    /// <paramref name="ergosfareBuilderAction"/>.
     /// </summary>
-    /// <param name="services">
-    /// The <see cref="IServiceCollection"/> to which Stella.Ergosfare services will be added.
-    /// </param>
+    /// <param name="services">The container to add Ergosfare to.</param>
     /// <param name="ergosfareBuilderAction">
-    /// An action that configures the Stella.Ergosfare module registry using an <see cref="IModuleRegistry"/>.
-    /// This allows registration of additional modules and customization of the messaging pipeline.
+    /// Configures the registry: which modules to register, and how the framework should
+    /// behave.
     /// </param>
-    /// <returns>
-    /// The same <see cref="IServiceCollection"/> instance, enabling fluent chaining of service registrations.
-    /// </returns>
+    /// <returns>The same collection, so calls can be chained.</returns>
     /// <remarks>
     /// <para>
-    /// This method registers:
-    /// <list type="bullet">
-    ///   <item><description>The dispatch machinery: the dependencies factory, executor cache and mediator.</description></item>
-    ///   <item><description>A singleton <see cref="FrozenCompositionCatalog"/> — this container's view of the compiled composition table.</description></item>
-    ///   <item><description>The configured default result adapter, when <see cref="IModuleRegistry.UseDefaultResultAdapter"/> was called.</description></item>
-    ///   <item><description>All module-defined handlers, interceptors, and services discovered at initialization.</description></item>
-    /// </list>
+    /// This registers the dispatch machinery — the dependencies factory, the pipeline
+    /// executors and the mediators — along with this container's view of the compiled
+    /// composition table, the default result adapter if one was configured, and every
+    /// participant the registered modules named.
     /// </para>
     /// <para>
-    /// After setting up dependencies, this method invokes <paramref name="ergosfareBuilderAction"/>
-    /// to allow custom module configuration, then calls <see cref="ModuleRegistry.Initialize"/>
-    /// to finalize the setup.
+    /// The modules are configured first and the registry is finalized afterwards, so
+    /// everything registered during configuration is in place before the container is built.
     /// </para>
     /// </remarks>
     public static IServiceCollection AddErgosfare(this IServiceCollection services,
         Action<IModuleRegistry> ergosfareBuilderAction)
     {
-        // The composition catalog is per container: the frozen table it reads is
-        // process-wide, but which of its rows this application registered is not.
+        // One catalog per container: the composition table it reads is process-wide, but
+        // which of its rows this application registered is not.
         var compositions = new FrozenCompositionCatalog();
 
         var ergosfareBuilder = new ModuleRegistry(services, compositions);

@@ -7,19 +7,28 @@ using Stella.Ergosfare.SourceGenerator.Models;
 namespace Stella.Ergosfare.SourceGenerator.Symbols;
 
 /// <summary>
-///     Projects one declared type into the model the rest of the generator works from. This
-///     is the only place a <c>GeneratorSyntaxContext</c> is turned into a
-///     <see cref="RegistrableTypeModel"/>, which is what keeps the model comparable by value
-///     and the incremental pipeline able to skip unchanged declarations.
+/// Projects a declared type into the model the rest of the generator works from.
 /// </summary>
-
+/// <remarks>
+/// The only place a <see cref="GeneratorSyntaxContext"/> becomes a
+/// <see cref="RegistrableTypeModel"/>. Everything downstream sees values rather than
+/// symbols, which is what lets the incremental pipeline compare models and skip declarations
+/// that did not change.
+/// </remarks>
 internal static class RegistrableTypeReader
 {
     /// <summary>
-    ///     Projects a candidate type declaration to its registration model, or <c>null</c>
-    ///     when the type carries no Ergosfare marker. Runs per declaration; partial types
-    ///     may yield duplicates, which the registration pipeline dedupes.
+    /// Reads one candidate type declaration.
     /// </summary>
+    /// <param name="ctx">The declaration to read.</param>
+    /// <param name="ct">Cancels the read.</param>
+    /// <returns>
+    /// The type's model, or <c>null</c> when it carries no Ergosfare marker.
+    /// </returns>
+    /// <remarks>
+    /// Runs once per declaration, so a partial type yields a model per part; the registration
+    /// pipeline drops the repeats.
+    /// </remarks>
     internal static RegistrableTypeModel? Transform(GeneratorSyntaxContext ctx, CancellationToken ct)
     {
         if (ctx.SemanticModel.GetDeclaredSymbol((TypeDeclarationSyntax)ctx.Node, ct) is not { } symbol)
@@ -27,8 +36,8 @@ internal static class RegistrableTypeReader
             return null;
         }
 
-        // Static classes cannot implement interfaces; implicitly declared symbols are
-        // compiler artifacts. Neither is registrable.
+        // A static class cannot implement an interface, and an implicitly declared symbol is
+        // a compiler artifact. Neither is registrable.
         if (symbol.IsStatic || symbol.IsImplicitlyDeclared)
         {
             return null;
@@ -43,9 +52,9 @@ internal static class RegistrableTypeReader
 
         if (ParticipantAttributes.IsExcludedFromDiscovery(symbol))
         {
-            // Deliberately outside the closed world — but the reachability judgment must
-            // know the zone exists, so the exclusion flows through as a shadow model
-            // instead of vanishing.
+            // Deliberately outside the closed world, but the reachability judgment has to
+            // know the zone is there — so the exclusion flows through as a shadow model
+            // rather than vanishing.
             return CreateExcludedShadowModel(symbol, isCommand, isQuery, isEvent, referencedAssemblyName: null);
         }
 
@@ -65,8 +74,8 @@ internal static class RegistrableTypeReader
             ? ConstructionAnalyzer.GetProviderConstructionExpression(symbol, typeofExpression, symbol.ContainingAssembly, out usesKeyedServices)
             : null;
 
-        // Informational diagnostics apply to pipeline participants declared in source —
-        // the only place the user can act on them.
+        // The informational diagnostics are about how a pipeline participant is built, so
+        // only a type carrying contracts answers for them.
         var hasMultipleCtors = !descriptors.IsEmpty && ConstructionAnalyzer.HasMultiplePublicInstanceConstructors(symbol);
         var hasFromServices = !descriptors.IsEmpty && ConstructionAnalyzer.HasFromServicesOnConstructor(symbol);
 
@@ -108,9 +117,9 @@ internal static class RegistrableTypeReader
             StagedConstructionUsesKeyedServices = stagedKeyedServices,
             HasMultiplePublicConstructors = hasMultipleCtors,
             HasFromServicesConstructorParameter = hasFromServices,
-            // Handler-bearing types keep their declaration location too: the
-            // unreachable-handler diagnostics (ERGO007/008) anchor there; annotated
-            // messages anchor ERGO011/012 and dispatchable ones ERGO013 the same way.
+            // A handler-bearing type keeps its declaration location too: ERGO007 and ERGO008
+            // anchor an unreachable handler there, and an annotated or dispatchable message
+            // anchors ERGO011 through ERGO013 the same way.
             InfoLocation = hasMultipleCtors || hasFromServices || !descriptors.IsEmpty
                            || resultAdapter is not null || isDispatchable
                 ? LocationInfo.From(symbol)
@@ -125,10 +134,14 @@ internal static class RegistrableTypeReader
     }
 
     /// <summary>
-    ///     The models of the event messages this type subscribes to, for the ones that carry
-    ///     no marker of their own. Empty for everything that is not a subscriber, which is
-    ///     almost everything.
+    /// Builds models for the event messages a subscriber names but that carry no marker of
+    /// their own.
     /// </summary>
+    /// <param name="symbol">The type to read subscriptions from.</param>
+    /// <returns>
+    /// One model per such message; empty for anything that is not a subscriber, which is
+    /// nearly everything.
+    /// </returns>
     private static ImmutableArray<RegistrableTypeModel> DeriveEventMessages(INamedTypeSymbol symbol)
     {
         var messages = ContractReader.GetDerivedEventMessages(symbol);
@@ -149,16 +162,16 @@ internal static class RegistrableTypeReader
     }
 
     /// <summary>
-    ///     The model of a plain type a subscriber named as its event. A message and nothing
-    ///     else: it carries no contracts, is never constructed by the pipeline, and answers
-    ///     no diagnostics of its own — the subscriber that named it is where those belong.
+    /// Builds the model of a plain type a subscriber named as its event.
     /// </summary>
+    /// <param name="symbol">The named type.</param>
+    /// <returns>A model describing a message and nothing else.</returns>
     /// <remarks>
-    ///     <see cref="RegistrableTypeModel.ReferencedAssemblyName"/> stays <c>null</c> even
-    ///     when the type is declared elsewhere. The field records where a model was
-    ///     <em>found</em> by scanning, and this one was not found — it was created because
-    ///     this compilation declares a subscriber for it, which is a fact about this
-    ///     compilation rather than about the assembly the type happens to live in.
+    /// It carries no contracts, is never constructed by the pipeline, and answers no
+    /// diagnostics of its own — the subscriber that named it is where those belong.
+    /// <see cref="RegistrableTypeModel.ReferencedAssemblyName"/> stays <c>null</c> even for a
+    /// type declared elsewhere: that field records where scanning found a model, and this one
+    /// was not found but created, because this compilation declares a subscriber for it.
     /// </remarks>
     private static RegistrableTypeModel CreateDerivedEventMessageModel(INamedTypeSymbol symbol)
     {
@@ -204,8 +217,8 @@ internal static class RegistrableTypeReader
             IsExcludedFromDiscovery = false,
             ResultAdapter = null,
             HasIgnoredResultAdapter = false,
-            // Hiding a subscriber from bulk collection does not stop it from running, so the
-            // message it names is still a message.
+            // This type declares no marker itself; it is a message because a subscriber named
+            // it as one.
             ImplementsMessageMarker = false,
             DerivedEventMessages = DeriveEventMessages(symbol),
             MetadataSortKey = SymbolNaming.BuildMetadataName(symbol),
@@ -213,19 +226,22 @@ internal static class RegistrableTypeReader
     }
 
     /// <summary>
-    ///     The reduced model of an <c>[ExcludeFromDiscovery]</c> type: the reachability
-    ///     judgment's exclusion zone — the type's assignable chain when it could be a runtime
-    ///     message instance, and its main-handler descriptor messages when it carries handler
-    ///     contracts — plus what a hidden participant still contributes to emission: its
-    ///     pipeline row in the frozen composition, and its dispatch roots when a registration
-    ///     reaches it. Never registered, never diagnosed.
+    /// Builds the reduced model of a type marked <c>[ExcludeFromDiscovery]</c>.
     /// </summary>
+    /// <param name="symbol">The hidden type.</param>
+    /// <param name="isCommand">Whether it reaches the command marker.</param>
+    /// <param name="isQuery">Whether it reaches the query marker.</param>
+    /// <param name="isEvent">Whether it reaches the event marker.</param>
+    /// <param name="referencedAssemblyName">
+    /// The assembly it was scanned from, or <c>null</c> when this compilation declares it.
+    /// </param>
+    /// <returns>A model that is never registered and never diagnosed.</returns>
     /// <remarks>
-    ///     Reduced is not the same as empty, and the difference is decided per field by who
-    ///     reads it. What the type would cost to construct stays out, because nothing hidden
-    ///     is ever constructed from here; what a dispatch needs to close its generics stays
-    ///     in, because hiding a type from bulk registration does not stop it from being
-    ///     dispatched.
+    /// It carries what the reachability judgment needs to see the exclusion zone — the
+    /// assignable chain of anything that could be a message at run time, and the messages its
+    /// main-handler contracts name — and what a hidden type still owes emission: its row in
+    /// the frozen composition, and the roots a dispatch of it would close. What it costs to
+    /// construct stays out, because nothing hidden is ever constructed from here.
     /// </remarks>
     internal static RegistrableTypeModel CreateExcludedShadowModel(
         INamedTypeSymbol symbol,
@@ -237,21 +253,20 @@ internal static class RegistrableTypeReader
         var descriptors = ContractReader.BuildDescriptors(symbol);
         var isDispatchable = ContractReader.IsDispatchableMessage(symbol, descriptors);
 
-        // Hidden from discovery, but still part of a pipeline: [ExcludeFromDiscovery]
-        // keeps a type out of bulk registration, it does not stop a handler from being
-        // written for it or someone registering it by hand. The frozen table therefore
-        // describes these types too — as messages and as participants — and the consuming
-        // container's own registrations decide whether the rows run. Emission names the
-        // type, so unlike the judgment's exclusion zone this needs real accessibility.
+        // Hidden from discovery, yet still part of a pipeline: [ExcludeFromDiscovery] keeps a
+        // type out of bulk registration; it does not stop a handler being written for it or
+        // someone registering it by hand. So the frozen table describes these types too, as
+        // messages and as participants, and the consuming container's own registrations
+        // decide whether the rows run. Emission names the type, which is why this needs real
+        // accessibility where the judgment's exclusion zone does not.
         var isAccessible = SymbolNaming.IsAccessibleFromGeneratedCode(symbol);
         var isMessageShape = isAccessible && ContractReader.IsMessageShape(symbol, descriptors);
 
-        // A hidden message a registration reaches is rooted, and rooting a message means its
-        // result contracts too — AddMessage closes the message generic, AddResult/AddStream
-        // close the (message, result) ones, and they are different tables. Left empty, the
-        // shared root emission wrote the message root and silently skipped the others, so a
-        // hidden ICommand<string> dispatched by result still closed its generic through
-        // MakeGenericType. The judgment this model was first written for never read them.
+        // Rooting a hidden message means rooting its result contracts as well: AddMessage
+        // closes the message generic while AddResult and AddStream close the (message,
+        // result) ones, and those are separate tables. Without the results, a hidden
+        // ICommand<string> dispatched by result would still close its generic through
+        // MakeGenericType.
         var dispatchResults = isDispatchable
             ? ContractReader.GetDispatchResults(symbol)
             : ImmutableArray<DispatchResultModel>.Empty;

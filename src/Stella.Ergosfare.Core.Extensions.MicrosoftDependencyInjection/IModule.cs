@@ -2,13 +2,21 @@
 
 
 /// <summary>
-///     Represents a module in an application that can be configured and built.
+/// A unit of registration: one call that adds a set of participants and services to the
+/// container.
 /// </summary>
+/// <remarks>
+/// The message modules — commands, queries, events — are modules, and so is the facade a
+/// plugin's generator writes.
+/// </remarks>
 public interface IModule
 {
     /// <summary>
-    ///     Builds the module using the provided configuration.
+    /// Adds this module's registrations to the container being built.
     /// </summary>
-    /// <param name="configuration">The configuration for the module.</param>
+    /// <param name="configuration">
+    /// What the module registers into: the service collection, and the record of what this
+    /// container selected.
+    /// </param>
     void Build(IModuleConfiguration configuration);
 }

@@ -4,46 +4,46 @@ namespace Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 
 
 /// <summary>
-/// Executes the pre-merged exception-interceptor list (direct first, then indirect) for a
-/// message, dispatching every interceptor through its typed contract — result-typed
-/// asynchronous interceptors via <see cref="IAsyncExceptionInterceptor{TMessage, TResult}"/>,
-/// result-agnostic ones via <see cref="IAsyncExceptionInterceptor{TMessage}"/>, synchronous
-/// ones via <see cref="IExceptionInterceptor{TMessage, TResult}"/>. There is no object-typed
-/// bridge and no boxed awaitable; `in` variance admits interceptors registered for base
-/// message or result types.
-/// <para>
-/// An interceptor carrying an <see cref="IExceptionInterceptorFilter"/> runs only for the
-/// exceptions it accepts. The stage itself never rethrows: it reports whether any
-/// interceptor <em>matched</em> — the caller owns the unhandled-failure outcome, which
-/// differs by channel (rethrow for classic pipelines, a failed carrier for materializable
-/// result types, nothing for a value-carried failure that already lives in the result).
-/// </para>
+/// Runs a message's exception-interceptor stage for a failure, skipping the interceptors
+/// that filter it out, and reports whether any of them accepted it.
 /// </summary>
-/// <typeparam name="TMessage">The dispatch message type (the runtime type on executor paths).</typeparam>
+/// <typeparam name="TMessage">
+/// The message type the stage dispatches as; on executor paths this is the message's
+/// runtime type.
+/// </typeparam>
 /// <typeparam name="TResult">
-/// The pipeline's result type — <see cref="Unit"/> for pipelines that produce no result.
+/// The pipeline's result type. Pipelines that produce no result pass <see cref="Unit"/>.
 /// </typeparam>
 /// <remarks>
-/// Static: the pipeline state travels as arguments, so a dispatch allocates no invoker object.
+/// The stage never rethrows. What happens to an unaccepted failure differs by result type
+/// — rethrown for an ordinary pipeline, turned into a failed carrier for a materializable
+/// result type, left in the result when the failure was carried there to begin with — so
+/// that decision belongs to the caller.
 /// </remarks>
 internal static class ExceptionInterceptorInvocationStrategy<TMessage, TResult>
     where TMessage : notnull
 {
     /// <summary>
-    /// Executes all exception interceptors for the specified message, result, and exception.
+    /// Runs the exception interceptors that accept <paramref name="exception"/>, passing
+    /// each the result the previous one returned.
     /// </summary>
-    /// <param name="messageDependencies">The message's pipeline composition, supplying the exception-interceptor list.</param>
-    /// <param name="serviceProvider">The provider of the scope this dispatch runs in; interceptors resolve from it.</param>
-    /// <param name="message">The message whose processing failed.</param>
-    /// <param name="result">The result produced by the pipeline so far, if any.</param>
-    /// <param name="exception">The failure — thrown by the pipeline or carried inside its result.</param>
-    /// <param name="executionContext">The execution context for the current pipeline invocation.</param>
+    /// <param name="messageDependencies">The message's participants; supplies the stage list.</param>
+    /// <param name="serviceProvider">The provider interceptors are resolved from.</param>
+    /// <param name="message">The message whose dispatch failed.</param>
+    /// <param name="result">The result produced so far, if any.</param>
+    /// <param name="exception">
+    /// The failure to handle, whether it was thrown or carried inside a result.
+    /// </param>
+    /// <param name="executionContext">The execution context of this dispatch.</param>
     /// <returns>
-    /// Whether any interceptor accepted the exception, and the (possibly replaced) result
-    /// after all matching exception interceptors have executed. The result is meaningful
-    /// only when <c>Matched</c> is <c>true</c> — an unmatched stage ran nobody and handled
-    /// nothing.
+    /// Whether any interceptor accepted the failure, and the result the stage produced. The
+    /// result means nothing when nothing matched — that stage ran no interceptor and
+    /// handled nothing.
     /// </returns>
+    /// <exception cref="NotSupportedException">
+    /// A matching interceptor implements no exception-interceptor contract for
+    /// <typeparamref name="TMessage"/> and <typeparamref name="TResult"/>.
+    /// </exception>
     public static async ValueTask<(bool Matched, object? Result)> Invoke(
         IMessageDependencies messageDependencies,
         IServiceProvider serviceProvider,
@@ -59,10 +59,9 @@ internal static class ExceptionInterceptorInvocationStrategy<TMessage, TResult>
         {
             var interceptor = interceptors[i].Resolve(serviceProvider);
 
-            // A filtered interceptor that rejects this exception is not a participant at
-            // all: it neither runs nor counts towards "something handled it". Resolution
-            // still happens first — the filter lives on the instance, and resolving every
-            // registered interceptor is the behavior the unfiltered stage already had.
+            // A filtered interceptor that rejects this failure takes no part in the stage:
+            // it neither runs nor makes the failure handled. It is still resolved first,
+            // because the filter is a member of the instance.
             if (interceptor is IExceptionInterceptorFilter filter && !filter.Matches(exception))
             {
                 continue;
@@ -70,6 +69,8 @@ internal static class ExceptionInterceptorInvocationStrategy<TMessage, TResult>
 
             matched = true;
 
+            // Most specific contract first: an interceptor implementing several is
+            // dispatched through the result-typed asynchronous one.
             result = interceptor switch
             {
                 IAsyncExceptionInterceptor<TMessage, TResult> typedAsyncInterceptor =>

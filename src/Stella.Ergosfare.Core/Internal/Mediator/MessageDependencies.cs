@@ -6,15 +6,13 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 
 /// <summary>
-/// The resolved pipeline of a message type: fixed, ordered handler reference arrays per
-/// stage, built once from the message's <see cref="FrozenPipelineShape"/> and shared
-/// process-wide.
+/// The participants of one message type and group set, as fixed per-stage arrays built once
+/// from the message's pipeline shape.
 /// </summary>
 /// <remarks>
-/// Instances hold no scope state. Handler instances are resolved per invocation from the
-/// dispatching scope's provider, which the mediation pipeline passes down explicitly —
-/// unless <c>memoizedProvider</c> is supplied, in which case each reference resolves once
-/// from that provider and caches the instance process-wide (the memoized fast path).
+/// An instance holds no scope state and is shared across dispatches. Participant instances
+/// come from the provider each dispatch passes in — unless the instance was built with a
+/// memoized provider, in which case each reference resolves once and keeps its instance.
 /// </remarks>
 internal sealed class MessageDependencies : IMessageDependencies
 {
@@ -37,13 +35,15 @@ internal sealed class MessageDependencies : IMessageDependencies
     public IReadOnlyList<IHandlerReference<IFinalInterceptor>> FinalInterceptors { get; }
 
     /// <summary>
-    /// Initializes the fixed reference arrays from a message's frozen pipeline shape.
+    /// Builds the per-stage reference arrays from a message's pipeline shape.
     /// </summary>
-    /// <param name="shape">The ordered, group-filtered pipeline shape with pre-resolved handler types.</param>
+    /// <param name="shape">
+    /// The message's pipeline for one group set: participant types per stage, in invocation
+    /// order and already closed over the message's type arguments.
+    /// </param>
     /// <param name="memoizedProvider">
-    /// When non-null, references resolve once from this provider and cache the instance
-    /// (memoized fast path); when null, references resolve per invocation from the
-    /// execution context's provider.
+    /// When supplied, references resolve once from this provider and keep the instance;
+    /// when <c>null</c>, they resolve per invocation from the dispatching scope's provider.
     /// </param>
     public MessageDependencies(FrozenPipelineShape shape, IServiceProvider? memoizedProvider)
     {
@@ -56,20 +56,19 @@ internal sealed class MessageDependencies : IMessageDependencies
         ExceptionInterceptors = Materialize<IExceptionInterceptor>(shape.ExceptionInterceptors, memoizedProvider);
         FinalInterceptors = Materialize<IFinalInterceptor>(shape.FinalInterceptors, memoizedProvider);
 
-        // Precomputed once per (message type, groups): the exact condition the single-handler
-        // strategies use for their zero-interceptor fast path. Executors read this to invoke
-        // the handler directly, without entering the strategy's async machinery.
+        // Worked out once per (message type, groups): the exact condition the single-handler
+        // paths need before they can call a handler without entering a strategy at all.
         HasNoInterceptors =
             PreInterceptors.Count == 0
             && PostInterceptors.Count == 0
             && ExceptionInterceptors.Count == 0
             && FinalInterceptors.Count == 0;
 
-        // The direct level wins outright: a sole direct handler serves the message no
-        // matter how many covariant candidates exist; without a direct one the dispatch
-        // falls to the covariant level. Only a same-level contest — or an empty candidate
-        // set — must reach the strategy to be told so, so the short circuit mirrors the
-        // strategies' selection exactly.
+        // Handlers registered for the message type itself win outright: one of those serves
+        // the message however many covariant candidates exist, and only when there are none
+        // does the covariant level get considered. A contested level — or no candidate at
+        // all — has to reach the strategy to be reported, so this mirrors the strategies'
+        // own selection exactly.
         FastSingleHandler = HasNoInterceptors
             ? Handlers.Count == 1
                 ? Handlers[0]
@@ -79,37 +78,48 @@ internal sealed class MessageDependencies : IMessageDependencies
     }
 
     /// <summary>
-    /// The main-handler stages as concrete arrays, so hot loops index without interface
-    /// dispatch. Same instances the <see cref="Handlers"/>/<see cref="IndirectHandlers"/>
-    /// properties expose.
+    /// The direct main handlers as a concrete array, so hot loops index it without going
+    /// through an interface. The same instance <see cref="Handlers"/> exposes.
     /// </summary>
     internal IHandlerReference<IHandler>[] HandlerArray { get; }
+
+    /// <summary>
+    /// The covariantly matched main handlers as a concrete array; the same instance
+    /// <see cref="IndirectHandlers"/> exposes.
+    /// </summary>
     internal IHandlerReference<IHandler>[] IndirectHandlerArray { get; }
 
     /// <summary>
-    /// Whether all four interceptor stages are empty — the broadcast fast path's
-    /// eligibility condition, computed once at construction.
+    /// Whether all four interceptor stages are empty.
     /// </summary>
     internal bool HasNoInterceptors { get; }
 
     /// <summary>
-    /// The main handler the priority ladder selects — the sole direct one, else the sole
-    /// covariant one — when the pipeline has no interceptor stages; <c>null</c> when the
-    /// winning level is contested or empty. Computed once at construction.
+    /// The one main handler this pipeline runs — the sole direct one, or the sole covariant
+    /// one when there is no direct handler — but only when there are no interceptors at all.
+    /// <c>null</c> when the winning level is empty or contested, or when a stage would run.
     /// </summary>
     internal IHandlerReference<IHandler>? FastSingleHandler { get; }
 
     /// <summary>
-    /// Whether references resolve once and cache the instance (memoized mode). Generated
-    /// plans must not construct handlers directly in this mode — the memoized instance is
-    /// the semantic contract.
+    /// Whether references resolve once and keep their instance.
     /// </summary>
+    /// <remarks>
+    /// Generated plans must not construct participants themselves in this mode: reusing the
+    /// one instance is the contract.
+    /// </remarks>
     internal bool MemoizedInstances { get; }
 
     /// <summary>
-    /// Wraps a shape's participant types in resolvable references. Runs once per
-    /// (message type, groups) process-wide — never on the dispatch path.
+    /// Wraps a stage's participant types in resolvable references.
     /// </summary>
+    /// <typeparam name="THandler">The stage's participant contract.</typeparam>
+    /// <param name="participants">The participant types, in invocation order.</param>
+    /// <param name="memoizedProvider">The provider to memoize against, or <c>null</c>.</param>
+    /// <returns>The references, in the same order.</returns>
+    /// <remarks>
+    /// Runs once per (message type, groups) for the whole process, never during a dispatch.
+    /// </remarks>
     private static IHandlerReference<THandler>[] Materialize<THandler>(
         IReadOnlyList<Type> participants,
         IServiceProvider? memoizedProvider)

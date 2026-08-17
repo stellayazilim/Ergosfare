@@ -5,44 +5,26 @@ using Stella.Ergosfare.SourceGenerator.Models;
 namespace Stella.Ergosfare.SourceGenerator.Symbols;
 
 /// <summary>
-///     Closes open participants over the messages their constraints admit. A handler taking
-///     its message as a type parameter is one declaration and many pipelines; monomorphizing
-///     it here turns each of those pipelines into an ordinary registrable type, which is what
-///     lets them be planned instead of resolved through an open generic at run time.
+/// Closes open participants over the messages their constraints admit.
 /// </summary>
-
+/// <remarks>
+/// A handler taking its message as a type parameter is one declaration and many pipelines.
+/// Closing it here turns each of those into an ordinary registrable type, which is what lets
+/// them be planned instead of resolved through an open generic at run time.
+/// </remarks>
 internal static class Monomorphizer
 {
     /// <summary>
-    ///     Whether generated code — a sibling top-level type in the same assembly — can
-    ///     reference the type. Private/protected members of other types and file-local
-    ///     types cannot be named from the generated file.
+    /// Reports whether a generic level is still open.
     /// </summary>
-    /// <summary>
-    ///     Whether a generic participant is one no message can bind.
-    /// </summary>
+    /// <param name="type">The type to test.</param>
+    /// <returns>
+    /// <c>true</c> for the definition itself and for a form constructed from its own type
+    /// parameters.
+    /// </returns>
     /// <remarks>
-    ///     <para>
-    ///     A generic participant binds when its contract's message type is built from its
-    ///     own type parameters — <c>WrapHandler&lt;T&gt; : ICommandHandler&lt;Wrap&lt;T&gt;&gt;</c>.
-    ///     The table then keys the message by its definition and names the participant by
-    ///     its unbound <c>typeof</c>, and the dispatch closes the participant over the
-    ///     dispatched message's own generic arguments (<c>FrozenComposition.Close</c>). One
-    ///     baked entry serves every instantiation.
-    ///     </para>
-    ///     <para>
-    ///     It binds to nothing when the contract's message type is the type parameter
-    ///     itself — <c>ValidateCommands&lt;TCommand&gt; : ICommandPreInterceptor&lt;TCommand&gt;</c>.
-    ///     The message is then any concrete command, which carries no generic arguments to
-    ///     close the participant over, and participants are matched to messages by concrete
-    ///     type, so no message's stage arrays ever contain it.
-    ///     </para>
+    /// A form closed over concrete types is neither, and can be named.
     /// </remarks>
-    /// <summary>
-    ///     Whether a generic level is still open — the definition itself, or a constructed
-    ///     form whose arguments are its own type parameters. A form closed over concrete
-    ///     types is neither, and can be named.
-    /// </summary>
     internal static bool IsUnboundOrDefinition(INamedTypeSymbol type)
     {
         if (type.IsUnboundGenericType || SymbolEqualityComparer.Default.Equals(type, type.OriginalDefinition))
@@ -61,6 +43,27 @@ internal static class Monomorphizer
         return false;
     }
 
+    /// <summary>
+    /// Reports whether a generic participant is one no message can bind.
+    /// </summary>
+    /// <param name="symbol">The participant to test.</param>
+    /// <returns><c>true</c> when nothing binds it.</returns>
+    /// <remarks>
+    /// <para>
+    /// A generic participant binds when its contract's message type is built from its own
+    /// type parameters — <c>WrapHandler&lt;T&gt; : ICommandHandler&lt;Wrap&lt;T&gt;&gt;</c>.
+    /// The table then keys the message by its definition and names the participant by its
+    /// unbound <c>typeof</c>, and the dispatch closes the participant over the arguments of
+    /// the message it carries. One baked entry serves every instantiation.
+    /// </para>
+    /// <para>
+    /// It binds to nothing when the contract's message type is the type parameter itself —
+    /// <c>ValidateCommands&lt;TCommand&gt; : ICommandPreInterceptor&lt;TCommand&gt;</c>. The
+    /// message is then any concrete command, which carries no generic arguments to close the
+    /// participant over, and participants are matched to messages by concrete type, so no
+    /// message's stages ever hold it.
+    /// </para>
+    /// </remarks>
     internal static bool IsUnbindableGenericParticipant(INamedTypeSymbol symbol)
     {
         if (symbol.Arity == 0)
@@ -85,22 +88,22 @@ internal static class Monomorphizer
     }
 
     /// <summary>
-    ///     Closes every unbindable open participant over the messages its constraint admits,
-    ///     one closed model per pair — the compile-time counterpart of the instantiations a
-    ///     generic method gets in the binary.
+    /// Closes every unbindable open participant over the messages its constraint admits.
     /// </summary>
+    /// <param name="compilation">The compilation to read participants and messages from.</param>
+    /// <param name="ct">Cancels the work.</param>
+    /// <returns>One closed model per participant-and-message pair.</returns>
     /// <remarks>
-    ///     <para>
-    ///     The closing set does not come from the source: nobody writes
-    ///     <c>ValidateCommands&lt;RegisterUser&gt;</c>. It comes from the type parameter's
-    ///     constraint intersected with the compiled message set, and every pair that
-    ///     survives becomes a distinct type with its own registration and its own place in
-    ///     that message's pipeline.
-    ///     </para>
-    ///     <para>
-    ///     A participant that closes over nothing keeps ERGO016: it was registered and it
-    ///     still runs for no message.
-    ///     </para>
+    /// <para>
+    /// The set to close over does not come from the source — nobody writes
+    /// <c>ValidateCommands&lt;RegisterUser&gt;</c>. It is the type parameter's constraint
+    /// intersected with the compiled messages, and each surviving pair becomes a distinct
+    /// type with its own registration and its own place in that message's pipeline.
+    /// </para>
+    /// <para>
+    /// A participant that closes over nothing keeps ERGO016: it is registered and it still
+    /// runs for no message.
+    /// </para>
     /// </remarks>
     internal static ImmutableArray<RegistrableTypeModel> MonomorphizeOpenParticipants(
         Compilation compilation,
@@ -123,7 +126,7 @@ internal static class Monomorphizer
         {
             ct.ThrowIfCancellationRequested();
 
-            // Only the single-parameter shape is modeled: the message is the one thing a
+            // Only the single-parameter shape is closed here: the message is the one thing a
             // constraint can name, and a second parameter has nothing to be closed from.
             if (participant.Arity != 1)
             {
@@ -159,9 +162,18 @@ internal static class Monomorphizer
     }
 
     /// <summary>
-    ///     Walks the compilation's own types for the two halves monomorphization needs: the
-    ///     open participants that bind to nothing, and the messages a constraint can admit.
+    /// Walks a namespace for the two halves this closing needs.
     /// </summary>
+    /// <param name="ns">The namespace to walk.</param>
+    /// <param name="openParticipants">
+    /// The list open participants are added to; created on first use.
+    /// </param>
+    /// <param name="messages">The list candidate messages are added to; created on first use.</param>
+    /// <param name="ct">Cancels the walk.</param>
+    /// <remarks>
+    /// Only the compilation's own types: a closed form is emitted into this assembly, so it
+    /// is built from what this assembly declares.
+    /// </remarks>
     internal static void CollectMonomorphizationCandidates(
         INamespaceSymbol ns,
         ref List<INamedTypeSymbol>? openParticipants,
@@ -184,6 +196,14 @@ internal static class Monomorphizer
         }
     }
 
+    /// <summary>
+    /// Sorts one type, and everything nested in it, into open participants or messages.
+    /// </summary>
+    /// <param name="type">The type to sort.</param>
+    /// <param name="openParticipants">
+    /// The list open participants are added to; created on first use.
+    /// </param>
+    /// <param name="messages">The list candidate messages are added to; created on first use.</param>
     internal static void CollectMonomorphizationCandidate(
         INamedTypeSymbol type,
         ref List<INamedTypeSymbol>? openParticipants,
@@ -212,8 +232,8 @@ internal static class Monomorphizer
             return;
         }
 
-        // A message is what a constraint can admit: dispatchable, and therefore not itself
-        // a participant.
+        // A constraint admits messages, so what qualifies is a dispatchable type — which is
+        // therefore not itself a participant.
         if (ContractReader.IsDispatchableMessage(type, ContractReader.BuildDescriptors(type)))
         {
             (messages ??= []).Add(type);
@@ -221,10 +241,15 @@ internal static class Monomorphizer
     }
 
     /// <summary>
-    ///     Whether a message satisfies every constraint the participant's type parameter
-    ///     declares — the compile-time question "would <c>Participant&lt;Message&gt;</c>
-    ///     have compiled if someone had written it".
+    /// Reports whether a message satisfies every constraint a type parameter declares.
     /// </summary>
+    /// <param name="parameter">The participant's type parameter.</param>
+    /// <param name="candidate">The message to close it over.</param>
+    /// <returns><c>true</c> when every constraint holds.</returns>
+    /// <remarks>
+    /// The same question as whether <c>Participant&lt;Message&gt;</c> would have compiled had
+    /// someone written it.
+    /// </remarks>
     internal static bool SatisfiesConstraints(ITypeParameterSymbol parameter, INamedTypeSymbol candidate)
     {
         if (parameter.HasReferenceTypeConstraint && candidate.IsValueType)
@@ -255,6 +280,12 @@ internal static class Monomorphizer
         return true;
     }
 
+    /// <summary>
+    /// Reports whether a candidate is the constraint type or derives from it.
+    /// </summary>
+    /// <param name="candidate">The message to test.</param>
+    /// <param name="constraint">The constraint it must satisfy.</param>
+    /// <returns><c>true</c> when the candidate is assignable to the constraint.</returns>
     internal static bool IsAssignableToConstraint(INamedTypeSymbol candidate, INamedTypeSymbol constraint)
     {
         for (var current = candidate; current is not null; current = current.BaseType)
@@ -277,11 +308,20 @@ internal static class Monomorphizer
     }
 
     /// <summary>
-    ///     Projects one monomorphized participant to its registration model. The closed form
-    ///     is a distinct type — it names itself in full rather than in the unbound form a
-    ///     declared generic uses — and its contracts now name a concrete message, which is
-    ///     what lets the composition table bind it like any other participant.
+    /// Builds the model of one closed participant.
     /// </summary>
+    /// <param name="closed">The closed form.</param>
+    /// <param name="openDefinition">The declaration it was closed from.</param>
+    /// <param name="currentAssembly">The compilation's assembly.</param>
+    /// <returns>
+    /// The model, or <c>null</c> when the closed form carries no contract to register.
+    /// </returns>
+    /// <remarks>
+    /// The closed form is a type in its own right: it names itself in full rather than in the
+    /// unbound form a declared generic uses, and its contracts name a concrete message, which
+    /// is what lets the composition table bind it like any other participant. Its attributes
+    /// are read from the declaration, which is where an author wrote them.
+    /// </remarks>
     internal static RegistrableTypeModel? CreateMonomorphizedModel(
         INamedTypeSymbol closed,
         INamedTypeSymbol openDefinition,
@@ -329,7 +369,7 @@ internal static class Monomorphizer
             ExcludedInterceptorGroups = ParticipantAttributes.GetPipelineExclusionGroups(openDefinition),
             IsValueType = closed.IsValueType,
             IsNestedType = closed.ContainingType is not null,
-            // Bound, so no longer the shape ERGO016 reports.
+            // It is bound now, so no longer the shape ERGO016 reports.
             IsGenericParticipant = false,
             MonomorphizedFrom = SymbolNaming.BuildTypeofExpression(openDefinition),
             AssignableKeys = ImmutableArray<string>.Empty,

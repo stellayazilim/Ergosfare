@@ -4,23 +4,24 @@ using System.Collections.Concurrent;
 namespace Stella.Ergosfare.Core.Abstractions;
 
 /// <summary>
-/// An immutable, canonicalized group filter: <see cref="Of"/> interns equal sequences
-/// (same names, same order — ordinal) to one instance, so the grouped dispatch caches can
-/// match a reused filter with a single reference check instead of comparing group names
-/// element-wise. Define filters once and reuse them:
+/// An immutable group filter whose equal instances are canonicalized, so dispatch caches
+/// can recognize a reused filter by reference instead of comparing names.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Build a filter once with <see cref="Of"/> and reuse the instance:
 /// <code>
 /// static readonly GroupSet Reporting = GroupSet.Of("reporting");
 /// await mediator.SendAsync(new BuildDailyReport(), Reporting);
 /// </code>
-/// A <see cref="GroupSet"/> is also an <see cref="IReadOnlyList{T}"/> of its names, so it can
-/// be passed anywhere a group sequence is accepted — including the full dispatch overloads
-/// that take one alongside contextual items — and the caches recognize it there too.
-/// </summary>
-/// <remarks>
-/// Interning is bounded: beyond an internal cap, <see cref="Of"/> returns un-interned
-/// instances, which still dispatch correctly — the caches fall back to comparing group
-/// names. Group names come from code in practice, so the cap exists only as a guard
-/// against pathological dynamic name generation.
+/// A set is an <see cref="IReadOnlyList{T}"/> of its names, so it is accepted anywhere a
+/// group sequence is, including the dispatch overloads that take contextual items.
+/// </para>
+/// <para>
+/// Canonicalization is capped. Past the internal limit <see cref="Of"/> returns
+/// non-canonical instances; those still dispatch identically, the caches simply compare
+/// names. The cap only guards against group names generated dynamically without bound.
+/// </para>
 /// </remarks>
 public sealed class GroupSet : IReadOnlyList<string>
 {
@@ -28,14 +29,16 @@ public sealed class GroupSet : IReadOnlyList<string>
 
     private static readonly ConcurrentDictionary<string, GroupSet> Interned = new();
 
-    /// <summary>The empty filter: no group filtering, the default pipeline.</summary>
+    /// <summary>
+    /// The filter that applies no group filtering, selecting the default pipeline.
+    /// </summary>
     public static readonly GroupSet Empty = new([], string.Empty);
 
     private readonly string[] _names;
 
     /// <summary>
-    /// The names joined with the executor caches' separator — the same string the
-    /// composite stores key grouped executors by, precomputed once per set.
+    /// The names joined with the separator the executor caches key grouped entries by,
+    /// computed once per set.
     /// </summary>
     internal readonly string JoinedKey;
 
@@ -46,12 +49,20 @@ public sealed class GroupSet : IReadOnlyList<string>
     }
 
     /// <summary>
-    /// Returns the canonical <see cref="GroupSet"/> for the given group names. Order is
-    /// significant and comparison is ordinal, matching dispatch-time group semantics
-    /// exactly; the input sequence is snapshotted, so later mutation of a passed array
-    /// never affects the set.
+    /// Returns the canonical set for <paramref name="groups"/>. Two calls with the same
+    /// names in the same order return the same instance, up to the canonicalization cap.
     /// </summary>
-    /// <param name="groups">The group names; must not be null or contain nulls.</param>
+    /// <param name="groups">
+    /// The group names. Order is significant and names are compared ordinally, matching
+    /// dispatch-time group semantics. The sequence is copied, so mutating the argument
+    /// afterwards does not affect the returned set.
+    /// </param>
+    /// <returns>
+    /// <see cref="Empty"/> when <paramref name="groups"/> is empty; otherwise a set over
+    /// the given names.
+    /// </returns>
+    /// <exception cref="ArgumentNullException"><paramref name="groups"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="groups"/> contains a <c>null</c> name.</exception>
     public static GroupSet Of(params string[] groups)
     {
         ArgumentNullException.ThrowIfNull(groups);
@@ -78,26 +89,37 @@ public sealed class GroupSet : IReadOnlyList<string>
 
         var set = new GroupSet([.. groups], key);
 
-        // Beyond the cap the set is served un-interned: reference identity across Of
-        // calls is lost, content-based matching in the caches is not.
+        // Past the cap the set is handed out without being cached: callers lose reference
+        // identity across Of calls, but the caches still match it by content.
         return Interned.Count < InternCap ? Interned.GetOrAdd(key, set) : set;
     }
 
-    /// <summary>The group names, in order.</summary>
+    /// <summary>
+    /// The backing name array, in order.
+    /// </summary>
     internal string[] Names => _names;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// The number of group names in this set.
+    /// </summary>
     public int Count => _names.Length;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// The group name at <paramref name="index"/>.
+    /// </summary>
+    /// <param name="index">The zero-based position to read.</param>
     public string this[int index] => _names[index];
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Returns an enumerator over the group names, in order.
+    /// </summary>
     public IEnumerator<string> GetEnumerator() => ((IEnumerable<string>)_names).GetEnumerator();
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Returns the group names for display, or <c>GroupSet.Empty</c> when there are none.
+    /// </summary>
     public override string ToString()
         => _names.Length == 0 ? "GroupSet.Empty" : $"GroupSet [{string.Join(", ", _names)}]";
 }

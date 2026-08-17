@@ -5,14 +5,16 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 
 /// <summary>
-/// Internal mediator responsible for dispatching messages to their corresponding handlers
-/// and managing the execution context and dependencies for each message.
+/// The <see cref="IMessageMediator"/> a scope resolves: it holds that scope's provider and
+/// forwards every dispatch to the container's <see cref="MessageDispatchEngine"/>.
 /// </summary>
-/// <remarks>
-/// The <see cref="MessageMediator"/> dispatches through the engine's cached pipeline
-/// executors; the compiled composition decides what serves each message type.
-/// </remarks>
-
+/// <param name="messageDependenciesFactory">The container's dependencies factory.</param>
+/// <param name="serviceProvider">The provider of the scope this mediator was resolved from.</param>
+/// <param name="executorCache">
+/// The container's pipeline executors. Supplying this without an engine builds a private
+/// engine over it.
+/// </param>
+/// <param name="engine">The container's dispatch engine.</param>
 internal sealed class MessageMediator(
     IMessageDependenciesFactory messageDependenciesFactory,
     IServiceProvider serviceProvider,
@@ -55,39 +57,49 @@ internal sealed class MessageMediator(
     }
 
     /// <summary>
-    /// The provider of the scope this mediator was resolved from — the broadcast fast lane
-    /// (events assembly, via InternalsVisibleTo) dispatches strategies against it directly.
+    /// The provider of the scope this mediator was resolved from. The events assembly
+    /// dispatches against it directly on its publish path.
     /// </summary>
     internal IServiceProvider ScopeProvider => _serviceProvider;
 
     /// <summary>
-    /// The dependencies factory backing this mediator; see <see cref="ScopeProvider"/>.
+    /// The container's dependencies factory; exposed alongside <see cref="ScopeProvider"/>
+    /// for the same reason.
     /// </summary>
     internal IMessageDependenciesFactory DependenciesFactory => _messageDependenciesFactory;
 
+    /// <summary>
+    /// Returns the engine, or explains that the mediator was built without one.
+    /// </summary>
+    /// <returns>The engine this mediator dispatches through.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// The mediator was constructed with neither an engine nor an executor cache.
+    /// </exception>
     private MessageDispatchEngine RequireEngine()
         => _engine ?? throw new InvalidOperationException(
             "Executor dispatch requires the PipelineExecutorCache; register Ergosfare through AddErgosfare.");
 
 
     /// <summary>
-    /// Factory used to create message handler dependencies for a given message type and descriptor.
+    /// The factory the engine builds its pipelines through.
     /// </summary>
     private readonly IMessageDependenciesFactory _messageDependenciesFactory = messageDependenciesFactory ?? throw new ArgumentNullException(nameof(messageDependenciesFactory));
 
     /// <summary>
-    /// The provider of the scope this mediator was resolved from; passed to the mediation
-    /// strategy on each dispatch so handlers resolve against the calling scope.
+    /// The provider of the scope this mediator was resolved from, passed to the engine on
+    /// every dispatch so participants resolve against the calling scope.
     /// </summary>
     private readonly IServiceProvider _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
 
     /// <summary>
-    /// The dispatch engine the executor overloads delegate to. DI injects the container's
-    /// singleton; directly-constructed mediators (tests) that supply only an executor cache
-    /// get a private engine wrapping it, preserving the original optional-cache contract.
-    /// Declared after the null-validated fields above so a null factory still fails their
-    /// argument checks first.
+    /// The engine every dispatch goes through. Dependency injection supplies the
+    /// container's; a mediator constructed by hand with only an executor cache gets a
+    /// private engine wrapping it.
     /// </summary>
+    /// <remarks>
+    /// Declared after the null-checked fields above so that a <c>null</c> factory still
+    /// fails their argument checks first.
+    /// </remarks>
     private readonly MessageDispatchEngine? _engine =
         engine ?? (executorCache is null ? null : new MessageDispatchEngine(executorCache, messageDependenciesFactory));
 }

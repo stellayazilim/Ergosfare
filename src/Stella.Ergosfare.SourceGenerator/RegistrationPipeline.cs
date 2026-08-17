@@ -9,18 +9,25 @@ using Stella.Ergosfare.SourceGenerator.Symbols;
 namespace Stella.Ergosfare.SourceGenerator;
 
 /// <summary>
-///     One run of the registration output: reconcile the discovered models into a single
-///     type list, judge dispatch reachability over it, plan what the judged list compiles to,
-///     and write the file. The generator itself only wires the providers that feed this.
+/// Turns the generator's collected inputs into the registration file.
 /// </summary>
-
+/// <remarks>
+/// The discovered models are reconciled into one type list, dispatch reachability is judged
+/// over that list, the judged list is planned, and the result is written. The generator
+/// itself only wires the providers feeding this.
+/// </remarks>
 internal static class RegistrationPipeline
 {
     /// <summary>
-    ///     ERGO018 at every <c>Register</c> call naming a type only run time knows. Local
-    ///     to this compilation by construction: registration sites come from its own syntax,
-    ///     and a referenced assembly's manifest carries no location to report against.
+    /// Reports ERGO018 for every <c>Register</c> call naming a type only run time knows.
     /// </summary>
+    /// <param name="context">The context diagnostics are reported to.</param>
+    /// <param name="registrationSites">The registration calls collected from this compilation.</param>
+    /// <remarks>
+    /// Every reported call is in this compilation by construction: registration sites come
+    /// from its own syntax, and a referenced assembly's manifest carries no location to
+    /// report against.
+    /// </remarks>
     private static void ReportUnknownRegistrations(
         SourceProductionContext context, ImmutableArray<RegistrationSiteModel> registrationSites)
     {
@@ -34,6 +41,24 @@ internal static class RegistrationPipeline
         }
     }
 
+    /// <summary>
+    /// Runs one registration output: reports the input diagnostics, plans, and adds the
+    /// generated source.
+    /// </summary>
+    /// <param name="context">The context source and diagnostics are added to.</param>
+    /// <param name="sourceModels">The registrable types this compilation declares.</param>
+    /// <param name="availability">What the referenced Ergosfare package's surface offers.</param>
+    /// <param name="referencedModels">The registrable types found in referenced assemblies.</param>
+    /// <param name="dispatchSites">The dispatches in this compilation.</param>
+    /// <param name="registrationSites">The registration calls in this compilation.</param>
+    /// <param name="referencedSites">The dispatch manifests referenced assemblies recorded.</param>
+    /// <param name="judgmentInputs">The settings the reachability judgment reads.</param>
+    /// <param name="defaultResultAdapterSites">The <c>UseDefaultResultAdapter</c> calls in this compilation.</param>
+    /// <param name="pluginInvocations">The plugin methods visible to this compilation.</param>
+    /// <remarks>
+    /// Nothing is written for a compilation with no registrable type, unless it must still
+    /// carry a manifest.
+    /// </remarks>
     internal static void Execute(
         SourceProductionContext context,
         ImmutableArray<RegistrableTypeModel> sourceModels,
@@ -46,9 +71,9 @@ internal static class RegistrationPipeline
         ImmutableArray<DefaultResultAdapterSiteModel> defaultResultAdapterSites,
         ImmutableArray<PluginInvocationModel> pluginInvocations)
     {
-        // The closed world's entry condition, reported before anything is planned: a
-        // registration this compilation cannot resolve to a type is a defect on its own
-        // terms, whatever the rest of the compilation turns out to look like.
+        // Reported before anything is planned: a registration this compilation cannot
+        // resolve to a type is a defect on its own terms, whatever the rest turns out to
+        // look like.
         ReportUnknownRegistrations(context, registrationSites);
 
         var seen = new HashSet<string>();
@@ -56,11 +81,9 @@ internal static class RegistrationPipeline
         var excludedShadows = new List<RegistrableTypeModel>();
         var defaultResultAdapter = ResultAdapterReader.ReduceDefaultResultAdapter(defaultResultAdapterSites);
 
-        // Source-declared types first: on a (pathological) full-name collision with a
-        // referenced type, typeof in the generated file binds to the source declaration.
-        // The open definitions monomorphization answered for. A definition that closed over
-        // at least one message still carries IsGenericParticipant on its own model — it is a
-        // declared open generic, after all — but it is no longer the shape ERGO016 reports.
+        // The open definitions monomorphization already answered for. Such a definition
+        // still carries IsGenericParticipant on its own model — it is a declared open
+        // generic, after all — but it is no longer the shape ERGO016 reports.
         var monomorphizedDefinitions = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var model in referencedModels)
@@ -71,6 +94,8 @@ internal static class RegistrationPipeline
             }
         }
 
+        // Source-declared types first: on a full-name collision with a referenced type,
+        // typeof in the generated file binds to the source declaration.
         AddModels(context, sourceModels, seen, types, excludedShadows, monomorphizedDefinitions, defaultResultAdapter);
         AddModels(context, referencedModels, seen, types, excludedShadows, monomorphizedDefinitions, defaultResultAdapter);
 
@@ -79,10 +104,10 @@ internal static class RegistrationPipeline
         types = ErgosfareRegistrationGenerator.ApplyDispatchJudgment(
             context, types, excludedShadows, dispatchSites, registrationSites, referencedSites, judgmentInputs);
 
-        // The manifest must be emitted even from a compilation that declares no
-        // registrable type at all — a callsite-only library's sites would otherwise be
-        // invisible to the composition root, and a siteless assembly's marker is exactly
-        // what distinguishes "dispatches nothing" from "unknown".
+        // A compilation declaring no registrable type at all still owes a manifest:
+        // otherwise a callsite-only library's dispatches would be invisible to the
+        // composition root, and a siteless assembly's marker is exactly what separates
+        // "dispatches nothing" from "unknown".
         var emitManifest = availability.HasDispatchSiteAttribute;
 
         if (types.Count == 0 && !emitManifest)
@@ -90,15 +115,13 @@ internal static class RegistrationPipeline
             return;
         }
 
-        // Deterministic output regardless of declaration/discovery order.
+        // Deterministic output regardless of declaration or discovery order.
         types.Sort(static (x, y) => string.CompareOrdinal(x.TypeofExpression, y.TypeofExpression));
 
         var plans = new PlanBuilder(
             types, excludedShadows, availability,
             defaultResultAdapter, pluginInvocations, dispatchSites, referencedSites.Sites).Build();
 
-        // Hidden messages are rooted like discovered ones: rooting is not registering, and
-        // hiding a type from bulk collection does not stop it from being dispatched.
         var registeredShadows = CollectRootableShadows(excludedShadows);
 
         var source = RegistrationEmitter.Emit(types, registeredShadows, availability,
@@ -110,33 +133,25 @@ internal static class RegistrationPipeline
     }
 
     /// <summary>
-    ///     Every hidden message the compilation can name, so it is rooted alongside the
-    ///     discovered ones. <c>[ExcludeFromDiscovery]</c> keeps a type out of bulk collection;
-    ///     it does not make it invisible, and it does not stop the type from being dispatched.
+    /// Selects the hidden messages that are rooted alongside the discovered ones.
     /// </summary>
+    /// <param name="excludedShadows">The types hidden from discovery.</param>
+    /// <returns>The hidden messages to root, ordered by type name.</returns>
     /// <remarks>
-    ///     <para>
-    ///     Rooting is not registering. <c>AddMessage&lt;T&gt;()</c> instantiates a
-    ///     <c>MessageRoot&lt;T&gt;</c> so a dispatch can close its generic inside a generic
-    ///     context; it selects nothing into any container, which is still settled entirely by
-    ///     what the application registered. Without the root the dispatch closes the same
-    ///     generic through <c>MakeGenericType</c> — an answer only a JIT can give, so the same
-    ///     dispatch works in development and fails under NativeAOT.
-    ///     </para>
-    ///     <para>
-    ///     This used to ask whether a registration named the message, on the reasoning that a
-    ///     hand-written <c>Register</c> collects what <c>RegisterGenerated()</c> would. That
-    ///     reasoning is about <em>registration</em>, and rooting is not that: the question a
-    ///     root answers is whether a dispatch can close its generic, which does not depend on
-    ///     who selected what. Measured, the narrower rule left five shapes on the reflective
-    ///     arm — the deliberate no-handler fixtures, and a subtype only a base-typed handler
-    ///     knows about — none of which a registration can name, and all of which are dispatched.
-    ///     </para>
-    ///     <para>
-    ///     What the wider rule costs is one empty object per hidden message that is never
-    ///     dispatched. What it buys is that a dispatch of a type the compilation declared
-    ///     never depends on a JIT, which is the whole point of the table.
-    ///     </para>
+    /// <para>
+    /// Rooting is not registering. <c>AddMessage&lt;T&gt;()</c> instantiates a
+    /// <c>MessageRoot&lt;T&gt;</c> so a dispatch can close its generic inside a generic
+    /// context; it selects nothing into any container, which stays settled by what the
+    /// application registered. Without the root the dispatch closes the same generic through
+    /// <c>MakeGenericType</c> — an answer only a JIT can give, so the same dispatch works in
+    /// development and fails under NativeAOT.
+    /// </para>
+    /// <para>
+    /// So every hidden message this compilation can name is rooted, whether or not anything
+    /// registers it: <c>[ExcludeFromDiscovery]</c> keeps a type out of bulk collection, and
+    /// says nothing about whether it is dispatched. The cost is one empty object per hidden
+    /// message that never is.
+    /// </para>
     /// </remarks>
     private static List<RegistrableTypeModel> CollectRootableShadows(
         List<RegistrableTypeModel> excludedShadows)
@@ -154,10 +169,10 @@ internal static class RegistrationPipeline
             // non-dispatchable shape has no generic for a dispatch to close.
             //
             // Source-declared only. A referenced assembly carrying [assembly:
-            // ExcludeFromDiscovery] said "do not look here at all", which is a wider
-            // statement than a type's own "keep me out of bulk registration": its types are
-            // not ours to name, and its internals are not ours to reach. This compilation's
-            // own hidden types are a different matter — it declared them, so it can name them.
+            // ExcludeFromDiscovery] said "do not look here at all", which is wider than a
+            // type's own "keep me out of bulk registration": its types are not ours to name,
+            // and its internals not ours to reach. This compilation's own hidden types are a
+            // different matter — it declared them, so it can name them.
             if (shadow is { IsDispatchableMessage: true, IsAccessible: true, ReferencedAssemblyName: null })
             {
                 rooted.Add(shadow);
@@ -169,6 +184,20 @@ internal static class RegistrationPipeline
         return rooted;
     }
 
+    /// <summary>
+    /// Sorts one batch of models into the registrable list or the hidden one, reporting what
+    /// each says about itself along the way.
+    /// </summary>
+    /// <param name="context">The context diagnostics are reported to.</param>
+    /// <param name="models">The models to add.</param>
+    /// <param name="seen">The types already added; a repeat is skipped.</param>
+    /// <param name="types">The list registrable types are added to.</param>
+    /// <param name="excludedShadows">The list types hidden from discovery are added to.</param>
+    /// <param name="monomorphizedDefinitions">The open definitions monomorphization closed.</param>
+    /// <param name="defaultResultAdapter">The container's default result adapter, if it names one.</param>
+    /// <remarks>
+    /// Batches are added source-first, so the first model to claim a type name wins.
+    /// </remarks>
     internal static void AddModels(
         SourceProductionContext context,
         ImmutableArray<RegistrableTypeModel> models,
@@ -187,7 +216,7 @@ internal static class RegistrationPipeline
 
             if (model.IsExcludedFromDiscovery)
             {
-                // Deliberate opt-out: no registration, no diagnostics — the shadow only
+                // A deliberate opt-out: no registration and no diagnostics. The shadow only
                 // feeds the reachability judgment's exclusion zone.
                 excludedShadows.Add(model);
                 continue;
@@ -210,7 +239,7 @@ internal static class RegistrationPipeline
 
             // Ahead of the informational ones: a participant that never runs makes every
             // finding about how it would be constructed moot. A definition that closed over
-            // at least one message is not that shape — monomorphization answered for it.
+            // at least one message is not that shape.
             if (model.IsGenericParticipant && !monomorphizedDefinitions.Contains(model.TypeofExpression))
             {
                 context.ReportDiagnostic(Diagnostic.Create(
@@ -235,8 +264,8 @@ internal static class RegistrationPipeline
                     model.DisplayName));
             }
 
-            // ERGO011/012 judge where the message is compiled: a referenced message's
-            // annotations were already judged (or predate the rules) in its own build.
+            // ERGO011/012 are judged where the message is compiled: a referenced message's
+            // annotations were already answered for in its own build.
             if (model.ReferencedAssemblyName is null && model.ResultAdapter is { } resultAdapter)
             {
                 if (model.HasIgnoredResultAdapter)
@@ -260,11 +289,10 @@ internal static class RegistrationPipeline
                 }
             }
 
-            // ERGO013/014: with a default adapter configured, a result-bearing message
-            // no tier serves stays a throwing pipeline. Unacknowledged, that is a design
-            // hole and fails the build right here — no reason to wait for a dispatch to
-            // reveal it; acknowledged via [IgnoreResultAdapter], it stays visible as a
-            // warning.
+            // ERGO013/014: with a default adapter configured, a result-bearing message no
+            // tier serves is a throwing pipeline. Unacknowledged that fails the build right
+            // here rather than at some later dispatch; acknowledged with
+            // [IgnoreResultAdapter] it stays visible as a warning.
             if (model.ReferencedAssemblyName is null
                 && defaultResultAdapter is not null
                 && model.IsDispatchableMessage
@@ -286,17 +314,17 @@ internal static class RegistrationPipeline
     }
 
     /// <summary>
-    ///     Each model, followed by the event messages its subscriber contracts named. The
-    ///     messages travel inside their subscriber's model so the syntax provider keeps
-    ///     comparing one value per declaration; this is where they become registrable types
-    ///     in their own right.
+    /// Walks each model, followed by the event messages its subscriber contracts named.
     /// </summary>
+    /// <param name="models">The models to walk.</param>
+    /// <returns>Every model and every message carried inside one.</returns>
     /// <remarks>
-    ///     A derived message is emitted on its own terms rather than its subscriber's: the
-    ///     subscriber may be hidden from discovery and the message still is not, because
-    ///     hiding a subscriber says nothing about the message it serves. Duplicates — two
-    ///     subscribers for one message, or a subscriber seen twice through partial
-    ///     declarations — are dropped by the caller's <c>seen</c> set.
+    /// Those messages travel inside their subscriber's model so the syntax provider keeps
+    /// comparing one value per declaration; here they become registrable types in their own
+    /// right, and are judged on their own terms — a subscriber may be hidden from discovery
+    /// while the message it serves is not. Repeats, whether two subscribers for one message
+    /// or one subscriber seen through several partial declarations, are dropped by the
+    /// caller's <c>seen</c> set.
     /// </remarks>
     private static IEnumerable<RegistrableTypeModel> WithDerivedEventMessages(
         ImmutableArray<RegistrableTypeModel> models)

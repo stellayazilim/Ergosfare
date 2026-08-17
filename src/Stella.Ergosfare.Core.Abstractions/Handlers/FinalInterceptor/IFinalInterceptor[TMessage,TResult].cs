@@ -3,27 +3,29 @@ namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 
 
 /// <summary>
-/// Synchronous final-interceptor contract for messages of type <typeparamref name="TMessage"/>
-/// with results of type <typeparamref name="TResult"/>. Always executed at the end of the
-/// pipeline, regardless of success or failure — for cleanup, auditing, or logging.
+/// Runs once a <typeparamref name="TMessage"/> pipeline has settled, whether it produced a
+/// result or failed — for cleanup, auditing or logging.
 /// </summary>
-/// <typeparam name="TMessage">The type of message this interceptor handles.</typeparam>
-/// <typeparam name="TResult">The type of result produced by the handler.</typeparam>
+/// <typeparam name="TMessage">The message type this interceptor accepts.</typeparam>
+/// <typeparam name="TResult">The result type this interceptor accepts.</typeparam>
 /// <remarks>
-/// Final interceptors observe the pipeline outcome but cannot alter it — hence
-/// <see cref="Handle"/> returns nothing. Asynchronous final interceptors implement
+/// A final interceptor observes the outcome and cannot change it, which is why
+/// <see cref="Handle"/> returns nothing. A pipeline stopped by
+/// <see cref="ErgosfareContext.Abort()"/> runs no final interceptors. Implement
 /// <see cref="IAsyncFinalInterceptor{TMessage}"/> or
-/// <see cref="IAsyncFinalInterceptor{TMessage, TResult}"/> instead; the pipeline dispatches
-/// each through its own typed member with no object-typed bridge between them.
+/// <see cref="IAsyncFinalInterceptor{TMessage, TResult}"/> instead when the work involves
+/// awaiting.
 /// </remarks>
 public interface IFinalInterceptor<in TMessage, in TResult> : IFinalInterceptor
 {
     /// <summary>
-    /// Handles the end of the pipeline for the given message.
+    /// Observes how the pipeline for <paramref name="message"/> settled.
     /// </summary>
-    /// <param name="message">The message that was processed.</param>
-    /// <param name="result">The final result, if any.</param>
-    /// <param name="exception">The exception that terminated the pipeline, if any.</param>
-    /// <param name="executionContext">The current execution context.</param>
+    /// <param name="message">The message that was dispatched.</param>
+    /// <param name="result">The result, or <c>null</c> when the pipeline failed.</param>
+    /// <param name="exception">
+    /// The failure that ended the pipeline, or <c>null</c> when it succeeded.
+    /// </param>
+    /// <param name="executionContext">The execution context of this dispatch.</param>
     void Handle(TMessage message, TResult? result, Exception? exception, ErgosfareContext executionContext);
 }

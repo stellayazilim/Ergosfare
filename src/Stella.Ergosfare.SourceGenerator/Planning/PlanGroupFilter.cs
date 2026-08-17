@@ -5,29 +5,47 @@ using Stella.Ergosfare.SourceGenerator.Models;
 namespace Stella.Ergosfare.SourceGenerator.Planning;
 
 /// <summary>
-///     How one plan decides which participants it carries. A plan keyed by a proven group
-///     set decides at compile time and simply omits the rest; the filtering plan — the one
-///     serving dispatches whose set is a runtime value — carries everyone and hands each
-///     call the name of a boolean the body evaluates once.
+/// Decides which participants one plan carries, and under what test.
 /// </summary>
+/// <param name="target">The group set this plan is compiled for.</param>
+/// <param name="filtering">
+/// Whether this is the plan that serves dispatches whose groups are only known at runtime.
+/// </param>
+/// <remarks>
+/// A plan compiled for a known set decides here and simply leaves the rest out. The
+/// filtering plan takes every participant instead and gives each call the name of a boolean
+/// its body computes once.
+/// </remarks>
 internal sealed class PlanGroupFilter(ImmutableArray<string> target, bool filtering)
 {
     private readonly Dictionary<string, string> _guardsBySignature = new(StringComparer.Ordinal);
     private readonly List<StagedGroupGuardModel> _guards = [];
     private readonly HashSet<string> _covered = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The group set this plan is compiled for.
+    /// </summary>
     public ImmutableArray<string> Target { get; } = target;
 
+    /// <summary>
+    /// Whether this plan decides participation at runtime rather than now.
+    /// </summary>
     public bool Filtering { get; } = filtering;
 
+    /// <summary>
+    /// The tests the plan's body computes once at the top, one per distinct group
+    /// declaration among its participants.
+    /// </summary>
     public ImmutableArray<StagedGroupGuardModel> Guards => ImmutableArray.CreateRange(_guards);
 
     /// <summary>
-    ///     Every group the filtering plan can be asked about — the union of what its
-    ///     participants declare. The runtime gate validates the plan against the
-    ///     composition over exactly these, which is the only set that reproduces the
-    ///     participants the body carries.
+    /// Every group the filtering plan can be asked about — all the groups its participants
+    /// declare between them.
     /// </summary>
+    /// <remarks>
+    /// The runtime checks the plan against the composition over exactly these, which is the
+    /// one set that reproduces the participants its body holds.
+    /// </remarks>
     public ImmutableArray<string> CoveredGroups
     {
         get
@@ -40,10 +58,19 @@ internal sealed class PlanGroupFilter(ImmutableArray<string> target, bool filter
     }
 
     /// <summary>
-    ///     Whether the plan carries this participant, and under which guard. A keyed plan
-    ///     answers false for anyone its set does not select; the filtering plan takes
-    ///     everyone and names their test.
+    /// Decides whether the plan carries a participant, and under which test.
     /// </summary>
+    /// <param name="participant">The participant to consider.</param>
+    /// <param name="guard">
+    /// The local holding this participant's group test, when this returns <c>true</c> on a
+    /// filtering plan; <c>null</c> when the call needs no test.
+    /// </param>
+    /// <returns><c>true</c> when the plan carries the participant.</returns>
+    /// <remarks>
+    /// A plan compiled for a known set answers <c>false</c> for anyone that set does not
+    /// select. The filtering plan takes everyone and names their test, reusing one local for
+    /// participants that declare the same groups.
+    /// </remarks>
     public bool TryInclude(RegistrableTypeModel participant, out string? guard)
     {
         if (!Filtering)
@@ -79,10 +106,14 @@ internal sealed class PlanGroupFilter(ImmutableArray<string> target, bool filter
     }
 
     /// <summary>
-    ///     The call filling one guard: the single-group overload for the common shape, the
-    ///     array one when a participant declares several, and the default-group test for a
-    ///     participant that declares none.
+    /// Builds the call that computes one participant's group test.
     /// </summary>
+    /// <param name="participant">The participant the test is for.</param>
+    /// <returns>The call to write.</returns>
+    /// <remarks>
+    /// A participant declaring no groups gets the default-group test, one declaring a single
+    /// group gets the overload taking one name, and only several groups need an array.
+    /// </remarks>
     private static string GuardExpression(RegistrableTypeModel participant)
     {
         const string helper = "global::Stella.Ergosfare.Core.Abstractions.StagedPlans.PlanGroups.";
@@ -107,13 +138,24 @@ internal sealed class PlanGroupFilter(ImmutableArray<string> target, bool filter
         return sb.Append(" })").ToString();
     }
 
+    /// <summary>
+    /// Writes a group name as a C# string literal.
+    /// </summary>
+    /// <param name="value">The group name.</param>
+    /// <returns>The literal, quoted and escaped.</returns>
     private static string Quote(string value)
         => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(value, quote: true);
+
     /// <summary>
-    ///     Whether a participant runs under a target group set, mirroring the runtime's
-    ///     any-of × any-of test: a participant declaring no <c>[Group]</c> belongs to the
-    ///     default group, and an empty target set IS the default group.
+    /// Reports whether a participant runs under a group set.
     /// </summary>
+    /// <param name="participant">The participant to test.</param>
+    /// <param name="targetGroups">The groups being dispatched under.</param>
+    /// <returns><c>true</c> when any declared group is any requested group.</returns>
+    /// <remarks>
+    /// The same test the runtime makes: a participant declaring no groups belongs to the
+    /// default group, and requesting no groups means requesting the default one.
+    /// </remarks>
     internal static bool Participates(RegistrableTypeModel participant, ImmutableArray<string> targetGroups)
     {
         if (participant.GroupNames.IsEmpty)

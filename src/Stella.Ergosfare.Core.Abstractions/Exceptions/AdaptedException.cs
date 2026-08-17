@@ -2,27 +2,34 @@
 namespace Stella.Ergosfare.Core.Abstractions.Exceptions;
 
 /// <summary>
-/// Exception wrapper used by result adapters to surface errors without
-/// directly throwing the original result type.
+/// An exception that carries the result value it was derived from, so code raising a
+/// failure out of a result carrier can hand the carrier itself to whoever catches it.
 /// </summary>
-/// <param name="message">Human-readable message for the exception.</param>
-/// <param name="originalResult">The original result object that was adapted.</param>
-public sealed class AdaptedException(string message, object originalResult) 
+/// <remarks>
+/// The framework never raises this exception. It is available to
+/// <see cref="IResultAdapter{TResult}"/> implementations and to application code that turns
+/// a failed result into a throw without losing the original value.
+/// </remarks>
+/// <param name="message">The exception message.</param>
+/// <param name="originalResult">
+/// The result value the failure was derived from. Cannot be <c>null</c>.
+/// </param>
+/// <exception cref="ArgumentNullException"><paramref name="originalResult"/> is <c>null</c>.</exception>
+public sealed class AdaptedException(string message, object originalResult)
     : Exception(message)
 {
     /// <summary>
-    /// Gets the original result object that triggered this exception.
-    /// Stored by reference, not copied.
+    /// The result value this exception was derived from, held by reference.
     /// </summary>
     public object OriginalResult { get; } = originalResult ?? throw new ArgumentNullException(nameof(originalResult));
 
     /// <summary>
-    /// Retrieves the original result as a strongly typed value.
+    /// Returns <see cref="OriginalResult"/> cast to <typeparamref name="TResult"/>.
     /// </summary>
-    /// <typeparam name="TResult">The expected type of the original result.</typeparam>
-    /// <returns>The original result cast to <typeparamref name="TResult"/>.</returns>
+    /// <typeparam name="TResult">The type the original result is expected to be.</typeparam>
+    /// <returns>The original result.</returns>
     /// <exception cref="InvalidCastException">
-    /// Thrown if the original result cannot be cast to the requested type.
+    /// The original result is not a <typeparamref name="TResult"/>.
     /// </exception>
     public TResult GetOriginalResult<TResult>() where TResult : notnull
         => (TResult)OriginalResult;

@@ -3,41 +3,52 @@ using System.Collections.Immutable;
 namespace Stella.Ergosfare.SourceGenerator.Models;
 
 /// <summary>
-///     Value-equatable projection of one manual registration site: a
-///     <c>Register&lt;T&gt;()</c> / <c>Register(typeof(T))</c> call. Manual registration is
-///     the same source-generated collection path as <c>RegisterGenerated()</c> — per type
-///     instead of in bulk — so the registered type's main-handler contracts count as
-///     coverage evidence in the dead-dispatch judgment exactly like discovered ones.
-///     A site whose type cannot be statically known (a non-<c>typeof</c> argument,
-///     descriptor batches, or the legacy assembly scan of older packages) is opaque:
-///     coverage evidence is then incomplete by construction and the judgment suspends.
+/// One hand-written registration — a <c>Register&lt;T&gt;()</c> or
+/// <c>Register(typeof(T))</c> call — reduced to what reachability judgment needs.
 /// </summary>
+/// <remarks>
+/// Registering by hand collects a type through the same generated path as
+/// <c>RegisterGenerated()</c>, one at a time rather than in bulk, so the type's handler
+/// contracts count as evidence that a message is handled exactly as a discovered handler
+/// would. A registration whose type cannot be known at compile time — a <c>Type</c>
+/// argument that is not a <c>typeof</c>, a batch of descriptors, or the assembly scan older
+/// packages used — leaves that evidence incomplete, and judgment stops.
+/// </remarks>
 internal readonly struct RegistrationSiteModel : IEquatable<RegistrationSiteModel>
 {
     /// <summary>
-    ///     CLR metadata name of the registered type — the manifest attribute's payload —
-    ///     or <c>null</c> for an opaque registration.
+    /// The CLR metadata name of the registered type, or <c>null</c> when the type is
+    /// unknown.
     /// </summary>
     public required string? TypeMetadataName { get; init; }
 
     /// <summary>
-    ///     The registered type's main-handler message type expressions (normalized), the
-    ///     coverage evidence the site contributes. Empty for plain messages, interceptors
-    ///     and opaque sites.
+    /// The message types this registration proves are handled, normalized. Empty for a
+    /// message, an interceptor, or an unknown type — none of them makes a message handled.
     /// </summary>
     public required ImmutableArray<string> MainHandlerMessageKeys { get; init; }
 
-    /// <summary>Whether the registration's type is statically unknowable.</summary>
+    /// <summary>
+    /// Whether the registered type cannot be known at compile time.
+    /// </summary>
     public required bool IsOpaque { get; init; }
 
     /// <summary>
-    ///     Where to report ERGO018, set only for a <c>Register</c> call naming a type this
-    ///     compilation cannot know. The other opaque shape — the generator's own
-    ///     <c>RegisterParticipants</c> batch channel — leaves it null: its argument is an
-    ///     <c>IEnumerable&lt;Type&gt;</c> by design, so it is opaque without being a defect.
+    /// Where to report ERGO018, set only for a <c>Register</c> call naming a type this
+    /// compilation cannot know.
     /// </summary>
+    /// <remarks>
+    /// The other unknowable shape — the generator's own bulk channel — leaves this
+    /// <c>null</c>: its argument is a sequence of types by design, so it is unknowable
+    /// without being a mistake.
+    /// </remarks>
     public required LocationInfo? UnknownTypeLocation { get; init; }
 
+    /// <summary>
+    /// Compares the registered type, its evidence and its location.
+    /// </summary>
+    /// <param name="other">The site to compare against.</param>
+    /// <returns><c>true</c> when both describe the same registration.</returns>
     public bool Equals(RegistrationSiteModel other)
     {
         if (TypeMetadataName != other.TypeMetadataName
@@ -59,8 +70,17 @@ internal readonly struct RegistrationSiteModel : IEquatable<RegistrationSiteMode
         return true;
     }
 
+    /// <summary>
+    /// Compares against another registration site.
+    /// </summary>
+    /// <param name="obj">The object to compare against.</param>
+    /// <returns><c>true</c> when it is an equal site.</returns>
     public override bool Equals(object? obj) => obj is RegistrationSiteModel other && Equals(other);
 
+    /// <summary>
+    /// Returns a hash over the type name, how much evidence it carries, and whether it is
+    /// unknowable.
+    /// </summary>
     public override int GetHashCode()
     {
         unchecked

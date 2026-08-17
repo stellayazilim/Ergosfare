@@ -5,35 +5,30 @@ using Stella.Ergosfare.SourceGenerator.Models;
 namespace Stella.Ergosfare.SourceGenerator.Symbols;
 
 /// <summary>
-///     Reads a type's Ergosfare contracts off its interface list: which pipeline stages it
-///     participates in and for which messages (the descriptors), what shapes its handler
-///     members take (the contract shapes), and — for a message — whether anything can be
-///     dispatched with it and with what result.
+/// Reads a type's Ergosfare contracts off its interface list.
 /// </summary>
-
+/// <remarks>
+/// Which pipeline stages it takes part in and for which messages — the descriptors — what
+/// shape its handler members have, and, for a message, whether it can be dispatched and with
+/// what result.
+/// </remarks>
 internal static class ContractReader
 {
     /// <summary>
-    ///     Whether the type can appear as a dispatched message instance: a concrete,
-    ///     fully closed class or struct with no handler contracts. Only such types get
-    ///     dispatch roots — abstract types and interfaces never carry a runtime message's
-    ///     type, handlers are never dispatched, and open generics cannot be rooted.
+    /// Reports whether a composition can be computed for this type.
     /// </summary>
-    /// <summary>
-    ///     Whether the type is a message shape a composition can be computed for: a
-    ///     construct carrying no handler contracts of its own. Wider than
-    ///     <see cref="IsDispatchableMessage"/> — an abstract base or an interface is never
-    ///     dispatched itself, but it is what the frozen table's ancestor ladder lands on
-    ///     when a message the generator never saw (a proxy, a type hidden from discovery)
-    ///     is dispatched.
-    /// </summary>
+    /// <param name="symbol">The type to test.</param>
+    /// <param name="descriptors">The type's own handler contracts.</param>
+    /// <returns><c>true</c> when it is a message shape.</returns>
     /// <remarks>
-    ///     A generic message definition is a shape too, and unlike
-    ///     <see cref="IsDispatchableMessage"/> it needs no closed instantiation: the table
-    ///     keys generic messages by their definition and the lookup normalizes a runtime
-    ///     <c>Wrap&lt;int&gt;</c> to <c>Wrap&lt;&gt;</c>, so one entry serves every
-    ///     instantiation. A generic containing type is still refused — see
-    ///     <see cref="BuildDescriptors"/>.
+    /// Wider than <see cref="IsDispatchableMessage"/>: an abstract base or an interface is
+    /// never dispatched itself, but it is where the frozen table's ancestor ladder lands when
+    /// a message this compilation never saw — a proxy, a type hidden from discovery — is
+    /// dispatched. A generic message definition is a shape too, and needs no closed
+    /// instantiation: the table keys it by its definition and the lookup normalizes a runtime
+    /// <c>Wrap&lt;int&gt;</c> to <c>Wrap&lt;&gt;</c>, so one entry serves every
+    /// instantiation. A generic containing type is still refused — see
+    /// <see cref="BuildDescriptors"/>.
     /// </remarks>
     internal static bool IsMessageShape(INamedTypeSymbol symbol, ImmutableArray<DescriptorModel> descriptors)
     {
@@ -58,6 +53,19 @@ internal static class ContractReader
         return true;
     }
 
+    /// <summary>
+    /// Reports whether a type can appear as a dispatched message instance.
+    /// </summary>
+    /// <param name="symbol">The type to test.</param>
+    /// <param name="descriptors">The type's own handler contracts.</param>
+    /// <returns>
+    /// <c>true</c> for a concrete, fully closed class or struct carrying no handler contract.
+    /// </returns>
+    /// <remarks>
+    /// Only such a type gets dispatch roots: an abstract type or an interface never carries a
+    /// runtime message's type, a handler is never dispatched, and an open generic cannot be
+    /// rooted.
+    /// </remarks>
     internal static bool IsDispatchableMessage(INamedTypeSymbol symbol, ImmutableArray<DescriptorModel> descriptors)
     {
         if (symbol.IsAbstract || descriptors.Length > 0)
@@ -82,10 +90,14 @@ internal static class ContractReader
     }
 
     /// <summary>
-    ///     Collects the result roots of a dispatchable message from its closed marker
-    ///     contracts: <c>ICommand&lt;T&gt;</c>/<c>IQuery&lt;T&gt;</c> feed the
-    ///     result-executor path, <c>IStreamQuery&lt;T&gt;</c> the streaming path.
+    /// Collects the result roots a dispatchable message needs.
     /// </summary>
+    /// <param name="symbol">The message to read.</param>
+    /// <returns>One entry per distinct result contract the message closes.</returns>
+    /// <remarks>
+    /// <c>ICommand&lt;T&gt;</c> and <c>IQuery&lt;T&gt;</c> feed the result path;
+    /// <c>IStreamQuery&lt;T&gt;</c> feeds the streaming one.
+    /// </remarks>
     internal static ImmutableArray<DispatchResultModel> GetDispatchResults(INamedTypeSymbol symbol)
     {
         ImmutableArray<DispatchResultModel>.Builder? results = null;
@@ -126,16 +138,23 @@ internal static class ContractReader
     }
 
     /// <summary>
-    ///     Collects the raw interceptor contracts the type implements — the undeduped
-    ///     counterpart of <see cref="BuildDescriptors"/>'s interceptor walk, keeping the
-    ///     async/sync and result-typed facts the staged-plan arm selection needs.
+    /// Collects the interceptor contracts a type implements, undeduped.
     /// </summary>
+    /// <param name="symbol">The type to read.</param>
+    /// <returns>
+    /// One shape per contract, or empty when the type cannot be named by a staged plan.
+    /// </returns>
+    /// <remarks>
+    /// The counterpart of <see cref="BuildDescriptors"/>'s interceptor walk, keeping each
+    /// contract separate along with whether it is asynchronous and whether it names a result
+    /// — which is what selecting a call's contract turns on.
+    /// </remarks>
     internal static ImmutableArray<ContractShapeModel> BuildContractShapes(INamedTypeSymbol symbol)
     {
-        // Arity alone is not the question — a closed constructed participant has the same
-        // arity as the definition it came from, and its contracts name concrete types. What
-        // disqualifies a type here is an *unbound* level anywhere in its chain: the staged
-        // plan has to name the participant, and a name with an open level cannot be written.
+        // Arity alone settles nothing: a closed constructed participant has the same arity as
+        // the definition it came from, and its contracts name concrete types. What rules a
+        // type out here is an unbound level anywhere in its chain, because a staged plan has
+        // to name the participant and a name with an open level cannot be written.
         for (var current = symbol; current is not null; current = current.ContainingType)
         {
             if (current.Arity > 0 && Monomorphizer.IsUnboundOrDefinition(current))
@@ -208,16 +227,21 @@ internal static class ContractReader
     }
 
     /// <summary>
-    ///     Reads the exception type an interceptor accepts off its
-    ///     <c>IExceptionInterceptorFilter&lt;TException&gt;</c>, so the staged plan can
-    ///     bake the runtime stage's filter probe in as an <c>is</c> test.
+    /// Reads the exception type an interceptor accepts.
     /// </summary>
+    /// <param name="symbol">The interceptor to read.</param>
+    /// <param name="filterExpression">
+    /// The accepted exception type, or <c>null</c> when the interceptor declares no filter or
+    /// the filter cannot be reproduced.
+    /// </param>
+    /// <param name="undecidable">Set when the filter cannot be reproduced.</param>
     /// <remarks>
-    ///     Only the single-generic-filter shape is decidable. A type carrying the
-    ///     non-generic filter without exactly one generic one has written its own
-    ///     <c>Matches</c> (or has several to disambiguate by hand), and no compile-time test
-    ///     reproduces it — the plan is disqualified instead of guessing, and the dispatch
-    ///     asks the instance through the runtime stage.
+    /// A single <c>IExceptionInterceptorFilter&lt;TException&gt;</c> lets a staged plan bake
+    /// the runtime stage's probe in as an <c>is</c> test. A type carrying the non-generic
+    /// filter without exactly one generic one has written its own <c>Matches</c>, or has
+    /// several filters to disambiguate by hand, and no compile-time test reproduces that —
+    /// the plan is dropped rather than guessed at, and the dispatch asks the instance through
+    /// the runtime stage.
     /// </remarks>
     internal static void ReadExceptionFilter(INamedTypeSymbol symbol, out string? filterExpression, out bool undecidable)
     {
@@ -261,23 +285,27 @@ internal static class ContractReader
     }
 
     /// <summary>
-    ///     Pre-computes the handler descriptors for the type's handler contracts, mirroring
-    ///     the runtime descriptor builders exactly: main handlers keep their declared
-    ///     message types verbatim (sync contracts first, then result-less async, then
-    ///     result-producing async, no dedupe), interceptors normalize generic messages to
-    ///     their definitions and dedupe per (message, result) pair with the synchronous
-    ///     pattern winning.
+    /// Builds the descriptors for a type's handler contracts.
     /// </summary>
+    /// <param name="symbol">The type to read.</param>
+    /// <returns>
+    /// Its descriptors in the order the runtime builds them, or empty when the type is nested
+    /// in a generic one.
+    /// </returns>
     /// <remarks>
-    ///     A generic participant definition is modelled like any other: its message
-    ///     expressions carry type parameters (<c>Wrap&lt;T&gt;</c>), which is fine because
-    ///     nothing emits them — the composition table matches on the definition key and
-    ///     names the participant by its own unbound <c>typeof</c>, closing it over the
-    ///     dispatched message's arguments at runtime. Descriptors were empty here while
-    ///     they were still emitted as <c>typeof</c> arguments, which a type parameter
-    ///     cannot appear in; that emission is gone. A generic <em>containing</em> type is
-    ///     still refused: its parameters are not the participant's own, so closing over
-    ///     the message cannot supply them.
+    /// The order and the deduping match the runtime descriptor builders exactly. A main
+    /// handler keeps its declared message type verbatim — synchronous contracts first, then
+    /// result-less asynchronous, then result-producing, with no deduping. An interceptor
+    /// normalizes a generic message to its definition and is deduped per message and result,
+    /// where the synchronous contract wins.
+    /// <para>
+    /// A generic participant definition is read like any other, its message expressions
+    /// carrying type parameters such as <c>Wrap&lt;T&gt;</c>: nothing emits those, since the
+    /// composition table matches on the definition key and names the participant by its own
+    /// unbound <c>typeof</c>, closing it over the dispatched message's arguments. A generic
+    /// containing type is refused, because its parameters are not the participant's own and
+    /// closing over the message cannot supply them.
+    /// </para>
     /// </remarks>
     internal static ImmutableArray<DescriptorModel> BuildDescriptors(INamedTypeSymbol symbol)
     {
@@ -386,12 +414,12 @@ internal static class ContractReader
 
         var result = ImmutableArray.CreateBuilder<DescriptorModel>();
 
-        // Main handlers: runtime builder order, no dedupe.
+        // Main handlers, in the runtime builder's order and with nothing dropped.
         AppendAll(result, mainSync);
         AppendAll(result, mainAsyncVoid);
         AppendAll(result, mainAsyncResult);
 
-        // Interceptors: runtime builder order with first-wins dedupe per (message, result).
+        // Interceptors, in that same order, keeping the first contract per message and result.
         AppendDeduped(result, preSync, preAsync, null);
         AppendDeduped(result, postSync, postAsyncTyped, postAsyncAgnostic);
         AppendDeduped(result, exceptionSync, exceptionAsyncTyped, exceptionAsyncAgnostic);
@@ -400,6 +428,11 @@ internal static class ContractReader
         return result.ToImmutable();
     }
 
+    /// <summary>
+    /// Appends a bucket's descriptors, keeping every one.
+    /// </summary>
+    /// <param name="result">The builder to append to.</param>
+    /// <param name="bucket">The descriptors to append, or <c>null</c> when there are none.</param>
     internal static void AppendAll(ImmutableArray<DescriptorModel>.Builder result, List<DescriptorModel>? bucket)
     {
         if (bucket is null)
@@ -413,6 +446,14 @@ internal static class ContractReader
         }
     }
 
+    /// <summary>
+    /// Appends one stage's buckets in order, keeping the first descriptor per message and
+    /// result.
+    /// </summary>
+    /// <param name="result">The builder to append to.</param>
+    /// <param name="first">The bucket that wins a tie, or <c>null</c> when empty.</param>
+    /// <param name="second">The next bucket, or <c>null</c> when empty.</param>
+    /// <param name="third">The last bucket, or <c>null</c> when empty.</param>
     internal static void AppendDeduped(
         ImmutableArray<DescriptorModel>.Builder result,
         List<DescriptorModel>? first,
@@ -451,16 +492,18 @@ internal static class ContractReader
     }
 
     /// <summary>
-    ///     The event messages this type's subscriber contracts name, limited to the ones that
-    ///     carry no module marker of their own.
+    /// Collects the event messages a type's subscriber contracts name, for the ones carrying
+    /// no module marker of their own.
     /// </summary>
+    /// <param name="symbol">The subscriber to read.</param>
+    /// <returns>The named messages, each once.</returns>
     /// <remarks>
-    ///     An <c>IEventHandler&lt;T&gt;</c> signature is not evidence pointing at a message —
-    ///     it is what makes one. A plain domain type means nothing to the generator until a
-    ///     subscriber is written for it, and its own declaration is never visited (it has no
-    ///     base list to be selected by), so this is where its model has to be born. A message
-    ///     that already carries <c>IEvent</c> is skipped: it is registrable on its own terms
-    ///     and deriving it again would only produce a duplicate for the pipeline to drop.
+    /// An <c>IEventHandler&lt;T&gt;</c> signature is not evidence pointing at a message — it
+    /// is what makes one. A plain domain type means nothing here until a subscriber is
+    /// written for it, and its own declaration is never visited, having no base list to be
+    /// selected by, so this is where its model has to be born. A message already carrying
+    /// <c>IEvent</c> is skipped: it is registrable on its own terms, and naming it again
+    /// would only produce a duplicate to drop.
     /// </remarks>
     internal static ImmutableArray<INamedTypeSymbol> GetDerivedEventMessages(INamedTypeSymbol symbol)
     {

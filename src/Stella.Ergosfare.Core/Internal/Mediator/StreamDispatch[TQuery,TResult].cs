@@ -6,11 +6,23 @@ using Stella.Ergosfare.Core.Internal.Factories;
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 /// <summary>
-/// One container's streaming pipeline for one (query, result) pair, seen through its result
-/// type so the table can hand it back without naming the query type.
+/// One container's streaming pipeline for a (query, item) pair, seen through its item type
+/// so the table can return it without naming the query type.
 /// </summary>
+/// <typeparam name="TResult">The type of the streamed items.</typeparam>
 internal interface IStreamDispatch<out TResult>
 {
+    /// <summary>
+    /// Streams the results of <paramref name="query"/>.
+    /// </summary>
+    /// <param name="query">The query to run.</param>
+    /// <param name="context">
+    /// The caller's execution context, or <c>null</c> to create one for this stream.
+    /// </param>
+    /// <param name="cancellationToken">Token for the enumeration.</param>
+    /// <param name="serviceProvider">The provider participants are resolved from.</param>
+    /// <param name="groups">The groups to run, or <c>null</c> for the default.</param>
+    /// <returns>The streamed results.</returns>
     IAsyncEnumerable<TResult> Stream(
         object query,
         ErgosfareContext? context,
@@ -19,12 +31,14 @@ internal interface IStreamDispatch<out TResult>
         IEnumerable<string>? groups);
 }
 
-/// <summary>The typed closure of <see cref="IStreamDispatch{TResult}"/>.</summary>
+/// <summary>
+/// <see cref="IStreamDispatch{TResult}"/> closed over its query and item types.
+/// </summary>
+/// <typeparam name="TQuery">The query type this pipeline serves.</typeparam>
+/// <typeparam name="TResult">The type of the streamed items.</typeparam>
+/// <param name="dependenciesFactory">The factory participants are resolved through.</param>
 /// <remarks>
-/// Belongs to a container, like the broadcast and executor pipelines beside it. The streaming
-/// lane used to be one object per (query, result) pair for the whole process, carrying the
-/// last serving container's factory as part of its cache key; ownership says that
-/// structurally and the guard goes away.
+/// Like the publish and send pipelines beside it, this belongs to one container.
 /// </remarks>
 internal sealed class StreamDispatch<TQuery, TResult>(IMessageDependenciesFactory dependenciesFactory)
     : IStreamDispatch<TResult>
@@ -48,15 +62,18 @@ internal sealed class StreamDispatch<TQuery, TResult>(IMessageDependenciesFactor
             ? GetDependencies()
             : GetGroupedDependencies(groups);
 
-        // A fresh, unpooled context when the caller supplied none: enumeration happens after
-        // this call returns, so its completion is not observable here and the context cannot go
-        // back to the pool either way.
+        // A context created here is never recycled: enumeration happens after this call
+        // returns, so there is no point at which the context is known to be finished with.
         context ??= new ErgosfareContext(cancellationToken: cancellationToken);
         var strategy = new SingleStreamHandlerMediationStrategy<TQuery, TResult>(cancellationToken);
 
         return strategy.Mediate((TQuery)query, dependencies, context, serviceProvider);
     }
 
+    /// <summary>
+    /// Returns the participants of the ungrouped pipeline, resolving them on first use.
+    /// </summary>
+    /// <returns>The participants for this query.</returns>
     private IMessageDependencies GetDependencies()
     {
         if (dependenciesFactory is not MessageDependenciesFactory typedFactory)
@@ -77,10 +94,15 @@ internal sealed class StreamDispatch<TQuery, TResult>(IMessageDependenciesFactor
     }
 
     /// <summary>
-    /// Grouped counterpart of <see cref="GetDependencies"/>: a single last-used group-set slot
-    /// with an ordinal element-wise compare, snapshotting the caller's sequence so later
-    /// mutation of a reused settings instance reads as a different group set.
+    /// Returns the participants a group set selects, behind a single last-used slot.
     /// </summary>
+    /// <param name="groups">The groups the caller asked for.</param>
+    /// <returns>The participants for that set.</returns>
+    /// <remarks>
+    /// The caller's sequence is compared without being copied and copied only on a miss,
+    /// and the copy is what the participants are built from — so mutating a reused sequence
+    /// afterwards reads as a different group set rather than silently changing this one.
+    /// </remarks>
     private IMessageDependencies GetGroupedDependencies(IEnumerable<string> groups)
     {
         if (dependenciesFactory is not MessageDependenciesFactory typedFactory)
@@ -90,7 +112,8 @@ internal sealed class StreamDispatch<TQuery, TResult>(IMessageDependenciesFactor
 
         var slot = _cachedGroupedSlot;
 
-        // Deliberate: groups is matched allocation-free first and only materialized on a miss.
+        // Deliberate: groups is compared without being copied first, and copied only on a
+        // miss.
         // ReSharper disable once PossibleMultipleEnumeration
         if (slot is not null && GroupSlotMatch.Matches(groups, slot.Groups, slot.Canonical))
         {
@@ -105,11 +128,25 @@ internal sealed class StreamDispatch<TQuery, TResult>(IMessageDependenciesFactor
         return dependencies;
     }
 
+    /// <summary>
+    /// Builds the participants for one group set.
+    /// </summary>
+    /// <param name="factory">The factory to build through.</param>
+    /// <param name="groups">The groups to filter participants by.</param>
+    /// <returns>The participants for this query.</returns>
+    /// <exception cref="Abstractions.Exceptions.NoHandlerFoundException">
+    /// No composition serves the query. A query nothing handles is a failed dispatch rather
+    /// than an empty stream, which is why this throws instead of returning nothing.
+    /// </exception>
     private static IMessageDependencies Build(IMessageDependenciesFactory factory, string[] groups)
-        // A query with no composition is a failed dispatch, not an empty stream: Create throws
-        // NoHandlerFoundException exactly as the descriptor lookup did.
         => factory.Create(typeof(TQuery), groups);
 
+    /// <summary>
+    /// One group set and the participants it selects.
+    /// </summary>
+    /// <param name="groups">The group names this slot was built for.</param>
+    /// <param name="canonical">The canonical set it came from, when it came from one.</param>
+    /// <param name="dependencies">The participants for the set.</param>
     private sealed class GroupedSlot(string[] groups, GroupSet? canonical, IMessageDependencies dependencies)
     {
         public readonly string[] Groups = groups;

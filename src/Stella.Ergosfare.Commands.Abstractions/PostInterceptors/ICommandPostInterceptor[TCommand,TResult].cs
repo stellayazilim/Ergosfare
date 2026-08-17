@@ -5,20 +5,17 @@ namespace Stella.Ergosfare.Commands.Abstractions;
 
 
 /// <summary>
-/// Represents a type-safe post-interceptor for commands with a strongly-typed result.
-/// Executes after the command handler has completed and can modify the result before it
-/// propagates further through the pipeline.
+/// Runs after the handler of a <typeparamref name="TCommand"/> and decides what result the
+/// caller receives.
 /// </summary>
-/// <typeparam name="TCommand">The command type being intercepted. Must implement <see cref="ICommand{TResult}"/>.</typeparam>
-/// <typeparam name="TResult">
-/// The result type of the command. Also the type returned by the interceptor — for a
-/// narrower return type there is no third parameter anymore; return the base result type.
-/// </typeparam>
+/// <typeparam name="TCommand">The command type this interceptor accepts.</typeparam>
+/// <typeparam name="TResult">The result type the command declares.</typeparam>
 /// <remarks>
-/// <typeparamref name="TCommand"/> is contravariant, matching the core
-/// <see cref="IAsyncPostInterceptor{TMessage, TResult}"/> contract the typed dispatch
-/// matches against. <typeparamref name="TResult"/> must stay invariant: the typed member
-/// returns it.
+/// The interceptor returns the same result type it was given; to narrow a result, return
+/// the declared type carrying the narrower value. <typeparamref name="TCommand"/> is
+/// contravariant, so an interceptor written against a base command type also runs for the
+/// commands derived from it, while <typeparamref name="TResult"/> stays invariant because
+/// it is returned.
 /// </remarks>
 public interface ICommandPostInterceptor<in TCommand, TResult> :
     ICommand,
@@ -26,20 +23,26 @@ public interface ICommandPostInterceptor<in TCommand, TResult> :
     where TCommand : ICommand<TResult>
     where TResult : notnull
 {
-    /// <inheritdoc />
+    /// <summary>
+    /// Forwards the core contract to the typed method below.
+    /// </summary>
+    /// <param name="command">The command that was handled.</param>
+    /// <param name="messageResult">The result as the previous stage left it.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <returns>The result the typed method returned.</returns>
     async ValueTask<object> IAsyncPostInterceptor<TCommand, TResult>.HandleAsync(
         TCommand command, TResult messageResult, ErgosfareContext context)
         => (await HandleAsync(command, messageResult, context));
 
     /// <summary>
-    /// Handles the post-processing of a command asynchronously.
+    /// Processes the result of handling <paramref name="command"/>.
     /// </summary>
-    /// <param name="command">The command that was executed.</param>
-    /// <param name="commandResult">The result produced by the command handler.</param>
-    /// <param name="context">The current execution context.</param>
+    /// <param name="command">The command that was handled.</param>
+    /// <param name="commandResult">The result as the previous stage left it.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
     /// <returns>
-    /// A <see cref="ValueTask{TResult}"/> producing the (possibly modified) result that
-    /// continues through the pipeline.
+    /// The result the rest of the pipeline receives — either the one passed in or a
+    /// replacement.
     /// </returns>
     new ValueTask<TResult> HandleAsync(TCommand command, TResult commandResult, ErgosfareContext context);
 }

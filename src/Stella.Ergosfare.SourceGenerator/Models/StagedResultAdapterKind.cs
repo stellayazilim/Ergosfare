@@ -1,26 +1,31 @@
 namespace Stella.Ergosfare.SourceGenerator.Models;
 
 /// <summary>
-///     How a staged result plan models its result slot's adapter — the compile-time mirror
-///     of the runtime's <c>ResultAdapterBinding</c> resolution (annotation exact-slot fit
-///     first, then the framework's native carriers, else none).
+/// Which adapter a staged result plan was compiled against.
 /// </summary>
+/// <remarks>
+/// Worked out the same way the runtime binds one: the message's annotation first, if it
+/// fits the result type exactly, then the framework's own carriers, then nothing.
+/// </remarks>
 internal enum StagedResultAdapterKind
 {
-    /// <summary>No adapter binds to the slot; no value-path branch is emitted at all.</summary>
+    /// <summary>
+    /// Nothing binds to the result type, so the plan carries no failure-reading branch at
+    /// all.
+    /// </summary>
     None,
 
     /// <summary>
-    ///     The framework's own <c>Result</c>/<c>Result&lt;T&gt;</c> carrier: the branch is
-    ///     a direct <c>.Exception</c> field read and a real throw materializes via the
-    ///     carrier's own <c>Fail</c> — no adapter instance appears in the emitted code.
+    /// The framework's own carrier. The branch reads its exception field directly and a
+    /// thrown failure becomes a failed carrier through the carrier's own factory, so no
+    /// adapter object appears in the generated code.
     /// </summary>
     Native,
 
     /// <summary>
-    ///     A <c>[ResultAdapter]</c>-annotated foreign carrier: the plan instantiates the
-    ///     adapter once and probes through <c>TryGetException</c>; materialization applies
-    ///     only when the adapter also implements <c>IResultMaterializer&lt;TResult&gt;</c>.
+    /// A carrier bound by a <c>[ResultAdapter]</c> annotation. The plan constructs the
+    /// adapter once and asks it; turning a thrown failure into a result only happens when
+    /// that adapter can also build one.
     /// </summary>
     Custom,
 }

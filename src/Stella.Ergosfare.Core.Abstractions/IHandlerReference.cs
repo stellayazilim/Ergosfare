@@ -1,30 +1,30 @@
 namespace Stella.Ergosfare.Core.Abstractions;
 
 /// <summary>
-/// A resolvable reference to a pipeline handler: its pre-computed concrete type and a way
-/// to obtain an instance for the current dispatch.
+/// A reference to a pipeline participant: the concrete type to instantiate, and a way to
+/// obtain an instance for the dispatch in progress.
 /// </summary>
 /// <remarks>
-/// References are provider-independent and shared process-wide; the handler instance is
-/// obtained per invocation from the dispatching scope's service provider, which the
-/// mediation pipeline passes down explicitly — resolution is the dispatcher's
-/// responsibility, never the execution context's. Registered DI lifetimes are honored;
-/// memoized pipelines cache the resolved instance inside the reference instead.
+/// References hold no provider of their own and are shared across dispatches. The instance
+/// is obtained per invocation from the provider the dispatcher passes in, so registered DI
+/// lifetimes apply as configured. A memoized pipeline caches the resolved instance in the
+/// reference and returns it on subsequent calls.
 /// </remarks>
-/// <typeparam name="THandler">The type of the handler.</typeparam>
+/// <typeparam name="THandler">The participant type this reference resolves to.</typeparam>
 public interface IHandlerReference<out THandler>
 {
     /// <summary>
-    /// Gets the concrete handler type to instantiate — already closed over the message's
-    /// generic arguments when the handler targets a generic message type.
+    /// The concrete type to instantiate. When the participant targets a generic message
+    /// type, this type is already closed over the message's generic arguments.
     /// </summary>
     Type HandlerType { get; }
 
     /// <summary>
-    /// Resolves the handler instance from the given provider — the dispatching scope's
-    /// provider, passed down by the mediation pipeline — unless the pipeline is memoized,
-    /// in which case the cached instance is returned.
+    /// Returns an instance for the current dispatch, resolved from
+    /// <paramref name="serviceProvider"/>, or the cached instance if this reference is
+    /// memoized.
     /// </summary>
-    /// <param name="serviceProvider">The provider of the scope the current dispatch runs in.</param>
+    /// <param name="serviceProvider">The provider of the scope the dispatch runs in.</param>
+    /// <returns>The participant instance to invoke.</returns>
     THandler Resolve(IServiceProvider serviceProvider);
 }
