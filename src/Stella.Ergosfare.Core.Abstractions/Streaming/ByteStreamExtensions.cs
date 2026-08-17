@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 namespace Stella.Ergosfare.Core.Abstractions.Streaming;
 
 /// <summary>
@@ -10,6 +11,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Streaming;
 /// because they only make sense over bytes — a sequence of frames or of order lines has no
 /// <see cref="Stream"/> to be, and its message should not carry a method that says otherwise.
 /// </remarks>
+[Experimental(ExperimentalIds.StreamingSurface)]
 public static class ByteStreamExtensions
 {
     /// <summary>

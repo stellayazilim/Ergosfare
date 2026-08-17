@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics;
 using System.Threading.Channels;
 
@@ -27,6 +28,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Streaming;
 /// left open, so the next write fails instead of blocking forever.
 /// </para>
 /// </remarks>
+[Experimental(ExperimentalIds.StreamingSurface)]
 public abstract class ErgosfareStream<TChunk> : IMessage, IAsyncEnumerable<TChunk>
 {
     /// <summary>

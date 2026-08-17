@@ -1,3 +1,5 @@
+using Stella.Ergosfare.Core.Abstractions;
+using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions.Streaming;
 
 namespace Stella.Ergosfare.Commands.Abstractions.Streaming;
@@ -22,6 +24,7 @@ namespace Stella.Ergosfare.Commands.Abstractions.Streaming;
 /// result to work with.
 /// </para>
 /// </remarks>
+[Experimental(ExperimentalIds.StreamingSurface)]
 public abstract class ErgosfareCommandStream<TChunk, TMeta, TResult> : ErgosfareStream<TChunk>, ICommand<TResult>
     where TMeta : notnull
 {

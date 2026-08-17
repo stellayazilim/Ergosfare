@@ -12,6 +12,7 @@ namespace Stella.Ergosfare.SourceGenerator.Test;
 public class StreamMessagePlanEmissionTests
 {
     private const string StreamApp = """
+        #pragma warning disable ERGOEXP003
         using System;
         using System.Collections.Generic;
         using System.Threading.Tasks;
@@ -103,6 +104,7 @@ public class StreamMessagePlanEmissionTests
     public void PublishingAStreamMessage_FailsTheBuild()
     {
         var result = GeneratorTestHost.Run("""
+            #pragma warning disable ERGOEXP003
             using System;
             using System.Collections.Generic;
             using System.Threading.Tasks;

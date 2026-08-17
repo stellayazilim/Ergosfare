@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 namespace Stella.Ergosfare.Core.Abstractions.Streaming;
 
 /// <summary>
@@ -7,6 +8,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Streaming;
 /// A stream ends once. There is no resuming a faulted one: the handler runs a single time
 /// for the whole sequence, so when it stops there is nobody left to produce the rest.
 /// </remarks>
+[Experimental(ExperimentalIds.StreamingSurface)]
 public enum StreamCompletion
 {
     /// <summary>The stream is still open.</summary>

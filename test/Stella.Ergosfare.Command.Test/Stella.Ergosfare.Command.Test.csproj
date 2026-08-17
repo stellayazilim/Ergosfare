@@ -4,6 +4,8 @@
         <IsPackable>false</IsPackable>
         <!-- Deliberate consumer of the experimental result-adapter surface under test. -->
         <NoWarn>$(NoWarn);ERGOEXP001</NoWarn>
+        <!-- And of the experimental streaming surface, which these fixtures exist to exercise. -->
+        <NoWarn>$(NoWarn);ERGOEXP003</NoWarn>
         <!-- ERGO007: a few probe handlers are delivered through engine-level dispatch or
              runtime registration, sites the closed-world analysis cannot see; the handlers
              do execute. Generator diagnostics ignore #pragma, so the suppression lives
