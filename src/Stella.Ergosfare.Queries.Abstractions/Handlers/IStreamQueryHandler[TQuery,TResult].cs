@@ -4,20 +4,14 @@ namespace Stella.Ergosfare.Queries.Abstractions;
 
 
 /// <summary>
-/// Represents a type-safe asynchronous handler for a stream query of type <typeparamref name="TQuery"/>,
-/// producing a stream of results of type <typeparamref name="TResult"/>.
+/// Handles queries of type <typeparamref name="TQuery"/> by streaming
+/// <typeparamref name="TResult"/> items back to the caller.
 /// </summary>
-/// <typeparam name="TQuery">The type of the stream query being handled. Must implement <see cref="IStreamQuery{TResult}"/>.</typeparam>
-/// <typeparam name="TResult">The type of results produced by the stream query.</typeparam>
+/// <typeparam name="TQuery">The stream query type this handler accepts.</typeparam>
+/// <typeparam name="TResult">The type of each streamed item.</typeparam>
 /// <remarks>
-/// <para>
-/// Implementing this interface allows a handler to process a stream query asynchronously
-/// and yield multiple results over time, as part of a reactive query mediation pipeline.
-/// </para>
-/// <para>
-/// Handlers implementing this interface are automatically recognized and invoked
-/// by the query mediator when the corresponding stream query type is dispatched.
-/// </para>
+/// Items are produced as the caller enumerates, so the handler body runs after the dispatch
+/// call itself has returned. A stream query is served by exactly one handler.
 /// </remarks>
-public interface IStreamQueryHandler<in TQuery, out TResult> : 
+public interface IStreamQueryHandler<in TQuery, out TResult> :
     IQuery, IStreamHandler<TQuery, TResult> where TQuery : IStreamQuery<TResult>;

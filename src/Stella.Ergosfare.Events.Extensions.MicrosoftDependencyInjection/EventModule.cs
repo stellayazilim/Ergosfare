@@ -6,46 +6,33 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
 
 /// <summary>
-/// Represents the event module for the application, which registers the event mediation
-/// pipeline and its associated services.
+/// The module that registers an application's events and the mediator that publishes them.
 /// </summary>
-/// <remarks>
-/// <para>
-/// The <see cref="EventModule"/> allows registration of event handlers, pre-, post-, final-, 
-/// and exception interceptors within the event mediation pipeline.
-/// </para>
-/// <para>
-/// It also registers the core services <see cref="IEventMediator"/> and <see cref="IPublisher"/>
-/// in the dependency injection container.
-/// </para>
-/// </remarks>
+/// <param name="builder">Selects which event constructs this container runs.</param>
 internal class EventModule(Action<EventModuleBuilder> builder) : IModule
 {
-    
     /// <summary>
-    /// Configures the event module using the specified module configuration.
+    /// Runs the application's selection and registers the event mediator under all three of
+    /// its names.
     /// </summary>
-    /// <param name="configuration">The module configuration containing services and this container's frozen composition selection.</param>
+    /// <param name="configuration">The container being built and its composition selection.</param>
     public void Build(IModuleConfiguration configuration)
     {
         builder(new EventModuleBuilder(configuration.Compositions));
 
-        // Transient, not scoped: the mediator is stateless and a transient service is handed
-        // the resolving scope's provider all the same, so per-dispatch handler resolution
-        // still binds to the calling scope. Scoped would add a scope lock and a
-        // resolved-services dictionary insert to every dispatch for no benefit. The
-        // engine-backed shape makes the facade the only object built per resolution.
+        // Transient: the mediator holds nothing but the provider that resolved it, and a
+        // transient still receives the calling scope's provider.
         configuration.Services.TryAddTransient<IEventMediator, EngineBackedEventMediator>();
 
-        // The same facade under its concrete name, so an application can inject either. A
-        // publish through the interface pays a generic-virtual dispatch the JIT cannot
-        // devirtualize; through the class it is a direct call. Measured at ~5 ns, which is
-        // nothing for most callers and everything for a hot loop — so the choice belongs to
-        // the caller, and both spellings resolve the one object graph.
+        // The same facade under its concrete name, so an application can inject either and
+        // a publish through the class is a direct call rather than a virtual one.
         configuration.Services.TryAddTransient<EventMediator>(
             static provider => provider.GetRequiredService<IEventMediator>() as EventMediator
                 ?? throw new InvalidOperationException(
                     "The registered IEventMediator is not a EventMediator; a replacement registration cannot serve the concrete facade."));
+
+        // And under the publisher name, for code that reads better asking a publisher to
+        // publish.
         configuration.Services.TryAddTransient<IPublisher, EngineBackedEventMediator>();
     }
 }

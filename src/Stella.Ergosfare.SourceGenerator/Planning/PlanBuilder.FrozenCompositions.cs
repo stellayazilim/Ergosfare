@@ -5,39 +5,50 @@ namespace Stella.Ergosfare.SourceGenerator.Planning;
 internal sealed partial class PlanBuilder
 {
     /// <summary>
-    ///     Computes the frozen pipeline compositions: for every dispatchable message, the
-    ///     full six-stage participant table in the runtime shape-builder's exact execution
-    ///     order — direct/indirect split at the seam the runtime descriptor split uses
-    ///     (declared message equality vs assignability), each segment sorted
-    ///     weight-descending then ordinal CLR <c>FullName</c>, group labels baked per row.
-    ///     The table is the dispatch authority, so it carries what the registry used to.
-    ///     Keyed participants get rows like any other — which of them an application runs
-    ///     is settled by what it registered, and the consuming catalog narrows the table
-    ///     to exactly that. A message's <c>[ExcludeFromPipeline]</c> is resolved here:
-    ///     the blanket form drops every covariantly matched interceptor, the group-scoped
-    ///     form drops the covariant interceptors carrying an excluded group, and neither
-    ///     touches directly registered interceptors or main handlers.
+    /// Builds each dispatchable message's whole pipeline: every stage's participants, in the
+    /// order they will run.
     /// </summary>
+    /// <param name="types">The discovered types.</param>
+    /// <param name="excludedShadows">The types hidden from discovery.</param>
+    /// <returns>One composition per message that has any participant at all.</returns>
     /// <remarks>
-    ///     A participant generated code cannot name (inaccessible) contributes no row:
-    ///     no registration surface can reference it either, so its absence from the table
-    ///     is the same absence the container already sees. An exact comparator tie —
-    ///     equal weight and equal metadata name, i.e. the same type reached twice — is
-    ///     broken by discovery order, which is deterministic and, the participants being
-    ///     identical, unobservable.
+    /// <para>
+    /// A participant is direct when its registration names this exact message type and
+    /// indirect when it names a type the message is assignable to — the same split the
+    /// runtime makes. Each segment is sorted by descending weight and then by type name, and
+    /// every row carries the participant's groups.
+    /// </para>
+    /// <para>
+    /// Keyed participants get rows like any other: which rows an application runs is decided
+    /// by what it registered, and its catalog narrows the table to exactly that.
+    /// </para>
+    /// <para>
+    /// A message's <c>[ExcludeFromPipeline]</c> is resolved here rather than at dispatch.
+    /// Without groups it drops every covariantly matched interceptor; with them it drops only
+    /// those carrying a named group. Neither form touches directly registered interceptors or
+    /// main handlers.
+    /// </para>
+    /// <para>
+    /// A participant generated code cannot name contributes no row — no registration could
+    /// reference it either, so its absence here matches what the container already sees. Two
+    /// rows with equal weight and equal name are the same type reached twice, so the order
+    /// discovery happened to produce settles it, unobservably.
+    /// </para>
     /// </remarks>
     private static List<FrozenCompositionModel> ComputeFrozenCompositions(
         List<RegistrableTypeModel> types, List<RegistrableTypeModel> excludedShadows)
     {
         var compositions = new List<FrozenCompositionModel>();
+        // Ten segments: a direct and an indirect one for each of the five stages, indexed by
+        // stage and reused across messages.
         var rows = new List<(uint Weight, string SortKey, FrozenParticipantModel Row)>?[10];
 
-        // Messages hidden from discovery still get entries: [ExcludeFromDiscovery] keeps a
-        // type out of bulk registration, it does not stop a handler from being written for
-        // it — and without an entry such a message (and every subtype resolving through it)
-        // would have no pipeline at all. Participants are widened the same way: a hidden
-        // interceptor is registered by hand, and the consuming catalog admits its row only
-        // for the container that did register it.
+        // Messages hidden from discovery still get entries. Being hidden keeps a type out of
+        // bulk registration; it does not stop a handler being written for it, and without an
+        // entry that message — and every message resolving through it — would have no
+        // pipeline at all. Participants are included the same way: a hidden interceptor is
+        // one registered by hand, and a container's catalog admits its row only if that
+        // container registered it.
         foreach (var message in Enumerate(types, excludedShadows))
         {
             if (!message.IsMessageShape)
@@ -93,6 +104,7 @@ internal sealed partial class PlanBuilder
                 }
 
                 isEmpty = false;
+                // Sorted once here so that consuming a composition never has to.
                 segmentRows.Sort(static (x, y) =>
                 {
                     var byWeight = y.Weight.CompareTo(x.Weight);
@@ -109,6 +121,8 @@ internal sealed partial class PlanBuilder
                 segments[i] = builder.MoveToImmutable();
             }
 
+            // A message nothing participates in needs no entry: having none is what tells
+            // the runtime it has no pipeline.
             if (isEmpty)
             {
                 continue;
@@ -123,7 +137,12 @@ internal sealed partial class PlanBuilder
         return compositions;
     }
 
-    /// <summary>Both model lists in order, without materializing a combined one.</summary>
+    /// <summary>
+    /// Walks both lists in order.
+    /// </summary>
+    /// <param name="types">The discovered types.</param>
+    /// <param name="excludedShadows">The types hidden from discovery.</param>
+    /// <returns>Every type in both, without building a combined list.</returns>
     private static IEnumerable<RegistrableTypeModel> Enumerate(
         List<RegistrableTypeModel> types, List<RegistrableTypeModel> excludedShadows)
     {
@@ -139,12 +158,17 @@ internal sealed partial class PlanBuilder
     }
 
     /// <summary>
-    ///     Whether the message's <c>[ExcludeFromPipeline]</c> keeps a covariantly matched
-    ///     interceptor out of its pipeline: the parameterless form excludes every one, the
-    ///     group-scoped form only those carrying a named group. Mirrors the runtime
-    ///     shape-builder's <c>PrepareIndirect</c>, including its treatment of an
-    ///     interceptor without <c>[Group]</c> as carrying the default group alone.
+    /// Reports whether a message's <c>[ExcludeFromPipeline]</c> keeps a covariantly matched
+    /// interceptor out of its pipeline.
     /// </summary>
+    /// <param name="message">The message carrying the exclusion.</param>
+    /// <param name="interceptor">The interceptor to test.</param>
+    /// <returns><c>true</c> when the interceptor is excluded.</returns>
+    /// <remarks>
+    /// Declared without groups the exclusion covers every covariant interceptor; with groups
+    /// it covers only those carrying one of them. An interceptor declaring no groups counts
+    /// as carrying the default group alone.
+    /// </remarks>
     private static bool IsExcludedFromPipeline(RegistrableTypeModel message, RegistrableTypeModel interceptor)
     {
         if (!message.HasPipelineExclusion)
@@ -181,6 +205,12 @@ internal sealed partial class PlanBuilder
         return false;
     }
 
+    /// <summary>
+    /// Reports whether a message is assignable to the type a registration names.
+    /// </summary>
+    /// <param name="message">The message to test.</param>
+    /// <param name="declaredKey">The registered message type, normalized.</param>
+    /// <returns><c>true</c> when the registration covariantly matches this message.</returns>
     private static bool ContainsAssignableKey(RegistrableTypeModel message, string declaredKey)
     {
         foreach (var assignableKey in message.AssignableKeys)

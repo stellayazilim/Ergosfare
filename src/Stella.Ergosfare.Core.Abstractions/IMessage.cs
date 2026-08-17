@@ -3,9 +3,11 @@ namespace Stella.Ergosfare.Core.Abstractions;
 
 
 /// <summary>
-/// base placeholder interface for all attachable types in Stella.Ergosfare system
+/// Marks a type as a message that can be dispatched through an Ergosfare pipeline.
 /// </summary>
 /// <remarks>
-/// Represents registerable message types in Stella.Ergosfare registry
+/// The interface declares no members. It exists so handler and interceptor contracts can
+/// constrain their message type argument, and so registration can recognize which types
+/// participate in dispatch.
 /// </remarks>
 public interface IMessage;

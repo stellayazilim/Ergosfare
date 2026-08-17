@@ -6,19 +6,27 @@ using Stella.Ergosfare.Core.Abstractions.Factories;
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 /// <summary>
-/// One container's table of frozen publish pipelines, keyed by message type — the publishing
-/// counterpart of the executor cache, and the same shape: a table the container owns, not a
-/// process-wide store every container has to be guarded against.
+/// One container's publish pipelines, keyed by event type — the publishing counterpart of
+/// <see cref="PipelineExecutorCache"/>.
 /// </summary>
+/// <param name="dependenciesFactory">The factory the pipelines resolve participants through.</param>
+/// <remarks>
+/// The table belongs to its container rather than the process, so containers need no
+/// guarding against each other here.
+/// </remarks>
 internal sealed class FrozenBroadcastTable(IMessageDependenciesFactory dependenciesFactory)
 {
     private readonly ConcurrentDictionary<Type, FrozenBroadcastDispatch> _byType = new();
 
     /// <summary>
-    /// The pipeline for a message known only by its runtime type. The generated root closes
-    /// the generic without reflection; a type the generator never saw falls to the reflective
-    /// construction inside <see cref="DispatchLookup"/>.
+    /// Returns the publish pipeline of an event known only by its runtime type.
     /// </summary>
+    /// <param name="messageType">The event's runtime type.</param>
+    /// <returns>The pipeline for that type.</returns>
+    /// <remarks>
+    /// A generated root closes the generic without reflection; a type the generator never
+    /// saw falls back to reflective construction.
+    /// </remarks>
     internal FrozenBroadcastDispatch Get(Type messageType)
         => _byType.TryGetValue(messageType, out var dispatch)
             ? dispatch
@@ -29,15 +37,17 @@ internal sealed class FrozenBroadcastTable(IMessageDependenciesFactory dependenc
                     typeof(FrozenBroadcastDispatch<>), [dependenciesFactory]));
 
     /// <summary>
-    /// The pipeline for a message whose type the caller knows at compile time: a
-    /// static-generic slot replaces the dictionary lookup with a field read and a table
-    /// identity check, and the closed type is named directly rather than constructed.
+    /// Returns the publish pipeline of an event type named at compile time.
     /// </summary>
+    /// <typeparam name="TEvent">The event type.</typeparam>
+    /// <returns>The pipeline for that type.</returns>
     /// <remarks>
-    /// The slot is keyed by this table, so containers stay isolated — a foreign table's
-    /// pipeline is never served, and the dictionary below keeps identity stable across slot
-    /// refreshes. Callers must guard with <c>message.GetType() == typeof(TEvent)</c>; a
-    /// base-typed generic call has to keep resolving by the runtime type.
+    /// A static generic slot turns the dictionary lookup into a field read plus a check that
+    /// the slot belongs to this table, and the closed type is named outright rather than
+    /// constructed. The check keeps containers apart; the dictionary behind it keeps pipeline
+    /// identity stable across slot rewrites. Callers must first confirm
+    /// <c>message.GetType() == typeof(TEvent)</c>, since publishing through a base type has
+    /// to resolve by the runtime type.
     /// </remarks>
     internal FrozenBroadcastDispatch Get<TEvent>() where TEvent : notnull
     {
@@ -56,13 +66,22 @@ internal sealed class FrozenBroadcastTable(IMessageDependenciesFactory dependenc
         return dispatch;
     }
 
+    /// <summary>
+    /// A table and the pipeline it served.
+    /// </summary>
+    /// <param name="table">The table the pipeline belongs to.</param>
+    /// <param name="dispatch">The pipeline.</param>
     private sealed class Slot(FrozenBroadcastTable table, FrozenBroadcastDispatch dispatch)
     {
         public readonly FrozenBroadcastTable Table = table;
         public readonly FrozenBroadcastDispatch Dispatch = dispatch;
     }
 
-    // The type parameter is the cache key: one static slot per closed message type.
+    /// <summary>
+    /// The last table to serve a compile-time lookup for one event type.
+    /// </summary>
+    /// <typeparam name="TEvent">The event type this slot belongs to.</typeparam>
+    // The type parameter is the key: one static slot per closed event type.
     // ReSharper disable once UnusedTypeParameter
     private static class Holder<TEvent> where TEvent : notnull
     {
@@ -71,13 +90,17 @@ internal sealed class FrozenBroadcastTable(IMessageDependenciesFactory dependenc
     }
 
     /// <summary>
-    /// Re-enters a generic context with a root's message type and constructs the closed
-    /// pipeline there — no <see cref="Type.MakeGenericType"/>, no reflection.
+    /// Constructs a publish pipeline inside a generic context carrying the root's event
+    /// type, so nothing is built reflectively.
     /// </summary>
     private sealed class DispatchVisitor : IMessageRootVisitor<FrozenBroadcastDispatch, IMessageDependenciesFactory>
     {
+        /// <summary>
+        /// The shared instance; the visitor holds no state.
+        /// </summary>
         public static readonly DispatchVisitor Instance = new();
 
+        /// <inheritdoc />
         public FrozenBroadcastDispatch Visit<TMessage>(IMessageDependenciesFactory state) where TMessage : IMessage
             => new FrozenBroadcastDispatch<TMessage>(state);
     }

@@ -4,16 +4,15 @@ namespace Stella.Ergosfare.Commands.Abstractions;
 
 
 /// <summary>
-/// Represents a non-type-safe exception interceptor for commands.
+/// Handles failures raised while dispatching any command, whatever its type.
 /// </summary>
 /// <remarks>
-/// This interceptor can handle any <see cref="ICommand"/> without specifying a particular result type.
-/// It returns <see cref="object"/> from the <c>HandleAsync</c> method, making it suitable for
-/// scenarios where you want to apply exception handling logic across multiple command types
-/// in a generic pipeline without caring about the exact result type.
-/// 
-/// For scenarios where type safety is required, use the generic version:
-/// <see cref="ICommandExceptionInterceptor{TCommand, TResult}"/>.
+/// Because it accepts every command, this contract sees the command as
+/// <see cref="ICommand"/> and its result as <see cref="object"/>. Running is what marks the
+/// failure handled, so an interceptor this broad handles everything it is registered for —
+/// use <see cref="ICommandExceptionInterceptorFor{TException}"/> to narrow it by exception
+/// type, or <see cref="ICommandExceptionInterceptor{TCommand, TResult}"/> for a typed
+/// result.
 /// </remarks>
 // ReSharper disable once UnusedType.Global
 public interface ICommandExceptionInterceptor: ICommand, IAsyncExceptionInterceptor<ICommand>;

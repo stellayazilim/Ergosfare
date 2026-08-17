@@ -5,30 +5,33 @@ using Stella.Ergosfare.Core.Internal.Factories;
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 /// <summary>
-/// The staged plans' advisory gate: whether the live pipeline is exactly the composition a
-/// plan was baked against — the two main-handler segments and the four interceptor stages
-/// matching the planned type lists in order. Anything else (a runtime-registered
-/// interceptor, a different or additional handler, reordered stages) fails the match and
-/// keeps the dispatch on the runtime strategy.
+/// Decides whether a compiled plan may be used: whether the live pipeline is exactly the
+/// one the plan was compiled against.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Handlers are compared exactly like the interceptor stages, which is what lets one gate
-/// serve both a broadcast and a single-handler pipeline: the latter's baked composition is
-/// one direct handler and an empty indirect segment, so "the live pipeline has exactly this
-/// one handler" falls out of the same list comparison instead of needing its own arm.
+/// Handlers are compared the same way as the interceptor stages, which is what lets one
+/// check serve a broadcast and a single-handler pipeline alike — the latter's compiled
+/// pipeline is one direct handler and no indirect ones, so "exactly this one handler" falls
+/// out of the same list comparison.
 /// </para>
 /// <para>
-/// The indirect segment is compared even for a single-handler plan, which does not run it —
-/// a sole direct handler wins the resolution ladder outright. That is deliberate: a covariant
-/// handler the generator never saw means the live composition is not the one the plan was
-/// baked against, and the advisory contract is "trust the plan only when the pipeline is
-/// exactly what was compiled". The dispatch then costs the strategy instead of the plan, and
-/// behaves identically either way.
+/// The indirect handlers are compared even for a single-handler plan, which would never run
+/// them: a direct handler wins outright. That is on purpose. A covariant handler the
+/// generator never saw means the live pipeline is not the compiled one, and a plan is
+/// trusted only when the two match exactly. The dispatch then costs the general strategy
+/// and behaves the same either way.
 /// </para>
 /// </remarks>
 internal static class StagedPlanGate
 {
+    /// <summary>
+    /// Reports whether the live participants are exactly what
+    /// <paramref name="composition"/> was compiled against.
+    /// </summary>
+    /// <param name="dependencies">The participants this container resolved.</param>
+    /// <param name="composition">The pipeline the plan was compiled against.</param>
+    /// <returns><c>true</c> when every stage matches, type for type and in order.</returns>
     internal static bool Matches(MessageDependencies dependencies, StagedPlanKey composition)
         => StageMatches(dependencies.Handlers, composition.HandlerTypeArray)
            && StageMatches(dependencies.IndirectHandlers, composition.IndirectHandlerTypeArray)
@@ -37,6 +40,13 @@ internal static class StagedPlanGate
            && StageMatches(dependencies.ExceptionInterceptors, composition.ExceptionInterceptorTypeArray)
            && StageMatches(dependencies.FinalInterceptors, composition.FinalInterceptorTypeArray);
 
+    /// <summary>
+    /// Reports whether one live stage holds exactly the compiled types, in order.
+    /// </summary>
+    /// <typeparam name="THandler">The stage's participant contract.</typeparam>
+    /// <param name="stage">The live stage.</param>
+    /// <param name="baked">The types the plan was compiled with.</param>
+    /// <returns><c>true</c> when both name the same types in the same order.</returns>
     private static bool StageMatches<THandler>(
         IReadOnlyList<IHandlerReference<THandler>> stage,
         Type[] baked)
@@ -58,12 +68,17 @@ internal static class StagedPlanGate
     }
 
     /// <summary>
-    /// The direct-construction gate on top of a composition match: every participant's
-    /// effective DI registration must be the module's own plain transient one — the
-    /// single shape where a plan constructing participants with <c>new</c> is observably
-    /// identical to container resolution. Any override (user factory, lifetime change)
-    /// routes the plan back to its provider-resolving variant.
+    /// Reports whether every participant of <paramref name="composition"/> was registered
+    /// in the module's own plain transient shape — the further condition a plan must meet
+    /// before it may construct participants itself instead of resolving them.
     /// </summary>
+    /// <param name="factory">The container's dependencies factory, which knows the registrations.</param>
+    /// <param name="composition">The pipeline the plan was compiled against.</param>
+    /// <returns><c>true</c> when constructing every participant is equivalent to resolving it.</returns>
+    /// <remarks>
+    /// Any override — a user's factory, a changed lifetime — sends the plan back to its
+    /// resolving variant.
+    /// </remarks>
     internal static bool AllPlainTransient(MessageDependenciesFactory factory, StagedPlanKey composition)
         => StagePlainTransient(factory, composition.HandlerTypeArray)
            && StagePlainTransient(factory, composition.IndirectHandlerTypeArray)
@@ -72,6 +87,12 @@ internal static class StagedPlanGate
            && StagePlainTransient(factory, composition.ExceptionInterceptorTypeArray)
            && StagePlainTransient(factory, composition.FinalInterceptorTypeArray);
 
+    /// <summary>
+    /// Reports whether every type of one stage was registered in the plain transient shape.
+    /// </summary>
+    /// <param name="factory">The container's dependencies factory.</param>
+    /// <param name="participants">The stage's participant types.</param>
+    /// <returns><c>true</c> when all of them were.</returns>
     private static bool StagePlainTransient(MessageDependenciesFactory factory, Type[] participants)
     {
         foreach (var participant in participants)

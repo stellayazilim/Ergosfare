@@ -1,26 +1,30 @@
 namespace Stella.Ergosfare.Core.Abstractions;
 
 /// <summary>
-/// The inverse of <see cref="IResultAdapter{TResult}"/>: builds a failed
-/// <typeparamref name="TResult"/> out of an exception. An adapter that also implements
-/// this contract declares its carrier type fully value-based — a real throw inside the
-/// pipeline is caught and materialized into a failed carrier instead of reaching the
-/// caller, and an unhandled carried failure flows out as the result rather than being
-/// rethrown. The framework's own <see cref="Results.Result"/>/<see cref="Results.Result{TValue}"/>
-/// adapters implement it; a foreign carrier's adapter may opt in when the carrier can
-/// represent an arbitrary exception.
+/// Builds a failed result value from an exception — the inverse of
+/// <see cref="IResultAdapter{TResult}"/>.
 /// </summary>
-/// <typeparam name="TResult">The closed pipeline result type the materializer produces.</typeparam>
+/// <typeparam name="TResult">The closed result type this materializer produces.</typeparam>
 /// <remarks>
-/// Deliberately separate from <see cref="IResultAdapter{TResult}"/>: every carrier can
-/// surface a failure, but not every carrier can absorb one (a union type without an
-/// exception arm extracts fine yet cannot materialize). Pipelines probe for this contract
-/// once, next to the adapter binding — a carrier without it keeps the classic semantics:
-/// an unhandled exception is rethrown to the caller.
+/// <para>
+/// Implementing this alongside <see cref="IResultAdapter{TResult}"/> changes how the
+/// pipeline settles for that result type: an exception thrown inside the pipeline is
+/// caught and turned into a failed result instead of reaching the caller, and a carried
+/// failure that no interceptor handled flows out as the returned result rather than being
+/// rethrown.
+/// </para>
+/// <para>
+/// It is a separate contract because not every carrier can absorb an arbitrary exception.
+/// A result type whose adapter does not implement this keeps the default behavior: an
+/// unhandled failure is thrown to the caller. The built-in
+/// <see cref="Results.Result"/> and <see cref="Results.Result{TValue}"/> adapters implement it.
+/// </para>
 /// </remarks>
 public interface IResultMaterializer<out TResult>
 {
-    /// <summary>Builds the failed carrier representing <paramref name="exception"/>.</summary>
+    /// <summary>
+    /// Builds the failed result carrying <paramref name="exception"/>.
+    /// </summary>
     /// <param name="exception">The failure to carry.</param>
     /// <returns>A failed <typeparamref name="TResult"/> carrying <paramref name="exception"/>.</returns>
     TResult Materialize(Exception exception);

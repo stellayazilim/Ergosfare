@@ -2,15 +2,14 @@
 
 
 /// <summary>
-/// Represents a strongly-typed handler for processing messages of type <typeparamref name="TMessage"/>
-/// and producing a result of type <typeparamref name="TResult"/>.
+/// Handles messages of type <typeparamref name="TMessage"/> synchronously and returns a
+/// <typeparamref name="TResult"/>.
 /// </summary>
-/// <typeparam name="TMessage">The type of the message to handle. Must be non-nullable.</typeparam>
-/// <typeparam name="TResult">The type of the result produced by the handler. Must be non-nullable.</typeparam>
+/// <typeparam name="TMessage">The message type this handler accepts.</typeparam>
+/// <typeparam name="TResult">The result type this handler produces.</typeparam>
 /// <remarks>
-/// Implementations of this interface provide synchronous handling logic and return the
-/// typed result directly — there is no object-typed bridge member; the pipeline invokes
-/// handlers exclusively through their typed members.
+/// Implement <see cref="IAsyncHandler{TMessage, TResult}"/> instead when handling involves
+/// awaiting; the two are separate contracts and a handler implements one of them.
 /// </remarks>
 public interface IHandler<in TMessage, out TResult> : IHandler
     where TMessage : notnull
@@ -18,10 +17,10 @@ public interface IHandler<in TMessage, out TResult> : IHandler
 {
 
     /// <summary>
-    /// Handles a message of type <typeparamref name="TMessage"/> and returns a strongly-typed result.
+    /// Handles <paramref name="message"/> and returns the result.
     /// </summary>
     /// <param name="message">The message to handle.</param>
-    /// <param name="context">The current execution context.</param>
-    /// <returns>The result of type <typeparamref name="TResult"/> produced by handling the message.</returns>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <returns>The result of handling <paramref name="message"/>.</returns>
     TResult Handle(TMessage message, ErgosfareContext context);
 }

@@ -8,24 +8,34 @@ using Stella.Ergosfare.SourceGenerator.ResultAdapters;
 namespace Stella.Ergosfare.SourceGenerator.Symbols;
 
 /// <summary>
-///     Reads result adapters off symbols: the ones a participant declares by attribute, and
-///     the container-wide default named at a <c>UseDefaultResultAdapter</c> callsite. What
-///     an adapter serves is flattened into a slot key here, so everything downstream can ask
-///     without a symbol in hand.
+/// Reads result adapters off symbols.
 /// </summary>
-
+/// <remarks>
+/// Both the adapter a message declares by attribute and the container-wide default named at a
+/// <c>UseDefaultResultAdapter</c> call. What an adapter serves is flattened into a slot key
+/// here, so everything downstream can ask without holding a symbol.
+/// </remarks>
 internal static class ResultAdapterReader
 {
     private const string DependencyInjectionExtensionsNamespace =
         "Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection";
 
     /// <summary>
-    ///     Projects a dispatchable message's <c>[ResultAdapter]</c> annotation, or
-    ///     <c>null</c> when there is none, and reports whether the message carries
-    ///     <c>[IgnoreResultAdapter]</c>. The runtime binding reads both attributes with
-    ///     inheritance (<c>GetCustomAttribute</c>'s default), so the mirror walks the base
-    ///     chain — the most derived annotation wins; the opt-out wins from any level.
+    /// Reads a dispatchable message's <c>[ResultAdapter]</c> annotation.
     /// </summary>
+    /// <param name="symbol">The message to read.</param>
+    /// <param name="dispatchResults">The results the message declares.</param>
+    /// <param name="isCommand">Whether it is a command, and so also dispatched void.</param>
+    /// <param name="currentAssembly">
+    /// The compilation's assembly, or <c>null</c> for a message read from metadata.
+    /// </param>
+    /// <param name="hasIgnore">Set when the message carries <c>[IgnoreResultAdapter]</c>.</param>
+    /// <returns>The annotated adapter, or <c>null</c> when the message annotates none.</returns>
+    /// <remarks>
+    /// Both attributes are inherited, matching how the runtime binding reads them: the base
+    /// chain is walked, the most derived annotation wins, and the opt-out counts from any
+    /// level.
+    /// </remarks>
     internal static ResultAdapterModel? GetResultAdapterModel(
         INamedTypeSymbol symbol,
         ImmutableArray<DispatchResultModel> dispatchResults,
@@ -68,8 +78,8 @@ internal static class ResultAdapterReader
 
         if (adapterSymbol is null || adapterSymbol.TypeKind == TypeKind.Error)
         {
-            // A typeof the model cannot resolve: nothing can ever bind — ERGO011
-            // material carrying no slots at all.
+            // A typeof that does not resolve: nothing can bind it, so it becomes an adapter
+            // serving no slot at all — which is what ERGO011 reports.
             return new ResultAdapterModel(
                 TypeofExpression: string.Empty,
                 DisplayName: adapterSymbol?.ToDisplayString() ?? "?",
@@ -94,8 +104,8 @@ internal static class ResultAdapterReader
             }
         }
 
-        // What the runtime binding's Activator.CreateInstance requires; bakeability
-        // additionally requires the emitted plan to be able to name the type.
+        // What the runtime binding's Activator.CreateInstance needs. Baking asks for that and
+        // for a type the emitted plan can name.
         var isInstantiable = hasPublicParameterlessConstructor
             && !adapterSymbol.IsAbstract
             && !adapterSymbol.IsUnboundGenericType
@@ -103,8 +113,8 @@ internal static class ResultAdapterReader
 
         var isBakeable = isInstantiable && ConstructionAnalyzer.IsNameableClosedType(adapterSymbol, currentAssembly);
 
-        // The message's runtime-probed slots: every declared result (a stream probes its
-        // enumerator), plus the Unit lane every command's void dispatch shape carries.
+        // The slots the runtime probes for this message: each declared result, with a stream
+        // probed through its enumerator, plus the Unit slot a command's void dispatch has.
         var fitsDeclaredSlot = isCommand && AdapterSlotKey.Contains(adapterSlotsKey, EmittedExpressions.Unit);
 
         if (!fitsDeclaredSlot)
@@ -134,9 +144,16 @@ internal static class ResultAdapterReader
     }
 
     /// <summary>
-    ///     The result-type expressions of the adapter's implementations of the given
-    ///     Core.Abstractions arity-1 contract, joined with the model's slot separator.
+    /// Flattens the slots an adapter serves through one contract into a key.
     /// </summary>
+    /// <param name="adapterSymbol">The adapter to read.</param>
+    /// <param name="contractName">
+    /// The single-parameter contract to look for, declared in Core.Abstractions.
+    /// </param>
+    /// <returns>
+    /// Its result-type expressions joined by the slot separator, or an empty string when it
+    /// implements the contract for none.
+    /// </returns>
     internal static string BuildAdapterSlotsKey(INamedTypeSymbol adapterSymbol, string contractName)
     {
         StringBuilder? slots = null;
@@ -156,11 +173,18 @@ internal static class ResultAdapterReader
     }
 
     /// <summary>
-    ///     Projects one <c>UseDefaultResultAdapter(...)</c> callsite. A literal
-    ///     <c>typeof</c> projects the adapter's served slots (closed) or slot patterns
-    ///     (open definition); anything else — a variable, a conditional, an unresolvable
-    ///     type — projects the opaque marker, which turns baking off compilation-wide.
+    /// Reads one <c>UseDefaultResultAdapter</c> call.
     /// </summary>
+    /// <param name="ctx">The invocation to read.</param>
+    /// <param name="ct">Cancels the read.</param>
+    /// <returns>
+    /// The site's model, or <c>null</c> when the invocation is not that method.
+    /// </returns>
+    /// <remarks>
+    /// A literal <c>typeof</c> gives the slots a closed adapter serves, or the patterns an
+    /// open definition serves. Anything else — a variable, a conditional, a type that does
+    /// not resolve — comes back opaque, which turns baking off for the whole compilation.
+    /// </remarks>
     internal static DefaultResultAdapterSiteModel? TransformDefaultResultAdapterSite(GeneratorSyntaxContext ctx, CancellationToken ct)
     {
         var invocation = (InvocationExpressionSyntax)ctx.Node;
@@ -179,9 +203,9 @@ internal static class ResultAdapterReader
             return DefaultResultAdapterSiteModel.Opaque;
         }
 
-        // The unbound form (typeof(X<>)) carries no interfaces; project its definition.
-        // Type parameters on a containing type would need a nesting-aware closing — such
-        // definitions stay opaque rather than half-modeled.
+        // The unbound form, typeof(X<>), carries no interfaces, so the definition is read
+        // instead. A type parameter on a containing type would need a nesting-aware closing,
+        // and such a definition stays opaque rather than half-read.
         var definition = adapterSymbol.IsUnboundGenericType ? adapterSymbol.OriginalDefinition : adapterSymbol;
 
         for (var container = definition.ContainingType; container is not null; container = container.ContainingType)
@@ -226,8 +250,8 @@ internal static class ResultAdapterReader
 
             parameterNamesKey = names.ToString();
 
-            // "global::App.BoxAdapter<T>" → "global::App.BoxAdapter"; the closing per
-            // bound slot re-appends the unified argument list.
+            // "global::App.BoxAdapter<T>" becomes "global::App.BoxAdapter"; closing it over a
+            // bound slot appends the argument list the match produced.
             var angle = baseExpression.IndexOf('<');
 
             if (angle < 0)
@@ -254,9 +278,14 @@ internal static class ResultAdapterReader
     }
 
     /// <summary>
-    ///     Whether every level of the containing-type chain is nameable from generated
-    ///     code in the current compilation — public, or at-least-internal within it.
+    /// Reports whether generated code in this compilation can name a type.
     /// </summary>
+    /// <param name="symbol">The type to test.</param>
+    /// <param name="currentAssembly">The compilation's assembly.</param>
+    /// <returns><c>true</c> when every level of its containing chain is reachable.</returns>
+    /// <remarks>
+    /// Each level must be public, or internal and declared in this compilation.
+    /// </remarks>
     internal static bool IsAccessibleChain(INamedTypeSymbol symbol, IAssemblySymbol currentAssembly)
     {
         for (var current = symbol; current is not null; current = current.ContainingType)
@@ -282,13 +311,20 @@ internal static class ResultAdapterReader
     }
 
     /// <summary>
-    ///     Reduces the compilation's <c>UseDefaultResultAdapter</c> callsites to one
-    ///     modeled view, or <c>null</c> when the mirror must stand down: no site at all,
-    ///     an opaque site, or sites disagreeing on the adapter. Standing down is never
-    ///     wrong — the runtime tier serves the default, the adapter-identity gate keeps
-    ///     unbaked plans off served slots, and no ERGO013 judgment runs over facts the
-    ///     mirror cannot see. Baking additionally requires <c>IsBakeable</c>.
+    /// Reduces a compilation's <c>UseDefaultResultAdapter</c> calls to the one adapter they
+    /// agree on.
     /// </summary>
+    /// <param name="sites">The calls collected from this compilation.</param>
+    /// <returns>
+    /// The agreed adapter, or <c>null</c> when there is no call, one of them is opaque, or
+    /// they name different adapters.
+    /// </returns>
+    /// <remarks>
+    /// Answering <c>null</c> costs correctness nothing: the runtime tier still serves the
+    /// default, the identity gate keeps unbaked plans off served slots, and no ERGO013
+    /// verdict is reached over facts that could not be read. Baking asks for
+    /// <c>IsBakeable</c> on top of an answer here.
+    /// </remarks>
     internal static DefaultResultAdapterSiteModel? ReduceDefaultResultAdapter(
         ImmutableArray<DefaultResultAdapterSiteModel> sites)
     {
@@ -317,11 +353,21 @@ internal static class ResultAdapterReader
     }
 
     /// <summary>
-    ///     The ERGO013 predicate: a result-bearing message none of whose non-stream
-    ///     result slots any adapter tier serves — not native, not the configured default.
-    ///     Void and stream-only messages never qualify: they have no result value to
-    ///     carry a failure in, so throwing is their inherent contract, not a misfit.
+    /// Reports whether a message declares a result slot no adapter serves.
     /// </summary>
+    /// <param name="message">The message to test.</param>
+    /// <param name="defaultAdapter">The container's default adapter.</param>
+    /// <param name="unservedSlotExpression">
+    /// The unserved result type, when this returns <c>true</c>.
+    /// </param>
+    /// <returns>
+    /// <c>true</c> when the message declares at least one non-stream result and neither the
+    /// native adapters nor the default serves any of them.
+    /// </returns>
+    /// <remarks>
+    /// What ERGO013 reports. A void or stream-only message never qualifies: it has no result
+    /// value to carry a failure in, so throwing is its contract rather than a misfit.
+    /// </remarks>
     internal static bool HasUnservedResultSlots(
         RegistrableTypeModel message, DefaultResultAdapterSiteModel defaultAdapter, out string unservedSlotExpression)
     {

@@ -7,45 +7,39 @@ namespace Stella.Ergosfare.Events;
 
 
 /// <summary>
-/// Mediates events through frozen publish pipelines closed over each event's runtime type,
-/// so handlers are always invoked through their typed members — including for the
-/// interface-erased <see cref="PublishAsync(IEvent, IEnumerable{string}, CancellationToken)"/> overload.
+/// The event mediator an application resolves: it holds the scope it was resolved from and
+/// the container's publish pipelines.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Unsealed so the DI registration can bind the engine-backed constructor through a
-/// single-constructor derived shape; the facade carries no state a derived type could
-/// corrupt.
+/// Every publish method is one body — check the argument, find the pipeline, run it. They
+/// deliberately do not call each other: each entry a caller can land on carries the whole
+/// path, because a relay frame between the facade and the pipeline costs more than it saves.
 /// </para>
 /// <para>
-/// Every publish entry is one body: guard the runtime type, read the frozen pipeline's
-/// slot, execute pooled. The entries deliberately do not relay through each other — each
-/// generic entry a caller's interface dispatch lands on carries the complete fast path,
-/// because every relay frame between the facade and the pipeline is a measured per-publish
-/// cost the pipeline itself never earns back.
+/// The class is not sealed so that registration can bind its engine-backed constructor
+/// through a derived shape; it holds no state a derived type could disturb.
 /// </para>
 /// </remarks>
-/// <inheritdoc cref="IEventMediator"/>
 public class EventMediator : IPublisher
 {
     /// <summary>
-    /// This container's frozen publish pipelines — the engine's table, captured once so a
-    /// publish reads a field instead of chasing the engine.
+    /// The container's publish pipelines, taken from the engine once so a publish reads a
+    /// field rather than going through the engine.
     /// </summary>
     private readonly FrozenBroadcastTable _broadcasts;
 
     /// <summary>
-    /// The scope provider handlers resolve against.
+    /// The provider of the scope this facade was resolved from; handlers resolve against it.
     /// </summary>
     private readonly IServiceProvider _serviceProvider;
 
     /// <summary>
-    /// Publishes go straight to the process-wide engine's broadcast table with
-    /// <paramref name="serviceProvider"/> as the handler-resolution scope, making the
-    /// facade the only object built per resolution.
+    /// Initializes the facade over a container's engine and the scope it serves.
     /// </summary>
-    /// <param name="engine">The singleton dispatch engine.</param>
+    /// <param name="engine">The container's dispatch engine.</param>
     /// <param name="serviceProvider">The provider of the scope this facade serves.</param>
+    /// <exception cref="ArgumentNullException">Either argument is <c>null</c>.</exception>
     public EventMediator(
         MessageDispatchEngine engine,
         IServiceProvider serviceProvider)
@@ -74,10 +68,10 @@ public class EventMediator : IPublisher
     {
         ArgumentNullException.ThrowIfNull(@event);
 
-        // When the runtime type is exactly TEvent (the overwhelmingly common typed publish)
-        // the pipeline comes from a static-generic slot instead of the type-keyed
-        // dictionary. A base-typed generic call keeps resolving by the runtime type — the
-        // slot for a base TEvent would dispatch the wrong closed pipeline.
+        // With the runtime type exactly TEvent — the common typed publish — the pipeline
+        // comes from a static generic slot instead of the type-keyed table. Publishing
+        // through a base type keeps resolving by the runtime type, since the slot for the
+        // base type holds the wrong pipeline.
         var dispatch = @event.GetType() == typeof(TEvent)
             ? _broadcasts.Get<TEvent>()
             : _broadcasts.Get(@event.GetType());
@@ -95,12 +89,18 @@ public class EventMediator : IPublisher
             .Publish(@event, context, _serviceProvider, groups);
     }
 
-    /// <summary>Publishes an event through its default pipeline.</summary>
+    /// <summary>
+    /// Publishes <paramref name="event"/> through its default pipeline.
+    /// </summary>
+    /// <param name="event">The event to publish.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>A task that completes when every handler has run.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="event"/> is <c>null</c>.</exception>
     /// <remarks>
-    /// The conveniences are declared here as well as on the interface. They used to be
-    /// extension methods, which a concrete-typed receiver finds; a default interface method is
-    /// not, so carrying them only on the interface would have broken every call made through
-    /// this class. Each carries the full body — see the class remarks.
+    /// The conveniences are declared on this class as well as on the interface. A call made
+    /// through the concrete type does not find a default interface method, so declaring them
+    /// only on the interface would leave those calls without an overload to bind to. Each
+    /// carries the whole body, for the reason given on the class.
     /// </remarks>
     public ValueTask PublishAsync(IEvent @event, CancellationToken cancellationToken = default)
     {
@@ -111,7 +111,18 @@ public class EventMediator : IPublisher
     }
 
 
-    /// <summary>Publishes under a canonical group filter.</summary>
+    /// <summary>
+    /// Publishes <paramref name="event"/> under a canonical group set.
+    /// </summary>
+    /// <param name="event">The event to publish.</param>
+    /// <param name="groups">
+    /// The groups to deliver to. An empty set publishes through the default pipeline.
+    /// </param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>A task that completes when every matching handler has run.</returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="event"/> or <paramref name="groups"/> is <c>null</c>.
+    /// </exception>
     public ValueTask PublishAsync(IEvent @event, GroupSet groups, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(@event);
@@ -122,7 +133,15 @@ public class EventMediator : IPublisher
             groups.Count == 0 ? null : groups);
     }
 
-    /// <summary>Typed counterpart of <see cref="PublishAsync(IEvent, CancellationToken)"/>.</summary>
+    /// <summary>
+    /// Publishes <paramref name="event"/> through its default pipeline, naming its type at
+    /// compile time.
+    /// </summary>
+    /// <typeparam name="TEvent">The event's compile-time type.</typeparam>
+    /// <param name="event">The event to publish.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>A task that completes when every handler has run.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="event"/> is <c>null</c>.</exception>
     public ValueTask PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
         where TEvent : notnull
     {
@@ -136,7 +155,20 @@ public class EventMediator : IPublisher
     }
 
 
-    /// <summary>Typed counterpart of the canonical group-filter overload.</summary>
+    /// <summary>
+    /// Publishes <paramref name="event"/> under a canonical group set, naming its type at
+    /// compile time.
+    /// </summary>
+    /// <typeparam name="TEvent">The event's compile-time type.</typeparam>
+    /// <param name="event">The event to publish.</param>
+    /// <param name="groups">
+    /// The groups to deliver to. An empty set publishes through the default pipeline.
+    /// </param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>A task that completes when every matching handler has run.</returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="event"/> or <paramref name="groups"/> is <c>null</c>.
+    /// </exception>
     public ValueTask PublishAsync<TEvent>(TEvent @event, GroupSet groups, CancellationToken cancellationToken = default)
         where TEvent : notnull
     {

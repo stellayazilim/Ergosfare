@@ -8,35 +8,34 @@ using Stella.Ergosfare.SourceGenerator.Symbols;
 namespace Stella.Ergosfare.SourceGenerator;
 
 /// <summary>
-///     Incremental generator producing compile-time Ergosfare registrations. It discovers
-///     every user-declared type assignable to a module marker interface (<c>ICommand</c>,
-///     <c>IQuery</c>, <c>IEvent</c>) — messages, handlers and interceptors all inherit the
-///     marker through their contracts — and emits an <c>ErgosfareGeneratedRegistrations</c>
-///     class into the compilation.
+/// Emits an assembly's Ergosfare registrations at compile time.
 /// </summary>
 /// <remarks>
-///     <para>
-///     Registration names constructs and nothing more: messages through
-///     <c>Register(typeof(T))</c>, pipeline participants batched through the module
-///     builders' <c>RegisterParticipants</c>, both recorded as the container's selection
-///     from the frozen composition table this generator also bakes. What each construct's
-///     pipeline looks like is decided here, at compile time, not assembled from
-///     descriptors at run time. Generic definitions are named unbound — one table entry
-///     serves every instantiation, and the dispatch closes participants over the
-///     dispatched message's arguments. Against older Ergosfare packages that lack the
-///     batch surface, emission degrades to per-type <c>Register(Type)</c> calls.
-///     </para>
-///     <para>
-///     Reference scanning: the generator also walks referenced assemblies for marker
-///     types — the compile-time replacement for the removed runtime assembly scanning: a
-///     library's handlers register through the consuming project's generated code. Only assemblies
-///     that themselves reference Ergosfare are inspected (nothing else can implement a
-///     marker), and Ergosfare's own assemblies are excluded because their handler contract
-///     interfaces inherit the module markers. Types the generated code cannot name —
-///     internal without <c>InternalsVisibleTo</c> covering this compilation — surface as
-///     ERGO002 instead of diverging silently from the runtime scan. Opt out per project
-///     with the <c>ErgosfareSourceGeneratorScanReferences=false</c> MSBuild property.
-///     </para>
+/// <para>
+/// Every user-declared type reaching a module marker — <c>ICommand</c>, <c>IQuery</c>,
+/// <c>IEvent</c> — is discovered and named in a generated
+/// <c>ErgosfareGeneratedRegistrations</c> class. Messages carry a marker themselves;
+/// handlers and interceptors reach one through their contracts.
+/// </para>
+/// <para>
+/// The generated code names constructs, not pipelines: messages through
+/// <c>Register(typeof(T))</c> and participants through the module builders'
+/// <c>RegisterParticipants</c> batch, both read against the composition tables baked here
+/// rather than assembled from descriptors at run time. A package predating the batch
+/// surface gets per-type registration instead. Generic definitions are named unbound, one
+/// entry serving every instantiation, and a dispatch closes participants over the
+/// arguments of the message it carries.
+/// </para>
+/// <para>
+/// Referenced assemblies are scanned as well, so a library's handlers register through
+/// the project consuming it. Only assemblies that reference Ergosfare are read — nothing
+/// else can carry a marker — and Ergosfare's own are skipped, their contract interfaces
+/// inheriting the markers. A type generated code cannot name, such as an internal one
+/// this compilation has no <c>InternalsVisibleTo</c> for, is reported as ERGO002 rather
+/// than dropped in silence. Setting the MSBuild property
+/// <c>ErgosfareSourceGeneratorScanReferences</c> to <c>false</c> turns the scan off for a
+/// project.
+/// </para>
 /// </remarks>
 [Generator(LanguageNames.CSharp)]
 public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerator
@@ -49,12 +48,15 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
     private const string ScanReferencesBuildProperty = "build_property.ErgosfareSourceGeneratorScanReferences";
 
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Wires the generator's inputs and registers its source output.
+    /// </summary>
+    /// <param name="context">The initialization context Roslyn supplies.</param>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        // The plugin facade: its own source output, emitted only for an assembly that
-        // declares itself a plugin. Kept separate because it shares no input with the
-        // registration emission below and must not add a tree to ordinary compilations.
+        // The plugin facade is its own output: it shares no input with the registration
+        // emission below, and must add no tree to a compilation that does not declare
+        // itself a plugin.
         RegisterPluginFacade(context);
         RegisterPluginScanDiagnostics(context);
 
@@ -69,18 +71,17 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
         var availability = context.CompilationProvider.Select(
             static (compilation, _) => new ModuleBuilderAvailabilityReader(compilation).Read());
 
-        // Reference scanning is default-on; consumers opt out per project through the
-        // ErgosfareSourceGeneratorScanReferences MSBuild property (surfaced to the
-        // generator as a build_property by the package's .props file).
+        // Reference scanning is on unless a project turns it off; the package's .props
+        // file surfaces the MSBuild property to the generator as a build_property.
         var scanReferences = context.AnalyzerConfigOptionsProvider.Select(static (provider, _) =>
             !provider.GlobalOptions.TryGetValue(ScanReferencesBuildProperty, out var value)
             || !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase));
 
-        // Referenced types, plus the monomorphized participants — the ones that take their
-        // message as a type parameter, closed over the messages their constraint admits.
-        // Both are compilation-wide questions rather than per-declaration ones, so they
-        // share a stage; each model carries its own provenance, and joining the array here
-        // keeps the positional Combine chain below untouched.
+        // Referenced marker types, plus the participants that take their message as a type
+        // parameter, closed over the messages their constraint admits. Both ask about the
+        // whole compilation rather than one declaration, so they share a stage; each model
+        // carries its own provenance, and merging them here leaves the positional Combine
+        // chain below alone.
         var referencedTypes = context.CompilationProvider
             .Combine(scanReferences)
             .Select(static (pair, ct) =>
@@ -92,9 +93,9 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 return referenced.AddRange(Monomorphizer.MonomorphizeOpenParticipants(pair.Left, ct));
             });
 
-        // Dispatch sites of the current compilation: every mediator dispatch invocation
-        // with the static type of its message argument — the manifest emission's payload
-        // and the local half of the reachability judgment.
+        // Every mediator dispatch in this compilation, with the static type of its message
+        // argument: what the emitted manifest records, and the local half of the
+        // reachability judgment.
         var dispatchSites = context.SyntaxProvider
             .CreateSyntaxProvider(
                 static (node, _) => IsDispatchInvocationCandidate(node),
@@ -103,10 +104,10 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
             .Select(static (model, _) => model!.Value)
             .Collect();
 
-        // Manual registration sites: Register<T>() / Register(typeof(T)) calls — the same
-        // collection path as RegisterGenerated(), per type instead of in bulk — plus the
-        // opaque shapes (a runtime-computed type, a RegisterParticipants batch) that make
-        // coverage evidence incomplete.
+        // Hand-written registrations — Register<T>() and Register(typeof(T)) — reaching
+        // the container the way the generated bulk call does, one type at a time. The
+        // shapes that cannot be read, a computed type or a RegisterParticipants batch, are
+        // collected too: they are what leaves the coverage evidence incomplete.
         var registrationSites = context.SyntaxProvider
             .CreateSyntaxProvider(
                 static (node, _) => IsRegistrationInvocationCandidate(node),
@@ -115,9 +116,9 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
             .Select(static (model, _) => model!.Value)
             .Collect();
 
-        // The container's default result adapter, when its UseDefaultResultAdapter
-        // callsite is a literal in this compilation — the staged plans then bake the
-        // binding for the slots it serves.
+        // The container's default result adapter, when UseDefaultResultAdapter names it
+        // literally in this compilation; the staged plans then bake the binding for the
+        // slots it serves.
         var defaultResultAdapterSites = context.SyntaxProvider
             .CreateSyntaxProvider(
                 static (node, _) => node is InvocationExpressionSyntax
@@ -131,8 +132,8 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
             .Collect();
 
         // The referenced assemblies' manifests: the closure half of the judgment. Gated on
-        // reference scanning like the type scan — with scanning off, the composition is
-        // deliberately incomplete and no closure-wide judgment is sound.
+        // the scan like the type input — with scanning off the picture is knowingly
+        // incomplete, and nothing said about the whole closure would hold.
         var referencedSites = context.CompilationProvider
             .Combine(scanReferences)
             .Select(static (pair, ct) => pair.Right
@@ -149,10 +150,10 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 pair.Left.Right,
                 pair.Right));
 
-        // The plugin methods visible to this compilation. Gated on reference scanning like
-        // every other reference-derived input: a plugin arrives as a referenced assembly's
-        // metadata, so scanning off means no plugin, which is also the shape a compilation
-        // that references none produces — and that shape emits nothing.
+        // The plugin methods this compilation can see. Gated on the scan like every other
+        // reference-derived input: a plugin arrives as referenced metadata, so scanning
+        // off produces the same shape as referencing no plugin at all — and that shape
+        // emits nothing.
         var pluginInvocations = context.CompilationProvider
             .Combine(scanReferences)
             .Select(static (pair, ct) => ScanPluginInvocations(pair.Left, pair.Right, ct));

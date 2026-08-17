@@ -1,20 +1,18 @@
 namespace Stella.Ergosfare.SourceGenerator.Models;
 
 /// <summary>
-/// Value-equatable projection of one pre-computed handler descriptor: everything the
-/// runtime descriptor builders would have derived reflectively, resolved at compile time.
+/// One participant's registration, worked out at compile time instead of reflectively at
+/// startup.
 /// </summary>
-/// <param name="Kind">Which descriptor kind (and therefore which factory method) to emit.</param>
+/// <param name="Kind">Which stage the participant belongs to.</param>
 /// <param name="MessageTypeExpression">
-/// The <c>typeof</c> argument for the descriptor's message type — verbatim for main
-/// handlers, normalized to the generic definition for interceptors, mirroring the runtime
-/// builders.
+/// The message type to write inside <c>typeof</c>: as declared for a main handler, and
+/// normalized to the generic definition for an interceptor.
 /// </param>
 /// <param name="ResultTypeExpression">
-/// The <c>typeof</c> argument for the descriptor's result type: the declared result for
-/// synchronous contracts, a <c>ValueTask</c> carrier for asynchronous ones, <c>object</c>
-/// for result-agnostic interceptor contracts, and <c>null</c> for pre-interceptors (which
-/// carry no result type).
+/// The result type to write inside <c>typeof</c>: the declared result for a synchronous
+/// contract, a task carrier for an asynchronous one, <c>object</c> for a contract that does
+/// not name the result, and <c>null</c> for a pre-interceptor, which has no result at all.
 /// </param>
 internal readonly record struct DescriptorModel(
     DescriptorKind Kind,

@@ -3,37 +3,45 @@
 namespace Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 
 /// <summary>
-/// One participant row of a frozen composition: the handler type plus the group names it
-/// participates under. Rows are emitted pre-sorted (weight descending, then ordinal
-/// <c>Type.FullName</c> — the runtime shape-builder's exact comparator), so consumption
-/// only ever filters and closes, never sorts.
+/// One participant of a frozen composition: the type to run, and the groups it runs under.
 /// </summary>
+/// <remarks>
+/// Rows arrive already ordered — descending weight, then ordinal type name — so consuming
+/// a composition only filters and closes them, never sorts.
+/// </remarks>
 /// <param name="handlerType">
-/// The participant's type — a generic definition when the participant closes over the
-/// message's type arguments at dispatch time. Public constructors are preserved under
-/// trimming: the generated table hands its <c>typeof</c> here, and this parameter is the
-/// only annotated slot on the path to the container's handler registrations, which
-/// activate the type reflectively.
+/// The participant's type, which is a generic definition when the participant closes over
+/// the message's type arguments at dispatch time. Its public constructors are preserved
+/// under trimming: this is the only annotated point on the path from the generated table to
+/// the container registrations that activate the type.
 /// </param>
 /// <param name="groups">
-/// The participant's declared group names, or <c>null</c> for the default group alone —
-/// the overwhelmingly common case, carried without an allocation.
+/// The groups the participant declared, or <c>null</c> for the default group alone — the
+/// common case, carried without allocating an array.
 /// </param>
 public sealed class FrozenParticipant(
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type handlerType,
     string[]? groups = null)
 {
-    /// <summary>The participant's (possibly open) type.</summary>
+    /// <summary>
+    /// The participant's type, possibly an open generic definition.
+    /// </summary>
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
     public Type HandlerType { get; } = handlerType;
 
-    /// <summary>The declared group names; <c>null</c> means the default group alone.</summary>
+    /// <summary>
+    /// The declared groups; <c>null</c> means the default group alone.
+    /// </summary>
     public IReadOnlyList<string>? Groups { get; } = groups;
 
     /// <summary>
-    /// The runtime group predicate: any of the participant's groups ordinally equals any
-    /// requested group — the shape-builder's <c>MatchesAnyGroup</c>, mirrored.
+    /// Reports whether this participant runs for a dispatch requesting
+    /// <paramref name="effectiveGroups"/>.
     /// </summary>
+    /// <param name="effectiveGroups">The groups the dispatch asked for; never empty.</param>
+    /// <returns>
+    /// <c>true</c> when any declared group ordinally equals any requested group.
+    /// </returns>
     internal bool MatchesAnyGroup(IReadOnlyList<string> effectiveGroups)
     {
         if (Groups is null)
@@ -65,20 +73,27 @@ public sealed class FrozenParticipant(
 }
 
 /// <summary>
-/// A message's whole frozen pipeline composition — the compile-time image of what the
-/// runtime shape-builder derives from the registry: the two main-handler segments
-/// (events carry N rows) and the four interceptor stages as direct/indirect segment
-/// pairs, every segment in the runtime execution order. Emitted per message by the
-/// source generator; group filtering happens per dispatch through
-/// <see cref="BuildShape"/>, once per (message, group set).
+/// A message's whole pipeline as the source generator compiled it: the two main-handler
+/// segments and the four interceptor stages, each split into direct and indirect
+/// participants, every segment already in execution order.
 /// </summary>
 /// <remarks>
-/// This is Phase 2's parallel surface: the registry remains the dispatch authority and
-/// the advisory gates stay in place, while dual-run parity tests hold this table to the
-/// shape-builder's output. Phase 3 turns it into the sole source. Messages whose
-/// composition the generator cannot model exactly — keyed participants, pipeline
-/// exclusions, unprovable ordering ties — simply have no entry and stay on the registry.
+/// One composition is emitted per message type. It is not yet a runnable pipeline — group
+/// filtering and the closing of open participant types happen per dispatch, in
+/// <see cref="BuildShape"/>, once per (message, group set). A message whose pipeline the
+/// generator cannot model exactly has no composition at all.
 /// </remarks>
+/// <param name="messageType">The message type this composition was compiled for.</param>
+/// <param name="handlers">The main handlers registered for the message type itself.</param>
+/// <param name="indirectHandlers">The main handlers registered for a base type.</param>
+/// <param name="preInterceptors">The direct pre-interceptors.</param>
+/// <param name="indirectPreInterceptors">The covariantly matched pre-interceptors.</param>
+/// <param name="postInterceptors">The direct post-interceptors.</param>
+/// <param name="indirectPostInterceptors">The covariantly matched post-interceptors.</param>
+/// <param name="exceptionInterceptors">The direct exception interceptors.</param>
+/// <param name="indirectExceptionInterceptors">The covariantly matched exception interceptors.</param>
+/// <param name="finalInterceptors">The direct final interceptors.</param>
+/// <param name="indirectFinalInterceptors">The covariantly matched final interceptors.</param>
 public sealed class FrozenComposition(
     Type messageType,
     FrozenParticipant[] handlers,
@@ -92,37 +107,60 @@ public sealed class FrozenComposition(
     FrozenParticipant[] finalInterceptors,
     FrozenParticipant[] indirectFinalInterceptors)
 {
-    /// <summary>The message type the composition was baked for.</summary>
+    /// <summary>
+    /// The message type this composition was compiled for.
+    /// </summary>
     public Type MessageType { get; } = messageType;
 
-    /// <summary>The direct main-handler rows; events carry every subscriber here.</summary>
+    /// <summary>
+    /// The main handlers registered for the message type itself. An event carries every
+    /// subscriber here.
+    /// </summary>
     public IReadOnlyList<FrozenParticipant> Handlers { get; } = handlers;
 
-    /// <summary>The covariantly matched main-handler rows.</summary>
+    /// <summary>
+    /// The main handlers registered for a type the message is assignable to.
+    /// </summary>
     public IReadOnlyList<FrozenParticipant> IndirectHandlers { get; } = indirectHandlers;
 
-    /// <summary>The four interceptor stages as direct/indirect segment pairs, in execution order.</summary>
+    /// <summary>
+    /// The pre-interceptors registered for the message type itself, in execution order.
+    /// </summary>
     public IReadOnlyList<FrozenParticipant> PreInterceptors { get; } = preInterceptors;
 
-    /// <inheritdoc cref="PreInterceptors"/>
+    /// <summary>
+    /// The pre-interceptors registered for a type the message is assignable to.
+    /// </summary>
     public IReadOnlyList<FrozenParticipant> IndirectPreInterceptors { get; } = indirectPreInterceptors;
 
-    /// <inheritdoc cref="PreInterceptors"/>
+    /// <summary>
+    /// The post-interceptors registered for the message type itself, in execution order.
+    /// </summary>
     public IReadOnlyList<FrozenParticipant> PostInterceptors { get; } = postInterceptors;
 
-    /// <inheritdoc cref="PreInterceptors"/>
+    /// <summary>
+    /// The post-interceptors registered for a type the message is assignable to.
+    /// </summary>
     public IReadOnlyList<FrozenParticipant> IndirectPostInterceptors { get; } = indirectPostInterceptors;
 
-    /// <inheritdoc cref="PreInterceptors"/>
+    /// <summary>
+    /// The exception interceptors registered for the message type itself, in execution order.
+    /// </summary>
     public IReadOnlyList<FrozenParticipant> ExceptionInterceptors { get; } = exceptionInterceptors;
 
-    /// <inheritdoc cref="PreInterceptors"/>
+    /// <summary>
+    /// The exception interceptors registered for a type the message is assignable to.
+    /// </summary>
     public IReadOnlyList<FrozenParticipant> IndirectExceptionInterceptors { get; } = indirectExceptionInterceptors;
 
-    /// <inheritdoc cref="PreInterceptors"/>
+    /// <summary>
+    /// The final interceptors registered for the message type itself, in execution order.
+    /// </summary>
     public IReadOnlyList<FrozenParticipant> FinalInterceptors { get; } = finalInterceptors;
 
-    /// <inheritdoc cref="PreInterceptors"/>
+    /// <summary>
+    /// The final interceptors registered for a type the message is assignable to.
+    /// </summary>
     public IReadOnlyList<FrozenParticipant> IndirectFinalInterceptors { get; } = indirectFinalInterceptors;
 
     private readonly FrozenParticipant[] _handlers = handlers;
@@ -137,8 +175,8 @@ public sealed class FrozenComposition(
     private readonly FrozenParticipant[] _indirectFinalInterceptors = indirectFinalInterceptors;
 
     /// <summary>
-    /// The ten segments as their backing arrays, for the per-container selection
-    /// projection — which needs to compare and rebuild them, not just enumerate.
+    /// The direct main-handler rows as their backing array, for callers that rebuild
+    /// segments rather than enumerate them.
     /// </summary>
     internal FrozenParticipant[] HandlerRows => _handlers;
 
@@ -170,14 +208,15 @@ public sealed class FrozenComposition(
     internal FrozenParticipant[] IndirectFinalInterceptorRows => _indirectFinalInterceptors;
 
     /// <summary>
-    /// Derives the executable pipeline shape for one dispatch: the shape-builder's exact
-    /// semantics — an empty group request becomes the default group and a non-empty one
-    /// is used verbatim, each segment filters by the any-of × any-of ordinal group
-    /// predicate, the interceptor stages merge direct-segment-first, and open participant
-    /// types close over the runtime message type's arguments.
+    /// Derives the runnable pipeline for one dispatch: filters every segment by group,
+    /// merges each interceptor stage with its direct participants first, and closes open
+    /// participant types over the runtime message type's arguments.
     /// </summary>
     /// <param name="runtimeMessageType">The dispatched message's runtime type.</param>
-    /// <param name="groups">The requested group names; empty means the default group.</param>
+    /// <param name="groups">
+    /// The requested groups; an empty list means the default group.
+    /// </param>
+    /// <returns>The pipeline shape for this message and group set.</returns>
     public FrozenPipelineShape BuildShape(Type runtimeMessageType, IReadOnlyList<string> groups)
     {
         IReadOnlyList<string> effectiveGroups = groups.Count == 0
@@ -193,9 +232,18 @@ public sealed class FrozenComposition(
             MergeStage(_finalInterceptors, _indirectFinalInterceptors, runtimeMessageType, effectiveGroups));
     }
 
+    /// <summary>
+    /// Returns the participants of one segment that run for these groups, closed over the
+    /// runtime message type.
+    /// </summary>
+    /// <param name="segment">The segment to filter.</param>
+    /// <param name="runtimeMessageType">The dispatched message's runtime type.</param>
+    /// <param name="effectiveGroups">The groups the dispatch asked for.</param>
+    /// <returns>The surviving participant types, order preserved.</returns>
     private static Type[] FilterSegment(
         FrozenParticipant[] segment, Type runtimeMessageType, IReadOnlyList<string> effectiveGroups)
     {
+        // Counted first so the result array is allocated exactly once, at its final size.
         var count = 0;
 
         foreach (var participant in segment)
@@ -225,6 +273,15 @@ public sealed class FrozenComposition(
         return result;
     }
 
+    /// <summary>
+    /// Filters both segments of an interceptor stage and joins them, direct participants
+    /// first.
+    /// </summary>
+    /// <param name="direct">The participants registered for the message type itself.</param>
+    /// <param name="indirect">The participants registered for a base type.</param>
+    /// <param name="runtimeMessageType">The dispatched message's runtime type.</param>
+    /// <param name="effectiveGroups">The groups the dispatch asked for.</param>
+    /// <returns>The stage's participant types, in execution order.</returns>
     private static Type[] MergeStage(
         FrozenParticipant[] direct, FrozenParticipant[] indirect,
         Type runtimeMessageType, IReadOnlyList<string> effectiveGroups)
@@ -232,6 +289,8 @@ public sealed class FrozenComposition(
         var directTypes = FilterSegment(direct, runtimeMessageType, effectiveGroups);
         var indirectTypes = FilterSegment(indirect, runtimeMessageType, effectiveGroups);
 
+        // With one segment empty the other already is the stage; only a genuine merge
+        // allocates.
         if (indirectTypes.Length == 0)
         {
             return directTypes;
@@ -248,6 +307,13 @@ public sealed class FrozenComposition(
         return merged;
     }
 
+    /// <summary>
+    /// Closes an open participant type over the runtime message type's arguments, or
+    /// returns it unchanged when there is nothing to close.
+    /// </summary>
+    /// <param name="handlerType">The participant type from the composition.</param>
+    /// <param name="runtimeMessageType">The dispatched message's runtime type.</param>
+    /// <returns>The type to instantiate.</returns>
     [UnconditionalSuppressMessage("AOT", "IL3050",
         Justification = "Open participants only close over generic message dispatches, which generated apps root at compile time.")]
     [UnconditionalSuppressMessage("Trimming", "IL2055",
@@ -259,10 +325,15 @@ public sealed class FrozenComposition(
 }
 
 /// <summary>
-/// The six executable stage arrays <see cref="FrozenComposition.BuildShape"/> derives for
-/// one (message, group set) — the frozen mirror of the runtime pipeline shape: main
-/// handlers split direct/indirect, interceptor stages merged direct-segment-first.
+/// A message's runnable pipeline for one group set: the participant types of each stage,
+/// filtered, closed and in execution order.
 /// </summary>
+/// <param name="handlers">The direct main-handler types.</param>
+/// <param name="indirectHandlers">The covariantly matched main-handler types.</param>
+/// <param name="preInterceptors">The merged pre-interceptor stage.</param>
+/// <param name="postInterceptors">The merged post-interceptor stage.</param>
+/// <param name="exceptionInterceptors">The merged exception-interceptor stage.</param>
+/// <param name="finalInterceptors">The merged final-interceptor stage.</param>
 public sealed class FrozenPipelineShape(
     Type[] handlers,
     Type[] indirectHandlers,
@@ -271,21 +342,33 @@ public sealed class FrozenPipelineShape(
     Type[] exceptionInterceptors,
     Type[] finalInterceptors)
 {
-    /// <summary>The direct main-handler types, in execution order.</summary>
+    /// <summary>
+    /// The main handlers registered for the message type itself, in execution order.
+    /// </summary>
     public IReadOnlyList<Type> Handlers { get; } = handlers;
 
-    /// <summary>The covariantly matched main-handler types, in execution order.</summary>
+    /// <summary>
+    /// The main handlers registered for a base type, in execution order.
+    /// </summary>
     public IReadOnlyList<Type> IndirectHandlers { get; } = indirectHandlers;
 
-    /// <summary>The merged pre-interceptor stage, direct segment first.</summary>
+    /// <summary>
+    /// The pre-interceptor stage, direct participants first.
+    /// </summary>
     public IReadOnlyList<Type> PreInterceptors { get; } = preInterceptors;
 
-    /// <summary>The merged post-interceptor stage, direct segment first.</summary>
+    /// <summary>
+    /// The post-interceptor stage, direct participants first.
+    /// </summary>
     public IReadOnlyList<Type> PostInterceptors { get; } = postInterceptors;
 
-    /// <summary>The merged exception-interceptor stage, direct segment first.</summary>
+    /// <summary>
+    /// The exception-interceptor stage, direct participants first.
+    /// </summary>
     public IReadOnlyList<Type> ExceptionInterceptors { get; } = exceptionInterceptors;
 
-    /// <summary>The merged final-interceptor stage, direct segment first.</summary>
+    /// <summary>
+    /// The final-interceptor stage, direct participants first.
+    /// </summary>
     public IReadOnlyList<Type> FinalInterceptors { get; } = finalInterceptors;
 }

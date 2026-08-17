@@ -4,15 +4,20 @@ using Stella.Ergosfare.SourceGenerator.Models;
 namespace Stella.Ergosfare.SourceGenerator;
 
 /// <summary>
-///     What the referenced Ergosfare package can actually host. Emission degrades surface by
-///     surface rather than by version number, so every question here is a capability probe
-///     against the consumer's compilation — a package without <c>AddStagedPlan</c> gets no
-///     staged plans and an otherwise identical file.
+/// Finds out what the referenced Ergosfare packages can host.
 /// </summary>
-
+/// <param name="compilation">The consuming compilation to look in.</param>
+/// <remarks>
+/// Every question is asked of the compilation itself rather than of a version number, so
+/// generation degrades one surface at a time: a package without staged plans gets none, and
+/// an otherwise identical file.
+/// </remarks>
 internal sealed class ModuleBuilderAvailabilityReader(Compilation compilation)
 {
-    /// <summary>Probes the compilation once, per compilation, for every surface.</summary>
+    /// <summary>
+    /// Asks every question once, for this compilation.
+    /// </summary>
+    /// <returns>What the referenced packages can host.</returns>
     internal ModuleBuilderAvailability Read()
     {
         var commandBuilder = compilation.GetTypeByMetadataName(ContractMetadataNames.CommandModuleBuilder);
@@ -32,6 +37,8 @@ internal sealed class ModuleBuilderAvailabilityReader(Compilation compilation)
             DispatchRootsHasVoidPlans: dispatchRoots is not null && !dispatchRoots.GetMembers("AddVoidPlan").IsEmpty,
             DispatchRootsHasResultPlans: dispatchRoots is not null && !dispatchRoots.GetMembers("AddResultPlan").IsEmpty,
             DispatchRootsHasPlanFactories: dispatchRoots is not null && HasFactoryOverload(dispatchRoots),
+            // Writing a construction also needs the extensions it resolves dependencies
+            // through, so both have to be present.
             DispatchRootsHasProviderPlanFactories: dispatchRoots is not null
                 && HasProviderFactoryOverload(dispatchRoots)
                 && compilation.GetTypeByMetadataName(ContractMetadataNames.ServiceProviderExtensions) is not null,
@@ -47,14 +54,19 @@ internal sealed class ModuleBuilderAvailabilityReader(Compilation compilation)
                 && !dispatchRoots.GetMembers("AddFrozenComposition").IsEmpty);
     }
 
+    /// <summary>
+    /// Reports whether a module builder takes participants in bulk.
+    /// </summary>
+    /// <param name="builder">The builder to check, or <c>null</c> when the module is absent.</param>
+    /// <returns><c>true</c> when the bulk method is available.</returns>
     private static bool HasRegisterParticipants(INamedTypeSymbol? builder)
         => builder is not null && !builder.GetMembers("RegisterParticipants").IsEmpty;
 
     /// <summary>
-    ///     Whether the referenced <c>GeneratedDispatchRoots</c> accepts a plan overload
-    ///     with a direct-construction factory parameter — the surface the
-    ///     <c>static () => new THandler()</c> emission requires.
+    /// Reports whether plans may carry a way to construct the handler.
     /// </summary>
+    /// <param name="dispatchRoots">The store generated registration writes into.</param>
+    /// <returns><c>true</c> when an overload taking a construction exists.</returns>
     private static bool HasFactoryOverload(INamedTypeSymbol dispatchRoots)
     {
         foreach (var member in dispatchRoots.GetMembers("AddVoidPlan"))
@@ -69,13 +81,15 @@ internal sealed class ModuleBuilderAvailabilityReader(Compilation compilation)
     }
 
     /// <summary>
-    ///     Whether the referenced <c>GeneratedDispatchRoots</c> accepts a plan overload
-    ///     with a provider-taking factory parameter
-    ///     (<c>Func&lt;IServiceProvider, THandler&gt;</c>) — the surface the
-    ///     dependency-injected construction emission requires. Recognized by delegate
-    ///     arity: the parameterless factory overload's <c>Func&lt;THandler&gt;</c> has one
-    ///     type argument, the provider-taking one has two.
+    /// Reports whether plans may carry a construction that resolves the handler's
+    /// dependencies from a provider.
     /// </summary>
+    /// <param name="dispatchRoots">The store generated registration writes into.</param>
+    /// <returns><c>true</c> when the provider-taking overload exists.</returns>
+    /// <remarks>
+    /// Told apart from the plain overload by how many type arguments the delegate takes: the
+    /// plain construction has one, the provider-taking one has two.
+    /// </remarks>
     private static bool HasProviderFactoryOverload(INamedTypeSymbol dispatchRoots)
     {
         foreach (var member in dispatchRoots.GetMembers("AddVoidPlan"))

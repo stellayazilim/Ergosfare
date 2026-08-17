@@ -3,21 +3,18 @@ using Stella.Ergosfare.Core.Abstractions.Handlers;
 
 namespace Stella.Ergosfare.Queries.Abstractions;
 
-
 /// <summary>
-/// Represents a type-safe exception interceptor for queries with a strongly-typed result.
-/// The interceptor can inspect the exception and modify or replace the query result.
+/// Handles failures raised while dispatching a <typeparamref name="TQuery"/> and supplies
+/// the result the caller receives instead.
 /// </summary>
-/// <typeparam name="TQuery">The query type being intercepted. Must implement <see cref="IQuery{TResult}"/>.</typeparam>
-/// <typeparam name="TResult">
-/// The result type of the query. Also the type returned by the interceptor — for a
-/// narrower return type there is no third parameter anymore; return the base result type.
-/// </typeparam>
+/// <typeparam name="TQuery">The query type this interceptor accepts.</typeparam>
+/// <typeparam name="TResult">The result type the query declares.</typeparam>
 /// <remarks>
-/// <typeparamref name="TQuery"/> is contravariant, matching the core
-/// <see cref="IAsyncExceptionInterceptor{TMessage, TResult}"/> contract the typed dispatch
-/// matches against. <typeparamref name="TResult"/> must stay invariant: the typed member
-/// returns it.
+/// <typeparamref name="TQuery"/> is contravariant, so an interceptor written against a base
+/// query type also runs for the queries derived from it; <typeparamref name="TResult"/>
+/// stays invariant because it is returned. Implement
+/// <see cref="IQueryExceptionInterceptorFor{TQuery, TResult, TException}"/> to accept only
+/// certain failures.
 /// </remarks>
 // ReSharper disable once UnusedType.Global
 public interface IQueryExceptionInterceptor<in TQuery, TResult>
@@ -25,27 +22,34 @@ public interface IQueryExceptionInterceptor<in TQuery, TResult>
     where TQuery : IQuery<TResult>
     where TResult : notnull
 {
-    /// <inheritdoc />
+    /// <summary>
+    /// Forwards the core contract to the typed method below.
+    /// </summary>
+    /// <param name="query">The query whose dispatch failed.</param>
+    /// <param name="result">The result produced so far, if any.</param>
+    /// <param name="exception">The failure being handled.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <returns>The result the typed method returned.</returns>
     async ValueTask<object?> IAsyncExceptionInterceptor<TQuery, TResult>.HandleAsync(
         TQuery query, TResult? result, Exception exception, ErgosfareContext context)
         => await HandleAsync(query, result, exception, context);
 
     /// <summary>
-    /// Handles the exception asynchronously, potentially modifying the query result.
+    /// Handles <paramref name="exception"/> and produces the result to continue with.
     /// </summary>
-    /// <param name="query">The query being processed when the exception occurred.</param>
-    /// <param name="result">The result produced before the exception occurred, if any.</param>
-    /// <param name="exception">The exception thrown during pipeline execution.</param>
-    /// <param name="context">The current execution context.</param>
-    /// <returns>
-    /// A <see cref="ValueTask{TResult}"/> producing the (possibly modified) result that
-    /// continues through the pipeline.
-    /// </returns>
+    /// <param name="query">The query whose dispatch failed.</param>
+    /// <param name="result">
+    /// The result produced before the failure, which is the result type's default when the
+    /// handler itself failed.
+    /// </param>
+    /// <param name="exception">The failure being handled.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <returns>The result the caller receives.</returns>
     /// <remarks>
-    /// The stage owes a result. A dispatch of this message locked its result type at the call
-    /// site, so nothing downstream may answer with null — to leave the failure unhandled,
-    /// do not claim it: an unmatched stage lets the exception surface to the caller. Model
-    /// absence in the value instead, the way <c>Result&lt;T&gt;</c> does.
+    /// Running this method is what marks the failure handled, and a handled failure has to
+    /// leave a result behind: the call site locked the result type when it dispatched. To
+    /// leave a failure for the caller, do not accept it — a failure no interceptor accepts
+    /// reaches the caller unchanged.
     /// </remarks>
     new ValueTask<TResult> HandleAsync(TQuery query, TResult? result, Exception exception, ErgosfareContext context);
 }

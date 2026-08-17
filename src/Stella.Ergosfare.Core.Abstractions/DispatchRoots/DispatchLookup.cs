@@ -3,36 +3,32 @@ using System.Diagnostics.CodeAnalysis;
 namespace Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 
 /// <summary>
-/// Closes a dispatch generic over a message's runtime type: the generated root first, so the
-/// closure happens inside a generic context with no reflection at all, and a reflective
-/// construction only for types the generator never saw.
+/// Closes a dispatch generic over a message's runtime type, preferring the generated root
+/// for the type and falling back to reflection for types the generator never saw.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Every dispatch surface needs this and each used to spell it out again — the command and
-/// query executor cache twice, the broadcast invoker cache, the stream invoker cache — each
-/// with its own copy of the same trimming and AOT justifications. One policy stated four
-/// times is four chances for them to drift apart, and the justification for reaching for
-/// reflection at all belongs in one place.
-/// </para>
-/// <para>
-/// The fallback is the JIT-only path: a runtime-registered message type has no generated
-/// root, so the closed type is built with <see cref="Type.MakeGenericType"/>. A trimmed or
-/// AOT-published application reaches it only for constructs the generator could not see,
-/// which is the same set those builds already cannot serve.
-/// </para>
+/// A type with a generated root is closed from inside a generic context, so nothing is
+/// constructed reflectively. Without one — a message registered only at runtime — the
+/// closed type is built with <see cref="Type.MakeGenericType"/>, which a trimmed or
+/// AOT-published application cannot rely on. Those builds reach the fallback only for
+/// constructs they already cannot serve.
 /// </remarks>
 internal static class DispatchLookup
 {
     /// <summary>
-    /// Closes a single-type dispatch generic (message only) — the shape the void executors
-    /// and the broadcast invokers use.
+    /// Closes a generic over the message type alone — the shape void executors and
+    /// broadcast invokers use.
     /// </summary>
+    /// <typeparam name="TReturn">What the caller wants built.</typeparam>
+    /// <typeparam name="TState">The state the visitor needs.</typeparam>
     /// <param name="messageType">The message's runtime type.</param>
-    /// <param name="visitor">Re-enters the generic context when the type has a generated root.</param>
-    /// <param name="state">Carried into the visitor unchanged.</param>
-    /// <param name="unrootedDefinition">Open generic definition to close reflectively when it does not.</param>
-    /// <param name="unrootedArguments">Constructor arguments for that reflective construction.</param>
+    /// <param name="visitor">Re-entered inside the generic context when a root exists.</param>
+    /// <param name="state">Passed to the visitor unchanged.</param>
+    /// <param name="unrootedDefinition">
+    /// The open generic definition to close reflectively when no root exists.
+    /// </param>
+    /// <param name="unrootedArguments">Constructor arguments for that construction.</param>
+    /// <returns>The closed instance.</returns>
     [UnconditionalSuppressMessage("Trimming", "IL2055",
         Justification = "The generic is closed over a live message's runtime type; the message roots its type.")]
     [UnconditionalSuppressMessage("AOT", "IL3050",
@@ -51,9 +47,19 @@ internal static class DispatchLookup
                 unrootedDefinition.MakeGenericType(messageType), unrootedArguments)!;
 
     /// <summary>
-    /// Closes a (message, result) dispatch generic against the result roots — the shape the
-    /// result executors use.
+    /// Closes a generic over a (message, result) pair — the shape result executors use.
     /// </summary>
+    /// <typeparam name="TReturn">What the caller wants built.</typeparam>
+    /// <typeparam name="TState">The state the visitor needs.</typeparam>
+    /// <param name="messageType">The message's runtime type.</param>
+    /// <param name="resultType">The result type.</param>
+    /// <param name="visitor">Re-entered inside the generic context when a root exists.</param>
+    /// <param name="state">Passed to the visitor unchanged.</param>
+    /// <param name="unrootedDefinition">
+    /// The open generic definition to close reflectively when no root exists.
+    /// </param>
+    /// <param name="unrootedArguments">Constructor arguments for that construction.</param>
+    /// <returns>The closed instance.</returns>
     [UnconditionalSuppressMessage("Trimming", "IL2055",
         Justification = "The generic is closed over a live message's runtime type; the message roots its type.")]
     [UnconditionalSuppressMessage("AOT", "IL3050",
@@ -73,11 +79,25 @@ internal static class DispatchLookup
                 unrootedDefinition.MakeGenericType(messageType, resultType), unrootedArguments)!;
 
     /// <summary>
-    /// Closes a (query, result) dispatch generic against the stream roots. Separate from
-    /// <see cref="OverResult{TReturn,TState}"/> because streaming results are a different
-    /// store: a message can carry both a value contract and a stream contract for the same
-    /// result type, and they are not interchangeable.
+    /// Closes a generic over a (query, result) pair against the streaming roots.
     /// </summary>
+    /// <typeparam name="TReturn">What the caller wants built.</typeparam>
+    /// <typeparam name="TState">The state the visitor needs.</typeparam>
+    /// <param name="messageType">The query's runtime type.</param>
+    /// <param name="resultType">The streamed item type.</param>
+    /// <param name="visitor">Re-entered inside the generic context when a root exists.</param>
+    /// <param name="state">Passed to the visitor unchanged.</param>
+    /// <param name="unrootedDefinition">
+    /// The open generic definition to close reflectively when no root exists.
+    /// </param>
+    /// <param name="unrootedArguments">Constructor arguments for that construction.</param>
+    /// <returns>The closed instance.</returns>
+    /// <remarks>
+    /// Streaming roots are a separate store from
+    /// <see cref="OverResult{TReturn,TState}"/>'s: one message can carry both a value
+    /// contract and a stream contract for the same result type, and the two are not
+    /// interchangeable.
+    /// </remarks>
     [UnconditionalSuppressMessage("Trimming", "IL2055",
         Justification = "The generic is closed over a live query's runtime type; the query roots its type.")]
     [UnconditionalSuppressMessage("AOT", "IL3050",

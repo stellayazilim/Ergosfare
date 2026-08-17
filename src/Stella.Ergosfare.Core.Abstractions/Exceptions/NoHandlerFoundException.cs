@@ -3,37 +3,35 @@ namespace Stella.Ergosfare.Core.Abstractions.Exceptions;
 
 
 /// <summary>
-/// Exception thrown when nothing will handle a message: either the message type has no
-/// descriptor at all, or it has one whose handlers are every one excluded from this
-/// dispatch. The <see cref="Exception.Message"/> says which.
+/// Thrown when nothing will handle a message: either no handler is registered for its
+/// type, or the handlers that are registered are all filtered out of this dispatch.
 /// </summary>
 /// <remarks>
-/// Derives from <see cref="InvalidOperationException"/> because the second case used to
-/// throw one of those directly, so callers catching it keep catching it. Callers wanting
-/// the specific failure now catch one type for both cases instead of two.
+/// The <see cref="Exception.Message"/> distinguishes the two cases. The exception derives
+/// from <see cref="InvalidOperationException"/>, so one catch covers both.
 /// </remarks>
 public class NoHandlerFoundException : InvalidOperationException
 {
     /// <summary>
-    /// Initializes the exception for a message type nothing is registered against.
+    /// Initializes the exception for a message type with no registered handler.
     /// </summary>
-    /// <param name="messageType">The type of the message for which no handler was found.</param>
+    /// <param name="messageType">The message type that went unhandled.</param>
     public NoHandlerFoundException(Type messageType)
         : this(messageType, $"Handler for message type '{messageType.Name}' was not found.")
     {
     }
 
     /// <summary>
-    /// Initializes the exception with a message describing why nothing will handle
-    /// <paramref name="messageType"/>.
+    /// Initializes the exception with a message stating why
+    /// <paramref name="messageType"/> went unhandled.
     /// </summary>
-    /// <param name="messageType">The type of the message for which no handler was found.</param>
-    /// <param name="message">The message that describes the error.</param>
+    /// <param name="messageType">The message type that went unhandled.</param>
+    /// <param name="message">The exception message.</param>
     public NoHandlerFoundException(Type messageType, string message) : base(message)
         => MessageType = messageType;
 
     /// <summary>
-    /// Gets the type of the message that caused the exception.
+    /// The message type that went unhandled.
     /// </summary>
     public Type MessageType { get; }
 }

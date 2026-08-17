@@ -2,9 +2,11 @@
 namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 
 /// <summary>
-/// Non-generic marker root for pre-interceptors. Carries no members — the pipeline invokes
-/// pre-interceptors exclusively through their typed contracts
-/// (<see cref="IPreInterceptor{TMessage}"/> / <see cref="IAsyncPreInterceptor{TMessage}"/>);
-/// this root exists for storage typing and registration.
+/// Marks a type as a pre-interceptor, for registration and storage.
 /// </summary>
+/// <remarks>
+/// The interface declares no members. Pre-interceptors are invoked through the typed member
+/// of <see cref="IPreInterceptor{TMessage}"/> or
+/// <see cref="IAsyncPreInterceptor{TMessage}"/>.
+/// </remarks>
 public interface IPreInterceptor;

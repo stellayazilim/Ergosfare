@@ -1,3 +1,195 @@
+## v2.12.0-preview – '2026-08-17'
+
+Preview release. The theme: **a pipeline stops failing in silence.** Four shapes compiled,
+ran, and delivered the wrong thing without saying so — a publish nobody subscribes to, an
+exception interceptor answering a dispatch with `null`, a stream dropping a `null` element, a
+`Register` naming a type only run time knows. Each of them is now either a build error or a
+correct result, and the settings that let a caller opt into the silence are gone.
+
+Underneath it, the same work continues on the other side: what a dispatch closes at run time
+keeps moving to compile time, so the difference between a shape that works in development and
+one that fails at publish keeps shrinking.
+
+### A publish that reaches nobody
+
+* The dead-dispatch judgment no longer exempts event sites. Publishing an event no subscriber
+  in the compilation serves fails the build with `ERGO005` in a composition root. **Breaking.**
+* The exemption rested on "reaching zero subscribers is a legal no-op", which answers a
+  different question: the runtime default decides what happens when no handler matched on a
+  call, while the judgment asks whether any handler can ever match. Declaring the event and
+  forgetting the subscriber is the ordinary way to arrive there, and it used to compile in
+  silence.
+* `throwIfNoHandlerFound` is removed from `PublishAsync`. **Breaking.** It asked the caller to
+  decide at run time about something the compilation can prove. What remains at run time is a
+  selection the container made — which is what the caller asked for — so reaching nobody
+  returns, and it now does so unconditionally. Measured before removing: the flag was never
+  passed `true` outside the tests that existed to exercise it.
+* The `string[]` group overloads go with it. **Breaking.** The full call takes
+  `IEnumerable<string>?`, which subsumes them, and keeping both made
+  `PublishAsync(@event, ["a"], token)` ambiguous — a trap every caller would meet, rather than
+  the two internal sites that had to be adjusted.
+
+### A plain domain type is an event message once a subscriber names it
+
+* A domain event declared without an Ergosfare reference used to compile, register its
+  handler, and never dispatch: the handler was collected — its contract carries the marker —
+  and the message had no pipeline to reach it with.
+* Requiring `IEvent` on the message pushed a mediator reference into the layer that declares
+  domain events, which runs the wrong way. Nothing in the publish path needed it:
+  `IEventHandler<TEvent>`, `PublishAsync<TEvent>` and `FrozenBroadcastDispatch<TEvent>` are
+  declared over `notnull`, because a broadcast carries no result and asks nothing of
+  `IMessage`.
+* What needed the marker was being *seen*. An `IEventHandler<T>` signature is not evidence
+  pointing at a message — it is the classification itself, so the message is born from the
+  subscriber's visit and its own declaration never has to be found. That is also why this
+  works across assembly boundaries, where the symbol comes from the contract's type argument.
+* `EventModuleBuilder.Register<TEvent>()` takes `notnull`. The module assertion on the `Type`
+  overload now applies to participants only: a subscriber or interceptor belongs to a module
+  and registering one in the wrong module is still reported, while a message belongs to
+  nothing and has no marker to assert against.
+
+### The result lane can take its message as a type argument
+
+* `DispatchAsync<TMessage, TResult>` joins the lanes that name their message. Every other one
+  already did; this one took the result and read the message's type back per call — not a
+  decision but an inference accident, since the return type forces `TResult` to be a type
+  parameter and C# does not infer type arguments through constraints.
+* The command and query facades carry five typed shapes each — groups, context, cancellation
+  token, `GroupSet`, `string[]` — mirroring the untyped surface rather than adding a second
+  vocabulary. They are default interface methods, so an existing `ICommandMediator` or
+  `IQueryMediator` implementation keeps compiling and forwards to its untyped call. Both
+  facades pin that the shipped mediators override them, because an implementation that does
+  not still returns the right answer and simply never reaches the typed engine path.
+* Not a hot-path change, and checkable rather than remembered: three paired benchmark runs put
+  the typed and untyped lanes within a nanosecond of each other, in both directions. What it
+  buys is the construction path — the executor closes from arguments the compiler already
+  resolved, so the `MakeGenericType` arm the untyped lane takes for a message with no
+  generated root is never reached.
+* The streaming members stay untyped on purpose: their shape is under revision, and adding a
+  surface to something scheduled to change is work that has to be undone.
+
+### Reflection keeps leaving the dispatch path
+
+* The native result carriers name their own adapter. Binding a slot to `Result<T>` used to
+  close `ResultExceptionAdapter<>` with `MakeGenericType` and read its `Instance` field
+  reflectively — an answer only a JIT can give. The slot is a generic context and the carrier
+  is the closed type in it, so the carrier answers for itself. 9 of the adapter layer's 18
+  reflective bindings were this one, and the `IL2055`/`IL3050` suppressions are gone with it.
+* Every hidden message the compilation declares gets a dispatch root, and its result contracts
+  get theirs. `[ExcludeFromDiscovery]` keeps a type out of bulk collection; it says nothing
+  about dispatch, and rooting is not registering — `AddMessage<T>()` selects nothing into any
+  container. Rooting the message while skipping `AddResult`/`AddStream` left a hidden
+  `ICommand<string>` closing one generic from the table and the other through
+  `MakeGenericType`.
+* Measured by making the reflective arms throw and running the suite: the shapes reaching them
+  drop from 25 to 2. What remains is generic messages, whose closed forms are never rooted
+  because an open definition is not a dispatchable message — tracked separately.
+
+### The plan gates stop disqualifying legal pipelines
+
+* The single-handler gate counted handler registrations per message and knew nothing about
+  groups, so two handlers in different groups — the canonical use of groups, unambiguous at
+  every set — read as a contested pipeline and lost every plan for the message, including the
+  ungrouped default. The count is now taken per plan, within the (message, group set) pair a
+  plan is built for.
+* The covariant gate threw the plan away whenever any base type of the message also had a
+  handler — a shape the priority ladder resolves without hesitation, and the very idiom the
+  v2.3.0 announcement recommends for cross-cutting handlers. A message with exactly one direct
+  handler is plannable regardless of what its bases carry; the staged plans now carry their
+  covariant segment for the gate alone, since none of it is called but the gate compares the
+  composition segment by segment.
+
+### Removed: the two-parameter pre-interceptor contracts
+
+* `ICommandPreInterceptor<TCommand, TModifiedCommand>`, `IQueryPreInterceptor<TQuery, TModifiedQuery>`
+  and `IEventPreInterceptor<TEvent, TModifiedEvent>` are gone. **Breaking.**
+* They existed to return a *narrower* message than the one that arrived, from a time when the
+  single-parameter contracts still returned `object`. Since those started returning the typed
+  message, the second parameter buys nothing: an interceptor declaring
+  `ICommandPreInterceptor<PlaceOrder>` may already return any `PlaceOrder`, derived types
+  included.
+* Migration is a deletion: drop the second type argument. A
+  `ICommandPreInterceptor<PlaceOrder, ValidatedPlaceOrder>` becomes
+  `ICommandPreInterceptor<PlaceOrder>` and keeps returning its `ValidatedPlaceOrder`.
+* The event variant was also the odd one out: alone among the pre-interceptor contracts it did
+  not carry `IEvent`, so module discovery never found it and it had to be registered by hand.
+
+### Diagnostics
+
+* `ERGOSG001`–`ERGOSG018` become `ERGO001`–`ERGO018`. **Breaking.** Numbers are preserved, so
+  the mapping is one rule: drop the `SG`. The scheme stays coherent — `ERGO###` for analyzer
+  diagnostics, `ERGOEXP###` for the experimental-API markers, which are untouched.
+* Anyone who suppressed a diagnostic by id is affected: an `.editorconfig` severity line, a
+  `NoWarn` entry, a `#pragma` or a `SuppressMessage` naming `ERGOSG###` stops matching and the
+  diagnostic comes back — as a build failure for the error-severity rules. This repository's
+  own suppressions are the demonstration: two test projects carried
+  `<NoWarn>ERGOSG005</NoWarn>` and their builds broke until updated.
+* `ERGO018` reports a `Register` call naming its type at run time, rather than quietly
+  suspending the reachability judgment. The closed world compiles a construct's pipeline,
+  freezes its composition and bakes its plan from what the compilation can see, and a type only
+  run time knows enters none of that. `Register(typeof(T))` and `Register<T>()` are unaffected.
+
+### Corrections
+
+* **Fix:** an exception interceptor that matched the failure and returned `null` made the
+  dispatch return `null` — into a non-nullable slot, with the handler's exception gone, no
+  diagnostic and no throw. A dispatch locks its result type at the call site and no stage
+  downstream may downgrade that. The four typed-result exception facades now return
+  `ValueTask<TResult>` rather than `ValueTask<TResult?>`. **Breaking.** The parameter stays
+  nullable and the asymmetry is the point: the handler may have thrown before producing
+  anything, so nullable in, non-nullable out. The erased core contracts keep their nullable
+  return, because they serve the void lane too, where an empty slot legitimately reaches the
+  exception and final stages as `null`.
+* **Fix:** a stream handler yielding `null` for a reference-typed element had that element
+  silently discarded, so the caller received a well-formed but shorter sequence. The null test
+  stood in for "did `MoveNextAsync` produce an element", which the consumption already answers,
+  and the two are not the same question — `null` is a legitimate element of an
+  `IAsyncEnumerable<T?>`.
+
+### Documentation
+
+* Every comment under `src/` is rewritten from scratch, XML documentation and inline alike. The
+  old text had drifted: it described legacy usage, named parameters the signatures no longer
+  had, and more than once a documentation block sat above the wrong member entirely, leaving
+  its real owner undocumented. Signature mismatches are corrected against the code rather than
+  the prose. No behaviour change, and the compiler now validates the whole set — the generator
+  builds with documentation generation on and zero warnings.
+* The `<see cref="..."/>` targets the earlier surgery left dangling are corrected to the types
+  that own the members now, along with the parameter docs left by removed parameters.
+
+### Repository
+
+* The generator body becomes wiring: `ErgosfareRegistrationGenerator.cs` goes from 4742 lines
+  to 244, with `Initialize` registering providers and nothing else. The plan layer is one
+  `PlanBuilder` split by responsibility, the symbol layer is readers per concern, and the
+  constants that had a copy in each layer now have one declaration.
+* Coverage is 86.5% → 91.1% line, with no project below 90%. The distribution was the real
+  problem rather than the number: three assemblies carried almost every open line, and two had
+  collapsed to near zero when the typed default interface methods arrived with nothing calling
+  them. Four groups of tests, no source change — the default interface methods dispatched
+  through a mediator that overrides nothing, suspended and failing pipelines that exercise the
+  context's non-inline return, foreign dependency factories that freeze nothing, and the
+  declarative surfaces the generator reads off symbols but never constructs.
+* `RegistrableTypeModel`'s hand-written equality is swept by reflection rather than a list of
+  cases, because it decides whether the incremental pipeline sees an edit at all: a property
+  left out of it serves a stale file with no diagnostic, no wrong build and no failing test.
+  All 36 properties participate, and a property added later is covered without anyone
+  remembering to cover it.
+* The e2e application layer owns its composition; the host only dispatches.
+
+### Breaking changes
+
+* `IEventMediator.PublishAsync` no longer takes `throwIfNoHandlerFound`, and its `string[]`
+  group overloads are removed. A publish that reaches nobody returns.
+* Publishing an event no subscriber in the compilation serves fails the build with `ERGO005`
+  in a composition root.
+* `ICommandExceptionInterceptor<TCommand, TResult>`, `IQueryExceptionInterceptor<TQuery, TResult>`
+  and their `For<TException>` variants return `ValueTask<TResult>`. An implementation returning
+  `null` no longer compiles without a warning, and no longer answers a dispatch at run time.
+* The generator diagnostics are renamed `ERGOSG###` → `ERGO###`. Suppressions naming the old
+  ids stop matching.
+* The two-parameter pre-interceptor contracts are removed; drop the second type argument.
+
 ## v2.11.0-preview – '2026-08-15'
 
 Preview release. The theme: **a plugin observes a pipeline, and cannot reshape one.** The

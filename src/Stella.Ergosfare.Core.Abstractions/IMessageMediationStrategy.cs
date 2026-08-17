@@ -2,42 +2,34 @@
 namespace Stella.Ergosfare.Core.Abstractions;
 
 /// <summary>
-///     Defines a strategy for mediating messages of a specific type and producing results of a specific type.
+/// Runs the participants of one message through a particular execution pattern — a single
+/// handler, a broadcast to every subscriber, a stream — and produces the pipeline's result.
 /// </summary>
-/// <typeparam name="TMessage">The type of message to be mediated.</typeparam>
-/// <typeparam name="TMessageResult">The type of result produced by the mediation process.</typeparam>
+/// <typeparam name="TMessage">The message type this strategy mediates.</typeparam>
+/// <typeparam name="TMessageResult">The result type this strategy produces.</typeparam>
 /// <remarks>
-///     Message mediation strategies encapsulate the logic for processing messages through the handling pipeline.
-///     Different strategies can implement different patterns such as single handler execution, broadcast to multiple
-///     handlers,
-///     or more complex orchestration of handlers. The strategy determines how pre-handlers, main handlers, post-handlers,
-///     and error handlers are invoked during the mediation process.
+/// A strategy decides how many main handlers may run, what happens when none or several
+/// match, and in what order the pre-, post-, exception- and final-interceptor stages are
+/// invoked around them.
 /// </remarks>
 public interface IMessageMediationStrategy<in TMessage, out TMessageResult>
     where TMessage : notnull
 {
     /// <summary>
-    ///     Mediates a message by executing the appropriate handlers and producing a result.
+    /// Runs <paramref name="message"/> through this strategy's pattern.
     /// </summary>
-    /// <param name="message">The message to be mediated.</param>
+    /// <param name="message">The message to mediate.</param>
     /// <param name="messageDependencies">
-    ///     The dependencies required for message handling, including handlers, pre-handlers,
-    ///     post-handlers, and error handlers.
+    /// The participants resolved for the message, per stage and in invocation order.
     /// </param>
     /// <param name="executionContext">
-    ///     The context in which the mediation is executed, providing access to cancellation tokens,
-    ///     shared data, and other execution-related information. The context is a pure data
-    ///     carrier between handlers; it plays no part in handler resolution.
+    /// The execution context for this dispatch. It carries data between participants and
+    /// takes no part in resolving them.
     /// </param>
     /// <param name="serviceProvider">
-    ///     The provider of the scope the dispatch runs in. The strategy resolves handler and
-    ///     interceptor instances from it at invocation time — resolution is the dispatcher's
-    ///     responsibility.
+    /// The provider of the scope the dispatch runs in. The strategy resolves each
+    /// participant instance from it at the point of invocation.
     /// </param>
-    /// <returns>The result of the mediation process, of type <typeparamref name="TMessageResult" />.</returns>
-    /// <remarks>
-    ///     The implementation of this method defines the specific pattern for mediating messages, such as
-    ///     executing a single handler, broadcasting to multiple handlers, or implementing more complex orchestration logic.
-    /// </remarks>
+    /// <returns>The result of running the pattern.</returns>
     TMessageResult Mediate(TMessage message, IMessageDependencies messageDependencies, ErgosfareContext executionContext, IServiceProvider serviceProvider);
 }

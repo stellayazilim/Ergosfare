@@ -4,20 +4,29 @@ using Stella.Ergosfare.SourceGenerator.Models;
 namespace Stella.Ergosfare.SourceGenerator.Planning;
 
 /// <summary>
-///     Turns the judged type list into the four plan families the emitter writes: the
-///     frozen compositions, the staged pipeline plans, and the two single-handler plan
-///     kinds. One class because they are four answers to one question — what does this
-///     compilation's dispatch look like — and they have to agree; one file per
-///     responsibility because the answers are computed in very different ways.
+/// Turns the discovered types into what the emitter writes: the compiled compositions, the
+/// staged plans, and the two kinds of single-handler plan.
 /// </summary>
 /// <param name="types">
-///     The judged, name-sorted types emission proceeds with. Order is load-bearing: it is
-///     what makes the emitted file deterministic.
+/// The types to proceed with, sorted by name. The order matters: it is what makes the
+/// generated file come out the same every build.
 /// </param>
 /// <param name="excludedShadows">
-///     Types hidden from discovery. They contribute pipeline rows — a hidden handler is
-///     registered by hand, not absent — without being registered themselves.
+/// Types hidden from discovery. They still contribute pipeline rows — a hidden handler is
+/// one registered by hand, not one that is absent — but are not registered themselves.
 /// </param>
+/// <param name="availability">Which surfaces the referenced packages can host.</param>
+/// <param name="defaultResultAdapter">
+/// The application's fallback result adapter, when one was configured.
+/// </param>
+/// <param name="pluginInvocations">The plugin methods to write calls to.</param>
+/// <param name="dispatchSites">The dispatch sites found in this compilation.</param>
+/// <param name="referencedDispatchSites">The dispatch sites recorded by referenced assemblies.</param>
+/// <remarks>
+/// One class, because these are four answers to a single question — what this compilation's
+/// dispatch looks like — and they have to agree with each other. One file per part, because
+/// the answers are worked out in very different ways.
+/// </remarks>
 internal sealed partial class PlanBuilder(
     List<RegistrableTypeModel> types,
     List<RegistrableTypeModel> excludedShadows,
@@ -28,11 +37,14 @@ internal sealed partial class PlanBuilder(
     ImmutableArray<DispatchSiteModel> referencedDispatchSites)
 {
     /// <summary>
-    ///     Every family the referenced package can host, reconciled: a message a plugin
-    ///     pulled into the staged family leaves the single-handler one, because the executor
-    ///     checks staged plans first and a second plan for that message would be emitted,
-    ///     validated at registration, and never reached.
+    /// Builds every family the referenced packages can host, reconciled with one another.
     /// </summary>
+    /// <returns>The complete set of plans and compositions to write.</returns>
+    /// <remarks>
+    /// A message a plugin pulled into the staged family leaves the single-handler one: the
+    /// executor looks for a staged plan first, so a second plan for that message would be
+    /// written, checked at registration, and never used.
+    /// </remarks>
     internal PlanSet Build()
     {
         var voidPlans = availability.DispatchRootsHasVoidPlans
@@ -71,7 +83,17 @@ internal sealed partial class PlanBuilder(
         return new PlanSet(voidPlans, resultPlans, stagedPlans, frozenCompositions);
     }
 
-    /// <summary>The plans whose message is not in the given set, without copying when none is.</summary>
+    /// <summary>
+    /// Returns the plans whose message is not in the given set.
+    /// </summary>
+    /// <typeparam name="TPlan">The kind of plan being filtered.</typeparam>
+    /// <param name="plans">The plans to filter.</param>
+    /// <param name="excluded">The messages to drop.</param>
+    /// <param name="messageOf">Reads a plan's message type.</param>
+    /// <returns>
+    /// The surviving plans, or the original list itself when nothing was dropped — which is
+    /// the usual case and copies nothing.
+    /// </returns>
     private static IReadOnlyList<TPlan> WithoutMessages<TPlan>(
         IReadOnlyList<TPlan> plans, HashSet<string> excluded, Func<TPlan, string> messageOf)
     {
@@ -85,6 +107,8 @@ internal sealed partial class PlanBuilder(
                 continue;
             }
 
+            // The first drop is what forces a copy; everything kept before it is carried
+            // over here, and everything after goes through the branch above.
             if (kept is null)
             {
                 kept = new List<TPlan>(plans.Count);

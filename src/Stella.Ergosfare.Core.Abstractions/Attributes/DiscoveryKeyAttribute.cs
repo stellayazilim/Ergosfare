@@ -2,22 +2,20 @@
 namespace Stella.Ergosfare.Core.Abstractions.Attributes;
 
 /// <summary>
-/// Gates a registrable construct behind one or more discovery keys: a keyed type is
-/// excluded from default discovery (<c>RegisterGenerated()</c>) and registers only when a
-/// registration call selects one of its keys, e.g. <c>RegisterGenerated("reporting")</c>
-/// or <c>RegisterGenerated("reporting.*")</c>.
+/// Puts a type behind one or more discovery keys, so it registers only when a registration
+/// call asks for one of them.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Untagged types carry the implicit default key (the empty string), which is what the
-/// pattern-less registration calls select. Listing the empty string alongside other keys
-/// (<c>[DiscoveryKey("", "debug")]</c>) keeps a type in default discovery while also making
-/// it selectable by key.
+/// A keyed type is left out of key-less discovery (<c>RegisterGenerated()</c>) and picked
+/// up by <c>RegisterGenerated("reporting")</c> or by a prefix pattern such as
+/// <c>RegisterGenerated("reporting.*")</c>. To keep a type in key-less discovery while
+/// still making it selectable, list <see cref="DefaultKey"/> among its keys —
+/// <c>[DiscoveryKey("", "debug")]</c>.
 /// </para>
 /// <para>
-/// Applied to an assembly, the attribute sets the default keys for every registrable type
-/// in that assembly that declares no <see cref="DiscoveryKeyAttribute"/> of its own —
-/// letting a library tag its whole surface (e.g. a modular-monolith module) in one place.
+/// Applied to an assembly, the attribute supplies the keys for every type in it that
+/// declares no keys of its own.
 /// </para>
 /// </remarks>
 [AttributeUsage(
@@ -26,14 +24,13 @@ namespace Stella.Ergosfare.Core.Abstractions.Attributes;
 public sealed class DiscoveryKeyAttribute(params string[] keys) : Attribute
 {
     /// <summary>
-    /// The default discovery key carried by types that declare no
-    /// <see cref="DiscoveryKeyAttribute"/>: the empty string, selected by the pattern-less
-    /// registration calls.
+    /// The key a type carries when it declares none — the empty string, which is what
+    /// key-less registration calls select.
     /// </summary>
     public const string DefaultKey = "";
 
     /// <summary>
-    /// Gets the discovery keys assigned to the type or assembly.
+    /// The discovery keys declared for this type or assembly.
     /// </summary>
     public string[] Keys => keys;
 }

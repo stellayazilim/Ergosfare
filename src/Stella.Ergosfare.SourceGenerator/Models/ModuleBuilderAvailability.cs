@@ -1,54 +1,52 @@
 ﻿namespace Stella.Ergosfare.SourceGenerator.Models;
 
 /// <summary>
-///     Which Ergosfare registration surfaces the consuming compilation references.
-///     Builder extension methods are only emitted for module builders that are actually
-///     reachable, so projects referencing just the abstractions still compile clean; the
-///     bulk participant path is only emitted when the referenced Ergosfare version exposes
-///     it, so the generator degrades gracefully to per-type <c>Register(Type)</c> emission
-///     against older packages.
+/// Which Ergosfare surfaces the consuming compilation can actually reach.
 /// </summary>
-/// <param name="HasCompositionCatalog">Whether <c>FrozenCompositionCatalog</c> is resolvable.</param>
-/// <param name="HasCommandModuleBuilder">Whether the command module's DI builder is resolvable.</param>
-/// <param name="HasQueryModuleBuilder">Whether the query module's DI builder is resolvable.</param>
-/// <param name="HasEventModuleBuilder">Whether the event module's DI builder is resolvable.</param>
-/// <param name="CommandBuilderHasRegisterParticipants">Whether the command builder exposes <c>RegisterParticipants</c>.</param>
-/// <param name="QueryBuilderHasRegisterParticipants">Whether the query builder exposes <c>RegisterParticipants</c>.</param>
-/// <param name="EventBuilderHasRegisterParticipants">Whether the event builder exposes <c>RegisterParticipants</c>.</param>
-/// <param name="HasDispatchRoots">Whether the <c>GeneratedDispatchRoots</c> store is resolvable.</param>
-/// <param name="DispatchRootsHasVoidPlans">Whether the store exposes <c>AddVoidPlan</c> (compile-time pipeline plans).</param>
-/// <param name="DispatchRootsHasResultPlans">Whether the store exposes <c>AddResultPlan</c> (result pipeline plans).</param>
+/// <param name="HasCompositionCatalog">Whether the per-container composition catalog is available.</param>
+/// <param name="HasCommandModuleBuilder">Whether the command module's builder is available.</param>
+/// <param name="HasQueryModuleBuilder">Whether the query module's builder is available.</param>
+/// <param name="HasEventModuleBuilder">Whether the event module's builder is available.</param>
+/// <param name="CommandBuilderHasRegisterParticipants">Whether the command builder takes participants in bulk.</param>
+/// <param name="QueryBuilderHasRegisterParticipants">Whether the query builder takes participants in bulk.</param>
+/// <param name="EventBuilderHasRegisterParticipants">Whether the event builder takes participants in bulk.</param>
+/// <param name="HasDispatchRoots">Whether the store generated registration writes into is available.</param>
+/// <param name="DispatchRootsHasVoidPlans">Whether the store accepts plans for resultless messages.</param>
+/// <param name="DispatchRootsHasResultPlans">Whether the store accepts plans for result-producing messages.</param>
 /// <param name="DispatchRootsHasPlanFactories">
-///     Whether the plan surface accepts direct-construction factories (the
-///     <c>Func&lt;THandler&gt;</c> overloads); older packages take only the parameterless
-///     form, and emission degrades accordingly.
+/// Whether plans may carry a way to construct the handler. An older package takes only the
+/// plain form, and generation falls back to it.
 /// </param>
 /// <param name="DispatchRootsHasProviderPlanFactories">
-///     Whether the plan surface accepts provider-taking construction factories (the
-///     <c>Func&lt;IServiceProvider, THandler&gt;</c> overloads) and the compilation can
-///     name <c>ServiceProviderServiceExtensions</c> the emitted factory resolves
-///     dependencies through; without either, dependency-injected handlers keep the
-///     factory-less plan form.
+/// Whether plans may carry a construction that resolves the handler's dependencies from a
+/// provider, and the compilation can name the extensions such a construction needs. Without
+/// both, a handler with dependencies keeps the plan form that has no construction at all.
 /// </param>
 /// <param name="HasKeyedServiceExtensions">
-///     Whether <c>ServiceProviderKeyedServiceExtensions</c> is resolvable — required by
-///     factories for handlers with <c>[FromKeyedServices]</c> parameters; without it such
-///     handlers keep the factory-less plan form.
+/// Whether the keyed-service extensions are available, which a construction needs when the
+/// handler takes keyed parameters; without them such a handler keeps the plan form with no
+/// construction.
 /// </param>
 /// <param name="DispatchRootsHasStagedPlans">
-///     Whether the store exposes <c>AddStagedPlan</c> (staged pipeline plans for
-///     interceptor-bearing messages); older packages simply skip the staged emission.
+/// Whether the store accepts staged plans, for messages whose pipelines carry interceptors.
+/// An older package simply gets none.
 /// </param>
 /// <param name="StagedPlansSupportDirectConstruction">
-///     Whether the staged plan bases expose the direct-construction surface
-///     (<c>SupportsDirectConstruction</c>/<c>ExecuteDirect</c>); against older packages
-///     the emission skips the direct variant and plans resolve through the provider.
+/// Whether staged plans can construct participants themselves. Against an older package the
+/// direct variant is not written and plans resolve through the provider.
 /// </param>
 /// <param name="HasDispatchSiteAttribute">
-///     Whether <c>DispatchSiteAttribute</c> is resolvable — the dispatch-manifest surface;
-///     against older packages the manifest emission is skipped and closure judgments
-///     degrade to the current compilation's own sites.
+/// Whether the dispatch-manifest attributes are available. Without them no manifest is
+/// written, and reachability is judged from this compilation's own dispatch sites alone.
 /// </param>
+/// <param name="DispatchRootsHasFrozenCompositions">
+/// Whether the store accepts compiled compositions.
+/// </param>
+/// <remarks>
+/// Every flag is a separate capability, so generation degrades one surface at a time: a
+/// project referencing only the abstractions still compiles, and an older package gets
+/// whatever it can host rather than nothing.
+/// </remarks>
 internal readonly record struct ModuleBuilderAvailability(
     bool HasCompositionCatalog,
     bool HasCommandModuleBuilder,

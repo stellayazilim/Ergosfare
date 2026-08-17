@@ -3,26 +3,25 @@ using Stella.Ergosfare.Core.Abstractions.Results;
 namespace Stella.Ergosfare.Core.Abstractions;
 
 /// <summary>
-/// Extracts a value-carried failure out of a pipeline result of type
-/// <typeparamref name="TResult"/> without throwing it — the bridge that lets result-pattern
-/// values (the framework's own <see cref="Result"/>/<see cref="Result{TValue}"/>, or foreign
-/// carriers such as FluentResults/OneOf) trigger the exception-interceptor stage.
+/// Reads a failure out of a result value without throwing it, so a result that carries its
+/// error as data still reaches the exception-interceptor stage.
 /// </summary>
-/// <typeparam name="TResult">The closed pipeline result type the adapter understands.</typeparam>
+/// <typeparam name="TResult">The closed result type this adapter reads.</typeparam>
 /// <remarks>
-/// Typed on purpose: the previous object-based contract boxed every value-typed result on
-/// every probe and re-discovered its target by <c>CanAdapt</c> checks. This shape binds per
-/// closed result type — resolved once per pipeline, called devirtualized, and passed by
-/// readonly reference so nothing is copied or boxed. A pipeline whose result type has no
-/// adapter pays nothing at all.
+/// Implement this for any carrier that represents failure as a value — the built-in
+/// <see cref="Result"/> and <see cref="Result{TValue}"/>, or a third-party type such as
+/// FluentResults or OneOf. An adapter is bound once per closed result type; a pipeline
+/// whose result type has no adapter skips the probe entirely.
 /// </remarks>
 public interface IResultAdapter<TResult>
 {
     /// <summary>
-    /// Attempts to extract a failure from <paramref name="result"/> without throwing.
+    /// Reads the failure carried by <paramref name="result"/>, if there is one.
     /// </summary>
-    /// <param name="result">The pipeline result to inspect.</param>
-    /// <param name="exception">The carried failure, when present.</param>
-    /// <returns><c>true</c> when a failure was extracted; otherwise <c>false</c>.</returns>
+    /// <param name="result">The result value to inspect.</param>
+    /// <param name="exception">
+    /// The carried failure when this method returns <c>true</c>; otherwise <c>null</c>.
+    /// </param>
+    /// <returns><c>true</c> when <paramref name="result"/> carries a failure.</returns>
     bool TryGetException(in TResult result, out Exception? exception);
 }

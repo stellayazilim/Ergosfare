@@ -5,6 +5,30 @@ using Stella.Ergosfare.SourceGenerator.ResultAdapters;
 namespace Stella.Ergosfare.SourceGenerator.Planning;
 internal sealed partial class PlanBuilder
 {
+    /// <summary>
+    /// Builds the staged plans: one compiled pipeline body per message and group set.
+    /// </summary>
+    /// <param name="types">The discovered types.</param>
+    /// <param name="excludedShadows">The types hidden from discovery.</param>
+    /// <param name="hasKeyedServiceExtensions">
+    /// Whether the consuming compilation can resolve the keyed-service extensions.
+    /// </param>
+    /// <param name="defaultResultAdapter">The container's default result adapter, if it names one.</param>
+    /// <param name="pluginInvocations">The plugin methods visible to this compilation.</param>
+    /// <param name="groupSetsByKey">The group sets dispatch sites name, per message key.</param>
+    /// <param name="unprovableGroupKeys">The messages named under a set that could not be read.</param>
+    /// <returns>The plans, in discovery order.</returns>
+    /// <remarks>
+    /// A staged plan runs a fixed list of calls in a fixed order, so it is built only for a
+    /// message whose whole pipeline is settled here — handler, interceptors, plugin calls and
+    /// result adapter alike. Anything left open drops that one plan and the dispatch keeps
+    /// the general path, which is always correct.
+    /// <para>
+    /// Every message gets a plan for the default set, plus one for each set some dispatch
+    /// names for it. A message named under a set this compilation cannot read also gets the
+    /// filtering plan, which carries every participant and decides each one at run time.
+    /// </para>
+    /// </remarks>
     private static List<StagedPlanModel> ComputeStagedPlans(
         List<RegistrableTypeModel> types,
         List<RegistrableTypeModel> excludedShadows,
@@ -26,8 +50,8 @@ internal sealed partial class PlanBuilder
                 continue;
             }
 
-            // The default set always, then every filter a call site proved for this message
-            // — through its own type or through a base the site was typed as.
+            // The default set always, then every set a dispatch names for this message —
+            // through its own type, or through a base the site was written against.
             targetSets.Clear();
             targetSets.Add(ImmutableArray<string>.Empty);
             CollectTargetSets(type, groupSetsByKey, targetSets);
@@ -37,8 +61,8 @@ internal sealed partial class PlanBuilder
                 AddStagedPlan(type, new PlanGroupFilter(targetGroups, filtering: false));
             }
 
-            // And, when a call site names a filter this compilation cannot read, the one plan
-            // that answers any set: every participant present, each call behind its guard.
+            // And, when a dispatch names a set this compilation cannot read, the one plan that
+            // answers any set: every participant present, each call behind its own test.
             if (HasUnprovableGroupSite(type, unprovableGroupKeys))
             {
                 AddStagedPlan(type, new PlanGroupFilter(ImmutableArray<string>.Empty, filtering: true));
@@ -61,8 +85,8 @@ internal sealed partial class PlanBuilder
             }
             else if (type.IsEvent && type.DispatchResults.Length == 0)
             {
-                // Broadcast pipeline: a resultless pipeline like the void one, differing in
-                // one thing — every matched handler runs instead of a sole one.
+                // A broadcast pipeline: resultless like the void one, differing in a single
+                // thing — every matched handler runs instead of one.
                 isBroadcast = true;
             }
             else if ((type.IsCommand || type.IsQuery)
@@ -82,9 +106,9 @@ internal sealed partial class PlanBuilder
 
             if (isBroadcast)
             {
-                // No sole-handler gate and no covariant disqualification: a broadcast is
-                // where a covariant handler is a legitimate participant rather than a
-                // competing claim on the message.
+                // No sole-handler test and no covariant disqualification: a broadcast is where
+                // a covariant handler is an ordinary participant rather than a competing
+                // claim on the message.
                 if (!TryAssembleBroadcastHandlers(type, types, hasKeyedServiceExtensions, filter,
                         out handlers, out indirectHandlers))
                 {
@@ -93,14 +117,14 @@ internal sealed partial class PlanBuilder
             }
             else
             {
-                // The sole handler gate mirrors the single-handler plans, minus the
-                // interceptor suppression (interceptors are the whole point here) — and
-                // taken within this plan's own group set, which is the only set that
-                // decides which handlers the pipeline it bakes actually has.
+                // The same sole-handler requirement the single-handler plans have, minus their
+                // interceptor suppression — interceptors are the whole point here — and asked
+                // within this plan's own group set, the only set that decides which handlers
+                // the pipeline it bakes actually has.
                 //
-                // A send delivers to one handler; under a set that selects none, the
-                // pipeline has no handler at all and there is nothing to bake — the runtime
-                // lane raises the no-handler outcome the caller asked for.
+                // A send delivers to one handler, so under a set selecting none there is no
+                // pipeline to bake, and the runtime lane raises the no-handler outcome the
+                // caller asked for.
                 if (!TrySelectPlanHandler(type, handlersByMessage, filter, out var handler, out var handlerDescriptor))
                 {
                     return;
@@ -111,19 +135,19 @@ internal sealed partial class PlanBuilder
                     return;
                 }
 
-                // The covariant siblings. None of them runs — the ladder gives the message
-                // to its direct handler outright — but they are in the live pipeline, and
-                // the gate compares the composition a plan was baked against segment by
-                // segment. Carrying them is what lets a message with a handler on one of
-                // its base contracts keep a plan at all.
+                // The covariant siblings. None of them runs — the ladder gives the message to
+                // its direct handler outright — but they are in the live pipeline, and the
+                // check compares the composition a plan was baked against segment by segment.
+                // Carrying them is what lets a message with a handler on one of its base
+                // contracts keep a plan at all.
                 if (!TryCollectCovariantMainHandlers(type, types, excludedShadows, hasKeyedServiceExtensions,
                         filter, out indirectHandlers))
                 {
                     return;
                 }
 
-                // Selection above already proved the handler belongs to this plan's set;
-                // the call is what names the guard a filtering plan's body evaluates.
+                // Selection above already established that the handler belongs to this plan's
+                // set; this call is what names the test a filtering plan's body runs.
                 if (!filter.TryInclude(handler, out var handlerGuard))
                 {
                     return;
@@ -157,43 +181,41 @@ internal sealed partial class PlanBuilder
                 && !isBroadcast
                 && targetGroups.IsEmpty)
             {
-                // No interceptors and no plugin: the single-handler plans already cover this
-                // shape. A plugin is what pulls an interceptorless pipeline in here — its
-                // observer has to be emitted into both plan families, and a plan body is the
-                // only place a call can live. The body collapses accordingly: with no pre
-                // chain, the pipeline start and the pre-handler boundary are the same point,
-                // as are the post-handler and after-post ones.
+                // No interceptor and no plugin: the single-handler plans already serve this
+                // shape. A plugin is what pulls an interceptorless pipeline in here, since
+                // its observer has to reach both plan families and a plan body is the only
+                // place a call can live. The body collapses accordingly — with no pre chain,
+                // the pipeline start and the pre-handler boundary are one point, as are the
+                // post-handler and after-post ones.
                 //
-                // A broadcast has no single-handler family to fall back on, so its bare
-                // loop IS the plan: the interceptorless publish gets the same straight-line
-                // body — and, through the construction gate, the same direct construction —
-                // that the interceptorless command already enjoys. Without this arm the
-                // flagship "hooks cost zero while not attached" lane is the only lane left
-                // resolving its participants through the container per publish.
+                // A broadcast has no single-handler family to fall back on, so its bare loop
+                // is the plan: an interceptorless publish gets the same straight-line body,
+                // and the same direct construction, an interceptorless send already gets.
+                // Without this arm, publishing would be the one lane still resolving its
+                // participants through the container every time.
                 //
-                // A filtered dispatch has no such family either: the single-handler plans
-                // are keyed by message alone and answer only the default set, so leaving a
-                // grouped pipeline out here would leave every grouped dispatch — however
-                // simple — resolving through the container.
+                // A grouped dispatch has no such family either — the single-handler plans are
+                // keyed by message alone and answer the default set only — so leaving a
+                // grouped pipeline out here would send every grouped dispatch, however
+                // simple, through the container.
                 return;
             }
 
-            // The runtime binding's compile-time mirror: the opt-out suppresses every
-            // tier; else the annotation when it fits the slot exactly, else the native
-            // carriers, else the compilation's discovered default adapter, else nothing.
-            // A fitting annotation the plan cannot bake (inaccessible or uninstantiable
-            // adapter) disqualifies the plan — the runtime mirror serves the pipeline
-            // instead. A default the discovery could not model (opaque callsite,
-            // disagreeing sites, unbakeable type) bakes nothing: a slot it binds at
-            // runtime then fails the hosting executor's adapter-identity gate and stays
-            // on the strategy.
+            // The same order the runtime binding walks: the opt-out suppresses every tier;
+            // otherwise the annotation when it fits the slot exactly, then the native
+            // carriers, then this compilation's default adapter, then nothing. A fitting
+            // annotation the plan cannot bake — an inaccessible or uninstantiable adapter —
+            // drops the plan, and the runtime serves that pipeline instead. A default that
+            // could not be read, from an opaque call, disagreeing calls or an unbakeable
+            // type, bakes nothing: a slot it binds at run time then fails the executor's
+            // adapter-identity check and stays on the general path.
             var adapterKind = StagedResultAdapterKind.None;
             string? adapterTypeExpression = null;
             var adapterMaterializes = false;
 
             if (type.HasIgnoredResultAdapter)
             {
-                // Classic emission; the runtime binding resolves to null for every tier.
+                // The plain body: the runtime binding answers null for every tier.
             }
             else if (resultTypeExpression is not null)
             {
@@ -222,15 +244,15 @@ internal sealed partial class PlanBuilder
             }
             else if (type.ResultAdapter is { } voidAnnotation && voidAnnotation.Fits(EmittedExpressions.Unit))
             {
-                // A Unit-fitting annotation binds the void lane at runtime; void plans do
-                // not model adapters, so the plan is disqualified rather than diverging.
+                // An annotation fitting Unit binds the void lane at run time, and a void plan
+                // carries no adapter, so the plan is dropped rather than left to diverge.
                 return;
             }
             else if (!type.HasIgnoredResultAdapter
                      && defaultResultAdapter is not null
                      && new DefaultResultAdapterBinder(defaultResultAdapter).TryBind(EmittedExpressions.Unit, out _, out _))
             {
-                // A Unit-serving default binds every void lane at runtime; same posture.
+                // A default serving Unit binds every void lane at run time; same answer.
                 return;
             }
 
@@ -250,21 +272,24 @@ internal sealed partial class PlanBuilder
     }
 
     /// <summary>
-    ///     Orders one staged stage exactly like the runtime shape builder: the direct
-    ///     segment first, then the indirect one, each sorted by weight descending with the
-    ///     type name as the ordinal tie-break (participants are non-nested and
-    ///     non-generic, so the display name equals the runtime <c>Type.FullName</c>).
+    /// Builds a broadcast plan's two handler segments.
     /// </summary>
-    /// <summary>
-    ///     Assembles a broadcast plan's two handler segments — directly registered handlers
-    ///     first, then the covariantly matched ones — in the runtime's own execution order
-    ///     (weight-descending, then ordinal by display name). Fails, leaving the message to
-    ///     the runtime strategy, when any part of the handler set cannot be modeled exactly.
-    /// </summary>
+    /// <param name="message">The event the plan serves.</param>
+    /// <param name="types">The discovered types.</param>
+    /// <param name="hasKeyedServiceExtensions">
+    /// Whether the consuming compilation can resolve the keyed-service extensions.
+    /// </param>
+    /// <param name="filter">The plan's group set.</param>
+    /// <param name="handlers">The directly registered handlers, when this returns <c>true</c>.</param>
+    /// <param name="indirectHandlers">
+    /// The covariantly matched handlers, when this returns <c>true</c>.
+    /// </param>
+    /// <returns><c>true</c> when the whole handler set could be settled.</returns>
     /// <remarks>
-    ///     The covariant segment is the reason a broadcast needs its own assembly step: for a
-    ///     single-handler pipeline a covariant handler is a competing claim that disqualifies
-    ///     the plan, while here it is an ordinary participant the publish delivers to.
+    /// Both segments come back in the order the runtime runs them: heavier weights first,
+    /// then by type name. A broadcast needs its own step because of the covariant segment —
+    /// for a single-handler pipeline a covariant handler is a competing claim that drops the
+    /// plan, while here it is an ordinary participant the publish delivers to.
     /// </remarks>
     private static bool TryAssembleBroadcastHandlers(
         RegistrableTypeModel message,
@@ -303,10 +328,10 @@ internal sealed partial class PlanBuilder
                     continue;
                 }
 
-                // Only the asynchronous resultless contract is modeled. The runtime also
-                // dispatches the ValueTask-shaped and synchronous ones through a type
-                // switch; a plan would have to reproduce that choice per handler, and the
-                // strategy already does it correctly.
+                // Only the asynchronous resultless contract is called from a plan. The
+                // runtime reaches the ValueTask-shaped and synchronous ones through a type
+                // switch, which a plan would have to reproduce per handler — and the general
+                // path already does it.
                 if (descriptor.ResultTypeExpression != EmittedExpressions.ValueTask)
                 {
                     return false;
@@ -321,16 +346,16 @@ internal sealed partial class PlanBuilder
                 continue;
             }
 
-            // Reached through two registrations — the handler would appear in the pipeline
-            // more than once and the order among the appearances is not worth modeling.
+            // Reached through two registrations: the handler would appear in the pipeline
+            // more than once, and the order among those appearances is not worth modeling.
             if (matched > 1)
             {
                 return false;
             }
 
-            // Out of this plan's group, so not a participant of it — and not a defect
-            // either: the set this plan is keyed by simply does not select it. The filtering
-            // plan takes everyone instead and remembers the test each one runs behind.
+            // Not selected by this plan's set, so not a participant of it — and no defect
+            // either. The filtering plan takes everyone instead, remembering the test each
+            // one runs behind.
             if (!filter.TryInclude(candidate, out var candidateGuard))
             {
                 continue;
@@ -384,25 +409,35 @@ internal sealed partial class PlanBuilder
     }
 
     /// <summary>
-    ///     The covariantly matched main handlers of a message, in the order the frozen
-    ///     composition holds them — weight-descending, then ordinal by metadata name, the
-    ///     rule <see cref="ComputeFrozenCompositions"/> applies to the very same segment.
+    /// Collects a message's covariantly matched main handlers.
     /// </summary>
+    /// <param name="message">The message the plan serves.</param>
+    /// <param name="types">The discovered types.</param>
+    /// <param name="excludedShadows">The types hidden from discovery.</param>
+    /// <param name="hasKeyedServiceExtensions">
+    /// Whether the consuming compilation can resolve the keyed-service extensions.
+    /// </param>
+    /// <param name="filter">The plan's group set.</param>
+    /// <param name="indirectHandlers">
+    /// The covariant handlers, when this returns <c>true</c>; empty when there are none.
+    /// </param>
+    /// <returns><c>true</c> when the segment could be settled.</returns>
     /// <remarks>
-    ///     <para>
-    ///     None of these handlers runs. The settled priority ladder gives the message to its
-    ///     direct handler no matter how many covariant candidates exist — a covariant handler
-    ///     is a fallback, not a competitor — and both pipeline bodies implement exactly that.
-    ///     They are collected because the staged gate compares every segment of the live
-    ///     composition against the baked one, so a plan claiming an empty covariant segment
-    ///     would be refused by every pipeline that has a base-contract handler.
-    ///     </para>
-    ///     <para>
-    ///     Returns <c>false</c> when a participant cannot be modeled: a keyed registration,
-    ///     whose presence depends on which container was built, or a type reached through two
-    ///     registrations, whose appearances the segment cannot order. An inaccessible type is
-    ///     not in the frozen composition either, so it is skipped rather than disqualifying.
-    ///     </para>
+    /// <para>
+    /// They come back in the order the frozen composition holds them — heavier weights first,
+    /// then by metadata name, the rule <see cref="ComputeFrozenCompositions"/> applies to
+    /// this same segment. None of them runs: the priority ladder gives the message to its
+    /// direct handler however many covariant candidates there are, and both pipeline bodies
+    /// do exactly that. They are collected because the check compares every segment of the
+    /// live composition against the baked one, so a plan claiming an empty covariant segment
+    /// would be refused by every pipeline that has a base-contract handler.
+    /// </para>
+    /// <para>
+    /// Answers <c>false</c> for a participant that cannot be settled: a keyed registration,
+    /// whose presence depends on which container was built, or a type reached through two
+    /// registrations, whose appearances the segment cannot order. An inaccessible type is not
+    /// in the frozen composition either, so it is skipped rather than taking the plan down.
+    /// </para>
     /// </remarks>
     private static bool TryCollectCovariantMainHandlers(
         RegistrableTypeModel message,
@@ -446,8 +481,8 @@ internal sealed partial class PlanBuilder
                 covariant = !direct;
             }
 
-            // The direct handler is the plan's own, and a type nothing matched is not in
-            // this pipeline at all.
+            // The direct handler is the plan's own, and a type nothing matched is not in this
+            // pipeline at all.
             if (matched == 0 || (matched == 1 && !covariant))
             {
                 continue;
@@ -458,7 +493,8 @@ internal sealed partial class PlanBuilder
                 return false;
             }
 
-            // Out of this plan's group set, so not in the composition it is baked against.
+            // Not selected by this plan's set, so not in the composition it is checked
+            // against.
             if (!filter.TryInclude(candidate, out var guard))
             {
                 continue;

@@ -1,18 +1,26 @@
 namespace Stella.Ergosfare.SourceGenerator.ResultAdapters;
 
 /// <summary>
-///     The adapters the framework binds without anyone asking: the native <c>Result</c>
-///     carrier's exception adapter. Both the plan layer and the unserved-slot diagnostic
-///     consult it, and for the same reason — a slot the framework already serves is not
-///     unserved, and is not the container's default adapter's business either.
+/// The adapters the framework binds on its own, without anyone configuring them.
 /// </summary>
+/// <remarks>
+/// Both the planning layer and the unserved-result diagnostic ask here, for the same
+/// reason: a result type the framework already serves is neither unserved nor the
+/// container's fallback adapter's concern.
+/// </remarks>
 internal static class NativeResultAdapters
 {
     /// <summary>
-    ///     The built-in adapter expression of a native carrier result slot —
-    ///     <c>ResultExceptionAdapter</c> for <c>Result</c>, its closed generic twin for
-    ///     <c>Result&lt;T&gt;</c> — or <c>false</c> for every other result type.
+    /// Finds the built-in adapter for a result type.
     /// </summary>
+    /// <param name="resultTypeExpression">The fully qualified result type.</param>
+    /// <param name="adapterTypeExpression">
+    /// The adapter to write when this method returns <c>true</c>; otherwise <c>null</c>.
+    /// </param>
+    /// <returns>
+    /// <c>true</c> for the framework's own carrier, in either its plain or its payload
+    /// form; <c>false</c> for every other result type.
+    /// </returns>
     internal static bool TryGetExpression(string resultTypeExpression, out string? adapterTypeExpression)
     {
         if (resultTypeExpression == EmittedExpressions.NativeResult)
@@ -21,6 +29,8 @@ internal static class NativeResultAdapters
             return true;
         }
 
+        // The payload form: the same carrier with type arguments, whose adapter is its own
+        // generic twin closed over the same arguments.
         if (resultTypeExpression.Length > EmittedExpressions.NativeResult.Length + 2
             && resultTypeExpression.StartsWith(EmittedExpressions.NativeResult + "<", StringComparison.Ordinal)
             && resultTypeExpression[resultTypeExpression.Length - 1] == '>')

@@ -3,16 +3,11 @@
 namespace Stella.Ergosfare.Queries.Abstractions;
 
 /// <summary>
-/// Represents a query message in the system, which can be dispatched through the query module.
+/// Marks a type as a query: a message sent to exactly one handler to read something.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Any type implementing <see cref="IQuery"/> is considered a query and can be registered
-/// within the query module, allowing it to be handled by query handlers and interceptors.
-/// </para>
-/// <para>
-/// Queries are typically read-only operations that return a result, and they participate
-/// in the query mediation pipeline.
-/// </para>
+/// A query is expected to read rather than change state. The interface declares no members;
+/// implement <see cref="IQuery{TResult}"/> to declare what the query returns, or
+/// <see cref="IStreamQuery{TResult}"/> to stream results back.
 /// </remarks>
 public interface IQuery: IMessage;

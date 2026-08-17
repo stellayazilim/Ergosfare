@@ -11,20 +11,22 @@ using Stella.Ergosfare.Core.Internal.Registry;
 namespace Stella.Ergosfare.Core.Internal.Factories;
 
 /// <summary>
-/// Creates (and caches per container) the resolved handler graph for a message type,
-/// reading the composition from the container's <see cref="FrozenCompositionCatalog"/>.
+/// Builds a message type's participants from the composition this container selected, and
+/// keeps each result.
 /// </summary>
+/// <param name="serviceProvider">The container this factory belongs to.</param>
 /// <remarks>
-/// Dependencies are provider-independent: handler instances are resolved per invocation
-/// from the dispatching scope's provider (carried by the execution context), so DI
-/// lifetimes are honored without binding the graph to any scope. Messages whose pipeline
-/// is fully singleton-registered — or all messages when
-/// <see cref="ErgosfareRuntimeOptions.MemoizeAllHandlers"/> is enabled — additionally
-/// cache resolved instances inside their references, pinned to the root provider.
 /// <para>
-/// A composition is settled before the container is built — the table is compiled and the
-/// selection is registration — so a built graph never goes stale and the cache needs no
-/// version stamp: the first build for a (message type, group set) is the last.
+/// The participants it returns hold no scope: instances are resolved per dispatch from the
+/// provider the dispatcher passes in, so registered lifetimes apply. A pipeline whose
+/// participants are all singletons — or every pipeline, when
+/// <see cref="ErgosfareRuntimeOptions.MemoizeAllHandlers"/> is on — instead resolves once
+/// against the root provider and keeps the instances.
+/// </para>
+/// <para>
+/// Nothing here can go stale: the composition table is compiled and the selection is
+/// complete before the container is built, so the first build for a (message type, group
+/// set) is also the last.
 /// </para>
 /// </remarks>
 internal sealed class MessageDependenciesFactory(IServiceProvider serviceProvider) : IMessageDependenciesFactory
@@ -37,20 +39,25 @@ internal sealed class MessageDependenciesFactory(IServiceProvider serviceProvide
     private bool _servicesResolved;
 
     /// <summary>
-    /// Group-less graphs, the overwhelmingly common case, keyed by message type alone.
+    /// Participants built without groups — the common case — keyed by message type alone.
     /// </summary>
     private readonly ConcurrentDictionary<Type, IMessageDependencies> _byType = new();
 
-    /// <summary>Grouped graphs, keyed by message type and the requested group set.</summary>
+    /// <summary>
+    /// Participants built for a group set, keyed by message type and that set.
+    /// </summary>
     private readonly ConcurrentDictionary<GroupedDependenciesKey, IMessageDependencies> _byTypeAndGroups = new();
 
     /// <summary>
-    /// Whether the handler type's effective DI registration is the module's own plain
-    /// transient shape, making container resolution and direct construction semantically
-    /// identical; see <see cref="HandlerLifetimeRegistry.IsPlainTransientRegistration"/>.
-    /// Always <c>false</c> before the first <see cref="Create"/> resolves the services —
-    /// executors only consult this after building their dependencies.
+    /// Reports whether <paramref name="handlerType"/> was registered in the module's own
+    /// plain transient shape, which is what lets a generated plan construct it directly.
     /// </summary>
+    /// <param name="handlerType">The participant type to ask about.</param>
+    /// <returns>
+    /// <c>true</c> when the registration is that shape. Always <c>false</c> until the first
+    /// <see cref="Create"/> has resolved this factory's services, which is fine because
+    /// executors only ask after building their participants.
+    /// </returns>
     internal bool IsPlainTransientRegistration(Type handlerType)
         => _servicesResolved && (_handlerLifetimes?.IsPlainTransientRegistration(handlerType) ?? false);
 
@@ -70,8 +77,9 @@ internal sealed class MessageDependenciesFactory(IServiceProvider serviceProvide
                 return cached;
             }
 
-            // A miss is not cached: the dictionary cannot hold one, and the lookup behind
-            // it is the catalog's own per-type cache — a dictionary hit either way.
+            // Misses are not recorded — a dictionary cannot hold one — and they cost little:
+            // the lookup behind this is the catalog's own per-type cache, a dictionary hit
+            // either way.
             var built = Build(messageType, groupsArray);
 
             return built is null ? null : _byType.GetOrAdd(messageType, built);
@@ -89,13 +97,22 @@ internal sealed class MessageDependenciesFactory(IServiceProvider serviceProvide
         return groupedBuilt is null ? null : _byTypeAndGroups.GetOrAdd(key, groupedBuilt);
     }
 
+    /// <summary>
+    /// Builds the participants of a message type and group set.
+    /// </summary>
+    /// <param name="messageType">The message type to build for.</param>
+    /// <param name="groups">The groups to filter participants by.</param>
+    /// <returns>The participants, or <c>null</c> when no composition serves the type.</returns>
+    /// <exception cref="UnresolvableParticipantException">
+    /// The composition names a participant this container cannot resolve.
+    /// </exception>
     private IMessageDependencies? Build(Type messageType, string[] groups)
     {
         EnsureServices();
 
-        // The one deliberately remaining corner: a message no compiled composition serves,
-        // and whose ancestors none serves either. Callers decide what that means — a
-        // dispatch fails, a publish simply has no subscribers.
+        // No composition serves this type, and none serves an ancestor either. What that
+        // means is the caller's to decide: a dispatch fails, a publish simply has no
+        // subscribers.
         if (_compositions?.Find(messageType) is not { } composition)
         {
             return null;
@@ -103,14 +120,12 @@ internal sealed class MessageDependenciesFactory(IServiceProvider serviceProvide
 
         var shape = composition.BuildShape(messageType, groups);
 
-        // Fail fast here rather than during registration: the table is process-wide while
-        // containers are per-application, so only a pipeline being built in a container's
-        // context can answer whether its participants are resolvable. Nothing is cached
-        // before this returns, so the failure is not sticky.
+        // Checked here rather than at registration: the composition table is process-wide
+        // while containers are not, so only a pipeline being built inside a container can
+        // say whether its participants resolve. Nothing has been cached at this point, so a
+        // failure here does not stick.
         EnsureParticipantsResolvable(shape, messageType, _resolvabilityProbe);
 
-        // Pipelines that are fully singleton-registered (or forced via MemoizeAllHandlers)
-        // cache handler instances inside their references, pinned to the root provider.
         var memoizeInstances = (_runtimeOptions?.MemoizeAllHandlers ?? false)
                                || (_handlerLifetimes?.AreAllParticipantsSingleton(messageType, shape) ?? false);
 
@@ -118,6 +133,13 @@ internal sealed class MessageDependenciesFactory(IServiceProvider serviceProvide
             shape, memoizeInstances ? _memoizedGraphProvider ?? serviceProvider : null);
     }
 
+    /// <summary>
+    /// Resolves the container services this factory reads, once.
+    /// </summary>
+    /// <remarks>
+    /// Deferred rather than done in the constructor because the factory is itself resolved
+    /// while the container is still being built.
+    /// </remarks>
     private void EnsureServices()
     {
         if (_servicesResolved)
@@ -134,15 +156,22 @@ internal sealed class MessageDependenciesFactory(IServiceProvider serviceProvide
     }
 
     /// <summary>
-    /// Verifies every participant of the shape is something the container knows how to
-    /// build, before any of them is asked for.
+    /// Checks that the container can build every participant of a pipeline, before any of
+    /// them is asked for.
     /// </summary>
+    /// <param name="shape">The pipeline to check.</param>
+    /// <param name="messageType">The message type the pipeline belongs to.</param>
+    /// <param name="probe">
+    /// The container's registration probe, or <c>null</c> when it offers none.
+    /// </param>
+    /// <exception cref="UnresolvableParticipantException">
+    /// A participant is not registered with the container.
+    /// </exception>
     /// <remarks>
-    /// Uses <see cref="IServiceProviderIsService"/>, which answers from the registrations
-    /// without constructing anything — a plain resolution attempt would instantiate the
-    /// whole pipeline on every rebuild. Containers that do not offer it are left alone:
-    /// the participant then fails at resolution time, exactly as before this check
-    /// existed.
+    /// The probe answers from the registrations without constructing anything; actually
+    /// resolving each participant would instantiate the whole pipeline just to check it. A
+    /// container that offers no probe is left alone, and its participants fail when they
+    /// are first resolved instead.
     /// </remarks>
     private static void EnsureParticipantsResolvable(
         FrozenPipelineShape shape, Type messageType, IServiceProviderIsService? probe)

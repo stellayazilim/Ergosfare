@@ -3,31 +3,35 @@ namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 
 
 /// <summary>
-/// Synchronous exception-interceptor contract for messages of type
-/// <typeparamref name="TMessage"/> with results of type <typeparamref name="TResult"/>.
-/// Executed when the pipeline throws; may observe the exception and replace the result.
+/// Handles a failure raised while dispatching a <typeparamref name="TMessage"/>, and
+/// supplies the result the caller receives instead.
 /// </summary>
-/// <typeparam name="TMessage">The type of message this interceptor handles.</typeparam>
-/// <typeparam name="TResult">The type of result produced by the handler.</typeparam>
+/// <typeparam name="TMessage">The message type this interceptor accepts.</typeparam>
+/// <typeparam name="TResult">The result type this interceptor accepts.</typeparam>
 /// <remarks>
-/// This is a standalone synchronous contract — asynchronous exception interceptors implement
-/// <see cref="IAsyncExceptionInterceptor{TMessage}"/> or
-/// <see cref="IAsyncExceptionInterceptor{TMessage, TResult}"/> instead; the pipeline
-/// dispatches each through its own typed member with no object-typed bridge between them.
+/// Running is what marks the failure handled: once any exception interceptor runs, the
+/// dispatch returns a result rather than throwing. Implement
+/// <see cref="IExceptionInterceptorFilter{TException}"/> alongside this contract to accept
+/// only certain exceptions, or one of the asynchronous contracts when the work involves
+/// awaiting.
 /// </remarks>
 public interface IExceptionInterceptor<in TMessage, in TResult> : IExceptionInterceptor
     where TMessage : notnull
 {
     /// <summary>
-    /// Handles an exception thrown while processing the message.
+    /// Handles <paramref name="exception"/> and produces the result to continue with.
     /// </summary>
-    /// <param name="message">The message whose processing threw.</param>
-    /// <param name="messageResult">The result produced so far, if any.</param>
-    /// <param name="exception">The exception that was thrown.</param>
-    /// <param name="context">The current execution context.</param>
+    /// <param name="message">The message whose dispatch failed.</param>
+    /// <param name="messageResult">
+    /// The result produced so far, which is the result type's default when the main handler
+    /// itself failed.
+    /// </param>
+    /// <param name="exception">The failure being handled.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
     /// <returns>
-    /// The (possibly replaced) result that continues through the pipeline, or <c>null</c>
-    /// to keep the current result.
+    /// The result that continues through the pipeline. This value replaces the current
+    /// result outright — returning <c>null</c> makes the result <c>null</c> rather than
+    /// preserving what came before.
     /// </returns>
     object? Handle(TMessage message, TResult? messageResult, Exception exception, ErgosfareContext context);
 }

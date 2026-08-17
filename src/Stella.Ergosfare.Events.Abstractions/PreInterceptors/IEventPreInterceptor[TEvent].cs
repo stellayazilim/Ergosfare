@@ -4,30 +4,37 @@ using Stella.Ergosfare.Core.Abstractions.Handlers;
 namespace Stella.Ergosfare.Events.Abstractions;
 
 /// <summary>
-/// Represents a type-safe pre-interceptor for events. It runs before the event handlers and
-/// returns the event that continues through the pipeline — the original, or a rewritten one.
+/// Runs before the handlers of a <typeparamref name="TEvent"/> and decides which event they
+/// receive.
 /// </summary>
-/// <typeparam name="TEvent">The type of event being intercepted.</typeparam>
+/// <typeparam name="TEvent">
+/// The event type this interceptor accepts. Any non-null type will do — an event need not
+/// implement <see cref="IEvent"/>.
+/// </typeparam>
 /// <remarks>
-/// A pre-interceptor carries no result, so the single-parameter form returns the event type
-/// directly rather than <see cref="object"/>. Use the non-generic
-/// <see cref="IEventPreInterceptor"/> to intercept any event, or
-/// <see cref="IEventPreInterceptor{TEvent, TModifiedEvent}"/> to return a different, derived
-/// event type. <typeparamref name="TEvent"/> is invariant because it is returned.
+/// The event returned is delivered to every handler, so replacing it here replaces it for
+/// all of them. <typeparamref name="TEvent"/> is invariant because it is returned.
 /// </remarks>
 // ReSharper disable once UnusedType.Global
 public interface IEventPreInterceptor<TEvent> : IEvent, IAsyncPreInterceptor<TEvent>
     where TEvent : notnull
 {
-    /// <inheritdoc cref="IAsyncPreInterceptor{TMessage}.HandleAsync(TMessage,ErgosfareContext)"/>
+    /// <summary>
+    /// Forwards the core contract to the typed method below.
+    /// </summary>
+    /// <param name="event">The event as the previous stage left it.</param>
+    /// <param name="context">The execution context of this publish.</param>
+    /// <returns>The event the typed method returned.</returns>
     async ValueTask<object> IAsyncPreInterceptor<TEvent>.HandleAsync(TEvent @event, ErgosfareContext context)
         => await HandleAsync(@event, context);
 
     /// <summary>
-    /// Handles the event before its handlers run and returns the event that continues through
-    /// the pipeline (the original, or a rewritten instance).
+    /// Processes <paramref name="event"/> before its handlers run.
     /// </summary>
-    /// <param name="event">The event to intercept.</param>
-    /// <param name="context">The current execution context.</param>
+    /// <param name="event">The event as the previous stage left it.</param>
+    /// <param name="context">The execution context of this publish.</param>
+    /// <returns>
+    /// The event the handlers receive — either the one passed in or a replacement.
+    /// </returns>
     new ValueTask<TEvent> HandleAsync(TEvent @event, ErgosfareContext context);
 }

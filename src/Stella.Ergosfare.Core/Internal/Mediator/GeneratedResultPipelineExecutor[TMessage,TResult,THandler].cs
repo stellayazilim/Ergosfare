@@ -7,14 +7,25 @@ using Stella.Ergosfare.Core.Internal.Factories;
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 /// <summary>
-/// Result-producing counterpart of
-/// <see cref="GeneratedVoidPipelineExecutor{TMessage, THandler}"/>: closed over the
-/// message, its result and its compile-time-known sole async handler, so the handler call
-/// devirtualizes instead of walking the contract pattern match. The same advisory-plan
-/// contract applies — the dependency cache validates the pipeline on the first dispatch
-/// and any mismatch falls back to the runtime dispatch shape; the validated shape is
-/// frozen thereafter.
+/// The result-producing pipeline a single-handler plan produces; the counterpart of
+/// <see cref="GeneratedVoidPipelineExecutor{TMessage, THandler}"/>, closed over the message,
+/// its result and the one handler the plan named.
 /// </summary>
+/// <typeparam name="TMessage">The message type this pipeline serves.</typeparam>
+/// <typeparam name="TResult">The result type it produces.</typeparam>
+/// <typeparam name="THandler">The handler the plan named.</typeparam>
+/// <param name="dependenciesFactory">The factory participants are resolved through.</param>
+/// <param name="directHandlerFactory">
+/// Constructs the handler without the container, when the plan carries a way to.
+/// </param>
+/// <param name="providerHandlerFactory">
+/// Constructs the handler with its dependencies resolved from a provider, when the plan
+/// carries a way to.
+/// </param>
+/// <remarks>
+/// The plan is checked on the first dispatch and anything unexpected falls back to the
+/// general pipeline, exactly as on the void side; what that dispatch settles is kept.
+/// </remarks>
 #pragma warning disable CS8714 // TResult is used as a pattern type argument; handler contracts declare notnull results
 internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandler>(
     IMessageDependenciesFactory dependenciesFactory,
@@ -25,18 +36,18 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
 {
 
     /// <summary>
-    /// The grouped compositions of this pipeline; see
+    /// This pipeline's participants per group set; see
     /// <see cref="GeneratedVoidPipelineExecutor{TMessage, THandler}"/>.
     /// </summary>
     private readonly GroupedCompositions _grouped = new(dependenciesFactory, typeof(TMessage));
 
-    // The effective adapter of the pipeline's result slot — the attribute tiers plus the
-    // container's default, resolved once on the first dispatch, so the fast paths below
-    // pay nothing when (as almost always) there is none.
+    // The adapter bound to this pipeline's result type, resolved on the first dispatch so
+    // the routes below cost nothing when there is none, which is nearly always.
     private IResultAdapter<TResult>? _resultAdapter;
     private IResultMaterializer<TResult>? _resultMaterializer;
     private volatile bool _resultAdapterResolved;
 
+    // A disposable handler is never constructed here; see the void executor.
     private static readonly bool HandlerIsDisposable =
         typeof(IDisposable).IsAssignableFrom(typeof(THandler)) || typeof(IAsyncDisposable).IsAssignableFrom(typeof(THandler));
 
@@ -45,13 +56,17 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
 
     private IMessageDependencies? _cachedDependencies;
     private MessageDependencies? _cachedFastDependencies;
+
+    // Whether the handler may be constructed here instead of resolved; see the void
+    // executor for the conditions.
     private bool _useDirectConstruction;
 
-    // True once the first dispatch has validated the entire fast lane — planned handler
-    // type, direct construction, no adapters. From then on the planned handler is
-    // constructed and invoked without touching dependencies at all.
+    // Whether the whole short route is available — planned handler, direct construction, no
+    // adapter — settled by the first dispatch. From then on the handler is constructed and
+    // called without the participants being consulted at all.
     private bool _fastDirect;
 
+    /// <inheritdoc />
     public ValueTask<TResult> Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider,
         IEnumerable<string>? groups)
     {
@@ -73,13 +88,16 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
         if (_cachedFastDependencies?.FastSingleHandler is { } handlerReference
             && _resultAdapter is null)
         {
+            // Re-checking the handler type ties the decision to the reference actually in
+            // hand, so this can only fall back to the container, never construct a type the
+            // pipeline no longer names.
             IHandler handler = _useDirectConstruction && handlerReference.HandlerType == typeof(THandler)
                 ? _directHandlerFactory is not null ? _directHandlerFactory() : _providerHandlerFactory!(serviceProvider)
                 : handlerReference.Resolve(serviceProvider);
 
-            // The strategy is skipped here, and with it its abort handling. That arm lives
-            // in the engine's dispatch frame — an exception-handling region here would keep
-            // Execute out of its caller on every dispatch; see MessageDispatchEngine.
+            // Abort handling is absent on purpose — the engine's frame owns it, and an
+            // exception-handling region here would stop this method being inlined into its
+            // caller on every dispatch.
             if (handler is THandler planned)
             {
                 return planned.HandleAsync((TMessage)message, context);
@@ -101,9 +119,14 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
     }
 
     /// <summary>
-    /// The group-filtered dispatch; see
+    /// Runs a dispatch that named groups; see
     /// <see cref="GeneratedVoidPipelineExecutor{TMessage, THandler}"/>.
     /// </summary>
+    /// <param name="message">The message to dispatch.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <param name="serviceProvider">The provider participants are resolved from.</param>
+    /// <param name="groups">The groups the dispatch asked for.</param>
+    /// <returns>The result the pipeline produced.</returns>
     private ValueTask<TResult> ExecuteGrouped(object message, ErgosfareContext context,
         IServiceProvider serviceProvider, IEnumerable<string> groups)
     {
@@ -130,10 +153,7 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
             (TMessage)message, composition.Dependencies, _resultAdapter, _resultMaterializer, context, serviceProvider);
     }
 
-    /// <summary>
-    /// Resolves the slot's effective adapter once; see
-    /// <see cref="FrozenVoidDispatch{TMessage}.EnsureResultAdapter"/>.
-    /// </summary>
+    /// <inheritdoc cref="FrozenVoidDispatch{TMessage}.EnsureResultAdapter"/>
     private void EnsureResultAdapter(IServiceProvider serviceProvider)
     {
         if (_resultAdapterResolved)
@@ -147,12 +167,17 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
         _resultAdapterResolved = true;
     }
 
+    /// <summary>
+    /// Returns this pipeline's participants, resolving and settling the plan's conditions on
+    /// the first call.
+    /// </summary>
+    /// <returns>The participants for the ungrouped pipeline.</returns>
     private IMessageDependencies GetDependencies()
     {
         if (dependenciesFactory is MessageDependenciesFactory typedFactory)
         {
-            // Frozen registry: dependencies resolve once per executor and are never
-            // re-validated — a registration after the first dispatch is not observed.
+            // Resolved once and kept: a registration made after the first dispatch is not
+            // noticed.
             var cached = _cachedDependencies;
 
             if (cached is not null)
@@ -168,8 +193,8 @@ internal sealed class GeneratedResultPipelineExecutor<TMessage, TResult, THandle
                 && fastDependencies is { MemoizedInstances: false, FastSingleHandler.HandlerType: var plannedType }
                 && plannedType == typeof(THandler)
                 && typedFactory.IsPlainTransientRegistration(typeof(THandler));
-            // Execute resolves the adapter slot before the first GetDependencies call, so
-            // the answer is already in hand here.
+            // Execute binds the adapter before it first calls this, so that answer is
+            // already available here.
             _fastDirect = _useDirectConstruction && _resultAdapter is null;
             return dependencies;
         }

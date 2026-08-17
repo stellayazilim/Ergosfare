@@ -3,76 +3,121 @@ using Stella.Ergosfare.Core.Abstractions;
 namespace Stella.Ergosfare.Queries.Abstractions;
 
 /// <summary>
-///     Represents the mediator interface for executing queries within the application.
+/// Executes queries against their handlers.
 /// </summary>
 /// <remarks>
-///     Everything a dispatch can be told is a parameter. A settings object used to carry the
-///     same two things, and carrying them that way meant allocating one per dispatch and
-///     reading it at dispatch time — a shape nothing can be compiled from. The conveniences
-///     below are default implementations over the full calls, so an implementation writes
-///     four methods and inherits the rest.
+/// Everything a dispatch needs is passed as an argument. Only the three overloads taking
+/// <c>IEnumerable&lt;string&gt;</c> groups or an <see cref="ErgosfareContext"/> are
+/// abstract; the rest are conveniences implemented in terms of those, so an implementation
+/// writes those and inherits the others.
 /// </remarks>
 public interface IQueryMediator : IMessage
 {
     /// <summary>
-    ///     Executes a query and returns its result.
+    /// Executes <paramref name="query"/> and returns its result.
     /// </summary>
-    /// <typeparam name="TQueryResult">The type of the result returned by the query.</typeparam>
+    /// <typeparam name="TQueryResult">The result type the query declares.</typeparam>
     /// <param name="query">The query to execute.</param>
     /// <param name="groups">
-    ///     The group filter, or <c>null</c> for the default pipeline. A reused
-    ///     <see cref="GroupSet"/> matches the cached pipeline on a single reference check.
+    /// The groups to run; <c>null</c> runs the default group. Reusing a
+    /// <see cref="GroupSet"/> lets the cached pipeline be matched by reference.
     /// </param>
-    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>The result the handler produced.</returns>
     ValueTask<TQueryResult> QueryAsync<TQueryResult>(IQuery<TQueryResult> query, IEnumerable<string>? groups,
         CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Executes under an externally owned execution context — the nested-dispatch path: a
-    ///     handler opens a scope on its own context (<c>using var scope = context.CreateScope();</c>)
-    ///     and passes <c>scope.Context</c> here. The caller owns the context's lifetime;
-    ///     cancellation flows from the context.
+    /// Executes <paramref name="query"/> under an execution context supplied by the caller —
+    /// the shape a nested query uses.
     /// </summary>
+    /// <typeparam name="TQueryResult">The result type the query declares.</typeparam>
+    /// <param name="query">The query to execute.</param>
+    /// <param name="context">
+    /// The context to run under, typically a child opened with
+    /// <c>using var scope = context.CreateScope();</c> and passed as <c>scope.Context</c>.
+    /// The caller owns its lifetime, and cancellation comes from it.
+    /// </param>
+    /// <param name="groups">The groups to run; <c>null</c> runs the default group.</param>
+    /// <returns>The result the handler produced.</returns>
     ValueTask<TQueryResult> QueryAsync<TQueryResult>(IQuery<TQueryResult> query, ErgosfareContext context,
         IEnumerable<string>? groups = null);
 
     /// <summary>
-    ///     Streams the results of a query.
+    /// Streams the results of <paramref name="query"/>.
     /// </summary>
+    /// <typeparam name="TQueryResult">The type of each streamed item.</typeparam>
+    /// <param name="query">The query to stream.</param>
+    /// <param name="groups">The groups to run; <c>null</c> runs the default group.</param>
+    /// <param name="cancellationToken">Token for the enumeration.</param>
+    /// <returns>The streamed results.</returns>
     /// <remarks>
-    ///     The sequence is produced by the handler and enumerated by the caller, so the pipeline
-    ///     runs as the caller pulls rather than before this call returns.
+    /// The handler produces items as the caller enumerates them, so the pipeline runs while
+    /// the caller pulls rather than before this method returns.
     /// </remarks>
     [Obsolete(StreamRevision.Notice)]
     IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query,
         IEnumerable<string>? groups, CancellationToken cancellationToken);
 
-    /// <summary>Executes a query through its default pipeline.</summary>
+    /// <summary>
+    /// Executes <paramref name="query"/> through its default pipeline.
+    /// </summary>
+    /// <typeparam name="TQueryResult">The result type the query declares.</typeparam>
+    /// <param name="query">The query to execute.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>The result the handler produced.</returns>
     ValueTask<TQueryResult> QueryAsync<TQueryResult>(IQuery<TQueryResult> query,
         CancellationToken cancellationToken = default)
         => QueryAsync(query, (IEnumerable<string>?)null, cancellationToken);
 
 
     /// <summary>
-    ///     Executes under a canonical group filter. Define the set once, statically, and the
-    ///     cached pipeline matches it on a single reference check; <see cref="GroupSet.Empty"/>
-    ///     dispatches the default pipeline.
+    /// Executes <paramref name="query"/> under a canonical group set.
     /// </summary>
+    /// <typeparam name="TQueryResult">The result type the query declares.</typeparam>
+    /// <param name="query">The query to execute.</param>
+    /// <param name="groups">
+    /// The groups to run. Build the set once and reuse it, and the cached pipeline is
+    /// matched by reference; <see cref="GroupSet.Empty"/> runs the default pipeline.
+    /// </param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>The result the handler produced.</returns>
     ValueTask<TQueryResult> QueryAsync<TQueryResult>(IQuery<TQueryResult> query, GroupSet groups,
         CancellationToken cancellationToken = default)
         => QueryAsync(query, groups.Count == 0 ? null : (IEnumerable<string>?)groups, cancellationToken);
 
-    /// <summary>Executes under a group filter given as a plain array.</summary>
+    /// <summary>
+    /// Executes <paramref name="query"/> under groups given as an array.
+    /// </summary>
+    /// <typeparam name="TQueryResult">The result type the query declares.</typeparam>
+    /// <param name="query">The query to execute.</param>
+    /// <param name="groups">The groups to run.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>The result the handler produced.</returns>
     ValueTask<TQueryResult> QueryAsync<TQueryResult>(IQuery<TQueryResult> query, string[] groups,
         CancellationToken cancellationToken = default)
         => QueryAsync(query, (IEnumerable<string>?)groups, cancellationToken);
 
-    /// <summary>Streams under a caller-owned context, the way items reach and leave a stream.</summary>
+    /// <summary>
+    /// Streams the results of <paramref name="query"/> under a caller-owned execution
+    /// context.
+    /// </summary>
+    /// <typeparam name="TQueryResult">The type of each streamed item.</typeparam>
+    /// <param name="query">The query to stream.</param>
+    /// <param name="context">The context to run under; the caller owns its lifetime.</param>
+    /// <param name="groups">The groups to run; <c>null</c> runs the default group.</param>
+    /// <returns>The streamed results.</returns>
     [Obsolete(StreamRevision.Notice)]
     IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query,
         ErgosfareContext context, IEnumerable<string>? groups = null);
 
-    /// <summary>Streams a query through its default pipeline.</summary>
+    /// <summary>
+    /// Streams the results of <paramref name="query"/> through its default pipeline.
+    /// </summary>
+    /// <typeparam name="TQueryResult">The type of each streamed item.</typeparam>
+    /// <param name="query">The query to stream.</param>
+    /// <param name="cancellationToken">Token for the enumeration.</param>
+    /// <returns>The streamed results.</returns>
     [Obsolete(StreamRevision.Notice)]
     IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query,
         CancellationToken cancellationToken = default)
@@ -80,7 +125,14 @@ public interface IQueryMediator : IMessage
         => StreamAsync(query, (IEnumerable<string>?)null, cancellationToken);
 #pragma warning restore CS0618
 
-    /// <summary>Streams under a canonical group filter.</summary>
+    /// <summary>
+    /// Streams the results of <paramref name="query"/> under a canonical group set.
+    /// </summary>
+    /// <typeparam name="TQueryResult">The type of each streamed item.</typeparam>
+    /// <param name="query">The query to stream.</param>
+    /// <param name="groups">The groups to run; <see cref="GroupSet.Empty"/> runs the default pipeline.</param>
+    /// <param name="cancellationToken">Token for the enumeration.</param>
+    /// <returns>The streamed results.</returns>
     [Obsolete(StreamRevision.Notice)]
     IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query, GroupSet groups,
         CancellationToken cancellationToken = default)
@@ -88,7 +140,14 @@ public interface IQueryMediator : IMessage
         => StreamAsync(query, groups.Count == 0 ? null : (IEnumerable<string>?)groups, cancellationToken);
 #pragma warning restore CS0618
 
-    /// <summary>Streams under a group filter given as a plain array.</summary>
+    /// <summary>
+    /// Streams the results of <paramref name="query"/> under groups given as an array.
+    /// </summary>
+    /// <typeparam name="TQueryResult">The type of each streamed item.</typeparam>
+    /// <param name="query">The query to stream.</param>
+    /// <param name="groups">The groups to run.</param>
+    /// <param name="cancellationToken">Token for the enumeration.</param>
+    /// <returns>The streamed results.</returns>
     [Obsolete(StreamRevision.Notice)]
     IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query, string[] groups,
         CancellationToken cancellationToken = default)
@@ -97,58 +156,91 @@ public interface IQueryMediator : IMessage
 #pragma warning restore CS0618
 
     /// <summary>
-    ///     Executes a query whose own type is named alongside its result, so the dispatch
-    ///     reaches its pipeline through a compile-time constant pair rather than reading the
-    ///     query's type back at run time.
+    /// Executes <paramref name="query"/> naming its own type alongside its result, so the
+    /// pipeline is reached through a pair of compile-time constants instead of the query's
+    /// type being read back at run time.
     /// </summary>
-    /// <remarks>
-    ///     <para>
-    ///         Every other lane already takes the message as its type argument; this one could
-    ///         not, because <typeparamref name="TQueryResult"/> has to be a type parameter for
-    ///         the return type and C# does not infer type arguments through constraints. Naming
-    ///         both is the price, and it is why these are additions rather than replacements:
-    ///         <c>QueryAsync&lt;TQueryResult&gt;(IQuery&lt;TQueryResult&gt;)</c> stays the terse
-    ///         form, and executing a query read off a queue is a legitimate shape whose
-    ///         concrete type genuinely is a run-time fact.
-    ///     </para>
-    ///     <para>
-    ///         Default implementations over the untyped calls, so an existing implementation
-    ///         keeps compiling and simply forwards. What is gained is gained by overriding
-    ///         them — <c>QueryMediator</c> does.
-    ///     </para>
-    ///     <para>
-    ///         The streaming members are deliberately left untyped: their shape is under
-    ///         revision, and adding a surface to something scheduled to change is work that
-    ///         has to be undone.
-    ///     </para>
-    /// </remarks>
     /// <typeparam name="TQuery">The query's own type.</typeparam>
-    /// <typeparam name="TQueryResult">The result the query declares.</typeparam>
+    /// <typeparam name="TQueryResult">The result type the query declares.</typeparam>
+    /// <param name="query">The query to execute.</param>
+    /// <param name="groups">The groups to run; <c>null</c> runs the default group.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>The result the handler produced.</returns>
+    /// <remarks>
+    /// <para>
+    /// Both type arguments have to be named: <typeparamref name="TQueryResult"/> must be a
+    /// type parameter for the return type, and C# will not infer type arguments through a
+    /// constraint. That is why these overloads are additions rather than replacements —
+    /// <c>QueryAsync&lt;TQueryResult&gt;(IQuery&lt;TQueryResult&gt;)</c> stays the short
+    /// form, and a query read off a queue genuinely does not know its type until run time.
+    /// </para>
+    /// <para>
+    /// The default implementation simply forwards to the untyped call, so an existing
+    /// implementation keeps working; the benefit comes from overriding it, as
+    /// <c>QueryMediator</c> does.
+    /// </para>
+    /// <para>
+    /// The streaming members have no typed counterpart on purpose: their shape is being
+    /// reworked, and adding surface to something already scheduled to change would only have
+    /// to be undone.
+    /// </para>
+    /// </remarks>
     ValueTask<TQueryResult> QueryAsync<TQuery, TQueryResult>(TQuery query, IEnumerable<string>? groups,
         CancellationToken cancellationToken)
         where TQuery : IQuery<TQueryResult>
         => QueryAsync<TQueryResult>(query, groups, cancellationToken);
 
-    /// <summary>Typed counterpart of the context query.</summary>
+    /// <summary>
+    /// Executes <paramref name="query"/> under a caller-owned context, naming both types.
+    /// </summary>
+    /// <typeparam name="TQuery">The query's own type.</typeparam>
+    /// <typeparam name="TQueryResult">The result type the query declares.</typeparam>
+    /// <param name="query">The query to execute.</param>
+    /// <param name="context">The context to run under; the caller owns its lifetime.</param>
+    /// <param name="groups">The groups to run; <c>null</c> runs the default group.</param>
+    /// <returns>The result the handler produced.</returns>
     ValueTask<TQueryResult> QueryAsync<TQuery, TQueryResult>(TQuery query, ErgosfareContext context,
         IEnumerable<string>? groups = null)
         where TQuery : IQuery<TQueryResult>
         => QueryAsync<TQueryResult>(query, context, groups);
 
-    /// <summary>Typed query through the default pipeline.</summary>
+    /// <summary>
+    /// Executes <paramref name="query"/> through its default pipeline, naming both types.
+    /// </summary>
+    /// <typeparam name="TQuery">The query's own type.</typeparam>
+    /// <typeparam name="TQueryResult">The result type the query declares.</typeparam>
+    /// <param name="query">The query to execute.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>The result the handler produced.</returns>
     ValueTask<TQueryResult> QueryAsync<TQuery, TQueryResult>(TQuery query,
         CancellationToken cancellationToken = default)
         where TQuery : IQuery<TQueryResult>
         => QueryAsync<TQuery, TQueryResult>(query, (IEnumerable<string>?)null, cancellationToken);
 
-    /// <summary>Typed counterpart of the canonical group-filter query.</summary>
+    /// <summary>
+    /// Executes <paramref name="query"/> under a canonical group set, naming both types.
+    /// </summary>
+    /// <typeparam name="TQuery">The query's own type.</typeparam>
+    /// <typeparam name="TQueryResult">The result type the query declares.</typeparam>
+    /// <param name="query">The query to execute.</param>
+    /// <param name="groups">The groups to run; <see cref="GroupSet.Empty"/> runs the default pipeline.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>The result the handler produced.</returns>
     ValueTask<TQueryResult> QueryAsync<TQuery, TQueryResult>(TQuery query, GroupSet groups,
         CancellationToken cancellationToken = default)
         where TQuery : IQuery<TQueryResult>
         => QueryAsync<TQuery, TQueryResult>(query, groups.Count == 0 ? null : (IEnumerable<string>?)groups,
             cancellationToken);
 
-    /// <summary>Typed counterpart of the array group-filter query.</summary>
+    /// <summary>
+    /// Executes <paramref name="query"/> under groups given as an array, naming both types.
+    /// </summary>
+    /// <typeparam name="TQuery">The query's own type.</typeparam>
+    /// <typeparam name="TQueryResult">The result type the query declares.</typeparam>
+    /// <param name="query">The query to execute.</param>
+    /// <param name="groups">The groups to run.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>The result the handler produced.</returns>
     ValueTask<TQueryResult> QueryAsync<TQuery, TQueryResult>(TQuery query, string[] groups,
         CancellationToken cancellationToken = default)
         where TQuery : IQuery<TQueryResult>

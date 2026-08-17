@@ -5,25 +5,29 @@ using Microsoft.CodeAnalysis.CSharp;
 namespace Stella.Ergosfare.SourceGenerator.Symbols;
 
 /// <summary>
-///     Whether a participant can be built with <c>new</c> instead of resolved, and how.
-///     A plan constructs participants directly only where doing so is observably identical
-///     to container activation, so every condition here is a condition of that equality:
-///     a public parameterless constructor, or one whose parameters the generated code can
-///     itself resolve from the dispatching provider.
+/// Decides whether a participant can be built with <c>new</c> instead of resolved, and how.
 /// </summary>
-
+/// <remarks>
+/// A plan constructs directly only where doing so is indistinguishable from container
+/// activation, so every condition here serves that equality: a public parameterless
+/// constructor, or one whose parameters the generated code can resolve from the dispatching
+/// provider itself.
+/// </remarks>
 internal static class ConstructionAnalyzer
 {
     /// <summary>
-    ///     Whether generated code can construct the type with <c>new()</c> and doing so
-    ///     is provably interchangeable with resolving its plain transient registration:
-    ///     a concrete, non-generic class whose ONLY instance constructor is public and
-    ///     parameterless (the container's greedy constructor selection would pick any
-    ///     richer constructor, and it only considers public ones), with no <c>required</c>
-    ///     members (a generated <c>new()</c> would fail compilation), implementing
-    ///     neither <c>IDisposable</c> nor <c>IAsyncDisposable</c> (the container tracks
-    ///     transient disposables; direct construction would not).
+    /// Reports whether a type can be built with a bare <c>new()</c>.
     /// </summary>
+    /// <param name="symbol">The type to test.</param>
+    /// <returns>
+    /// <c>true</c> when doing so is interchangeable with resolving its plain transient
+    /// registration.
+    /// </returns>
+    /// <remarks>
+    /// It must be a concrete, non-generic class whose only instance constructor is public and
+    /// parameterless, with no <c>required</c> members and implementing neither
+    /// <c>IDisposable</c> nor <c>IAsyncDisposable</c>.
+    /// </remarks>
     internal static bool IsDirectlyConstructible(INamedTypeSymbol symbol)
     {
         if (!HasDirectConstructionShape(symbol))
@@ -31,22 +35,25 @@ internal static class ConstructionAnalyzer
             return false;
         }
 
-        // Exactly one instance constructor, public and parameterless: with any richer
-        // constructor present (records' synthesized copy constructor included), the
-        // container's selection and `new()` can diverge — dropping dependencies the
-        // container would have injected.
+        // Exactly one instance constructor, public and parameterless. With any richer one in
+        // play — a record's synthesized copy constructor included — the container's selection
+        // and `new()` can part ways, dropping dependencies the container would have injected.
         return symbol.InstanceConstructors.Length == 1
                && symbol.InstanceConstructors[0] is { Parameters.IsEmpty: true, DeclaredAccessibility: Accessibility.Public };
     }
 
     /// <summary>
-    ///     Shared base qualification of both construction factories: a concrete,
-    ///     non-generic class implementing neither <c>IDisposable</c> nor
-    ///     <c>IAsyncDisposable</c> (the container tracks transient disposables in the
-    ///     resolving scope; direct construction would not), with no <c>required</c>
-    ///     members anywhere in the hierarchy (an emitted <c>new</c> fails compilation
-    ///     with CS9035, while the container activation the factory replaces ignores them).
+    /// Reports whether a type has the shape either construction factory needs.
     /// </summary>
+    /// <param name="symbol">The type to test.</param>
+    /// <returns><c>true</c> when nothing about the type itself rules construction out.</returns>
+    /// <remarks>
+    /// A concrete, non-generic class, implementing neither <c>IDisposable</c> nor
+    /// <c>IAsyncDisposable</c> — the container tracks a transient disposable in the resolving
+    /// scope and direct construction would not — with no <c>required</c> member anywhere in
+    /// its hierarchy, since an emitted <c>new</c> would fail to compile with CS9035 where the
+    /// activation it replaces ignores them.
+    /// </remarks>
     internal static bool HasDirectConstructionShape(INamedTypeSymbol symbol)
     {
         if (symbol.TypeKind != TypeKind.Class || symbol.IsAbstract || symbol.IsGenericType)
@@ -77,22 +84,32 @@ internal static class ConstructionAnalyzer
     }
 
     /// <summary>
-    ///     Builds the provider-taking construction factory
-    ///     (<c>static provider =&gt; new THandler(...)</c>) for a handler whose
-    ///     construction is provably identical to container activation, or <c>null</c>
-    ///     when the type does not qualify. The gate mirrors what
-    ///     <c>Microsoft.Extensions.DependencyInjection</c> would do with the type's plain
-    ///     transient registration: the container considers only public constructors, so a
-    ///     type with exactly one public constructor leaves it no choice; every parameter
-    ///     must be a plain service resolution (<c>GetRequiredService</c>) or a
-    ///     <c>[FromKeyedServices]</c> one (<c>GetRequiredKeyedService</c>) from the very
-    ///     provider container activation would resolve from. Anything that makes the
-    ///     container's behavior content-dependent disqualifies: optional/default-valued
-    ///     parameters (the container falls back to the default only when the service is
-    ///     unregistered), multiple public constructors (greedy selection), <c>ref</c>-ish
-    ///     or <c>params</c> parameters, <c>[ServiceKey]</c> injection, non-nameable
-    ///     parameter types, and keys the emission cannot reproduce exactly.
+    /// Builds the provider-taking construction factory for a handler.
     /// </summary>
+    /// <param name="symbol">The handler to construct.</param>
+    /// <param name="handlerTypeExpression">The expression naming the handler type.</param>
+    /// <param name="currentAssembly">
+    /// The compilation's assembly, or <c>null</c> for a handler read from metadata.
+    /// </param>
+    /// <param name="usesKeyedServices">
+    /// Set when the factory resolves at least one keyed service.
+    /// </param>
+    /// <returns>
+    /// A <c>static provider =&gt; new THandler(...)</c> lambda, or <c>null</c> when the
+    /// handler does not qualify.
+    /// </returns>
+    /// <remarks>
+    /// The bar is that the factory does what
+    /// <c>Microsoft.Extensions.DependencyInjection</c> would do with the type's plain
+    /// transient registration. The container only considers public constructors, so exactly
+    /// one public constructor leaves it no choice, and every parameter must be a plain
+    /// service resolution or a <c>[FromKeyedServices]</c> one from the very provider the
+    /// container would have resolved from. Anything that makes the container's choice depend
+    /// on what happens to be registered rules the factory out: an optional or default-valued
+    /// parameter, several public constructors, a <c>ref</c>-like or <c>params</c> parameter,
+    /// <c>[ServiceKey]</c> injection, a parameter type generated code cannot name, or a key
+    /// it cannot reproduce exactly.
+    /// </remarks>
     internal static string? GetProviderConstructionExpression(
         INamedTypeSymbol symbol,
         string handlerTypeExpression,
@@ -106,15 +123,30 @@ internal static class ConstructionAnalyzer
     }
 
     /// <summary>
-    ///     Builds the bare <c>new T(...)</c> expression for a participant whose
-    ///     construction is provably identical to container activation (see
-    ///     <see cref="GetProviderConstructionExpression"/> for the gate), resolving
-    ///     constructor dependencies from the given provider identifier. The staged plans'
-    ///     direct-construction emission consumes it with <c>serviceProvider</c>; the
-    ///     provider factories wrap it in a lambda. Parameterless constructions are only
-    ///     produced when asked for — the plan factories keep those on the cheaper
-    ///     <c>Func&lt;THandler&gt;</c> shape.
+    /// Builds the bare <c>new T(...)</c> expression for a participant.
     /// </summary>
+    /// <param name="symbol">The participant to construct.</param>
+    /// <param name="typeExpression">The expression naming its type.</param>
+    /// <param name="currentAssembly">
+    /// The compilation's assembly, or <c>null</c> for a participant read from metadata.
+    /// </param>
+    /// <param name="providerIdentifier">The identifier constructor dependencies resolve from.</param>
+    /// <param name="allowParameterless">
+    /// Whether a parameterless construction counts as an answer.
+    /// </param>
+    /// <param name="usesKeyedServices">
+    /// Set when the expression resolves at least one keyed service.
+    /// </param>
+    /// <returns>
+    /// The construction expression, or <c>null</c> when the participant does not qualify;
+    /// see <see cref="GetProviderConstructionExpression"/> for what qualifying means.
+    /// </returns>
+    /// <remarks>
+    /// The staged plans emit this expression directly against <c>serviceProvider</c>, while
+    /// the provider factories wrap it in a lambda. A parameterless construction is produced
+    /// only when asked for, because the plan factories keep those on the cheaper
+    /// <c>Func&lt;THandler&gt;</c> shape.
+    /// </remarks>
     internal static string? TryBuildConstructionExpression(
         INamedTypeSymbol symbol,
         string typeExpression,
@@ -136,7 +168,7 @@ internal static class ConstructionAnalyzer
         {
             if (constructor.DeclaredAccessibility != Accessibility.Public)
             {
-                // Invisible to the container's constructor selection; irrelevant here too.
+                // The container's constructor selection cannot see it, so neither does this.
                 continue;
             }
 
@@ -214,12 +246,19 @@ internal static class ConstructionAnalyzer
     }
 
     /// <summary>
-    ///     Whether generated code in the current compilation can name the closed type in
-    ///     a generic argument position: spellable names and public accessibility along the
-    ///     whole containing chain (internal accepted only for the current compilation's
-    ///     own types — referenced-assembly IVT grants are deliberately not modeled here),
-    ///     recursively for every generic type argument.
+    /// Reports whether generated code can name a closed type in a generic argument position.
     /// </summary>
+    /// <param name="type">The type to test.</param>
+    /// <param name="currentAssembly">
+    /// The compilation's assembly, or <c>null</c> when there is none to compare against.
+    /// </param>
+    /// <returns><c>true</c> when the type and every one of its arguments can be named.</returns>
+    /// <remarks>
+    /// The name must be spellable and the whole containing chain public — internal counts
+    /// only for the compilation's own types, since a referenced assembly's
+    /// <c>InternalsVisibleTo</c> grant is deliberately not read here. Each generic argument
+    /// is held to the same bar.
+    /// </remarks>
     internal static bool IsNameableClosedType(INamedTypeSymbol type, IAssemblySymbol? currentAssembly)
     {
         if (type.IsUnboundGenericType || !SymbolNaming.HasSpellableName(type))
@@ -258,6 +297,11 @@ internal static class ConstructionAnalyzer
         return true;
     }
 
+    /// <summary>
+    /// Reports whether a namespace is <c>Microsoft.Extensions.DependencyInjection</c>.
+    /// </summary>
+    /// <param name="ns">The namespace to test.</param>
+    /// <returns><c>true</c> when it is exactly that namespace.</returns>
     internal static bool IsDependencyInjectionNamespace(INamespaceSymbol? ns)
         => ns is
         {
@@ -270,13 +314,22 @@ internal static class ConstructionAnalyzer
         };
 
     /// <summary>
-    ///     The C# literal reproducing a <c>[FromKeyedServices]</c> key exactly — the
-    ///     container matches keys by boxed equality, so the emitted constant must carry
-    ///     the same runtime type and value as the attribute's. Strings, chars, bools,
-    ///     integral primitives, enums and <c>typeof</c> keys are reproducible; anything
-    ///     else (null, floating-point, arrays) returns <c>null</c> and keeps the handler
-    ///     on the container path.
+    /// Writes the literal that reproduces a <c>[FromKeyedServices]</c> key.
     /// </summary>
+    /// <param name="attribute">The attribute carrying the key.</param>
+    /// <param name="currentAssembly">
+    /// The compilation's assembly, or <c>null</c> when there is none to compare against.
+    /// </param>
+    /// <returns>
+    /// The literal, or <c>null</c> when the key cannot be reproduced — which keeps the
+    /// handler on the container path.
+    /// </returns>
+    /// <remarks>
+    /// The container matches keys by boxed equality, so the emitted constant has to carry the
+    /// same runtime type and value as the attribute's. Strings, chars, bools, integral
+    /// primitives, enums and <c>typeof</c> keys can be written back; null, floating-point and
+    /// array keys cannot.
+    /// </remarks>
     internal static string? GetServiceKeyLiteral(AttributeData attribute, IAssemblySymbol? currentAssembly)
     {
         if (attribute.ConstructorArguments.Length != 1)
@@ -319,6 +372,15 @@ internal static class ConstructionAnalyzer
         }
     }
 
+    /// <summary>
+    /// Reports whether a type declares more than one public instance constructor.
+    /// </summary>
+    /// <param name="symbol">The type to test.</param>
+    /// <returns><c>true</c> when a second public constructor is found.</returns>
+    /// <remarks>
+    /// What ERGO003 reports: with more than one, the container's greedy selection depends on
+    /// what is registered, and no factory can be proven to match it.
+    /// </remarks>
     internal static bool HasMultiplePublicInstanceConstructors(INamedTypeSymbol symbol)
     {
         var count = 0;
@@ -334,6 +396,14 @@ internal static class ConstructionAnalyzer
         return false;
     }
 
+    /// <summary>
+    /// Reports whether any constructor parameter carries <c>[FromServices]</c>.
+    /// </summary>
+    /// <param name="symbol">The type to test.</param>
+    /// <returns><c>true</c> when the attribute is found on a constructor parameter.</returns>
+    /// <remarks>
+    /// What ERGO004 reports: the attribute does nothing there.
+    /// </remarks>
     internal static bool HasFromServicesOnConstructor(INamedTypeSymbol symbol)
     {
         foreach (var constructor in symbol.InstanceConstructors)

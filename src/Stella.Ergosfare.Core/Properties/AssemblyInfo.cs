@@ -1,12 +1,12 @@
-// IVT policy: src/Directory.Build.props grants every project its own "<ProjectName>.Test"
-// automatically; this file carries only what that blanket cannot express — grants to other
-// src assemblies, and to test assemblies that are not this project's own.
+// Every project's own "<ProjectName>.Test" assembly is granted access by
+// src/Directory.Build.props. Listed here is only what that cannot cover: other src
+// assemblies, and test assemblies belonging to other projects.
 using System.Runtime.CompilerServices;
 
-// src-to-src
+// src assemblies
 [assembly:InternalsVisibleTo("Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection")]
 
-// foreign test assemblies
+// test assemblies belonging to other projects
 [assembly:InternalsVisibleTo("Stella.Ergosfare.Events.Test")]
 [assembly:InternalsVisibleTo("Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test")]
 [assembly:InternalsVisibleTo("Stella.Ergosfare.Test")]

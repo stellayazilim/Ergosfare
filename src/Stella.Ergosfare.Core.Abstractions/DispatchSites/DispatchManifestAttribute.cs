@@ -1,27 +1,34 @@
 namespace Stella.Ergosfare.Core.Abstractions.DispatchSites;
 
 /// <summary>
-/// Assembly-level marker stamped by the source generator whenever it ran with dispatch-site
-/// manifest support — including when the assembly contains no dispatch site at all. Its
-/// presence is what lets an aggregating composition root distinguish "this assembly truly
-/// dispatches nothing" from "this assembly predates manifests (or was built without the
-/// generator), so its dispatch sites are unknown". Unreachable-handler judgment (ERGO007)
-/// and compile-time handler trimming stay silent while any Ergosfare-referencing assembly
-/// in the closure lacks the marker.
+/// Marks an assembly whose dispatch sites the source generator recorded — including an
+/// assembly that dispatches nothing at all.
 /// </summary>
-/// <remarks>Written by generated code; not intended to be applied by hand.</remarks>
+/// <remarks>
+/// The marker is what separates "this assembly truly dispatches nothing" from "this
+/// assembly's dispatch sites are unknown", which is the case for anything built before
+/// manifests existed or without the generator. While any assembly referencing Ergosfare in
+/// the program lacks the marker, unreachable-handler reporting (ERGO007) and compile-time
+/// handler trimming stay off.
+/// <para>Written by generated code; do not apply it by hand.</para>
+/// </remarks>
+/// <param name="version">The manifest schema version the generator wrote.</param>
 [AttributeUsage(AttributeTargets.Assembly)]
 public sealed class DispatchManifestAttribute(int version) : Attribute
 {
-    /// <summary>The manifest schema version the emitting generator wrote.</summary>
+    /// <summary>
+    /// The manifest schema version the generator wrote.
+    /// </summary>
     public int Version { get; } = version;
 
     /// <summary>
-    /// Whether the assembly performs registrations whose types cannot be statically known
-    /// (a non-<c>typeof</c> <c>Type</c> argument, descriptor batches, or the legacy
-    /// assembly scan of older packages). Coverage evidence is then incomplete by
-    /// construction, so composition roots suspend dead-dispatch judgment (ERGO005/006)
-    /// closure-wide.
+    /// Whether the assembly registers types that cannot be known at compile time — a
+    /// <c>Type</c> argument that is not a <c>typeof</c>, a batch of descriptors, or the
+    /// assembly scan older packages used.
     /// </summary>
+    /// <remarks>
+    /// Evidence of what is registered is then incomplete, so composition roots stop
+    /// reporting dead dispatches (ERGO005 and ERGO006) across the whole program.
+    /// </remarks>
     public bool HasOpaqueRegistrations { get; set; }
 }

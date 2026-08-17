@@ -1,22 +1,22 @@
 ﻿namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
 /// <summary>
-/// Provides extension methods for configuring and registering modules with an <see cref="IModuleRegistry"/>.
+/// Extra configuration for an <see cref="IModuleRegistry"/>.
 /// </summary>
 public static class ModuleRegistryExtensions
 {
     /// <summary>
-    /// Restores the pre-v1.2 handler resolution behavior: every handler graph is resolved
-    /// once and memoized process-wide, regardless of the handlers' registered DI lifetimes.
-    /// This is the fastest dispatch mode, but scoped and transient handler dependencies are
-    /// NOT honored — the first resolved instance is reused for all subsequent dispatches.
+    /// Makes every participant resolve once and be reused for the life of the process,
+    /// whatever lifetime it was registered with.
     /// </summary>
-    /// <param name="moduleRegistry">The module registry being configured.</param>
-    /// <returns>The same <see cref="IModuleRegistry"/> instance, enabling fluent chaining.</returns>
+    /// <param name="moduleRegistry">The registry being configured.</param>
+    /// <returns>The same registry, so calls can be chained.</returns>
     /// <remarks>
-    /// By default (without this switch) registered lifetimes are honored: messages whose
-    /// handlers and interceptors are all singleton-registered use the memoized fast path
-    /// automatically, everything else is resolved from the calling scope's provider.
+    /// This is the fastest dispatch mode and it overrides registered lifetimes: a scoped or
+    /// transient participant is constructed once and that instance serves every later
+    /// dispatch. Without it, lifetimes are honored — a message whose participants are all
+    /// singletons already takes the same fast path, and everything else resolves from the
+    /// calling scope.
     /// </remarks>
     public static IModuleRegistry ForceMemoizedHandlers(this IModuleRegistry moduleRegistry)
     {

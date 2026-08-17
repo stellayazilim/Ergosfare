@@ -3,27 +3,38 @@ using System.Text;
 namespace Stella.Ergosfare.SourceGenerator;
 
 /// <summary>
-///     Pure string operations on the type expressions the models carry — the
-///     <c>global::</c>-qualified spellings the generated file uses. Nothing here reads a
-///     symbol; a type expression is the only input, which is what lets the plan layer
-///     compare types it never resolved.
+/// String operations on the type expressions the models carry — the fully qualified
+/// spellings written into generated code.
 /// </summary>
+/// <remarks>
+/// Nothing here reads a symbol; a type expression is the only input. That is what lets the
+/// planning layer compare types it never resolved.
+/// </remarks>
 internal static class TypeExpressions
 {
     private const string GlobalPrefix = "global::";
 
-    /// <summary>Drops the <c>global::</c> qualifier when present.</summary>
+    /// <summary>
+    /// Removes the global qualifier from a type expression.
+    /// </summary>
+    /// <param name="typeExpression">The expression to strip.</param>
+    /// <returns>The expression without its qualifier, or unchanged if it had none.</returns>
     internal static string StripGlobalPrefix(string typeExpression)
         => typeExpression.StartsWith(GlobalPrefix, StringComparison.Ordinal)
             ? typeExpression.Substring(GlobalPrefix.Length)
             : typeExpression;
 
     /// <summary>
-    ///     Splits <c>Name&lt;A, B&lt;C&gt;&gt;</c> into the base name and its top-level
-    ///     argument expressions; <c>false</c> for non-generic expressions (including
-    ///     shapes the splitter does not model, such as tuples and arrays of generics —
-    ///     those compare textually).
+    /// Splits a generic type expression into its name and its top-level type arguments.
     /// </summary>
+    /// <param name="expression">The expression to split.</param>
+    /// <param name="name">The name before the argument list, when this returns <c>true</c>.</param>
+    /// <param name="arguments">The top-level arguments, when this returns <c>true</c>.</param>
+    /// <returns>
+    /// <c>true</c> for a plain <c>Name&lt;…&gt;</c> shape. <c>false</c> for anything else,
+    /// including shapes this does not take apart — tuples, arrays, and a nested type after a
+    /// generic — which are compared as text instead.
+    /// </returns>
     internal static bool TrySplitGeneric(string expression, out string name, out List<string> arguments)
     {
         name = expression;
@@ -53,13 +64,15 @@ internal static class TypeExpressions
 
                     if (depth == 0 && i != expression.Length - 1)
                     {
-                        // A '>' closing the outer list before the end: not a plain
-                        // Name<...> shape (e.g. "X<T>.Nested") — compare textually.
+                        // The outer list closed before the end, so this is not a plain
+                        // Name<...> — "X<T>.Nested", for instance. Compare it as text.
                         return false;
                     }
 
                     break;
                 case ',' when depth == 1:
+                    // Only commas at the top level separate arguments; deeper ones belong to
+                    // an argument of its own.
                     arguments.Add(expression.Substring(argumentStart, i - argumentStart).Trim());
                     argumentStart = i + 1;
                     break;
@@ -71,11 +84,15 @@ internal static class TypeExpressions
     }
 
     /// <summary>
-    ///     Reduces every generic argument list in a type expression to its unbound form
-    ///     (<c>Foo&lt;int&gt;</c> → <c>Foo&lt;&gt;</c>, <c>Bar&lt;int, string&gt;</c> →
-    ///     <c>Bar&lt;,&gt;</c>), so constructed and definition spellings compare equal.
-    ///     Non-generic expressions pass through unchanged.
+    /// Reduces every generic argument list in an expression to its unbound form, so a
+    /// constructed type and its definition compare equal.
     /// </summary>
+    /// <param name="typeExpression">The expression to reduce.</param>
+    /// <returns>
+    /// The expression with arguments emptied — <c>Foo&lt;int&gt;</c> becomes
+    /// <c>Foo&lt;&gt;</c> and <c>Bar&lt;int, string&gt;</c> becomes <c>Bar&lt;,&gt;</c>. A
+    /// non-generic expression is returned unchanged.
+    /// </returns>
     internal static string DefinitionKey(string typeExpression)
     {
         if (typeExpression.IndexOf('<') < 0)
@@ -105,6 +122,8 @@ internal static class TypeExpressions
 
                     if (depth == 0)
                     {
+                        // The arguments themselves were skipped; what identifies the
+                        // definition is how many there were.
                         sb.Append(',', topLevelCommas).Append('>');
                     }
 

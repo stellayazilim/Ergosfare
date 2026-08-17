@@ -2,22 +2,22 @@
 namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 
 /// <summary>
-/// The pipeline composition a staged plan was baked against: the main handlers plus the four
-/// interceptor stages as ordered type lists — exactly the merged (direct-first, then
-/// indirect) order the runtime pipeline would execute them in.
+/// The pipeline a staged plan was compiled against: its main handlers and its four
+/// interceptor stages, each as an ordered list of types in the order the pipeline would run
+/// them.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The composition is the advisory contract's comparison key: on every registry-version
-/// rebuild the executor compares it against the live pipeline, and any difference —
-/// a runtime-registered interceptor, a different handler, reordered stages — routes the
-/// dispatch back through the runtime strategy. The arrays are captured as given (no
-/// defensive copy); plans are compile-time singletons whose compositions never change.
+/// This is what a plan is checked against before it is used. Whenever the live pipeline is
+/// rebuilt, the executor compares it with this key, and any difference — an interceptor
+/// registered at runtime, a different handler, a different order — sends the dispatch back
+/// through the general strategy.
 /// </para>
 /// <para>
-/// Handlers are a list because a broadcast serves all of them. A single-handler pipeline —
-/// every command and query plan — is the same shape with one direct handler and an empty
-/// indirect segment, so the comparison has one implementation rather than one per family.
+/// The arrays are kept as given rather than copied: a plan is a compile-time singleton
+/// whose pipeline never changes. Handlers are a list because a broadcast runs all of them;
+/// a single-handler pipeline is the same shape with one direct handler and no indirect
+/// ones, so one comparison serves every family.
 /// </para>
 /// </remarks>
 public sealed class StagedPlanKey
@@ -29,7 +29,16 @@ public sealed class StagedPlanKey
     internal readonly Type[] ExceptionInterceptorTypeArray;
     internal readonly Type[] FinalInterceptorTypeArray;
 
-    /// <summary>The single-handler composition: one directly registered handler, no covariant ones.</summary>
+    /// <summary>
+    /// Initializes the key of a single-handler pipeline: one handler registered for the
+    /// message type itself, and none registered for a base type.
+    /// </summary>
+    /// <param name="handlerType">The pipeline's only main handler.</param>
+    /// <param name="preInterceptorTypes">The pre-interceptors, in execution order.</param>
+    /// <param name="postInterceptorTypes">The post-interceptors, in execution order.</param>
+    /// <param name="exceptionInterceptorTypes">The exception interceptors, in execution order.</param>
+    /// <param name="finalInterceptorTypes">The final interceptors, in execution order.</param>
+    /// <param name="resultAdapterType">The result adapter the plan assumed, if any.</param>
     public StagedPlanKey(
         Type handlerType,
         Type[] preInterceptorTypes,
@@ -49,10 +58,19 @@ public sealed class StagedPlanKey
     }
 
     /// <summary>
-    /// The general composition, carrying both handler segments. The split mirrors the
-    /// runtime's own: directly registered handlers first, then the covariantly matched ones,
-    /// each segment in its baked execution order.
+    /// Initializes the key of any pipeline, carrying both handler segments.
     /// </summary>
+    /// <param name="handlerTypes">
+    /// The handlers registered for the message type itself, in execution order.
+    /// </param>
+    /// <param name="indirectHandlerTypes">
+    /// The handlers registered for a base type, in execution order.
+    /// </param>
+    /// <param name="preInterceptorTypes">The pre-interceptors, in execution order.</param>
+    /// <param name="postInterceptorTypes">The post-interceptors, in execution order.</param>
+    /// <param name="exceptionInterceptorTypes">The exception interceptors, in execution order.</param>
+    /// <param name="finalInterceptorTypes">The final interceptors, in execution order.</param>
+    /// <param name="resultAdapterType">The result adapter the plan assumed, if any.</param>
     public StagedPlanKey(
         Type[] handlerTypes,
         Type[] indirectHandlerTypes,
@@ -72,8 +90,8 @@ public sealed class StagedPlanKey
     }
 
     /// <summary>
-    /// The concrete type of the pipeline's sole main handler, or <c>null</c> when the plan
-    /// was baked against a handler list — a broadcast, where "the" handler does not exist.
+    /// The pipeline's only main handler, or <c>null</c> when the plan was compiled against
+    /// a list of them — a broadcast, where there is no single handler.
     /// </summary>
     public Type? HandlerType
         => HandlerTypeArray.Length == 1 && IndirectHandlerTypeArray.Length == 0
@@ -81,34 +99,46 @@ public sealed class StagedPlanKey
             : null;
 
     /// <summary>
-    /// The result-adapter type the plan's value-path branches were baked against, or
-    /// <c>null</c> when the plan models no adapter. Part of the comparison key: the
-    /// hosting executor only trusts the plan while the runtime-bound adapter of the
-    /// (message, result) slot is exactly this type — a plan emitted before an annotation
-    /// was added (or by an older generator) then falls back to the runtime strategy
-    /// instead of silently skipping the value path.
+    /// The result adapter the plan's value-path branches were compiled against, or
+    /// <c>null</c> when the plan assumed none.
     /// </summary>
+    /// <remarks>
+    /// Part of the comparison: the executor trusts the plan only while the adapter bound to
+    /// the (message, result) pair is exactly this type. A plan compiled before an annotation
+    /// was added falls back to the general strategy instead of quietly skipping the value
+    /// path.
+    /// </remarks>
     public Type? ResultAdapterType { get; }
 
-    /// <summary>The directly registered main handlers, in execution order.</summary>
+    /// <summary>
+    /// The main handlers registered for the message type itself, in execution order.
+    /// </summary>
     public IReadOnlyList<Type> HandlerTypes => HandlerTypeArray;
 
     /// <summary>
-    /// The covariantly matched main handlers, in execution order — handlers registered
-    /// against a base type or interface of the message. Empty for every single-handler
-    /// pipeline: a covariant main handler disqualifies those plans outright.
+    /// The main handlers registered for a base type of the message, in execution order.
+    /// Always empty for a single-handler pipeline: one such handler disqualifies those
+    /// plans outright.
     /// </summary>
     public IReadOnlyList<Type> IndirectHandlerTypes => IndirectHandlerTypeArray;
 
-    /// <summary>The pre-interceptor types, in execution order.</summary>
+    /// <summary>
+    /// The pre-interceptors, in execution order.
+    /// </summary>
     public IReadOnlyList<Type> PreInterceptorTypes => PreInterceptorTypeArray;
 
-    /// <summary>The post-interceptor types, in execution order.</summary>
+    /// <summary>
+    /// The post-interceptors, in execution order.
+    /// </summary>
     public IReadOnlyList<Type> PostInterceptorTypes => PostInterceptorTypeArray;
 
-    /// <summary>The exception-interceptor types, in execution order.</summary>
+    /// <summary>
+    /// The exception interceptors, in execution order.
+    /// </summary>
     public IReadOnlyList<Type> ExceptionInterceptorTypes => ExceptionInterceptorTypeArray;
 
-    /// <summary>The final-interceptor types, in execution order.</summary>
+    /// <summary>
+    /// The final interceptors, in execution order.
+    /// </summary>
     public IReadOnlyList<Type> FinalInterceptorTypes => FinalInterceptorTypeArray;
 }

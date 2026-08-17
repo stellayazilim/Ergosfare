@@ -9,13 +9,16 @@ using Stella.Ergosfare.Core.Internal.Factories;
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 /// <summary>
-/// Result-producing counterpart of <see cref="FrozenVoidDispatch{TMessage}"/>: one type for
-/// the compiled staged plan and the runtime body, decided once with the composition.
+/// One container's result-producing pipeline for one (message, result) pair; the
+/// counterpart of <see cref="FrozenVoidDispatch{TMessage}"/>, settling the same way on its
+/// first dispatch.
 /// </summary>
+/// <typeparam name="TMessage">The message type this pipeline serves.</typeparam>
+/// <typeparam name="TResult">The result type it produces.</typeparam>
 /// <remarks>
-/// The result slot adds one gate input the void side does not have: the plan is only
-/// trusted while its baked adapter is exactly the one the runtime binds (both null in the
-/// overwhelmingly common case), so a plan emitted without the slot's value-path branches
+/// Having a real result adds one more condition the void side does not have: a plan is only
+/// used while the adapter it was compiled against is exactly the one bound here — both
+/// absent, in the common case — so a plan compiled without the branches an adapter needs
 /// never serves an adapted pipeline.
 /// </remarks>
 #pragma warning disable CS8714 // TResult is used as a pattern type argument; handler contracts declare notnull results
@@ -27,8 +30,8 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
     private readonly StagedResultPlan<TMessage, TResult>? _plan;
     private readonly GroupedCompositions _grouped;
 
-    // The effective adapter of this pipeline's closed result slot, resolved once on the
-    // first dispatch; see FrozenVoidDispatch. The identity also feeds the plan gate.
+    // The adapter bound to this pipeline's result type, resolved on the first dispatch as in
+    // the void pipeline. Which adapter it is also decides whether a plan may be used.
     private IResultAdapter<TResult>? _resultAdapter;
     private IResultMaterializer<TResult>? _resultMaterializer;
     private volatile bool _resultAdapterResolved;
@@ -39,17 +42,31 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
     /// <inheritdoc cref="FrozenVoidDispatch{TMessage}._verdict"/>
     private volatile int _verdict;
 
+    /// <inheritdoc cref="FrozenVoidDispatch{TMessage}.Foreign"/>
     private const int Foreign = -1;
-    // The verdict a freshly constructed dispatch carries: never compared against,
-    // because the field starts there — it names the zero the other three are offsets from.
+
+    /// <inheritdoc cref="FrozenVoidDispatch{TMessage}.Undecided"/>
     // ReSharper disable once UnusedMember.Local
     private const int Undecided = 0;
+
+    /// <inheritdoc cref="FrozenVoidDispatch{TMessage}.UseBody"/>
     private const int UseBody = 1;
+
+    /// <inheritdoc cref="FrozenVoidDispatch{TMessage}.UsePlan"/>
     private const int UsePlan = 2;
+
+    /// <inheritdoc cref="FrozenVoidDispatch{TMessage}.UsePlanDirect"/>
     private const int UsePlanDirect = 3;
 
-    // Public within the internal type: the reflective fallback for unrooted runtime types
-    // constructs through Activator, which only binds public constructors.
+    /// <summary>
+    /// Initializes the pipeline over a container's factory and the plan compiled for this
+    /// pair, if any.
+    /// </summary>
+    /// <param name="dependenciesFactory">The factory participants are resolved through.</param>
+    /// <param name="plan">The compiled plan for this pair, or <c>null</c>.</param>
+    /// <remarks>
+    /// Public despite the type being internal, for the same reason its void twin is.
+    /// </remarks>
     public FrozenResultDispatch(IMessageDependenciesFactory dependenciesFactory, StagedResultPlan<TMessage, TResult>? plan)
     {
         _factory = dependenciesFactory;
@@ -62,6 +79,7 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
         }
     }
 
+    /// <inheritdoc />
     public ValueTask<TResult> Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider,
         IEnumerable<string>? groups)
     {
@@ -95,8 +113,13 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
     }
 
     /// <summary>
-    /// The first dispatch; see <see cref="FrozenVoidDispatch{TMessage}.ExecuteUndecided"/>.
+    /// Runs the first dispatch and settles which route the rest take; see
+    /// <see cref="FrozenVoidDispatch{TMessage}.ExecuteUndecided"/>.
     /// </summary>
+    /// <param name="message">The message to dispatch.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <param name="serviceProvider">The provider participants are resolved from.</param>
+    /// <returns>The result the pipeline produced.</returns>
     private ValueTask<TResult> ExecuteUndecided(object message, ErgosfareContext context, IServiceProvider serviceProvider)
     {
         EnsureResultAdapter(serviceProvider);
@@ -131,9 +154,18 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
     }
 
     /// <summary>
-    /// The frozen composition's delivery; see
+    /// Runs the resolved participants; see
     /// <see cref="FrozenVoidDispatch{TMessage}.ExecuteRuntimeLane"/>.
     /// </summary>
+    /// <param name="message">The message to dispatch.</param>
+    /// <param name="dependencies">The participants to run.</param>
+    /// <param name="fast">
+    /// The same participants as their concrete type, when they are one; <c>null</c> rules
+    /// out the single-handler route.
+    /// </param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <param name="serviceProvider">The provider participants are resolved from.</param>
+    /// <returns>The result the pipeline produced.</returns>
     private ValueTask<TResult> ExecuteRuntimeLane(
         object message, IMessageDependencies dependencies, MessageDependencies? fast,
         ErgosfareContext context, IServiceProvider serviceProvider)
@@ -152,8 +184,8 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
                     return ValueTask.FromResult(syncHandler.Handle((TMessage)message, context));
             }
 
-            // Unsupported handler contract: fall through so the body raises its canonical
-            // NotSupportedException.
+            // The handler implements no contract this route can call; falling through lets
+            // the body raise the one exception that says so.
         }
 
         return ResultPipelineBody<TMessage, TResult>.Run(
@@ -161,9 +193,14 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
     }
 
     /// <summary>
-    /// The group-filtered dispatch; see
+    /// Runs a dispatch that named groups; see
     /// <see cref="FrozenVoidDispatch{TMessage}.ExecuteGrouped"/>.
     /// </summary>
+    /// <param name="message">The message to dispatch.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <param name="serviceProvider">The provider participants are resolved from.</param>
+    /// <param name="groups">The groups the dispatch asked for.</param>
+    /// <returns>The result the pipeline produced.</returns>
     private ValueTask<TResult> ExecuteGrouped(object message, ErgosfareContext context,
         IServiceProvider serviceProvider, IEnumerable<string> groups)
     {
@@ -173,8 +210,8 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
 
         if (composition.Admission.Plan is StagedResultPlan<TMessage, TResult> groupedPlan)
         {
-            // A plan keyed by this set decided its participants at compile time; the
-            // filtering plan decides them from the set it is handed.
+            // A plan compiled for this exact set already knows its participants; the
+            // filtering plan works them out from the set it is handed.
             if (groupedPlan.FilterGroups is not null)
             {
                 return composition.Admission.Direct
@@ -191,10 +228,15 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
     }
 
     /// <summary>
-    /// The compiled plan for one group set; see
-    /// <see cref="FrozenVoidDispatch{TMessage}.AdmitGroupedPlan"/>. The result slot adds the
-    /// adapter-identity condition the default arm applies.
+    /// Decides which compiled plan, if any, may serve one group set; see
+    /// <see cref="FrozenVoidDispatch{TMessage}.AdmitGroupedPlan"/>.
     /// </summary>
+    /// <param name="groups">The group set being decided for.</param>
+    /// <param name="dependencies">The participants that set selects.</param>
+    /// <returns>The plan and whether it may construct participants itself.</returns>
+    /// <remarks>
+    /// The adapter must match here too, exactly as it must for the ungrouped route.
+    /// </remarks>
     private GroupedPlanAdmission AdmitGroupedPlan(string[] groups, IMessageDependencies dependencies)
     {
         var plan = GeneratedDispatchRoots.FindStagedResultPlan(typeof(TMessage), typeof(TResult), groups)
@@ -211,8 +253,8 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
         }
         else
         {
-            // No plan is keyed by this set; see the void dispatch for what the filtering
-            // plan is gated against.
+            // No plan was compiled for this set; the void dispatch explains what the
+            // filtering plan has to be checked against.
             plan = GeneratedDispatchRoots.FindFilteredResultPlan(typeof(TMessage), typeof(TResult))
                 as StagedResultPlan<TMessage, TResult>;
 

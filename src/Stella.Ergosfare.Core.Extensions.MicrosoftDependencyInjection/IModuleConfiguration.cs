@@ -5,20 +5,18 @@ namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
 
 /// <summary>
-/// Represents the configuration context for a module.
-/// Provides access to the service collection and the composition catalog
-/// associated with the module during setup.
+/// What a module registers into while the container is being built.
 /// </summary>
 public interface IModuleConfiguration
 {
     /// <summary>
-    ///     Gets the collection of services associated with the module configuration.
+    /// The container's service collection.
     /// </summary>
     IServiceCollection Services { get; }
 
     /// <summary>
-    ///     Gets this container's view of the frozen composition table — the selection
-    ///     surface registration records what the application actually registered into.
+    /// This container's view of the compiled composition table, where a module records the
+    /// participants it registered.
     /// </summary>
     FrozenCompositionCatalog Compositions { get; }
 }

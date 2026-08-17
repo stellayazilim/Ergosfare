@@ -5,17 +5,19 @@ namespace Stella.Ergosfare.SourceGenerator.Planning;
 internal sealed partial class PlanBuilder
 {
     /// <summary>
-    ///     Computes the compile-time void pipeline plans: a dispatchable command message
-    ///     qualifies when the whole discovered pipeline for it is exactly one main-handler
-    ///     descriptor, that descriptor is the result-less async contract
-    ///     (<c>IAsyncHandler&lt;TMessage&gt;</c>), its handler participates in default
-    ///     discovery in the default group, and no discovered interceptor targets the
-    ///     message directly. The check is deliberately conservative and only ever costs
-    ///     the speedup when wrong: the runtime executor validates the actual pipeline
-    ///     against the container's selected frozen composition and falls back to the
-    ///     general dispatch shape on any mismatch (covariant handlers or interceptors
-    ///     selected through base contracts, or keyed selections).
+    /// Builds the plans for messages that produce no result.
     /// </summary>
+    /// <param name="types">The discovered types.</param>
+    /// <returns>One plan per command that qualifies.</returns>
+    /// <remarks>
+    /// A command qualifies when its whole discovered pipeline is exactly one main handler,
+    /// that handler implements the resultless asynchronous contract, it takes part in default
+    /// discovery in the default group, and no discovered interceptor names the message
+    /// directly. The test is deliberately cautious and being wrong only costs the speedup:
+    /// the executor checks the real pipeline against the composition the container selected
+    /// and falls back to the general path on any difference — a covariant handler or
+    /// interceptor reached through a base contract, or a keyed registration.
+    /// </remarks>
     private static List<VoidPlanModel> ComputeVoidPlans(List<RegistrableTypeModel> types)
     {
         CollectPipelineFacts(types, out var handlersByMessage, out var interceptedMessages);
@@ -35,7 +37,8 @@ internal sealed partial class PlanBuilder
                 continue;
             }
 
-            // The sole handler must be the async void contract.
+            // Only the resultless asynchronous contract; a synchronous handler carries its
+            // result type here instead and falls out.
             if (descriptor.ResultTypeExpression != EmittedExpressions.ValueTask)
             {
                 continue;
@@ -53,12 +56,16 @@ internal sealed partial class PlanBuilder
     }
 
     /// <summary>
-    ///     Result-producing counterpart of <see cref="ComputeVoidPlans"/>: a dispatchable
-    ///     command/query with exactly one closed, non-stream result contract qualifies
-    ///     when its whole discovered pipeline is a single async handler producing exactly
-    ///     that result. Equally conservative and equally advisory — the runtime validates
-    ///     it against the container's selected frozen composition.
+    /// Builds the plans for messages that produce a result.
     /// </summary>
+    /// <param name="types">The discovered types.</param>
+    /// <returns>One plan per command or query that qualifies.</returns>
+    /// <remarks>
+    /// The counterpart of <see cref="ComputeVoidPlans"/>: a message with exactly one closed,
+    /// non-streaming result contract qualifies when its whole pipeline is a single
+    /// asynchronous handler producing exactly that result. Just as cautious, and checked
+    /// against the container's composition the same way.
+    /// </remarks>
     private static List<ResultPlanModel> ComputeResultPlans(List<RegistrableTypeModel> types)
     {
         CollectPipelineFacts(types, out var handlersByMessage, out var interceptedMessages);
@@ -72,9 +79,9 @@ internal sealed partial class PlanBuilder
                 continue;
             }
 
-            // Exactly one closed result contract, and not a streaming one — a message
-            // with several result shapes is dispatched with executor-side result typing
-            // the plan cannot pin down.
+            // Exactly one closed result, and not a streamed one: a message with several
+            // result shapes is dispatched with the result named at the call site, which no
+            // single plan can pin down.
             if (type.DispatchResults.Length != 1 || type.DispatchResults[0].IsStream)
             {
                 continue;
@@ -88,8 +95,8 @@ internal sealed partial class PlanBuilder
                 continue;
             }
 
-            // The sole handler must be the async contract producing exactly the message's
-            // declared result (sync contracts carry the bare result type and fall out).
+            // The handler must produce exactly the result the message declares, through the
+            // asynchronous contract.
             if (descriptor.ResultTypeExpression != EmittedExpressions.ValueTask + "<" + dispatchResult.ResultTypeExpression + ">")
             {
                 continue;
@@ -108,15 +115,16 @@ internal sealed partial class PlanBuilder
     }
 
     /// <summary>
-    ///     Indexes the discovered descriptors by message type: every main handler registered
-    ///     against a message, and the set of messages any interceptor targets directly — the
-    ///     shared facts all three plan computations qualify against.
+    /// Indexes the discovered participants by the message they are registered against.
     /// </summary>
+    /// <param name="types">The discovered types.</param>
+    /// <param name="handlersByMessage">The main handlers registered against each message.</param>
+    /// <param name="interceptedMessages">The messages some interceptor names directly.</param>
     /// <remarks>
-    ///     The handlers are kept as a list rather than a count and a last-seen winner because
-    ///     "how many handlers serve this pipeline" is not a property of the message: a group
-    ///     set is part of what selects them, so the question is only answerable against a
-    ///     plan's own set. See <see cref="TrySelectPlanHandler"/>.
+    /// Handlers are kept as a list rather than reduced to a count, because how many handlers
+    /// serve a pipeline is not a property of the message: groups help decide which of them
+    /// run, so the question is only answerable against a particular plan's group set. See
+    /// <see cref="TrySelectPlanHandler"/>.
     /// </remarks>
     private static void CollectPipelineFacts(
         List<RegistrableTypeModel> types,
@@ -149,15 +157,21 @@ internal sealed partial class PlanBuilder
     }
 
     /// <summary>
-    ///     The single-handler gate, taken per plan. A plan is built for one (message, group
-    ///     set) pair, and handlers in different groups are never both selected — so the count
-    ///     that decides "one handler serves this pipeline" is the count within the plan's own
-    ///     set, not the message's registration count.
+    /// Finds the one handler a plan would call, within that plan's own group set.
     /// </summary>
+    /// <param name="type">The message the plan serves.</param>
+    /// <param name="handlersByMessage">The main handlers registered against each message.</param>
+    /// <param name="filter">The plan's group set.</param>
+    /// <param name="handler">The selected handler, when this returns <c>true</c>.</param>
+    /// <param name="descriptor">That handler's registration, when this returns <c>true</c>.</param>
+    /// <returns><c>true</c> when exactly one handler serves this plan.</returns>
     /// <remarks>
-    ///     The filtering plan is the exception: it answers any set, so every handler is a
-    ///     candidate for it and two of them leave it unable to say which one the set at hand
-    ///     selects. That dispatch keeps the runtime group lane.
+    /// A plan is built for one message and one group set, and handlers in different groups
+    /// are never both selected — so what decides "one handler serves this pipeline" is how
+    /// many are in the plan's own set, not how many the message has in total. The filtering
+    /// plan is the exception: it answers any set, so every handler is a candidate and two of
+    /// them leave it unable to say which the set at hand selects. That dispatch keeps the
+    /// runtime group path.
     /// </remarks>
     private static bool TrySelectPlanHandler(
         RegistrableTypeModel type,
@@ -183,6 +197,8 @@ internal sealed partial class PlanBuilder
                 continue;
             }
 
+            // A second candidate means the plan cannot say which handler serves the
+            // dispatch, so it is not built at all.
             if (selected)
             {
                 return false;
@@ -196,12 +212,21 @@ internal sealed partial class PlanBuilder
     }
 
     /// <summary>
-    ///     The shared plan qualification: the message has exactly one discovered main
-    ///     handler, no interceptor targets it directly, and that handler is accessible
-    ///     and discoverable by default (an unkeyed, ungrouped registration — anything
-    ///     else may not be registered, or not in the default-group pipeline the plan
-    ///     serves).
+    /// Finds the one handler a single-handler plan would call, and checks it can be planned
+    /// for at all.
     /// </summary>
+    /// <param name="type">The message the plan would serve.</param>
+    /// <param name="handlersByMessage">The main handlers registered against each message.</param>
+    /// <param name="interceptedMessages">The messages some interceptor names directly.</param>
+    /// <param name="handler">The selected handler, when this returns <c>true</c>.</param>
+    /// <param name="descriptor">That handler's registration, when this returns <c>true</c>.</param>
+    /// <returns><c>true</c> when the message qualifies for a single-handler plan.</returns>
+    /// <remarks>
+    /// The message must have exactly one discovered handler and no interceptor naming it,
+    /// and that handler must be nameable by generated code and discovered by default —
+    /// unkeyed and ungrouped. Anything else might not be registered at all, or not in the
+    /// default-group pipeline this plan serves.
+    /// </remarks>
     private static bool TryGetSolePlannableHandler(
         RegistrableTypeModel type,
         Dictionary<string, List<(RegistrableTypeModel Model, DescriptorModel Descriptor)>> handlersByMessage,
@@ -217,10 +242,9 @@ internal sealed partial class PlanBuilder
             return false;
         }
 
-        // A handler on one of the message's base contracts is not consulted: the ladder
-        // gives the message to its sole direct handler, which is the one baked here. The
-        // runtime says the same — MessageDependencies.FastSingleHandler resolves the direct
-        // level first — so the plan and the pipeline it stands in for agree.
+        // A handler registered against one of the message's base types is not considered
+        // here: the message goes to its sole direct handler, which is the one this plan
+        // names. The runtime resolves the direct level first too, so plan and pipeline agree.
         if (interceptedMessages.Contains(type.TypeofExpression))
         {
             return false;

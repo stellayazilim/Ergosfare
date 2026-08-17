@@ -3,37 +3,41 @@ namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 
 
 /// <summary>
-/// Represents a handler that streams results asynchronously for messages of type <typeparamref name="TMessage"/>.
-/// Produces an <see cref="IAsyncEnumerable{TResult}"/> to enable asynchronous streaming of multiple results.
+/// Handles messages of type <typeparamref name="TMessage"/> by streaming
+/// <typeparamref name="TResult"/> items back to the caller.
 /// </summary>
-/// <typeparam name="TMessage">The type of the message to handle. Must be non-nullable.</typeparam>
-/// <typeparam name="TResult">The type of each item in the streamed result. Must be non-nullable.</typeparam>
+/// <typeparam name="TMessage">The message type this handler accepts.</typeparam>
+/// <typeparam name="TResult">The type of each streamed item.</typeparam>
 /// <remarks>
-/// This interface extends <see cref="IHandler{TMessage, TResult}"/> with <typeparamref name="TResult"/> 
-/// set to <see cref="IAsyncEnumerable{TResult}"/>, allowing the handler to produce multiple results asynchronously.
-/// The explicit interface implementation maps the generic <see cref="IHandler{TMessage, TResult}.Handle"/> method
-/// to the strongly-typed <see cref="StreamAsync"/> method.
+/// The contract is <see cref="IHandler{TMessage, TResult}"/> closed over
+/// <see cref="IAsyncEnumerable{T}"/>; its <c>Handle</c> is implemented explicitly here and
+/// forwards to <see cref="StreamAsync"/>, so implementations only write the streaming
+/// method. Items are produced as the caller enumerates, after the dispatch call itself has
+/// returned.
 /// </remarks>
 public interface IStreamHandler<in TMessage, out TResult>
     :IHandler<TMessage, IAsyncEnumerable<TResult>>
         where TMessage : notnull
 {
-    /// <inheritdoc cref="IHandler{TMessage, TResult}.Handle"/>
+    /// <summary>
+    /// Forwards the main-handler contract to <see cref="StreamAsync"/>.
+    /// </summary>
+    /// <param name="message">The message to handle.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <returns>The stream <see cref="StreamAsync"/> produced.</returns>
     IAsyncEnumerable<TResult> IHandler<TMessage, IAsyncEnumerable<TResult>>.Handle(
-        TMessage message, 
+        TMessage message,
         ErgosfareContext context)
     {
         return StreamAsync(message, context);
     }
-    
-    
+
+
     /// <summary>
-    /// Streams results asynchronously for a given message.
+    /// Streams the results of handling <paramref name="message"/>.
     /// </summary>
     /// <param name="message">The message to handle.</param>
-    /// <param name="context">The current execution context.</param>
-    /// <returns>
-    /// An <see cref="IAsyncEnumerable{TResult}"/> representing the streamed asynchronous results of the message handling.
-    /// </returns>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <returns>The streamed results.</returns>
     IAsyncEnumerable<TResult> StreamAsync(TMessage message,ErgosfareContext context);
 }

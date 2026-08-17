@@ -7,20 +7,40 @@ using Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 /// <summary>
-/// The void pipeline's runtime body: the plan family's N = 1 base case, run over a frozen
-/// composition. Hosts the exact semantics the single-handler mediation strategy carried —
-/// the main-handler priority ladder, the zero-interceptor fast path, the result-slot value
-/// channel, exception matching, and the abort/final contract — as a static body the frozen
-/// dispatches call with their own frozen state. There is no strategy instance and nothing
-/// here decides per dispatch; every input is resolved by the caller, once.
+/// Runs a void message through the single handler that serves it and the interceptor stages
+/// around it.
 /// </summary>
+/// <typeparam name="TMessage">The message type being dispatched.</typeparam>
+/// <remarks>
+/// This is where the semantics of a single-handler void dispatch live: which handler wins,
+/// how a pipeline with no interceptors is short-circuited, how a failure carried in a
+/// result is treated, and what an abort skips. It is a static body the dispatches call with
+/// state they resolved beforehand — nothing is decided per dispatch here.
+/// </remarks>
 internal static class VoidPipelineBody<TMessage> where TMessage : IMessage
 {
     /// <summary>
-    /// Runs the pipeline: pre stages (which may replace the message), the sole main
-    /// handler, post stages over the resultless <see cref="Unit"/> slot, exception stages
-    /// that swallow only when one actually matched, and final stages an abort skips.
+    /// Runs the pipeline for <paramref name="message"/>.
     /// </summary>
+    /// <param name="message">The message to dispatch.</param>
+    /// <param name="messageDependencies">The message's participants, per stage.</param>
+    /// <param name="resultAdapter">
+    /// The result type's adapter, used to spot a failure carried in the result slot;
+    /// <c>null</c> when there is none.
+    /// </param>
+    /// <param name="resultMaterializer">
+    /// The result type's materializer. When present, a thrown failure is absorbed instead of
+    /// reaching the caller; <c>null</c> keeps the default of throwing.
+    /// </param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <param name="serviceProvider">The provider participants are resolved from.</param>
+    /// <returns>A task that completes when the pipeline has run.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="messageDependencies"/> is <c>null</c>.</exception>
+    /// <exception cref="MultipleHandlerFoundException">
+    /// The level of handlers that serves the message holds more than one.
+    /// </exception>
+    /// <exception cref="NoHandlerFoundException">No handler is registered for the message.</exception>
+    /// <exception cref="ExecutionAbortedException">A participant stopped the pipeline.</exception>
     internal static async ValueTask Run(
         TMessage message,
         IMessageDependencies messageDependencies,
@@ -31,12 +51,11 @@ internal static class VoidPipelineBody<TMessage> where TMessage : IMessage
     {
         ArgumentNullException.ThrowIfNull(messageDependencies);
 
-        // The main-handler priority ladder: the direct level wins outright — a sole
-        // direct handler serves the message no matter how many covariant candidates
-        // exist (a covariant handler is a fallback, not a competitor); without a direct
-        // one the dispatch falls to the covariant level. More than one candidate AT THE
-        // SAME LEVEL is a contest, counted before anything resolves so a contested
-        // message runs neither claimant.
+        // Handlers registered for the message type itself decide the dispatch on their own:
+        // one of them serves the message however many covariant candidates exist, since a
+        // covariant handler is a fallback rather than a rival. Only with no direct handler
+        // does the covariant level come into play. Two candidates at the same level is a
+        // contest, counted before anything is resolved so that neither claimant runs.
         var handlers = messageDependencies.Handlers;
         var indirectHandlers = messageDependencies.IndirectHandlers;
 
@@ -62,26 +81,23 @@ internal static class VoidPipelineBody<TMessage> where TMessage : IMessage
         var exceptionInterceptorCount = messageDependencies.ExceptionInterceptors.Count;
         var finalInterceptorCount = messageDependencies.FinalInterceptors.Count;
 
-        // Fast path: with no interceptors registered, none of the invocation strategies can
-        // observe or transform anything — invoke the handler directly. Exceptions propagate
-        // unchanged, matching the zero-interceptor rethrow behavior of the full pipeline.
+        // With no interceptors at all there is nobody to observe or change anything, so the
+        // handler is called on its own. A failure then propagates untouched, which is what
+        // the full pipeline does in this case too.
         if ((preInterceptorCount | postInterceptorCount | exceptionInterceptorCount | finalInterceptorCount) == 0)
         {
-            // Typed seam: direct typed invocation when the dispatch TMessage satisfies the
-            // handler's message type (`in TMessage` variance; `out TResult` admits ValueTask<T>
-            // for a ValueTask slot). Interface-erased dispatches fall back to the DIM bridge.
             var fastHandler = soleHandler.Resolve(serviceProvider);
 
             try
             {
-                // No abort arm here: a handler that stops its own dispatch has nothing left
-                // to tell and no stage left to skip, so the signal travels to the caller.
+                // No abort arm: a handler that stops its own dispatch has no stage left to
+                // skip and nothing left to report, so the signal goes straight to the caller.
                 await InvokeHandler(fastHandler, message, context);
             }
             catch (Exception e) when (resultMaterializer is not null && e is not ExecutionAbortedException)
             {
-                // Catch-materialization; a void pipeline has nothing to hand back, so the
-                // materialized carrier is the absorption itself.
+                // A void pipeline has no result to hand back, so building the failed carrier
+                // is itself how the failure is absorbed.
                 resultMaterializer.Materialize(e);
                 return;
             }
@@ -96,9 +112,9 @@ internal static class VoidPipelineBody<TMessage> where TMessage : IMessage
             return;
         }
 
-        // The handler's ValueTask is the completion signal and is consumed here; what flows
-        // on through the interceptor stages is the result slot, and a void pipeline has one
-        // value for it — Unit.Value once the handler has run, null before that.
+        // The handler's task says when it finished and is awaited here; what travels through
+        // the stages is the result slot, and a void pipeline has one value for it — Unit
+        // once the handler has run, null before that.
         Unit? result = null;
         Exception? exception = null;
         ExceptionDispatchInfo? unhandledException = null;
@@ -118,7 +134,8 @@ internal static class VoidPipelineBody<TMessage> where TMessage : IMessage
                 await InvokeHandler(handler, message, context);
                 result = Unit.Value;
 
-                // The value channel; see the result-producing body.
+                // A failure carried in the result reaches the exception stage below without
+                // anything being thrown.
                 if (resultAdapter is not null && resultAdapter.TryGetException(in Unit.Value, out var carried) && carried is not null)
                 {
                     exception = carried;
@@ -141,7 +158,8 @@ internal static class VoidPipelineBody<TMessage> where TMessage : IMessage
             }
             catch (Exception e) when (e is not ExecutionAbortedException)
             {
-                // The classic zero-interceptor, no-adapter rethrow keeps its exact shape.
+                // With no exception interceptors and no adapter, the failure keeps its
+                // original path out of the pipeline.
                 if (exceptionInterceptorCount == 0 && resultAdapter is null)
                 {
                     exception = e;
@@ -181,16 +199,16 @@ internal static class VoidPipelineBody<TMessage> where TMessage : IMessage
                 }
                 else if (resultMaterializer is null)
                 {
-                    // Nobody accepted the failure and nothing absorbs it: it surfaces as a
-                    // throw after the final stage, like every unhandled failure.
+                    // Nobody accepted the failure and nothing absorbs it, so it is thrown
+                    // after the final stage has run.
                     unhandledException ??= ExceptionDispatchInfo.Capture(exception);
                 }
             }
         }
         catch (ExecutionAbortedException)
         {
-            // A participant stopped the pipeline. Nothing else runs — not the exception
-            // stage, not the final stage below — and the signal continues to the caller.
+            // A participant stopped the pipeline. Nothing else runs — neither the exception
+            // stage nor the final stage below — and the signal continues to the caller.
             aborted = true;
             throw;
         }
@@ -207,9 +225,17 @@ internal static class VoidPipelineBody<TMessage> where TMessage : IMessage
     }
 
     /// <summary>
-    /// Invokes the handler through its typed contract — no object-typed bridge; see the
-    /// result-producing body for the dispatch rules.
+    /// Calls the handler through whichever main-handler contract it implements.
     /// </summary>
+    /// <param name="handler">The resolved handler.</param>
+    /// <param name="message">The message to hand it.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <returns>A task that completes when the handler is done.</returns>
+    /// <exception cref="NotSupportedException">
+    /// The handler implements no main-handler contract accepting
+    /// <typeparamref name="TMessage"/>, which happens when a message is dispatched through a
+    /// static type that erases its own.
+    /// </exception>
     private static ValueTask InvokeHandler(object handler, TMessage message, ErgosfareContext context)
     {
         switch (handler)

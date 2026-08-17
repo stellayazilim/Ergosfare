@@ -5,43 +5,41 @@ using Stella.Ergosfare.SourceGenerator.Models;
 namespace Stella.Ergosfare.SourceGenerator.Symbols;
 
 /// <summary>
-///     Walks referenced assemblies for constructs the consuming compilation has to register
-///     — the compile-time replacement for the runtime assembly scan that used to do this. A
-///     library's handlers register through its consumer's generated code, so the consumer
-///     has to see them.
+/// Walks referenced assemblies for the constructs the consuming compilation has to register.
 /// </summary>
 /// <remarks>
-///     Only assemblies that reference Ergosfare are inspected, because nothing else can
-///     implement a marker; Ergosfare's own assemblies are skipped, because its handler
-///     contract interfaces inherit the markers and would otherwise all match.
+/// A library's handlers register through its consumer's generated code, so the consumer has
+/// to see them. Only assemblies that reference Ergosfare are inspected, because nothing else
+/// can carry a marker; Ergosfare's own are skipped, because its contract interfaces inherit
+/// the markers and would otherwise all match.
 /// </remarks>
-
 internal static class ReferenceScanner
 {
     /// <summary>
-    ///     Ergosfare's own assemblies are excluded from the scan: their handler contract
-    ///     interfaces inherit the module markers, so every one of them would match.
+    /// The assembly-name prefix reserved for Ergosfare's own assemblies.
     /// </summary>
     private const string ErgosfareAssemblyNamePrefix = "Stella.Ergosfare";
 
-    // Per-assembly opt-in that force-includes an assembly matching the reserved prefix.
-    // Surfaced from the ErgosfareSourceGeneratorForceScanReferences MSBuild property as
-    // [assembly: AssemblyMetadata("ErgosfareSourceGeneratorForceScanReferences", "true")].
+    // The per-assembly opt-in that scans an assembly matching the reserved prefix anyway,
+    // written as [assembly: AssemblyMetadata("ErgosfareSourceGeneratorForceScanReferences",
+    // "true")] and surfaced from the MSBuild property of the same name.
     private const string ForceScanReferencesMetadataKey = "ErgosfareSourceGeneratorForceScanReferences";
     private const string AssemblyMetadataAttributeName = "AssemblyMetadataAttribute";
     private const string AssemblyMetadataAttributeNamespace = "System.Reflection";
 
     /// <summary>
-    ///     Discovers registrable marker types in the compilation's referenced assemblies —
-    ///     the compile-time replacement for runtime scanning. Only assemblies that
-    ///     themselves reference an Ergosfare assembly can contain marker types, so
-    ///     everything else is skipped on a metadata-name check without realizing any of its
-    ///     types; Ergosfare's own assemblies are excluded because their handler contract
-    ///     interfaces inherit the module markers and must not be registered as user types.
-    ///     A downstream assembly that deliberately lives under the reserved prefix can opt
-    ///     back in per-assembly (see <see cref="HasForceScanReferencesOptIn"/>); the
-    ///     library's own assemblies never do, so their contracts stay unregistered.
+    /// Finds the registrable marker types in a compilation's referenced assemblies.
     /// </summary>
+    /// <param name="compilation">The compilation whose references are scanned.</param>
+    /// <param name="ct">Cancels the scan.</param>
+    /// <returns>One model per marker type found.</returns>
+    /// <remarks>
+    /// An assembly that references no Ergosfare assembly can hold no marker type, so it is
+    /// dismissed on a name check without realizing a single symbol. Ergosfare's own
+    /// assemblies are left out so their contract interfaces are never registered as user
+    /// types; an assembly that deliberately lives under the reserved prefix can opt back in
+    /// through <see cref="HasForceScanReferencesOptIn"/>, which the library's own never do.
+    /// </remarks>
     internal static ImmutableArray<RegistrableTypeModel> ScanReferencedAssemblies(
         Compilation compilation,
         CancellationToken ct)
@@ -57,15 +55,15 @@ internal static class ReferenceScanner
                 continue;
             }
 
-            // The reserved-prefix exclusion is per-assembly opt-out-able in reverse: an
-            // assembly under the prefix is skipped unless it explicitly force-opts-in.
+            // The reserved prefix keeps an assembly out unless that assembly asks to be let
+            // back in.
             if (IsErgosfareAssemblyName(assembly.Name) && !HasForceScanReferencesOptIn(assembly))
             {
                 continue;
             }
 
             // A library that opted out of discovery wholesale still shapes the judgment's
-            // exclusion zone: its marker types flow through as shadow models only.
+            // exclusion zone, so its marker types flow through as shadow models only.
             var assemblyExcluded = ParticipantAttributes.HasExcludeFromDiscovery(assembly.GetAttributes());
 
             var givesAccess = assembly.GivesAccessTo(compilation.Assembly);
@@ -77,22 +75,30 @@ internal static class ReferenceScanner
     }
 
     /// <summary>
-    ///     Whether the assembly name is Ergosfare's own (<c>Stella.Ergosfare</c> or a
-    ///     dotted child of it).
+    /// Reports whether an assembly name belongs to Ergosfare itself.
     /// </summary>
+    /// <param name="name">The assembly name to test.</param>
+    /// <returns>
+    /// <c>true</c> for <c>Stella.Ergosfare</c> and any dotted child of it.
+    /// </returns>
     internal static bool IsErgosfareAssemblyName(string name)
         => name.StartsWith(ErgosfareAssemblyNamePrefix, StringComparison.Ordinal)
            && (name.Length == ErgosfareAssemblyNamePrefix.Length
                || name[ErgosfareAssemblyNamePrefix.Length] == '.');
 
     /// <summary>
-    ///     Whether the assembly force-opts back into reference scanning despite matching the
-    ///     reserved <c>Stella.Ergosfare</c> name prefix. The opt-in is a per-assembly marker —
-    ///     <c>[assembly: AssemblyMetadata("ErgosfareSourceGeneratorForceScanReferences", "true")]</c>,
-    ///     surfaced from the same-named MSBuild property — so only assemblies that set it are
-    ///     scanned. The library's own assemblies never declare it, which is what keeps their
-    ///     marker-inheriting contract interfaces out of the generated registrations.
+    /// Reports whether an assembly asks to be scanned despite carrying the reserved name
+    /// prefix.
     /// </summary>
+    /// <param name="assembly">The assembly to test.</param>
+    /// <returns><c>true</c> when it declares the opt-in.</returns>
+    /// <remarks>
+    /// The opt-in is
+    /// <c>[assembly: AssemblyMetadata("ErgosfareSourceGeneratorForceScanReferences", "true")]</c>,
+    /// surfaced from the MSBuild property of the same name. Only an assembly that sets it is
+    /// scanned; the library's own never do, which is what keeps their marker-inheriting
+    /// contract interfaces out of the generated registrations.
+    /// </remarks>
     internal static bool HasForceScanReferencesOptIn(IAssemblySymbol assembly)
     {
         foreach (var attribute in assembly.GetAttributes())
@@ -113,9 +119,13 @@ internal static class ReferenceScanner
     }
 
     /// <summary>
-    ///     Whether the assembly's metadata records a reference to any Ergosfare assembly —
-    ///     a pure name check over the assembly-reference table, no symbol realization.
+    /// Reports whether an assembly's metadata records a reference to any Ergosfare assembly.
     /// </summary>
+    /// <param name="assembly">The assembly to test.</param>
+    /// <returns><c>true</c> when it references one.</returns>
+    /// <remarks>
+    /// A name check over the assembly-reference table; no symbol is realized to answer it.
+    /// </remarks>
     internal static bool ReferencesErgosfare(IAssemblySymbol assembly)
     {
         foreach (var module in assembly.Modules)
@@ -132,6 +142,15 @@ internal static class ReferenceScanner
         return false;
     }
 
+    /// <summary>
+    /// Walks a namespace and everything nested under it, collecting the marker types.
+    /// </summary>
+    /// <param name="ns">The namespace to walk.</param>
+    /// <param name="assemblyName">The assembly the namespace belongs to.</param>
+    /// <param name="givesAccess">Whether that assembly grants this compilation access to its internals.</param>
+    /// <param name="assemblyExcluded">Whether that assembly opted out of discovery as a whole.</param>
+    /// <param name="results">The builder collected models are added to; created on first use.</param>
+    /// <param name="ct">Cancels the walk.</param>
     internal static void CollectNamespaceTypes(
         INamespaceSymbol ns,
         string assemblyName,
@@ -155,6 +174,14 @@ internal static class ReferenceScanner
         }
     }
 
+    /// <summary>
+    /// Collects a type and every type nested inside it.
+    /// </summary>
+    /// <param name="type">The type to collect.</param>
+    /// <param name="assemblyName">The assembly the type belongs to.</param>
+    /// <param name="givesAccess">Whether that assembly grants this compilation access to its internals.</param>
+    /// <param name="assemblyExcluded">Whether that assembly opted out of discovery as a whole.</param>
+    /// <param name="results">The builder collected models are added to; created on first use.</param>
     internal static void CollectTypeAndNested(
         INamedTypeSymbol type,
         string assemblyName,
@@ -174,15 +201,19 @@ internal static class ReferenceScanner
     }
 
     /// <summary>
-    ///     Projects a metadata type from a referenced assembly to its registration model,
-    ///     or <c>null</c> when it carries no Ergosfare marker. Mirrors
-    ///     <see cref="RegistrableTypeReader.Transform"/>; descriptor computation is shared
-    ///     because both operate
-    ///     on <see cref="INamedTypeSymbol"/>. Types the generated code cannot name —
-    ///     internal without an <c>InternalsVisibleTo</c> grant, protected or private
-    ///     nested, or compiler-mangled (file-local) — flow through as inaccessible and
-    ///     surface as ERGO002.
+    /// Reads one metadata type from a referenced assembly into its model.
     /// </summary>
+    /// <param name="symbol">The type to read.</param>
+    /// <param name="assemblyName">The assembly it was found in.</param>
+    /// <param name="givesAccess">Whether that assembly grants this compilation access to its internals.</param>
+    /// <param name="assemblyExcluded">Whether that assembly opted out of discovery as a whole.</param>
+    /// <returns>The model, or <c>null</c> when the type carries no Ergosfare marker.</returns>
+    /// <remarks>
+    /// The metadata counterpart of <see cref="RegistrableTypeReader.Transform"/>, sharing its
+    /// contract reading because both work from an <see cref="INamedTypeSymbol"/>. A type
+    /// generated code cannot name — internal without a grant, protected or private nested, or
+    /// compiler-mangled — comes back inaccessible and is reported as ERGO002.
+    /// </remarks>
     internal static RegistrableTypeModel? TryCreateReferencedModel(
         INamedTypeSymbol symbol,
         string assemblyName,
@@ -203,7 +234,7 @@ internal static class ReferenceScanner
 
         if (assemblyExcluded || ParticipantAttributes.IsExcludedFromDiscovery(symbol))
         {
-            // Same shadow posture as source-declared exclusions; see Transform.
+            // The same posture a source-declared exclusion takes; see Transform.
             return RegistrableTypeReader.CreateExcludedShadowModel(symbol, isCommand, isQuery, isEvent, assemblyName);
         }
 
@@ -214,16 +245,17 @@ internal static class ReferenceScanner
         var typeofExpression = SymbolNaming.BuildTypeofExpression(symbol);
         var dispatchResults = isDispatchable ? ContractReader.GetDispatchResults(symbol) : ImmutableArray<DispatchResultModel>.Empty;
 
-        // Referenced adapters get no current-assembly grant either: baking qualifies only
-        // over fully public adapter types. ERGO011/012 never fire here (the annotations
-        // were judged where the message was compiled); the model only feeds the plan binding.
+        // A referenced adapter is read without a current-assembly grant, so baking qualifies
+        // over fully public adapter types only. ERGO011 and ERGO012 never fire from here —
+        // the annotations were answered for where the message was compiled — and the model
+        // feeds nothing but the plan binding.
         var referencedHasIgnore = false;
         var resultAdapter = isDispatchable
             ? ResultAdapterReader.GetResultAdapterModel(symbol, dispatchResults, isCommand, currentAssembly: null, out referencedHasIgnore)
             : null;
 
-        // Referenced handlers get no current-assembly grant: their construction factory
-        // qualifies only over fully public parameter types (IVT grants are not modeled).
+        // A referenced handler likewise: its construction factory qualifies over fully public
+        // parameter types, because an InternalsVisibleTo grant is not modeled here.
         var usesKeyedServices = false;
         var providerConstruction = isAccessible
             ? ConstructionAnalyzer.GetProviderConstructionExpression(symbol, typeofExpression, currentAssembly: null, out usesKeyedServices)
@@ -278,11 +310,17 @@ internal static class ReferenceScanner
     }
 
     /// <summary>
-    ///     Whether generated code in the current compilation can name a type declared in a
-    ///     referenced assembly: every level of the containing-type chain must be public, or
-    ///     internal with the assembly granting this compilation
-    ///     <c>InternalsVisibleTo</c> access.
+    /// Reports whether generated code in this compilation can name a type from a referenced
+    /// assembly.
     /// </summary>
+    /// <param name="symbol">The type to test.</param>
+    /// <param name="givesAccess">
+    /// Whether the declaring assembly grants this compilation access to its internals.
+    /// </param>
+    /// <returns><c>true</c> when every level of the type's containing chain is reachable.</returns>
+    /// <remarks>
+    /// Each level must be public, or internal with the grant in place.
+    /// </remarks>
     internal static bool IsVisibleToCompilation(INamedTypeSymbol symbol, bool givesAccess)
     {
         for (var current = symbol; current is not null; current = current.ContainingType)

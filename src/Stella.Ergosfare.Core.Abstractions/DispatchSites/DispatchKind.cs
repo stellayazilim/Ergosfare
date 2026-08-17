@@ -1,23 +1,23 @@
 namespace Stella.Ergosfare.Core.Abstractions.DispatchSites;
 
 /// <summary>
-/// The dispatch surface a recorded dispatch site went through; see
+/// Which mediator surface a recorded dispatch site called; see
 /// <see cref="DispatchSiteAttribute"/>.
 /// </summary>
 public enum DispatchKind : byte
 {
-    /// <summary>An <c>ICommandMediator.SendAsync</c> dispatch.</summary>
+    /// <summary>A call to <c>ICommandMediator.SendAsync</c>.</summary>
     Command = 0,
 
-    /// <summary>An <c>IQueryMediator.QueryAsync</c> dispatch.</summary>
+    /// <summary>A call to <c>IQueryMediator.QueryAsync</c>.</summary>
     Query = 1,
 
-    /// <summary>An <c>IQueryMediator.StreamAsync</c> dispatch.</summary>
+    /// <summary>A call to <c>IQueryMediator.StreamAsync</c>.</summary>
     Stream = 2,
 
-    /// <summary>An <c>IEventMediator.PublishAsync</c> dispatch.</summary>
+    /// <summary>A call to <c>IEventMediator.PublishAsync</c>.</summary>
     Event = 3,
 
-    /// <summary>A core <c>IMessageMediator</c> dispatch (module-agnostic).</summary>
+    /// <summary>A call to <c>IMessageMediator</c>, which belongs to no module.</summary>
     Message = 4,
 }

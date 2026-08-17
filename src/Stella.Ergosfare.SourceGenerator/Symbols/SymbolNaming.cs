@@ -5,33 +5,47 @@ using Microsoft.CodeAnalysis.CSharp;
 namespace Stella.Ergosfare.SourceGenerator.Symbols;
 
 /// <summary>
-///     How a symbol is spelled in the generated file, and whether it can be spelled there
-///     at all. Every type the emitted code names goes through here, so one answer serves
-///     the registration surface, the plan bodies and the frozen composition table alike.
+/// How a symbol is written into generated code, and whether it can be written there at all.
 /// </summary>
+/// <remarks>
+/// Every type the generated code names comes through here, so one answer serves the
+/// registration surface, the plan bodies and the composition table alike.
+/// </remarks>
 internal static class SymbolNaming
 {
     /// <summary>
-    ///     The fully qualified <c>typeof</c> argument for a type exactly as declared —
-    ///     constructed generics included.
+    /// Returns a type's fully qualified name exactly as declared, keeping the type
+    /// arguments of a constructed generic.
     /// </summary>
+    /// <param name="type">The type to write.</param>
+    /// <returns>The fully qualified name.</returns>
     internal static string VerbatimTypeExpression(ITypeSymbol type)
         => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
     /// <summary>
-    ///     The fully qualified <c>typeof</c> argument for a type, with generic types
-    ///     normalized to their unbound definitions — mirroring the interceptor descriptor
-    ///     builders' <c>GetGenericTypeDefinition()</c> normalization.
+    /// Returns a type's fully qualified name with a generic reduced to its unbound
+    /// definition.
     /// </summary>
+    /// <param name="type">The type to write.</param>
+    /// <returns>The fully qualified name, generic arguments dropped.</returns>
+    /// <remarks>
+    /// This is how an interceptor's registration names its message type, so that one
+    /// registration covers every closing of a generic message.
+    /// </remarks>
     internal static string NormalizedTypeExpression(ITypeSymbol type)
         => type is INamedTypeSymbol { IsGenericType: true } named
             ? BuildTypeofExpression(named.OriginalDefinition)
             : VerbatimTypeExpression(type);
 
     /// <summary>
-    ///     Whether the generated file can name the type at all: file-local, private and
-    ///     protected types have no spelling a separate file can use.
+    /// Reports whether generated code can name a type at all.
     /// </summary>
+    /// <param name="symbol">The type to test.</param>
+    /// <returns><c>true</c> when a separate file could refer to it.</returns>
+    /// <remarks>
+    /// A file-local, private or protected type — at any level of its containing chain — has
+    /// no name another file can use.
+    /// </remarks>
     internal static bool IsAccessibleFromGeneratedCode(INamedTypeSymbol symbol)
     {
         for (var current = symbol; current is not null; current = current.ContainingType)
@@ -53,11 +67,16 @@ internal static class SymbolNaming
     }
 
     /// <summary>
-    ///     Builds the fully qualified <c>typeof</c> argument for a type, walking the
-    ///     containing-type chain so nested types render correctly. Generic definitions use
-    ///     the unbound form (<c>Foo&lt;,&gt;</c>) — mixing bound and unbound levels is not
-    ///     legal C#, and every discovered type is a definition, never a constructed generic.
+    /// Builds a type's fully qualified name, walking its containing types so a nested type
+    /// comes out right.
     /// </summary>
+    /// <param name="symbol">The type to write.</param>
+    /// <returns>The fully qualified name.</returns>
+    /// <remarks>
+    /// A generic is written in its unbound form. Mixing bound and unbound levels is not
+    /// legal C#, and every type reaching here is a definition rather than a constructed
+    /// generic.
+    /// </remarks>
     internal static string BuildTypeofExpression(INamedTypeSymbol symbol)
     {
         var parts = new Stack<string>();
@@ -76,6 +95,8 @@ internal static class SymbolNaming
             sb.Append(ns.ToDisplayString()).Append('.');
         }
 
+        // The stack was filled innermost first, so popping it writes the containing types
+        // outermost first.
         var first = true;
         foreach (var part in parts)
         {
@@ -92,8 +113,15 @@ internal static class SymbolNaming
     }
 
     /// <summary>
-    ///     Checks that a symbol lives exactly in the given dotted namespace.
+    /// Reports whether a type sits in exactly the given namespace.
     /// </summary>
+    /// <param name="symbol">The type to test.</param>
+    /// <param name="expectedNamespace">The dotted namespace to match.</param>
+    /// <returns><c>true</c> when the type's namespace is exactly that one.</returns>
+    /// <remarks>
+    /// Compared segment by segment from the innermost outwards, so nothing is allocated to
+    /// answer it.
+    /// </remarks>
     internal static bool IsInNamespace(INamedTypeSymbol symbol, string expectedNamespace)
     {
         var ns = symbol.ContainingNamespace;
@@ -117,18 +145,21 @@ internal static class SymbolNaming
             end = start - 1;
         }
 
+        // Every segment matched, so this must now be the global namespace — otherwise the
+        // type sits deeper than the expected one.
         return ns is { IsGlobalNamespace: true };
     }
 
     /// <summary>
-    ///     Whether every name in the type's containing chain is a legal C# identifier —
-    ///     compiler-generated and other unspellable names cannot appear in emitted source.
+    /// Reports whether every name in a type's containing chain can be written in C# source.
     /// </summary>
-    /// <summary>
-    ///     Whether the type's full containing chain uses names spellable in C# source.
-    ///     File-local types survive into metadata as internal types with compiler-mangled
-    ///     names (<c>&lt;File&gt;F...__Type</c>) that a <c>typeof</c> cannot express.
-    /// </summary>
+    /// <param name="symbol">The type to test.</param>
+    /// <returns><c>true</c> when the whole chain is spellable.</returns>
+    /// <remarks>
+    /// A file-local type survives into metadata as an internal type with a compiler-mangled
+    /// name that no <c>typeof</c> can express, and the same goes for other
+    /// compiler-generated names.
+    /// </remarks>
     internal static bool HasSpellableName(INamedTypeSymbol symbol)
     {
         for (var current = symbol; current is not null; current = current.ContainingType)
@@ -143,10 +174,13 @@ internal static class SymbolNaming
     }
 
     /// <summary>
-    ///     The CLR metadata name of a type definition (<c>Ns.Type`1</c>, nested via
-    ///     <c>+</c>) — the manifest attribute's payload, resolvable back to a symbol by
-    ///     <c>GetTypeByMetadataName</c> in an aggregating compilation.
+    /// Builds a type's CLR metadata name — the form a manifest records.
     /// </summary>
+    /// <param name="symbol">The type to name.</param>
+    /// <returns>
+    /// The metadata name, with arity marked and nested types joined by <c>+</c>, which
+    /// another compilation can resolve back to a symbol.
+    /// </returns>
     internal static string BuildMetadataName(INamedTypeSymbol symbol)
     {
         var parts = new Stack<string>();

@@ -6,20 +6,28 @@ using Stella.Ergosfare.Core.Abstractions.Factories;
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 /// <summary>
-/// One container's table of streaming pipelines, keyed by (query type, result type) — the
-/// streaming counterpart of the executor cache and the broadcast table, and the same shape:
-/// a table the container owns rather than a process-wide store every container is guarded
-/// against.
+/// One container's streaming pipelines, keyed by (query type, item type) — the streaming
+/// counterpart of <see cref="PipelineExecutorCache"/> and <see cref="FrozenBroadcastTable"/>.
 /// </summary>
+/// <param name="dependenciesFactory">The factory the pipelines resolve participants through.</param>
+/// <remarks>
+/// The table belongs to its container rather than the process, so containers need no
+/// guarding against each other here.
+/// </remarks>
 internal sealed class StreamDispatchTable(IMessageDependenciesFactory dependenciesFactory)
 {
     private readonly ConcurrentDictionary<(Type QueryType, Type ResultType), object> _byPair = new();
 
     /// <summary>
-    /// The pipeline for a query known by its runtime type. The generated stream root closes
-    /// the generic without reflection; a pair the generator never saw falls to the reflective
-    /// construction inside <see cref="DispatchLookup"/>.
+    /// Returns the streaming pipeline of a query known by its runtime type.
     /// </summary>
+    /// <typeparam name="TResult">The type of the streamed items.</typeparam>
+    /// <param name="queryType">The query's runtime type.</param>
+    /// <returns>The pipeline for that pair.</returns>
+    /// <remarks>
+    /// A generated stream root closes the generic without reflection; a pair the generator
+    /// never saw falls back to reflective construction.
+    /// </remarks>
     internal IStreamDispatch<TResult> Get<TResult>(Type queryType)
     {
         var key = (queryType, typeof(TResult));
@@ -37,13 +45,17 @@ internal sealed class StreamDispatchTable(IMessageDependenciesFactory dependenci
     }
 
     /// <summary>
-    /// Re-enters a generic context with a root's (query, result) pair and constructs the
-    /// closed pipeline there — no <see cref="Type.MakeGenericType"/>, no reflection.
+    /// Constructs a streaming pipeline inside a generic context carrying the root's query
+    /// and item types, so nothing is built reflectively.
     /// </summary>
     private sealed class DispatchVisitor : IMessageResultRootVisitor<object, IMessageDependenciesFactory>
     {
+        /// <summary>
+        /// The shared instance; the visitor holds no state.
+        /// </summary>
         public static readonly DispatchVisitor Instance = new();
 
+        /// <inheritdoc />
         public object Visit<TMessage, TResult>(IMessageDependenciesFactory state)
             where TMessage : IMessage
             => new StreamDispatch<TMessage, TResult>(state);

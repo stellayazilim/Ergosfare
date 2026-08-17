@@ -3,59 +3,52 @@ using System.Diagnostics.CodeAnalysis;
 namespace Stella.Ergosfare.Plugins.Abstractions;
 
 /// <summary>
-/// Marks a method whose call the generator emits directly into every dispatch plan the
-/// method's filters admit, at the given <see cref="Hook"/>.
+/// Marks a method to be called from inside every dispatch pipeline its filters admit, at the
+/// given <see cref="Hook"/>.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The method is an <b>observer</b>: it reads the message and the execution context, and
-/// does its own work. It does not rewrite the message or produce a result — that is what pre
-/// and post interceptors are for, and a second way to do it would only be a second set of
-/// semantics to keep consistent. What it can do beyond observing, it does through the
-/// context: <c>Abort()</c> stops the pipeline, and throwing routes to the exception stages.
+/// The method observes: it reads the message and the execution context and does its own
+/// work. It cannot rewrite the message or produce a result — those belong to pre- and
+/// post-interceptors. What it can still do, it does through the context: <c>Abort()</c>
+/// stops the pipeline, and throwing routes into the exception stages.
 /// </para>
 /// <para>
-/// One attribute serves every pipeline, resultless or result-producing, because no hook
-/// carries a result: the three points a plugin can address are properties of the pipeline
-/// itself, not of what it produces.
+/// One attribute covers every kind of pipeline because no hook carries a result: the points
+/// a plugin can address belong to the pipeline itself, not to what it produces.
 /// </para>
 /// <para>
-/// Declare the method generic over the message and the generator closes it over the concrete
-/// type at each emission site — no boxing for value-typed messages, and the constraint
-/// doubles as a filter: a method constrained <c>where TMessage : ICacheableQuery</c> is
-/// emitted only into plans whose message satisfies it, and costs nothing anywhere else
-/// because nothing is emitted there.
+/// Declare the method generic over the message and it is closed over the concrete type at
+/// each site, so a value-typed message is not boxed. The constraint doubles as a filter: a
+/// method constrained <c>where TMessage : ICacheableQuery</c> reaches only pipelines whose
+/// message satisfies it, and costs nothing elsewhere because nothing is emitted there.
+/// Parameters are matched by what they are, in any order — the message, the
+/// <c>ErgosfareContext</c>, and anything else resolved from the dispatching provider.
 /// </para>
 /// <para>
-/// Parameters are bound by what they are, in any order: the message type parameter, the
-/// <c>ErgosfareContext</c>, and anything else from the dispatching provider.
+/// <b>The declaring service is a singleton and cannot be anything else.</b> It is registered
+/// with <c>TryAddSingleton</c>, so it is constructed once per container and a dispatch never
+/// pays to build one. A hook method must therefore keep no per-dispatch state on the
+/// service: every dispatch in flight shares the instance. A transient registration would not
+/// help either, since two hooks are two separate resolutions and would see two different
+/// objects.
 /// </para>
 /// <para>
-/// <b>The declaring service is a singleton, and that is not configurable.</b> The generated
-/// module registers it with <c>TryAddSingleton</c>, so it is resolved once per container and
-/// a dispatch never pays for constructing one. Which means a hook method must not keep
-/// per-dispatch state on the service: every dispatch in flight shares the instance. Two hooks
-/// are also two separate resolutions, so a transient registration would not rescue it — the
-/// second hook would get a different object than the first.
+/// State that must travel between hooks — a timestamp, a scope, a correlation id — belongs
+/// in <c>ErgosfareContext.Items</c>, which exists per dispatch for exactly this. A
+/// per-dispatch <em>dependency</em> is a different matter: declare it as a parameter and it
+/// is resolved from the dispatching provider at the call site, so a scoped service reaches a
+/// singleton hook without the service ever holding one.
 /// </para>
 /// <para>
-/// State that has to travel between hooks — a timestamp, a scope, a correlation id — belongs
-/// in <c>ErgosfareContext.Items</c>, which is created per dispatch and is the pipeline's own
-/// channel for exactly this. A per-dispatch <i>dependency</i> is a different question and has
-/// its own answer: declare it as a parameter, and it is resolved from the dispatching
-/// provider at the call site, so a scoped service reaches a singleton hook without the
-/// service ever capturing one.
+/// The return type decides how the call is made. A <c>void</c> method is called plainly and
+/// never enters an async state machine, which is what makes a counter or a log line cheap; a
+/// method returning <c>ValueTask</c> is awaited. <c>void</c> alone would not be enough,
+/// since it cannot be awaited and <c>async void</c> loses both completion and failure.
 /// </para>
 /// <para>
-/// The return type decides how the call is emitted. A <c>void</c> method is emitted as a
-/// plain call and never enters an async state machine — which is what makes a synchronous
-/// counter or a log line genuinely cheap. A method returning <c>ValueTask</c> is emitted
-/// with <c>await</c>. <c>void</c> alone would not do: it is not awaitable, and
-/// <c>async void</c> loses both the completion and the exception.
-/// </para>
-/// <para>
-/// Nothing is emitted for a plugin that is not referenced, so a consumer with no plugins
-/// gets the plan it would have had before this attribute existed.
+/// Nothing at all is emitted for a plugin that is not referenced, so an application without
+/// plugins gets exactly the pipeline it had before.
 /// </para>
 /// </remarks>
 /// <example>
@@ -69,10 +62,13 @@ namespace Stella.Ergosfare.Plugins.Abstractions;
 ///     => _duration.Record(Stopwatch.GetElapsedTime((long) context.Items["started"]).TotalMilliseconds);
 /// </code>
 /// </example>
+/// <param name="hook">The point in the pipeline to call the method at.</param>
 [Experimental(ExperimentalSurface.Id)]
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
 public sealed class PipelineInvokableAttribute(Hook hook) : Attribute
 {
-    /// <summary>The pipeline point the call is emitted at.</summary>
+    /// <summary>
+    /// The point in the pipeline this method is called at.
+    /// </summary>
     public Hook Hook => hook;
 }

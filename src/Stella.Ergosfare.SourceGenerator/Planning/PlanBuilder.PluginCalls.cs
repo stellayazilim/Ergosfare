@@ -5,26 +5,31 @@ namespace Stella.Ergosfare.SourceGenerator.Planning;
 internal sealed partial class PlanBuilder
 {
     /// <summary>
-    ///     The plugin methods emitted into one plan: those whose family filter admits the
-    ///     message's module, whose discovery-key filter admits the message's keys, and whose
-    ///     generic constraints the message satisfies. A method failing any of them
-    ///     contributes nothing to this plan — no call, no runtime check — which is the
-    ///     design's point about a constraint being the filter.
+    /// Picks the plugin methods to call from one message's plan.
     /// </summary>
+    /// <param name="invocations">Every plugin method discovered.</param>
+    /// <param name="message">The message whose plan is being built.</param>
+    /// <returns>
+    /// The methods whose family, key and constraint filters all admit this message, sorted
+    /// so the generated file comes out the same every build.
+    /// </returns>
     /// <remarks>
-    ///     <para>
-    ///         Pipeline shape is not among the filters: no hook carries a result, so one
-    ///         declaration serves a void command, a result-producing query and a broadcast
-    ///         alike. The one family outside this path is the stream lane, which has no plan
-    ///         to emit into — so a plugin declaring <c>Module.Query</c> covers a query's
-    ///         single-result dispatches and not its streaming ones.
-    ///     </para>
-    ///     <para>
-    ///         The order is ordinal by service type then method name. Weight-by-registration
-    ///         order is a property of the consumer's fluent chain, which this slice does not
-    ///         read; a stable arbitrary order is preferable to an unstable one, and pinning it
-    ///         here keeps the emitted source deterministic.
-    ///     </para>
+    /// <para>
+    /// A method failing any filter contributes nothing here — no call and no runtime test.
+    /// That is the point of using the constraint as the filter.
+    /// </para>
+    /// <para>
+    /// Pipeline shape is not a filter: no hook carries a result, so one declaration serves a
+    /// resultless command, a result-producing query and a broadcast alike. The one family
+    /// this path does not reach is streaming, which has no plan to write into — so a plugin
+    /// naming the query family covers a query's single-result dispatches but not its
+    /// streaming ones.
+    /// </para>
+    /// <para>
+    /// The order is by service type and then method name. Ordering by registration would
+    /// mean reading the consumer's own call chain, which this does not see; a stable
+    /// arbitrary order beats an unstable one.
+    /// </para>
     /// </remarks>
     private static ImmutableArray<PluginInvocationModel> SelectPluginCalls(
         ImmutableArray<PluginInvocationModel> invocations,
@@ -47,6 +52,8 @@ internal sealed partial class PlanBuilder
                 continue;
             }
 
+            // Nothing is allocated until something is selected, which is the usual case for
+            // a compilation with no plugins at all.
             (selected ??= ImmutableArray.CreateBuilder<PluginInvocationModel>()).Add(invocation);
         }
 
@@ -64,17 +71,29 @@ internal sealed partial class PlanBuilder
         return selected.ToImmutable();
     }
 
+    /// <summary>
+    /// Reports whether a method's family filter admits a message.
+    /// </summary>
+    /// <param name="modules">The families the method applies to.</param>
+    /// <param name="message">The message to test.</param>
+    /// <returns><c>true</c> when the message belongs to one of them.</returns>
     private static bool MatchesModule(PluginModule modules, RegistrableTypeModel message)
         => (message.IsCommand && (modules & PluginModule.Command) != 0)
            || (message.IsQuery && (modules & PluginModule.Query) != 0)
            || (message.IsEvent && (modules & PluginModule.Event) != 0);
 
     /// <summary>
-    ///     The key filter. An unwritten one selects the default key alone — the same set
-    ///     <c>RegisterGenerated()</c> without a pattern selects. A keyed message was opted
-    ///     out of default discovery by its author, and a plugin the consumer installed
-    ///     without naming a key should not quietly opt it back in.
+    /// Reports whether a method's key filter admits a message.
     /// </summary>
+    /// <param name="filter">The keys the method applies to; empty means it named none.</param>
+    /// <param name="declared">The keys the message declares; empty means it declared none.</param>
+    /// <returns><c>true</c> when the two overlap.</returns>
+    /// <remarks>
+    /// Naming no keys selects the default key alone — the same set a pattern-less
+    /// <c>RegisterGenerated()</c> selects. A keyed message was kept out of default discovery
+    /// by its author, and a plugin installed without naming a key should not quietly put it
+    /// back in.
+    /// </remarks>
     private static bool MatchesDiscoveryKeys(ImmutableArray<string> filter, ImmutableArray<string> declared)
     {
         if (filter.IsDefaultOrEmpty)
@@ -86,6 +105,8 @@ internal sealed partial class PlanBuilder
         {
             if (declared.IsDefaultOrEmpty)
             {
+                // The message carries the default key, which the filter reaches only by
+                // naming it explicitly.
                 if (key.Length == 0)
                 {
                     return true;
@@ -107,9 +128,15 @@ internal sealed partial class PlanBuilder
     }
 
     /// <summary>
-    ///     Whether the message satisfies the method's message-parameter constraints, decided
-    ///     against the same assignable chain the covariant interceptor match uses.
+    /// Reports whether a message satisfies a method's constraints.
     /// </summary>
+    /// <param name="constraints">The method's constraints.</param>
+    /// <param name="message">The message to test.</param>
+    /// <returns><c>true</c> when the method could be closed over this message.</returns>
+    /// <remarks>
+    /// Decided against the same list of assignable types that covariant interceptor matching
+    /// uses.
+    /// </remarks>
     private static bool SatisfiesConstraints(PluginConstraintModel constraints, RegistrableTypeModel message)
     {
         if (constraints.RequiresReferenceType && message.IsValueType)

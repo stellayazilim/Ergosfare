@@ -1,5 +1,5 @@
-// The binding is the runtime mirror of the experimental annotation surface — it reads
-// the marked attributes and consults the marked default-adapter carrier by design.
+// The binding reads the experimental annotation attributes and the experimental
+// default-adapter carrier, which is what it exists to do.
 #pragma warning disable ERGOEXP001
 
 using System.Diagnostics.CodeAnalysis;
@@ -8,42 +8,56 @@ using Stella.Ergosfare.Core.Abstractions.Attributes;
 namespace Stella.Ergosfare.Core.Abstractions.Results;
 
 /// <summary>
-/// Resolves the result adapter of a (message, result-slot) pair. Resolution ladder:
-/// <see cref="IgnoreResultAdapterAttribute"/> opts the message out entirely; else the
-/// message's <see cref="ResultAdapterAttribute"/> when its adapter fits the slot exactly;
-/// else the built-in adapters of the framework's own
-/// <see cref="Result"/>/<see cref="Result{TValue}"/> carriers; else — on the
-/// provider-taking overload — the container's configured <see cref="DefaultResultAdapter"/>
-/// when it can serve the slot; else <c>null</c>, the overwhelmingly common case, in which
-/// the pipeline performs no probing at all and keeps the classic try/catch semantics.
-/// Nobody is forced onto the value channel — adapters are a recommended win, never a
-/// requirement.
+/// Finds the result adapter for a (message, result) pair.
 /// </summary>
 /// <remarks>
-/// The attribute tiers resolve once per closed pair into a static generic slot, so
-/// dispatch paths only ever read a field; the default tier is per-container and cached by
-/// the callers that consult it. Both attributes are inherited; declaring both on one
-/// message (own or inherited) fails the build (ERGO012) — against assemblies compiled
-/// before that rule, the opt-out wins here. This is the runtime mirror of a compile-time
-/// fact: the source generator bakes the same attribute-tier binding into execution plans
-/// and fails the build on a mismatched annotation (ERGO011).
+/// <para>
+/// Tiers are consulted in order: <see cref="IgnoreResultAdapterAttribute"/> on the message
+/// ends the search with no adapter; then the message's
+/// <see cref="ResultAdapterAttribute"/>, if its adapter serves this exact result type; then
+/// the built-in adapters of <see cref="Result"/> and <see cref="Result{TValue}"/>; then —
+/// on the overload that takes a provider — the container's
+/// <see cref="DefaultResultAdapter"/>, if it can serve the result type. Most pairs reach
+/// the end and bind nothing, which means the pipeline never inspects its result and
+/// failures are thrown as usual.
+/// </para>
+/// <para>
+/// The attribute tiers resolve once per closed pair; the default tier is resolved per
+/// container by whoever consults it. Both attributes are inherited, and a message carrying
+/// both fails the build with ERGO012 — where both reach the runtime anyway, the opt-out
+/// wins.
+/// </para>
 /// </remarks>
 public static class ResultAdapterBinding
 {
     /// <summary>
-    /// The attribute-tier adapter bound to the pair — annotation, then native — or
-    /// <c>null</c> when neither binds or the message opts out. Does not consult the
-    /// container's default adapter; dispatch paths use the provider-taking overload.
+    /// Returns the adapter bound by the message's attributes or by a built-in carrier, or
+    /// <c>null</c> when neither binds or the message opts out.
     /// </summary>
+    /// <typeparam name="TMessage">The message type.</typeparam>
+    /// <typeparam name="TResult">The result type.</typeparam>
+    /// <returns>The bound adapter, or <c>null</c>.</returns>
+    /// <remarks>
+    /// This overload does not consult the container's default adapter; dispatch paths use
+    /// the overload that takes a provider.
+    /// </remarks>
     public static IResultAdapter<TResult>? For<TMessage, TResult>() => Slot<TMessage, TResult>.Adapter;
 
     /// <summary>
-    /// The effective adapter of the pair: the attribute tiers first, then the container's
-    /// configured <see cref="DefaultResultAdapter"/> when it can serve the slot. A message
-    /// carrying <see cref="IgnoreResultAdapterAttribute"/> resolves to <c>null</c> past
-    /// every tier, the default included.
+    /// Returns the adapter in effect for the pair, falling back to the container's
+    /// <see cref="DefaultResultAdapter"/>.
     /// </summary>
-    /// <param name="serviceProvider">The container the dispatch runs in; supplies the configured default adapter, if any.</param>
+    /// <typeparam name="TMessage">The message type.</typeparam>
+    /// <typeparam name="TResult">The result type.</typeparam>
+    /// <param name="serviceProvider">
+    /// The container the dispatch runs in, which supplies the default adapter if one is
+    /// configured.
+    /// </param>
+    /// <returns>
+    /// The adapter, or <c>null</c>. A message carrying
+    /// <see cref="IgnoreResultAdapterAttribute"/> returns <c>null</c> past every tier,
+    /// including the default.
+    /// </returns>
     public static IResultAdapter<TResult>? For<TMessage, TResult>(IServiceProvider serviceProvider)
     {
         if (Slot<TMessage, TResult>.Ignored)
@@ -59,9 +73,21 @@ public static class ResultAdapterBinding
         return (serviceProvider.GetService(typeof(DefaultResultAdapter)) as DefaultResultAdapter)?.For<TResult>();
     }
 
+    /// <summary>
+    /// Holds the attribute-tier binding of one closed pair, resolved on first use.
+    /// </summary>
+    /// <typeparam name="TMessage">The message type.</typeparam>
+    /// <typeparam name="TResult">The result type.</typeparam>
     private static class Slot<TMessage, TResult>
     {
+        /// <summary>
+        /// The adapter the attribute tiers bound, or <c>null</c>.
+        /// </summary>
         public static readonly IResultAdapter<TResult>? Adapter;
+
+        /// <summary>
+        /// Whether the message opts out of result adaptation entirely.
+        /// </summary>
         // ReSharper disable once StaticMemberInGenericType
         public static readonly bool Ignored;
 
@@ -70,14 +96,18 @@ public static class ResultAdapterBinding
             (Ignored, Adapter) = Resolve();
         }
 
+        /// <summary>
+        /// Walks the message's attributes and the result type's built-in binding.
+        /// </summary>
+        /// <returns>Whether the message opts out, and the adapter bound if it does not.</returns>
         [UnconditionalSuppressMessage("Trimming", "IL2072",
             Justification = "The annotation's DynamicallyAccessedMembers preserves the adapter's public parameterless constructor.")]
         private static (bool Ignored, IResultAdapter<TResult>? Adapter) Resolve()
         {
-            // One walk over the base chain for both attributes — the runtime mirror of
-            // GetCustomAttribute's inheritance. The opt-out wins over an annotation from
-            // any level: in-source the combination is ERGO012 and never compiles, so
-            // this arbitration only ever serves assemblies compiled before that rule.
+            // Both attributes are collected in one walk up the base chain, which is what
+            // makes them inherited. The opt-out wins over an annotation at any level; in
+            // source the two together do not compile, so this only arbitrates for
+            // assemblies built before that rule existed.
             var ignored = false;
             ResultAdapterAttribute? annotation = null;
 
@@ -104,18 +134,18 @@ public static class ResultAdapterBinding
 
             if (annotation is not null)
             {
-                // Exact-slot fit only: the annotation targets the declared result; other
-                // slots of the same message resolve past it.
+                // The annotation binds this result type only. The message's other result
+                // types fall through to the tiers below.
                 if (typeof(IResultAdapter<TResult>).IsAssignableFrom(annotation.AdapterType))
                 {
                     return (false, (IResultAdapter<TResult>)Activator.CreateInstance(annotation.AdapterType)!);
                 }
             }
 
-            // The framework's own carriers name their adapter themselves, so both of them
-            // answer through one boxing of the slot's default rather than a type test per
-            // carrier and a reflective closing for the generic one. A reference-typed slot
-            // boxes to null and falls through, which is the overwhelmingly common case.
+            // The built-in carriers name their own adapter, so both are served by one
+            // boxing of the result type's default value rather than a test per carrier. A
+            // reference-typed result boxes to null and falls through, which is the common
+            // case.
             if (default(TResult) is INativeAdapterCarrier carrier)
             {
                 return (false, (IResultAdapter<TResult>)carrier.NativeAdapter);
