@@ -38,4 +38,24 @@ public static class ExperimentalIds
     /// </para>
     /// </remarks>
     public const string PluginSurface = "ERGOEXP002";
+
+    /// <summary>
+    /// The streaming surface: <c>ErgosfareStream&lt;TChunk&gt;</c>, the module bases over it,
+    /// <c>StreamInfo</c>, and the bridges to <see cref="System.IO.Stream"/>.
+    /// </summary>
+    /// <remarks>
+    /// What a stream message <i>is</i> — a message whose payload arrives a chunk at a time,
+    /// bounded and single-pass — is settled. What is not settled is what the pipeline does
+    /// around one: which stages a stream message gets and what they are handed, how a refused
+    /// dispatch reaches a caller that is still writing, and whether the chunk sequence keeps
+    /// this shape once the byte path is tuned. Those answers will move, and moving them will
+    /// not be source-compatible.
+    /// <para>
+    /// Marked experimental rather than obsolete because none of it has shipped: an error by
+    /// default is the honest default for a surface nobody depends on yet. Opt in for a project
+    /// with <c>&lt;NoWarn&gt;$(NoWarn);ERGOEXP003&lt;/NoWarn&gt;</c>, or at one site with
+    /// <c>#pragma warning disable ERGOEXP003</c>.
+    /// </para>
+    /// </remarks>
+    public const string StreamingSurface = "ERGOEXP003";
 }

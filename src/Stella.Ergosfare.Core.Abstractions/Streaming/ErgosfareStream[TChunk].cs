@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics;
 using System.Threading.Channels;
 
@@ -27,7 +28,8 @@ namespace Stella.Ergosfare.Core.Abstractions.Streaming;
 /// left open, so the next write fails instead of blocking forever.
 /// </para>
 /// </remarks>
-public abstract class ErgosfareStream<TChunk> : IMessage, IAsyncEnumerable<TChunk>
+[Experimental(ExperimentalIds.StreamingSurface)]
+public abstract class ErgosfareStream<TChunk> : ErgosfareStream, IAsyncEnumerable<TChunk>
 {
     /// <summary>
     /// How many chunks a bounded channel holds before a writer has to wait.
@@ -44,6 +46,7 @@ public abstract class ErgosfareStream<TChunk> : IMessage, IAsyncEnumerable<TChun
     private readonly Stopwatch _elapsed = new();
 
     private int _readerTaken;
+    private bool _endedByDispatch;
     private long _chunks;
     private StreamCompletion _completion = StreamCompletion.Open;
 
@@ -115,6 +118,13 @@ public abstract class ErgosfareStream<TChunk> : IMessage, IAsyncEnumerable<TChun
     {
         ThrowIfAdopted();
 
+        // A closed channel answers with ChannelClosedException, whose message says nothing
+        // about what actually happened. Where the dispatch is what closed it, say so.
+        if (_endedByDispatch)
+        {
+            throw DispatchEnded();
+        }
+
         return _channel.Writer.WriteAsync(chunk, cancellationToken);
     }
 
@@ -132,6 +142,11 @@ public abstract class ErgosfareStream<TChunk> : IMessage, IAsyncEnumerable<TChun
     public bool TryWrite(TChunk chunk)
     {
         ThrowIfAdopted();
+
+        if (_endedByDispatch)
+        {
+            throw DispatchEnded();
+        }
 
         return _channel.Writer.TryWrite(chunk);
     }
@@ -237,6 +252,35 @@ public abstract class ErgosfareStream<TChunk> : IMessage, IAsyncEnumerable<TChun
             }
         }
     }
+
+    /// <inheritdoc />
+    internal override void EndDispatch()
+    {
+        // An adopted source has no writing side to release, and a stream that already ended
+        // has nothing to say. What is left is the case this exists for: the dispatch is over
+        // and the payload was still arriving.
+        if (_adopted is not null || _completion != StreamCompletion.Open)
+        {
+            return;
+        }
+
+        _endedByDispatch = true;
+        Fault(DispatchEnded());
+    }
+
+    /// <summary>
+    /// The failure a stream ends with when its dispatch stopped before the payload was
+    /// written.
+    /// </summary>
+    /// <returns>The exception.</returns>
+    /// <remarks>
+    /// Built fresh each time so it carries the stack of the write that hit it, rather than
+    /// the stack of the dispatch that ended a while ago somewhere else.
+    /// </remarks>
+    private InvalidOperationException DispatchEnded()
+        => new($"The dispatch of '{GetType()}' ended before its payload was written. Await the dispatch to see why " +
+               "— a stage refused it, the handler failed, or it was cancelled. Writing to the stream after that " +
+               "point would wait for a reader that is not coming.");
 
     /// <summary>
     /// Records how the stream ended, keeping the first answer.

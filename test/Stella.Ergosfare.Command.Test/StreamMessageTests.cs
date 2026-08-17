@@ -282,6 +282,55 @@ public class StreamMessageTests
 
         // The whole point: the metadata was enough to decide, so the payload never started.
         Assert.Equal(0, upload.Info.Chunks);
-        Assert.Equal(StreamCompletion.Open, upload.Info.Completion);
+
+        // And the pipeline that stopped ended the stream with it, so a producer still
+        // writing finds out rather than waiting on a reader that is not coming.
+        Assert.Equal(StreamCompletion.Faulted, upload.Info.Completion);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task ARefusedDispatch_EndsTheStreamInsteadOfLeavingTheWriterWaiting()
+    {
+        await using var provider = new ServiceCollection()
+            .AddErgosfare(x => x.AddCommandModule(c => c
+                .Register<FileUploadHandler>()
+                .Register<RejectOversizedUploads>()))
+            .BuildServiceProvider();
+
+        var mediator = provider.GetRequiredService<ICommandMediator>();
+
+        var upload = new FileUpload(new UploadMeta("huge.mp4", 4_000_000_000));
+        var call = mediator.SendAsync(upload);
+
+        await Assert.ThrowsAsync<TooLarge>(async () => await call);
+
+        // Without the pipeline ending the stream, this producer would fill the buffer and
+        // then wait on a reader the refusal took away. It finds out on the next write
+        // instead, and the message says what to do about it.
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await upload.WriteAsync([1]).AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+
+        Assert.Contains("Await the dispatch to see why", thrown.Message);
+        Assert.Equal(StreamCompletion.Faulted, upload.Info.Completion);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task ASucceedingDispatch_LeavesTheStreamAsTheProducerCompletedIt()
+    {
+        await using var provider = BuildProvider();
+        var mediator = provider.GetRequiredService<ICommandMediator>();
+
+        var upload = new FileUpload(new UploadMeta("fine.mp4", 2));
+        var call = mediator.SendAsync(upload);
+
+        await upload.WriteAsync([1, 2]);
+        upload.Complete();
+
+        await call;
+
+        // Ending a stream the producer already ended changes nothing: the first answer wins.
+        Assert.Equal(StreamCompletion.Completed, upload.Info.Completion);
     }
 }

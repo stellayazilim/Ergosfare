@@ -11,6 +11,9 @@
         <!-- The binding and carrier suites live with the core's tests rather than in a
              project of their own. -->
         <InternalsVisibleTo Include="Stella.Ergosfare.Core.Test" />
+        <!-- The dispatch ends a stream message it stopped serving; that call is the pipeline's
+             and nobody else's. -->
+        <InternalsVisibleTo Include="Stella.Ergosfare.Core" />
     </ItemGroup>
 
 </Project>
