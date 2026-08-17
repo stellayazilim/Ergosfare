@@ -107,6 +107,7 @@ public class GeneratorModelEqualityTests
         Kind = DispatchSiteKind.Message,
         IsOpaque = true,
         IsValueType = true,
+        IsStreamMessage = true,
         IsGenericMessage = true,
         AssignableKeys = ["global::TestApp.IPing"],
         Groups = ["reporting"],

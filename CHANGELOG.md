@@ -132,7 +132,47 @@ one that fails at publish keeps shrinking.
 * The event variant was also the odd one out: alone among the pre-interceptor contracts it did
   not carry `IEvent`, so module discovery never found it and it had to be registered by hand.
 
+### A message can arrive in chunks
+
+* `ErgosfareStream<TChunk>` is a message whose payload arrives a chunk at a time, with
+  `ErgosfareCommandStream<TChunk, TMeta[, TResult]>` and `ErgosfareQueryStream<TChunk, TMeta,
+  TResult>` over it. What makes a dispatch streaming is the message's own type — not the verb
+  it is sent with, not the module it belongs to — so a command streams exactly the way a query
+  does, and there is no `StreamAsync`, no streaming handler contract and no lane of its own.
+* Streaming used to mean one thing only: a query whose *result* arrives over time. The other
+  direction was missing, and it is the one that matters for a converter or an upload — a
+  handler that must read four gigabytes cannot be handed it as a single value. The two are
+  independent axes now: chunks in is a property of the message, chunks out is a property of
+  the result (`TResult = IAsyncEnumerable<T>`), and either, neither or both may hold.
+* The channel is bounded, so a producer faster than the handler waits instead of filling
+  memory, and single-pass, so nothing is replayed — which is why a stream message has no retry
+  and no resume: the handler runs once for the whole sequence. It is also an
+  `IAsyncEnumerable<TChunk>`, so a handler writes `await foreach (var chunk in command)` and
+  nothing stands between it and the payload.
+* `AsStream()` and `Chunked()` bridge to and from `System.IO.Stream`, written against
+  `IAsyncEnumerable<ReadOnlyMemory<byte>>` rather than against the message: they belong to the
+  byte shape, and a sequence of frames should not carry a method claiming to be a stream. Each
+  chunk owns its bytes — handing out slices of one reused buffer would be cheaper by an
+  allocation and would leave a handler that kept a chunk reading memory the next read
+  overwrote.
+* `StreamInfo` is what a stream reports about itself: chunks taken, duration, and how it
+  ended. It describes one stream, so an operation that takes chunks in and hands chunks out
+  has two — the two directions start, end and fail independently.
+* The metadata is the half of the message that exists before the payload moves, and that is
+  what it is for: the stages that run before the handler see it and nothing else, so an upload
+  can be refused without a byte of it arriving.
+* Nothing on the dispatch path changed. A stream message is an ordinary `ICommand<TResult>`
+  with an ordinary handler, so it gets the same compiled plan, the same interceptor stages and
+  the same frozen composition every other message gets — measured rather than assumed: a
+  stream message with a pre- and a post-interceptor emits `AddStagedPlan<…>` with both baked
+  into it.
+
 ### Diagnostics
+
+* `ERGO022` reports a published stream message. A publish delivers to every subscriber and a
+  chunk channel is consumed once, so whichever subscriber reads first takes the payload and
+  the rest see nothing — which one that is depending on registration order. An error: no
+  arrangement of subscribers makes it work.
 
 * `ERGOSG001`–`ERGOSG018` become `ERGO001`–`ERGO018`. **Breaking.** Numbers are preserved, so
   the mapping is one rule: drop the `SG`. The scheme stays coherent — `ERGO###` for analyzer

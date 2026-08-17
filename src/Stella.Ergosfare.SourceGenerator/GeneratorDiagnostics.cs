@@ -431,4 +431,25 @@ internal static class GeneratorDiagnostics
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// ERGO022: a message carrying a chunk channel is published.
+    /// </summary>
+    /// <remarks>
+    /// A publish delivers to every subscriber; a chunk channel is consumed once. Whichever
+    /// subscriber reads it first takes the payload and the rest get an empty sequence — and
+    /// which one that is depends on registration order. An error rather than a warning: there
+    /// is no arrangement of subscribers that makes it work, so nothing is lost by refusing it
+    /// here.
+    /// </remarks>
+    public static readonly DiagnosticDescriptor PublishedStreamMessage = new(
+        id: "ERGO022",
+        title: "Stream message is published",
+        messageFormat:
+            "Message '{0}' carries a chunk channel, and a publish delivers it to every subscriber — but the channel " +
+            "is consumed once, so whichever subscriber reads first takes the payload and the others see nothing. " +
+            "Send it to a single handler, or give each subscriber its own stream.",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }
