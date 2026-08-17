@@ -264,15 +264,6 @@ public class ResultCarrierPipelineTests
         public string? Value { get; init; }
     }
 
-    public sealed class DefaultBoundOutcomeAdapter : IResultAdapter<DefaultBoundOutcome>
-    {
-        public bool TryGetException(in DefaultBoundOutcome result, out Exception? exception)
-        {
-            exception = result.Error;
-            return exception is not null;
-        }
-    }
-
     public sealed record DefaultBoundCommand : ICommand<DefaultBoundOutcome>;
 
     public sealed class DefaultBoundHandler : ICommandHandler<DefaultBoundCommand, DefaultBoundOutcome>
@@ -299,7 +290,7 @@ public class ResultCarrierPipelineTests
 
         var provider = new ServiceCollection()
             .AddErgosfare(x => x
-                .UseDefaultResultAdapter(typeof(DefaultBoundOutcomeAdapter))
+                .UseDefaultResultAdapter(typeof(CommandTestDefaultResultAdapter))
                 .AddCommandModule(c => c
                     .Register<DefaultBoundHandler>()
                     .Register<DefaultBoundObserver>()))
@@ -361,7 +352,7 @@ public class ResultCarrierPipelineTests
 
         var provider = new ServiceCollection()
             .AddErgosfare(x => x
-                .UseDefaultResultAdapter(typeof(DefaultBoundOutcomeAdapter))
+                .UseDefaultResultAdapter(typeof(CommandTestDefaultResultAdapter))
                 .AddCommandModule(c => c
                     .Register<OptedOutHandler>()
                     .Register<OptedOutObserver>()))

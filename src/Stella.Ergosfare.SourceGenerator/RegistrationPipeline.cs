@@ -79,6 +79,10 @@ internal static class RegistrationPipeline
         var seen = new HashSet<string>();
         var types = new List<RegistrableTypeModel>();
         var excludedShadows = new List<RegistrableTypeModel>();
+        // Judged before the reduction consumes them: a call the reduction discards is exactly
+        // the call that has to be reported.
+        ResultAdapterReader.ReportDefaultResultAdapterSites(context, defaultResultAdapterSites);
+
         var defaultResultAdapter = ResultAdapterReader.ReduceDefaultResultAdapter(defaultResultAdapterSites);
 
         // The open definitions monomorphization already answered for. Such a definition
@@ -128,7 +132,7 @@ internal static class RegistrationPipeline
             plans.VoidPlans, plans.ResultPlans, plans.StagedPlans, plans.FrozenCompositions,
             emitManifest ? dispatchSites : ImmutableArray<DispatchSiteModel>.Empty,
             emitManifest ? registrationSites : ImmutableArray<RegistrationSiteModel>.Empty,
-            emitManifest, GeneratorVersion.Value);
+            defaultResultAdapter, emitManifest, GeneratorVersion.Value);
         context.AddSource("ErgosfareRegistrations.g.cs", SourceText.From(source, Encoding.UTF8));
     }
 
@@ -275,17 +279,21 @@ internal static class RegistrationPipeline
                         model.InfoLocation?.ToLocation(),
                         model.DisplayName));
                 }
-                else if (!resultAdapter.IsInstantiable || !resultAdapter.FitsDeclaredSlot)
+                else if (!resultAdapter.IsInstantiable || !resultAdapter.IsBakeable || !resultAdapter.FitsDeclaredSlot)
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
                         GeneratorDiagnostics.UnbindableResultAdapter,
                         model.InfoLocation?.ToLocation(),
                         resultAdapter.DisplayName,
                         model.DisplayName,
-                        resultAdapter.IsInstantiable
-                            ? "it does not implement IResultAdapter<TResult> for any result slot the message dispatches"
-                            : "the runtime binding cannot instantiate it — a concrete, fully closed type with a " +
-                              "public parameterless constructor is required"));
+                        !resultAdapter.IsInstantiable
+                            ? "it cannot be constructed — a concrete, fully closed type with a public parameterless " +
+                              "constructor is required"
+                            : !resultAdapter.IsBakeable
+                                ? "the generated registration cannot name it — the adapter must be accessible from " +
+                                  "the compilation that declares the message"
+                                : "it does not implement IResultAdapter<TResult> for any result slot the message " +
+                                  "dispatches"));
                 }
             }
 

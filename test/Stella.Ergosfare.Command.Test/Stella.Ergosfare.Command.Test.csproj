@@ -9,6 +9,13 @@
              do execute. Generator diagnostics ignore #pragma, so the suppression lives
              here — the rationale is commented at each declaration site. -->
         <NoWarn>$(NoWarn);ERGO007</NoWarn>
+        <!-- ERGO013: two fixtures configure a default result adapter, and a compilation gets
+             one of those (ERGO020) — so the whole assembly is judged against it, including
+             the scores of fixtures that return a plain value and mean to throw. The rule is
+             right for an application, where a configured default is a contract; here it would
+             only assert that a test assembly is not one. ERGO013 itself is covered in
+             Stella.Ergosfare.SourceGenerator.Test, over compilations written for it. -->
+        <NoWarn>$(NoWarn);ERGO013</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>

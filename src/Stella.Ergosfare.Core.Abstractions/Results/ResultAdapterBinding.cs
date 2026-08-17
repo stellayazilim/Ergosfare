@@ -1,9 +1,9 @@
-// The binding reads the experimental annotation attributes and the experimental
+// The binding names the experimental annotation attributes and the experimental
 // default-adapter carrier, which is what it exists to do.
 #pragma warning disable ERGOEXP001
 
-using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 
 namespace Stella.Ergosfare.Core.Abstractions.Results;
 
@@ -22,16 +22,20 @@ namespace Stella.Ergosfare.Core.Abstractions.Results;
 /// failures are thrown as usual.
 /// </para>
 /// <para>
-/// The attribute tiers resolve once per closed pair; the default tier is resolved per
-/// container by whoever consults it. Both attributes are inherited, and a message carrying
-/// both fails the build with ERGO012 — where both reach the runtime anyway, the opt-out
-/// wins.
+/// Neither attribute is read here. Both are inherited, both are resolved by the generator
+/// over the same base chain, and what reaches this class is the generated table: one entry
+/// per (message, result) slot an annotation binds, and one per message that opts out. So a
+/// tier decision costs a dictionary read, the adapter arrives already built and already
+/// typed as the slot's contract, and nothing on this path closes a generic or activates a
+/// type. A message carrying both annotations fails the build with ERGO012; where both
+/// somehow reach the runtime, the opt-out wins, because the generator writes the opt-out and
+/// no slot entry.
 /// </para>
 /// </remarks>
 public static class ResultAdapterBinding
 {
     /// <summary>
-    /// Returns the adapter bound by the message's attributes or by a built-in carrier, or
+    /// Returns the adapter bound by the message's annotations or by a built-in carrier, or
     /// <c>null</c> when neither binds or the message opts out.
     /// </summary>
     /// <typeparam name="TMessage">The message type.</typeparam>
@@ -74,14 +78,14 @@ public static class ResultAdapterBinding
     }
 
     /// <summary>
-    /// Holds the attribute-tier binding of one closed pair, resolved on first use.
+    /// Holds the annotation-tier binding of one closed pair, resolved on first use.
     /// </summary>
     /// <typeparam name="TMessage">The message type.</typeparam>
     /// <typeparam name="TResult">The result type.</typeparam>
     private static class Slot<TMessage, TResult>
     {
         /// <summary>
-        /// The adapter the attribute tiers bound, or <c>null</c>.
+        /// The adapter the annotation tier or a built-in carrier bound, or <c>null</c>.
         /// </summary>
         public static readonly IResultAdapter<TResult>? Adapter;
 
@@ -97,49 +101,21 @@ public static class ResultAdapterBinding
         }
 
         /// <summary>
-        /// Walks the message's attributes and the result type's built-in binding.
+        /// Reads the pair's generated entries, then the result type's built-in binding.
         /// </summary>
         /// <returns>Whether the message opts out, and the adapter bound if it does not.</returns>
-        [UnconditionalSuppressMessage("Trimming", "IL2072",
-            Justification = "The annotation's DynamicallyAccessedMembers preserves the adapter's public parameterless constructor.")]
         private static (bool Ignored, IResultAdapter<TResult>? Adapter) Resolve()
         {
-            // Both attributes are collected in one walk up the base chain, which is what
-            // makes them inherited. The opt-out wins over an annotation at any level; in
-            // source the two together do not compile, so this only arbitrates for
-            // assemblies built before that rule existed.
-            var ignored = false;
-            ResultAdapterAttribute? annotation = null;
-
-            for (var current = typeof(TMessage); current is not null; current = current.BaseType)
-            {
-                foreach (var attribute in current.GetCustomAttributes(inherit: false))
-                {
-                    switch (attribute)
-                    {
-                        case IgnoreResultAdapterAttribute:
-                            ignored = true;
-                            break;
-                        case ResultAdapterAttribute resultAdapter:
-                            annotation ??= resultAdapter;
-                            break;
-                    }
-                }
-            }
-
-            if (ignored)
+            if (GeneratedDispatchRoots.IsResultAdapterIgnored<TMessage>())
             {
                 return (true, null);
             }
 
-            if (annotation is not null)
+            // The generator wrote one entry per slot the annotated adapter fits, so a miss is
+            // the message's other result types falling through to the tier below.
+            if (GeneratedDispatchRoots.FindResultAdapter<TMessage, TResult>() is { } annotated)
             {
-                // The annotation binds this result type only. The message's other result
-                // types fall through to the tiers below.
-                if (typeof(IResultAdapter<TResult>).IsAssignableFrom(annotation.AdapterType))
-                {
-                    return (false, (IResultAdapter<TResult>)Activator.CreateInstance(annotation.AdapterType)!);
-                }
+                return (false, annotated);
             }
 
             // The built-in carriers name their own adapter, so both are served by one

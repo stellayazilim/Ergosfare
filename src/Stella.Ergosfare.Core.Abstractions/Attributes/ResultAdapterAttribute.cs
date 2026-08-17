@@ -18,19 +18,23 @@ namespace Stella.Ergosfare.Core.Abstractions.Attributes;
 /// </para>
 /// <para>
 /// The attribute is inherited, so an annotation on a base message type covers the messages
-/// derived from it. An adapter that cannot serve the declared result type fails the build
-/// with ERGO011.
+/// derived from it. An adapter that cannot serve the declared result type — or that the
+/// generated registration cannot name — fails the build with ERGO011. The binding itself is
+/// resolved at compile time and written into the generated adapter table, so this annotation
+/// is read by the generator rather than at run time.
 /// </para>
 /// </remarks>
 [Experimental(ExperimentalIds.ResultAdapterSurface)]
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface)]
-public sealed class ResultAdapterAttribute(
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.Interfaces)]
-    Type adapterType) : Attribute
+public sealed class ResultAdapterAttribute(Type adapterType) : Attribute
 {
     /// <summary>
     /// The adapter type bound to this message's pipeline result.
     /// </summary>
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.Interfaces)]
+    /// <remarks>
+    /// Carried for what reads the annotation — the generator, and anything inspecting the
+    /// declaration. Nothing constructs it from here, which is why it needs no trimming
+    /// annotation to survive.
+    /// </remarks>
     public Type AdapterType { get; } = adapterType;
 }

@@ -81,9 +81,27 @@ one that fails at publish keeps shrinking.
   container. Rooting the message while skipping `AddResult`/`AddStream` left a hidden
   `ICommand<string>` closing one generic from the table and the other through
   `MakeGenericType`.
+* The result adapter binding is a generated table. Three tiers used to be answered by
+  reflection at first dispatch: an annotated adapter was activated, the configured fallback was
+  closed over the slot by a second unifier living beside the generator's, and both attributes
+  were read off the message's base chain. The generator writes one entry per (message, result)
+  slot an annotation binds, one per message that opts out, and one per result type the fallback
+  serves — each passing its adapter as a type argument constrained to the slot's contract, so
+  an adapter that does not serve the slot is a compile error in the generated file. What
+  reaches the runtime is a dictionary read and one interface call.
+* `DefaultResultAdapter`'s constructor is internal. **Breaking.** A carrier built by hand
+  names an adapter no generated table answers for, which is the same hole `ERGO019` closes at
+  the call site; the fallback is declared through `UseDefaultResultAdapter`, the call the
+  generator reads. A container configured that way and reached by an application the generator
+  never ran for now says so on the first dispatch instead of serving nobody in silence.
+* This was reached even in a generated application: a staged plan bakes its adapter, but the
+  executor still had to bind one reflectively to compare identity against it, so the plan's
+  compile-time answer never removed the run-time one.
 * Measured by making the reflective arms throw and running the suite: the shapes reaching them
-  drop from 25 to 2. What remains is generic messages, whose closed forms are never rooted
-  because an open definition is not a dispatchable message — tracked separately.
+  drop from 25 to 2 on the dispatch path, and from 18 to 0 in the adapter layer. What remains
+  on the dispatch path is generic messages, whose closed forms are never rooted because an open
+  definition is not a dispatchable message — tracked separately. The adapter layer's trimming
+  and AOT suppressions are gone entirely.
 
 ### The plan gates stop disqualifying legal pipelines
 
@@ -124,6 +142,16 @@ one that fails at publish keeps shrinking.
   diagnostic comes back — as a build failure for the error-severity rules. This repository's
   own suppressions are the demonstration: two test projects carried
   `<NoWarn>ERGOSG005</NoWarn>` and their builds broke until updated.
+* `ERGO019`, `ERGO020` and `ERGO021` judge the `UseDefaultResultAdapter` call: the argument
+  must be a literal `typeof` the compilation resolves, a compilation names one default adapter,
+  and generated code must be able to name and construct it. **Breaking.** An unreadable or
+  duplicated call used to turn compile-time baking off for the whole compilation and leave the
+  answer to the runtime; there is no runtime answer any more, so what used to compile into a
+  slower path now fails the build. An adapter serving several result families does so through
+  several `IResultAdapter<TResult>` implementations.
+* `ERGO011` now also reports an annotated adapter the generated registration cannot name —
+  inaccessible from the compilation that declares the message. Same reason: the annotation's
+  binding lives in the generated table or nowhere.
 * `ERGO018` reports a `Register` call naming its type at run time, rather than quietly
   suspending the reachability judgment. The closed world compiles a construct's pipeline,
   freezes its composition and bakes its plan from what the compilation can see, and a type only

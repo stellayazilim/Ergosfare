@@ -1,5 +1,6 @@
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
+using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Abstractions.Results;
 
 namespace Stella.Ergosfare.Core.Test.Results;
@@ -10,8 +11,32 @@ namespace Stella.Ergosfare.Core.Test.Results;
 /// no annotation, an annotated message binds its declared adapter for the matching slot
 /// only, and everything else resolves to no adapter at all.
 /// </summary>
+/// <remarks>
+/// The annotation and fallback tiers are answered from the generated table, so the fixtures
+/// below are entered into it by hand — these messages are private to this file and no
+/// generated registration could name them. What each entry stands for is what the generator
+/// would have written for the same declaration.
+/// </remarks>
 public class ResultAndAdapterBindingTests
 {
+    static ResultAndAdapterBindingTests()
+    {
+        // [ResultAdapter(typeof(CustomOutcomeAdapter))] on a message declaring CustomOutcome.
+        GeneratedDispatchRoots.AddResultAdapter<AnnotatedMessage, CustomOutcome, CustomOutcomeAdapter>();
+
+        // [IgnoreResultAdapter], own and inherited — the base walk happens in the generator,
+        // so the derived message carries its own entry.
+        GeneratedDispatchRoots.AddIgnoredResultAdapter<IgnoredMessage>();
+        GeneratedDispatchRoots.AddIgnoredResultAdapter<DerivedFromIgnoredMessage>();
+
+        // UseDefaultResultAdapter(typeof(CustomOutcomeAdapter)) over a CustomOutcome slot,
+        // and typeof(BoxAdapter<>) closed over a Box<int> slot.
+        GeneratedDispatchRoots.AddDefaultResultAdapter<CustomOutcome, CustomOutcomeAdapter>();
+        GeneratedDispatchRoots.AddDefaultResultAdapter<Box<int>, BoxAdapter<int>>();
+
+        GeneratedDispatchRoots.SealResultAdapters();
+    }
+
     private sealed record PlainMessage;
 
     private sealed class CustomOutcome
@@ -173,7 +198,7 @@ public class ResultAndAdapterBindingTests
         Assert.IsType<CustomOutcomeAdapter>(ResultAdapterBinding.For<PlainMessage, CustomOutcome>(provider));
 
         // ...while the annotation and native tiers stay in front of it, and a slot the
-        // default cannot serve stays adapterless.
+        // default does not serve stays adapterless.
         Assert.IsType<CustomOutcomeAdapter>(ResultAdapterBinding.For<AnnotatedMessage, CustomOutcome>(provider));
         Assert.IsType<ResultExceptionAdapter<int>>(ResultAdapterBinding.For<PlainMessage, Result<int>>(provider));
         Assert.Null(ResultAdapterBinding.For<PlainMessage, string>(provider));
@@ -183,10 +208,9 @@ public class ResultAndAdapterBindingTests
     }
 
     [Fact]
-    public void OpenGenericDefaultAdapter_ClosesOverTheServedSlot()
+    public void OpenGenericDefaultAdapter_ServesTheSlotItWasClosedOver()
     {
-        var defaultAdapter = new DefaultResultAdapter(typeof(BoxAdapter<>));
-        var provider = new StubProvider(defaultAdapter);
+        var provider = new StubProvider(new DefaultResultAdapter(typeof(BoxAdapter<>)));
 
         var bound = ResultAdapterBinding.For<PlainMessage, Box<int>>(provider);
         Assert.IsType<BoxAdapter<int>>(bound);
@@ -195,10 +219,10 @@ public class ResultAndAdapterBindingTests
         Assert.True(bound.TryGetException(new Box<int> { Error = failure }, out var carried));
         Assert.Same(failure, carried);
 
-        // The closed instance is cached per slot; a slot the definition cannot unify
-        // with resolves to nothing.
+        // One instance per slot, built where the definition was closed; a slot the
+        // definition was never closed over resolves to nothing.
         Assert.Same(bound, ResultAdapterBinding.For<PlainMessage, Box<int>>(provider));
-        Assert.Null(ResultAdapterBinding.For<PlainMessage, CustomOutcome>(provider));
+        Assert.Null(ResultAdapterBinding.For<PlainMessage, Box<string>>(provider));
     }
 
     [Fact]
