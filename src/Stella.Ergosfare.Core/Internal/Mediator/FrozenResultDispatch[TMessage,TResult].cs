@@ -1,3 +1,7 @@
+// The executor ends a stream message's channel when its pipeline stops, which is what the
+// experimental streaming surface exists for.
+#pragma warning disable ERGOEXP003
+
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Abstractions.Factories;
@@ -81,6 +85,54 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
 
     /// <inheritdoc />
     public ValueTask<TResult> Execute(object message, ErgosfareContext context, IServiceProvider serviceProvider,
+        IEnumerable<string>? groups)
+    {
+        // A message that carries chunks has a second half the pipeline has to close. One type
+        // test on the ordinary path; the wrapper exists only where there is a stream.
+        if (message is global::Stella.Ergosfare.Core.Abstractions.Streaming.ErgosfareStream stream)
+        {
+            return ExecuteAndEndStream(stream, message, context, serviceProvider, groups);
+        }
+
+        return ExecuteCore(message, context, serviceProvider, groups);
+    }
+
+    /// <summary>
+    /// Runs the pipeline and ends the message's stream however it turns out.
+    /// </summary>
+    /// <param name="stream">The message's chunk-carrying half.</param>
+    /// <param name="message">The message to run.</param>
+    /// <param name="context">The execution context for this dispatch.</param>
+    /// <param name="serviceProvider">The provider participants are resolved against.</param>
+    /// <param name="groups">The groups to run.</param>
+    /// <returns>The result the pipeline produced.</returns>
+    /// <remarks>
+    /// A pipeline that stops has to end the stream with it. The two are separate
+    /// synchronisation objects, so a caller waiting on a full buffer learns nothing from the
+    /// dispatch failing — it would wait for a reader that is never coming.
+    /// </remarks>
+    private async ValueTask<TResult> ExecuteAndEndStream(global::Stella.Ergosfare.Core.Abstractions.Streaming.ErgosfareStream stream, object message, ErgosfareContext context,
+        IServiceProvider serviceProvider, IEnumerable<string>? groups)
+    {
+        try
+        {
+            return await ExecuteCore(message, context, serviceProvider, groups).ConfigureAwait(false);
+        }
+        finally
+        {
+            stream.EndDispatch();
+        }
+    }
+
+    /// <summary>
+    /// The pipeline itself, for a message with chunks or without.
+    /// </summary>
+    /// <param name="message">The message to run.</param>
+    /// <param name="context">The execution context for this dispatch.</param>
+    /// <param name="serviceProvider">The provider participants are resolved against.</param>
+    /// <param name="groups">The groups to run.</param>
+    /// <returns>The result the pipeline produced.</returns>
+    private ValueTask<TResult> ExecuteCore(object message, ErgosfareContext context, IServiceProvider serviceProvider,
         IEnumerable<string>? groups)
     {
         if (groups is not null)

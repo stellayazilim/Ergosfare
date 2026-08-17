@@ -158,6 +158,12 @@ one that fails at publish keeps shrinking.
 * `StreamInfo` is what a stream reports about itself: chunks taken, duration, and how it
   ended. It describes one stream, so an operation that takes chunks in and hands chunks out
   has two — the two directions start, end and fail independently.
+* A pipeline that stops ends the stream with it. The two are separate synchronisation
+  objects, so a stage refusing an upload or a handler failing said nothing to a caller
+  waiting on a full buffer — it would have waited for a reader that was never coming, and the
+  pump task would have leaked with the chunks it held. The executors now close the channel
+  however the dispatch turns out, and the next write fails with a message naming what to do:
+  await the dispatch to see why it ended.
 * The metadata is the half of the message that exists before the payload moves, and that is
   what it is for: the stages that run before the handler see it and nothing else, so an upload
   can be refused without a byte of it arriving.
