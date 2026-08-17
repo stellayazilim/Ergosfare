@@ -126,6 +126,19 @@ internal static class RegistrationPipeline
             types, excludedShadows, availability,
             defaultResultAdapter, pluginInvocations, dispatchSites, referencedSites.Sites).Build();
 
+        // What the planner saw and could not plan. A dispatch that cannot survive the shape
+        // is reported here rather than left to find out at run time.
+        foreach (var finding in plans.Findings)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                GeneratorDiagnostics.ContestedInGroupSet,
+                finding.Location?.ToLocation(),
+                finding.Message,
+                string.Join(", ", finding.Groups),
+                finding.First,
+                finding.Second));
+        }
+
         var registeredShadows = CollectRootableShadows(excludedShadows);
 
         var source = RegistrationEmitter.Emit(types, registeredShadows, availability,

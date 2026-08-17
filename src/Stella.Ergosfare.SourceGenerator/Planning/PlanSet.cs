@@ -18,4 +18,5 @@ internal sealed record PlanSet(
     IReadOnlyList<VoidPlanModel> VoidPlans,
     IReadOnlyList<ResultPlanModel> ResultPlans,
     IReadOnlyList<StagedPlanModel> StagedPlans,
-    IReadOnlyList<FrozenCompositionModel> FrozenCompositions);
+    IReadOnlyList<FrozenCompositionModel> FrozenCompositions,
+    IReadOnlyList<PlanFinding> Findings);

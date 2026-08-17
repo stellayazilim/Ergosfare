@@ -47,6 +47,10 @@ internal sealed partial class PlanBuilder(
     /// </remarks>
     internal PlanSet Build()
     {
+        // What the planner saw and could not plan. Every disqualification a dispatch cannot
+        // survive lands here instead of in a bare return.
+        var findings = new List<PlanFinding>();
+
         var voidPlans = availability.DispatchRootsHasVoidPlans
             ? ComputeVoidPlans(types)
             : (IReadOnlyList<VoidPlanModel>)Array.Empty<VoidPlanModel>();
@@ -56,7 +60,7 @@ internal sealed partial class PlanBuilder(
             : (IReadOnlyList<ResultPlanModel>)Array.Empty<ResultPlanModel>();
 
         var stagedPlans = availability.DispatchRootsHasStagedPlans
-            ? ComputeStagedPlans(types, excludedShadows, availability.HasKeyedServiceExtensions,
+            ? ComputeStagedPlans(findings, types, excludedShadows, availability.HasKeyedServiceExtensions,
                 defaultResultAdapter is { IsBakeable: true } ? defaultResultAdapter : null,
                 pluginInvocations,
                 CollectGroupSets(dispatchSites, referencedDispatchSites),
@@ -80,7 +84,7 @@ internal sealed partial class PlanBuilder(
             ? ComputeFrozenCompositions(types, excludedShadows)
             : (IReadOnlyList<FrozenCompositionModel>)Array.Empty<FrozenCompositionModel>();
 
-        return new PlanSet(voidPlans, resultPlans, stagedPlans, frozenCompositions);
+        return new PlanSet(voidPlans, resultPlans, stagedPlans, frozenCompositions, findings);
     }
 
     /// <summary>

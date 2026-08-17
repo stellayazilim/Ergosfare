@@ -30,6 +30,7 @@ internal sealed partial class PlanBuilder
     /// </para>
     /// </remarks>
     private static List<StagedPlanModel> ComputeStagedPlans(
+        List<PlanFinding> findings,
         List<RegistrableTypeModel> types,
         List<RegistrableTypeModel> excludedShadows,
         bool hasKeyedServiceExtensions,
@@ -125,7 +126,7 @@ internal sealed partial class PlanBuilder
                 // A send delivers to one handler, so under a set selecting none there is no
                 // pipeline to bake, and the runtime lane raises the no-handler outcome the
                 // caller asked for.
-                if (!TrySelectPlanHandler(type, handlersByMessage, filter, out var handler, out var handlerDescriptor))
+                if (!TrySelectPlanHandler(findings, type, handlersByMessage, filter, out var handler, out var handlerDescriptor))
                 {
                     return;
                 }
