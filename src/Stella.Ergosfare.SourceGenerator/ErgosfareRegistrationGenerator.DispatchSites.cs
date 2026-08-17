@@ -804,6 +804,7 @@ public sealed partial class ErgosfareRegistrationGenerator
             Kind = kind,
             IsOpaque = isOpaque,
             IsValueType = named.IsValueType,
+            IsStreamMessage = CarriesChunkChannel(named),
             IsGenericMessage = named.IsGenericType,
             AssignableKeys = ParticipantAttributes.GetAssignableKeys(named),
             Groups = ImmutableArray<string>.Empty,
@@ -811,6 +812,30 @@ public sealed partial class ErgosfareRegistrationGenerator
             Location = location,
             ReferencedAssemblyName = referencedAssemblyName,
         };
+    }
+
+    /// <summary>
+    /// Reports whether a message carries a chunk channel.
+    /// </summary>
+    /// <param name="message">The static message type.</param>
+    /// <returns><c>true</c> when its base chain reaches the streaming base.</returns>
+    /// <remarks>
+    /// The base is what declares a message streaming — nothing about the dispatch surface
+    /// does — so this walk is the whole classification.
+    /// </remarks>
+    private static bool CarriesChunkChannel(INamedTypeSymbol message)
+    {
+        for (var current = message; current is not null; current = current.BaseType)
+        {
+            if (current.Arity == 1
+                && current.Name == "ErgosfareStream"
+                && SymbolNaming.IsInNamespace(current, ContractNames.StreamingNamespace))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -916,6 +941,7 @@ public sealed partial class ErgosfareRegistrationGenerator
             Kind = kind,
             IsOpaque = true,
             IsValueType = false,
+            IsStreamMessage = false,
             IsGenericMessage = false,
             AssignableKeys = ImmutableArray<string>.Empty,
             Groups = ImmutableArray<string>.Empty,
@@ -1203,6 +1229,16 @@ public sealed partial class ErgosfareRegistrationGenerator
             {
                 context.ReportDiagnostic(Diagnostic.Create(
                     GeneratorDiagnostics.OpaqueDispatchSite, location.ToLocation(), site.DisplayName));
+            }
+
+            // Also local, and settled by the message's own type: a chunk channel has one
+            // reader, so broadcasting it cannot mean what the call says it means.
+            if (site is { IsStreamMessage: true, Kind: DispatchSiteKind.Event })
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    GeneratorDiagnostics.PublishedStreamMessage,
+                    site.Location?.ToLocation(),
+                    site.DisplayName));
             }
         }
 

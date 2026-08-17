@@ -46,6 +46,11 @@ internal static class ContractNames
     /// <summary>The namespace the core abstractions live in.</summary>
     internal const string CoreAbstractionsNamespace = "Stella.Ergosfare.Core.Abstractions";
 
+    /// <summary>
+    /// Where the streaming base lives — what makes a message carry a chunk channel.
+    /// </summary>
+    internal const string StreamingNamespace = "Stella.Ergosfare.Core.Abstractions.Streaming";
+
     /// <summary>The contract an interceptor carries to accept only some failures.</summary>
     internal const string ExceptionFilterContract = "IExceptionInterceptorFilter";
 }

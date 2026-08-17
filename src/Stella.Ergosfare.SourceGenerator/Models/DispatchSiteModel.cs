@@ -54,6 +54,15 @@ internal readonly struct DispatchSiteModel : IEquatable<DispatchSiteModel>
     public required bool IsValueType { get; init; }
 
     /// <summary>
+    /// Whether the message carries a chunk channel — a stream message.
+    /// </summary>
+    /// <remarks>
+    /// Read from the static type's base chain. What it decides is what a site may do with
+    /// such a message: its channel is consumed once, so a publish has no honest meaning.
+    /// </remarks>
+    public required bool IsStreamMessage { get; init; }
+
+    /// <summary>
     /// Whether the static type is generic or constructs a generic.
     /// </summary>
     /// <remarks>
@@ -109,6 +118,7 @@ internal readonly struct DispatchSiteModel : IEquatable<DispatchSiteModel>
             || Kind != other.Kind
             || IsOpaque != other.IsOpaque
             || IsValueType != other.IsValueType
+            || IsStreamMessage != other.IsStreamMessage
             || IsGenericMessage != other.IsGenericMessage
             || HasUnprovableGroups != other.HasUnprovableGroups
             || ReferencedAssemblyName != other.ReferencedAssemblyName
