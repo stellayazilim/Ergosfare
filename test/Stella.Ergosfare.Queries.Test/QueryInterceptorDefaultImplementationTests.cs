@@ -21,14 +21,14 @@ public class QueryInterceptorDefaultImplementationTests
     private record TestQuery : IQuery<string>;
 
     [ExcludeFromDiscovery]
-    private class TestPreInterceptor : IQueryPreInterceptor<TestQuery, TestQuery>
+    private class TestPreInterceptor : IQueryPreInterceptor<TestQuery>
     {
         public bool Called;
 
-        public ValueTask<TestQuery?> HandleAsync(TestQuery query, ErgosfareContext executionContext)
+        public ValueTask<TestQuery> HandleAsync(TestQuery query, ErgosfareContext executionContext)
         {
             Called = true;
-            return ValueTask.FromResult<TestQuery?>(query);
+            return ValueTask.FromResult(query);
         }
     }
 

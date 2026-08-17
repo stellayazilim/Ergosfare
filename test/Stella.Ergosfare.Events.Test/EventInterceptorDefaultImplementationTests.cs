@@ -30,7 +30,8 @@ public class EventInterceptorDefaultImplementationTests
         }
     }
 
-    private class TestTypedPreInterceptor : IEventPreInterceptor<TestEvent, TestEvent>
+    [ExcludeFromDiscovery]
+    private class TestTypedPreInterceptor : IEventPreInterceptor<TestEvent>
     {
         public static readonly TestEvent Replacement = new();
 
