@@ -1,3 +1,5 @@
+using Stella.Ergosfare.Core.Abstractions;
+using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions.Streaming;
 
 namespace Stella.Ergosfare.Commands.Abstractions.Streaming;
@@ -16,6 +18,7 @@ namespace Stella.Ergosfare.Commands.Abstractions.Streaming;
 /// four-gigabyte upload can be refused without a byte of it being read. The chunks belong to
 /// the handler alone.
 /// </remarks>
+[Experimental(ExperimentalIds.StreamingSurface)]
 public abstract class ErgosfareCommandStream<TChunk, TMeta> : ErgosfareStream<TChunk>, ICommand
     where TMeta : notnull
 {

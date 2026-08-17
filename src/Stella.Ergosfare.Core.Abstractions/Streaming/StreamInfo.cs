@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 namespace Stella.Ergosfare.Core.Abstractions.Streaming;
 
 /// <summary>
@@ -20,6 +21,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Streaming;
 /// these, which is the honest shape: the two directions start, end and fail independently.
 /// </para>
 /// </remarks>
+[Experimental(ExperimentalIds.StreamingSurface)]
 public readonly record struct StreamInfo(
     long Chunks,
     TimeSpan Duration,

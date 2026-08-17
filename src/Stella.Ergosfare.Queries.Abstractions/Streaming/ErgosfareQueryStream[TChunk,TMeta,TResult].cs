@@ -1,3 +1,5 @@
+using Stella.Ergosfare.Core.Abstractions;
+using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions.Streaming;
 
 namespace Stella.Ergosfare.Queries.Abstractions.Streaming;
@@ -15,6 +17,7 @@ namespace Stella.Ergosfare.Queries.Abstractions.Streaming;
 /// a search over an uploaded file, a checksum, a validation pass — is written here and
 /// dispatched with the ordinary query verb.
 /// </remarks>
+[Experimental(ExperimentalIds.StreamingSurface)]
 public abstract class ErgosfareQueryStream<TChunk, TMeta, TResult> : ErgosfareStream<TChunk>, IQuery<TResult>
     where TMeta : notnull
 {
