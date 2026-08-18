@@ -1,4 +1,8 @@
-## Unreleased
+## v2.14.0-preview – '2026-08-18'
+
+Preview release. The theme: **one lane.** The runtime dispatch lane is deleted end to end —
+a dispatch either runs its compiled plan or fails stating why, streaming included — and a
+group set that provably cannot be satisfied stops the build instead of every dispatch.
 
 ### A plan the compiler cannot build is a build error, not a quieter path
 
@@ -12,7 +16,7 @@
   returns findings alongside plans, and the pipeline reports them. That channel is what the
   remaining silent disqualifications need; `ERGO023` is the first through it.
 
-### The runtime dispatch lane is removed – '2026-08-18'
+### The runtime dispatch lane is removed
 
 Nothing is dispatched at run time that was not produced at compile time. A dispatch either
 runs its compiled plan or fails stating why; the lane that used to serve what no plan
