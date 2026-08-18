@@ -5,90 +5,105 @@ using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Generated;
 using Stella.Ergosfare.Queries.Abstractions;
 using Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
 
 namespace Stella.Ergosfare.Contract.Test.Dispatch;
+
+// This area's fixture types are top-level and unkeyed so the generator bakes a plan for
+// each of them — only compiled plans dispatch now. Every message stays scoped to this area:
+// no other class may share these types, and no interceptor here targets anything but its
+// own message.
+
+/// <summary>Void command whose handler proves it ran.</summary>
+public sealed class Greet : ICommand
+{
+    /// <summary>Set by the handler so the test can prove it ran.</summary>
+    public bool Handled;
+
+    /// <summary>The context instance the handler was handed.</summary>
+    public ErgosfareContext? SeenContext;
+}
+
+/// <inheritdoc />
+public sealed class GreetHandler : ICommandHandler<Greet>
+{
+    /// <inheritdoc />
+    public ValueTask HandleAsync(Greet command, ErgosfareContext context)
+    {
+        command.Handled = true;
+        command.SeenContext = context;
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>The instance the handler was handed, so identity can be compared.</summary>
+public sealed class Echo : ICommand<string>
+{
+    /// <summary>The word the handler echoes back.</summary>
+    public string Word = string.Empty;
+}
+
+/// <inheritdoc />
+// ReSharper disable once ClassNeverInstantiated.Global
+public sealed class EchoHandler : ICommandHandler<Echo, string>
+{
+    /// <summary>The message instance the last dispatch handed this handler.</summary>
+    public static Echo? LastSeen;
+
+    /// <inheritdoc />
+    public ValueTask<string> HandleAsync(Echo command, ErgosfareContext context)
+    {
+        LastSeen = command;
+        return ValueTask.FromResult(command.Word + "!");
+    }
+}
+
+/// <summary>Value-typed query, the third result shape the area exercises.</summary>
+public sealed class Sum : IQuery<int>
+{
+    /// <summary>Left operand.</summary>
+    public int Left;
+
+    /// <summary>Right operand.</summary>
+    public int Right;
+}
+
+/// <inheritdoc />
+public sealed class SumHandler : IQueryHandler<Sum, int>
+{
+    /// <inheritdoc />
+    public ValueTask<int> HandleAsync(Sum query, ErgosfareContext context)
+        => ValueTask.FromResult(query.Left + query.Right);
+}
+
+/// <summary>Never registered anywhere: the no-handler scenarios dispatch these.</summary>
+[ExcludeFromDiscovery]
+public sealed class NeverRegisteredCommand : ICommand;
+
+/// <inheritdoc cref="NeverRegisteredCommand"/>
+[ExcludeFromDiscovery]
+public sealed class NeverRegisteredQuery : IQuery<int>;
 
 /// <summary>
 /// What a dispatch does when nothing but a handler is in the way: the handler runs, its
 /// value comes back, and it is handed the caller's own message instance together with a
 /// live execution context.
 /// </summary>
+/// <remarks>
+/// The container registers each dispatched message's full compiled pipeline explicitly —
+/// the plan gate demands exactly that, and an explicit list is the honest spelling of it.
+/// </remarks>
 public sealed class BasicDispatchTests
 {
-    private const string Key = "contract.dispatch";
-
-    [DiscoveryKey(Key)]
-    public sealed class Greet : ICommand
-    {
-        /// <summary>Set by the handler so the test can prove it ran.</summary>
-        public bool Handled;
-
-        /// <summary>The context instance the handler was handed.</summary>
-        public ErgosfareContext? SeenContext;
-    }
-
-    [DiscoveryKey(Key)]
-    public sealed class GreetHandler : ICommandHandler<Greet>
-    {
-        public ValueTask HandleAsync(Greet command, ErgosfareContext context)
-        {
-            command.Handled = true;
-            command.SeenContext = context;
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    /// <summary>The instance the handler was handed, so identity can be compared.</summary>
-    [DiscoveryKey(Key)]
-    public sealed class Echo : ICommand<string>
-    {
-        public string Word = string.Empty;
-    }
-
-    [DiscoveryKey(Key)]
-    // ReSharper disable once ClassNeverInstantiated.Global
-    public sealed class EchoHandler : ICommandHandler<Echo, string>
-    {
-        /// <summary>The message instance the last dispatch handed this handler.</summary>
-        public static Echo? LastSeen;
-
-        public ValueTask<string> HandleAsync(Echo command, ErgosfareContext context)
-        {
-            LastSeen = command;
-            return ValueTask.FromResult(command.Word + "!");
-        }
-    }
-
-    [DiscoveryKey(Key)]
-    public sealed class Sum : IQuery<int>
-    {
-        public int Left;
-        public int Right;
-    }
-
-    [DiscoveryKey(Key)]
-    public sealed class SumHandler : IQueryHandler<Sum, int>
-    {
-        public ValueTask<int> HandleAsync(Sum query, ErgosfareContext context)
-            => ValueTask.FromResult(query.Left + query.Right);
-    }
-
-    /// <summary>Never registered anywhere: the no-handler scenarios dispatch these.</summary>
-    [ExcludeFromDiscovery]
-    public sealed class NeverRegisteredCommand : ICommand;
-
-    /// <inheritdoc cref="NeverRegisteredCommand"/>
-    [ExcludeFromDiscovery]
-    public sealed class NeverRegisteredQuery : IQuery<int>;
-
     private static ServiceProvider CreateProvider()
         => new ServiceCollection()
             .AddErgosfare(options => options
-                .AddCommandModule(commands => commands.RegisterGenerated(Key))
-                .AddQueryModule(queries => queries.RegisterGenerated(Key)))
+                .AddCommandModule(commands => commands
+                    .Register<GreetHandler>()
+                    .Register<EchoHandler>())
+                .AddQueryModule(queries => queries
+                    .Register<SumHandler>()))
             .BuildServiceProvider();
 
     [Fact]

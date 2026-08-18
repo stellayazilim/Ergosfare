@@ -1,13 +1,63 @@
 using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Events.Abstractions;
 using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
 
 namespace Stella.Ergosfare.Events.Test;
+
+// The fixtures live at the top level so the source generator compiles their broadcast
+// plans — nothing is dispatched at run time that was not produced at compile time. The
+// types are owned by EngineBroadcastTests alone; each container below registers its
+// events' full compiled pipelines.
+
+public sealed record BaseNotice : IEvent;
+
+public sealed record SlowNotice : IEvent;
+
+/// <summary>
+/// What the handlers below observed, recorded per test.
+/// </summary>
+internal static class EngineBroadcastDelivered
+{
+    public static int Count;
+
+    public static ErgosfareContext? Context;
+
+    public static void Reset()
+    {
+        Count = 0;
+        Context = null;
+    }
+}
+
+public sealed class BaseNoticeHandler : IEventHandler<BaseNotice>
+{
+    public ValueTask HandleAsync(BaseNotice @event, ErgosfareContext context)
+    {
+        EngineBroadcastDelivered.Count++;
+        EngineBroadcastDelivered.Context = context;
+        context.Set("engine.broadcast", true);
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class SlowNoticeHandler : IEventHandler<SlowNotice>
+{
+    public async ValueTask HandleAsync(SlowNotice @event, ErgosfareContext context)
+    {
+        EngineBroadcastDelivered.Context = context;
+        context.Set("engine.broadcast", true);
+
+        // Never completes synchronously, so the publish above this frame cannot take
+        // its inline-return shortcut.
+        await Task.Yield();
+
+        EngineBroadcastDelivered.Count++;
+    }
+}
 
 /// <summary>
 /// The engine's own broadcast surface — the three entry points the event facade is a typed
@@ -23,51 +73,6 @@ namespace Stella.Ergosfare.Events.Test;
 /// </remarks>
 public class EngineBroadcastTests
 {
-    public sealed record BaseNotice : IEvent;
-
-    public sealed record SlowNotice : IEvent;
-
-    private static class Delivered
-    {
-        public static int Count;
-
-        public static ErgosfareContext? Context;
-
-        public static void Reset()
-        {
-            Count = 0;
-            Context = null;
-        }
-    }
-
-    [ExcludeFromDiscovery]
-    public sealed class BaseNoticeHandler : IEventHandler<BaseNotice>
-    {
-        public ValueTask HandleAsync(BaseNotice @event, ErgosfareContext context)
-        {
-            Delivered.Count++;
-            Delivered.Context = context;
-            context.Set("engine.broadcast", true);
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    [ExcludeFromDiscovery]
-    public sealed class SlowNoticeHandler : IEventHandler<SlowNotice>
-    {
-        public async ValueTask HandleAsync(SlowNotice @event, ErgosfareContext context)
-        {
-            Delivered.Context = context;
-            context.Set("engine.broadcast", true);
-
-            // Never completes synchronously, so the publish above this frame cannot take
-            // its inline-return shortcut.
-            await Task.Yield();
-
-            Delivered.Count++;
-        }
-    }
-
     private static ServiceProvider Build()
         => new ServiceCollection()
             .AddErgosfare(x => x.AddEventModule(e =>
@@ -84,7 +89,7 @@ public class EngineBroadcastTests
     {
         await using var provider = Build();
         var engine = provider.GetRequiredService<MessageDispatchEngine>();
-        Delivered.Reset();
+        EngineBroadcastDelivered.Reset();
 
         // Statically an object: nothing but the runtime type can find the pipeline, which
         // is the shape a message read off a transport arrives in.
@@ -92,10 +97,10 @@ public class EngineBroadcastTests
 
         await engine.BroadcastAsync(erased, provider);
 
-        Assert.Equal(1, Delivered.Count);
+        Assert.Equal(1, EngineBroadcastDelivered.Count);
 
         // The engine rented this one, so it is back in the pool with its state gone.
-        Assert.False(Delivered.Context!.Has("engine.broadcast"));
+        Assert.False(EngineBroadcastDelivered.Context!.Has("engine.broadcast"));
     }
 
     [Fact]
@@ -105,7 +110,7 @@ public class EngineBroadcastTests
     {
         await using var provider = Build();
         var engine = provider.GetRequiredService<MessageDispatchEngine>();
-        Delivered.Reset();
+        EngineBroadcastDelivered.Reset();
 
         // Concrete type argument: the static-generic slot answers.
         await engine.BroadcastAsync(new BaseNotice(), provider);
@@ -116,7 +121,7 @@ public class EngineBroadcastTests
 
         await engine.BroadcastAsync(erased, provider);
 
-        Assert.Equal(2, Delivered.Count);
+        Assert.Equal(2, EngineBroadcastDelivered.Count);
     }
 
     [Fact]
@@ -127,12 +132,12 @@ public class EngineBroadcastTests
         await using var provider = Build();
         var engine = provider.GetRequiredService<MessageDispatchEngine>();
         var context = new ErgosfareContext();
-        Delivered.Reset();
+        EngineBroadcastDelivered.Reset();
 
         await engine.BroadcastAsync(new BaseNotice(), context, provider);
 
-        Assert.Equal(1, Delivered.Count);
-        Assert.Same(context, Delivered.Context);
+        Assert.Equal(1, EngineBroadcastDelivered.Count);
+        Assert.Same(context, EngineBroadcastDelivered.Context);
 
         // The nested-publish path rents nothing, so it returns nothing — what the handler
         // wrote is still there for the caller that owns the context.
@@ -146,16 +151,16 @@ public class EngineBroadcastTests
     {
         await using var provider = Build();
         var engine = provider.GetRequiredService<MessageDispatchEngine>();
-        Delivered.Reset();
+        EngineBroadcastDelivered.Reset();
 
         await engine.BroadcastAsync(new SlowNotice(), provider);
 
-        Assert.Equal(1, Delivered.Count);
+        Assert.Equal(1, EngineBroadcastDelivered.Count);
 
         // Reclaimed from the awaiting helper's finally, not inline — the assertion is the
         // same either way, which is the point: the caller cannot tell, and must not.
-        Assert.False(Delivered.Context!.Has("engine.broadcast"));
-        Assert.False(Delivered.Context.CancellationToken.CanBeCanceled);
+        Assert.False(EngineBroadcastDelivered.Context!.Has("engine.broadcast"));
+        Assert.False(EngineBroadcastDelivered.Context.CancellationToken.CanBeCanceled);
     }
 
     [Fact]

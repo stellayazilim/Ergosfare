@@ -4,107 +4,139 @@ using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Contract.Test.Harness;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Generated;
 
 namespace Stella.Ergosfare.Contract.Test.Exclusion;
 
-/// <summary>
-/// What <c>[ExcludeFromPipeline]</c> on a message does to an interceptor that reaches it
-/// covariantly — registered against a supertype the message implements — and what it
-/// deliberately does not do to an interceptor written for the message itself.
-/// </summary>
-/// <remarks>
-/// Each axis declares its own supertype. The registry is process-wide, so a shared
-/// supertype would attach both axes' covariant interceptors to both axes' messages, and
-/// each container could only resolve its own half.
-/// <para>
-/// These types stay keyed: the generator skips messages carrying the attribute rather than
-/// modeling the exclusion, so no staged plan can serve them and both axes reach the
-/// reflective pipeline shape.
-/// </para>
-/// </remarks>
-public abstract class PipelineExclusionContract
+// Top-level and unkeyed so the generator sees everything here; what it does and does not
+// bake for these messages is the contract being pinned. The supertype stays area-local —
+// a marker-wide interceptor would attach to every pipeline in the process.
+
+/// <summary>The area-local supertype the covariant interceptor is registered against.</summary>
+[ExcludeFromDiscovery]
+public interface IAuditedForExclusion : ICommand;
+
+/// <summary>An excluded message whose pipeline would need a staged plan.</summary>
+[ExcludeFromPipeline]
+public sealed class ExcludedCommand : IAuditedForExclusion;
+
+/// <inheritdoc cref="ExcludedCommand"/>
+public sealed class ExcludedCommandHandler : ICommandHandler<ExcludedCommand>
 {
-    /// <summary>The discovery key this area registers under.</summary>
-    protected const string Key = "contract.exclude";
-
-    /// <summary>Marks the handler of whichever message was dispatched.</summary>
-    [ExcludeFromDiscovery]
-    public abstract class AuditedHandlerBase<TCommand> : ICommandHandler<TCommand>
-        where TCommand : class, ICommand
+    /// <inheritdoc />
+    public ValueTask HandleAsync(ExcludedCommand command, ErgosfareContext context)
     {
-        /// <inheritdoc />
-        public ValueTask HandleAsync(TCommand command, ErgosfareContext context)
-        {
-            context.Mark("handler");
-            return ValueTask.CompletedTask;
-        }
+        context.Mark("handler");
+        return ValueTask.CompletedTask;
     }
+}
 
-    /// <summary>Registered against a supertype: it reaches its messages covariantly.</summary>
-    [ExcludeFromDiscovery]
-    public abstract class CovariantPreBase<TSupertype> : ICommandPreInterceptor<TSupertype>
-        where TSupertype : class, ICommand
+/// <summary>Registered against the excluded message itself, deliberately.</summary>
+public sealed class ExcludedCommandDirectPre : ICommandPreInterceptor<ExcludedCommand>
+{
+    /// <inheritdoc />
+    public ValueTask<ExcludedCommand> HandleAsync(ExcludedCommand command, ErgosfareContext context)
     {
-        /// <inheritdoc />
-        public ValueTask<TSupertype> HandleAsync(TSupertype command, ErgosfareContext context)
-        {
-            context.Mark("pre:covariant");
-            return ValueTask.FromResult(command);
-        }
+        context.Mark("pre:direct");
+        return ValueTask.FromResult(command);
     }
+}
 
-    /// <summary>Registered against the excluded message itself, deliberately.</summary>
-    [ExcludeFromDiscovery]
-    public abstract class DirectPreBase<TCommand> : ICommandPreInterceptor<TCommand>
-        where TCommand : class, ICommand
+/// <summary>An excluded message whose pipeline is a bare handler.</summary>
+[ExcludeFromPipeline]
+public sealed class ExcludedBareCommand : IAuditedForExclusion;
+
+/// <inheritdoc cref="ExcludedBareCommand"/>
+public sealed class ExcludedBareCommandHandler : ICommandHandler<ExcludedBareCommand>
+{
+    /// <inheritdoc />
+    public ValueTask HandleAsync(ExcludedBareCommand command, ErgosfareContext context)
     {
-        /// <inheritdoc />
-        public ValueTask<TCommand> HandleAsync(TCommand command, ErgosfareContext context)
-        {
-            context.Mark("pre:direct");
-            return ValueTask.FromResult(command);
-        }
+        context.Mark("handler");
+        return ValueTask.CompletedTask;
     }
+}
 
-    /// <summary>A container with this axis' exclusion types registered its own way.</summary>
-    protected abstract ServiceProvider CreateProvider();
+/// <summary>A sibling on the same supertype, without the attribute.</summary>
+public sealed class IncludedCommand : IAuditedForExclusion;
 
-    /// <summary>The message carrying <c>[ExcludeFromPipeline]</c>.</summary>
-    protected abstract ICommand NewExcludedCommand();
+/// <inheritdoc cref="IncludedCommand"/>
+public sealed class IncludedCommandHandler : ICommandHandler<IncludedCommand>
+{
+    /// <inheritdoc />
+    public ValueTask HandleAsync(IncludedCommand command, ErgosfareContext context)
+    {
+        context.Mark("handler");
+        return ValueTask.CompletedTask;
+    }
+}
 
-    /// <summary>Its sibling, implementing the same supertype without the attribute.</summary>
-    protected abstract ICommand NewIncludedCommand();
+/// <summary>Registered against the supertype: it reaches its messages covariantly.</summary>
+public sealed class AuditedExclusionPre : ICommandPreInterceptor<IAuditedForExclusion>
+{
+    /// <inheritdoc />
+    public ValueTask<IAuditedForExclusion> HandleAsync(IAuditedForExclusion command, ErgosfareContext context)
+    {
+        context.Mark("pre:covariant");
+        return ValueTask.FromResult(command);
+    }
+}
 
-    private PipelineRecorder NewRecorder() => new() { Label = GetType().Name };
+/// <summary>
+/// What <c>[ExcludeFromPipeline]</c> is on the plan lane. The exclusion survives only in
+/// its degenerate case: a bare-handler excluded message gets a single-handler plan, and
+/// the covariant interceptor its supertype would attract stays out of it. An excluded
+/// message that would need a staged plan — one with a direct interceptor of its own — gets
+/// no plan at all: the generator skips the message rather than modeling the exclusion, so
+/// the "direct interceptors still run" half of the feature awaits a compiled-plan
+/// formulation, and until then such a dispatch fails loudly.
+/// </summary>
+public sealed class PipelineExclusionTests
+{
+    private static ServiceProvider CreateProvider()
+        => new ServiceCollection()
+            .AddErgosfare(options => options
+                .AddCommandModule(commands => commands
+                    .Register<ExcludedCommandHandler>()
+                    .Register<ExcludedCommandDirectPre>()
+                    .Register<ExcludedBareCommandHandler>()
+                    .Register<IncludedCommandHandler>()
+                    .Register<AuditedExclusionPre>()))
+            .BuildServiceProvider();
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_covariantly_matched_interceptor_stays_out_of_a_message_marked_ExcludeFromPipeline()
+    public async Task An_excluded_message_with_a_direct_interceptor_fails_unplanned()
     {
         await using var provider = CreateProvider();
-        var recorder = NewRecorder();
+        var recorder = new PipelineRecorder();
+        var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        await provider.GetRequiredService<ICommandMediator>()
-            .SendAsync(NewExcludedCommand(), recorder.Commands());
+        // The generator skips [ExcludeFromPipeline] messages that would need a staged
+        // plan; nothing runs, not even the interceptor written for the message itself.
+        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(
+            async () => await mediator.SendAsync(new ExcludedCommand(), recorder.Commands()));
 
-        Assert.DoesNotContain("pre:covariant", recorder.Stages);
+        Assert.Equal(UnplannedDispatchReason.NoCompiledPlan, thrown.Reason);
+        Assert.Empty(recorder.Stages);
     }
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task An_interceptor_registered_against_the_message_itself_still_runs_on_it()
+    public async Task A_bare_handler_excluded_message_still_dispatches_and_keeps_the_covariant_interceptor_out()
     {
         await using var provider = CreateProvider();
-        var recorder = NewRecorder();
+        var recorder = new PipelineRecorder();
 
+        // The degenerate case is planned: with no direct interceptors the exclusion leaves
+        // a bare handler, and the single-handler plan runs it. Were the attribute ignored,
+        // the covariant pre-interceptor would be in the live pipeline and the bare plan
+        // could not serve it — so this passing is the exclusion working.
         await provider.GetRequiredService<ICommandMediator>()
-            .SendAsync(NewExcludedCommand(), recorder.Commands());
+            .SendAsync(new ExcludedBareCommand(), recorder.Commands());
 
-        // The attribute suppresses covariant matching only; an interceptor written for this
-        // message was written for it deliberately.
-        recorder.AssertStages("pre:direct", "handler");
+        recorder.AssertStages("handler");
     }
 
     [Fact]
@@ -112,115 +144,11 @@ public abstract class PipelineExclusionContract
     public async Task The_same_covariant_interceptor_still_joins_a_sibling_without_the_attribute()
     {
         await using var provider = CreateProvider();
-        var recorder = NewRecorder();
+        var recorder = new PipelineRecorder();
 
         await provider.GetRequiredService<ICommandMediator>()
-            .SendAsync(NewIncludedCommand(), recorder.Commands());
+            .SendAsync(new IncludedCommand(), recorder.Commands());
 
         recorder.AssertStages("pre:covariant", "handler");
     }
-}
-
-/// <summary>The exclusion types registered through generated descriptors.</summary>
-public static class KeyedExclusionTypes
-{
-    /// <summary>The axis-local supertype the covariant interceptor is registered against.</summary>
-    [ExcludeFromDiscovery]
-    public interface IAudited : ICommand;
-
-    /// <summary>The message carrying [ExcludeFromPipeline].</summary>
-    [DiscoveryKey("contract.exclude")]
-    [ExcludeFromPipeline]
-    public sealed class ExcludedCommand : IAudited;
-
-    /// <inheritdoc />
-    [DiscoveryKey("contract.exclude")]
-    public sealed class ExcludedCommandHandler : PipelineExclusionContract.AuditedHandlerBase<ExcludedCommand>;
-
-    /// <inheritdoc />
-    [DiscoveryKey("contract.exclude")]
-    public sealed class ExcludedCommandDirectPre : PipelineExclusionContract.DirectPreBase<ExcludedCommand>;
-
-    /// <summary>Its sibling, same supertype, without the attribute.</summary>
-    [DiscoveryKey("contract.exclude")]
-    public sealed class IncludedCommand : IAudited;
-
-    /// <inheritdoc />
-    [DiscoveryKey("contract.exclude")]
-    public sealed class IncludedCommandHandler : PipelineExclusionContract.AuditedHandlerBase<IncludedCommand>;
-
-    /// <inheritdoc />
-    [DiscoveryKey("contract.exclude")]
-    public sealed class AuditedPre : PipelineExclusionContract.CovariantPreBase<IAudited>;
-}
-
-/// <summary>The same shapes, hidden from the generator so <c>Register&lt;T&gt;()</c> is reflective.</summary>
-public static class FallbackExclusionTypes
-{
-    /// <inheritdoc cref="KeyedExclusionTypes.IAudited"/>
-    [ExcludeFromDiscovery]
-    public interface IAudited : ICommand;
-
-    /// <inheritdoc cref="KeyedExclusionTypes.ExcludedCommand"/>
-    [ExcludeFromDiscovery]
-    [ExcludeFromPipeline]
-    public sealed class ExcludedCommand : IAudited;
-
-    /// <inheritdoc />
-    [ExcludeFromDiscovery]
-    public sealed class ExcludedCommandHandler : PipelineExclusionContract.AuditedHandlerBase<ExcludedCommand>;
-
-    /// <inheritdoc />
-    [ExcludeFromDiscovery]
-    public sealed class ExcludedCommandDirectPre : PipelineExclusionContract.DirectPreBase<ExcludedCommand>;
-
-    /// <inheritdoc cref="KeyedExclusionTypes.IncludedCommand"/>
-    [ExcludeFromDiscovery]
-    public sealed class IncludedCommand : IAudited;
-
-    /// <inheritdoc />
-    [ExcludeFromDiscovery]
-    public sealed class IncludedCommandHandler : PipelineExclusionContract.AuditedHandlerBase<IncludedCommand>;
-
-    /// <inheritdoc />
-    [ExcludeFromDiscovery]
-    public sealed class AuditedPre : PipelineExclusionContract.CovariantPreBase<IAudited>;
-}
-
-/// <summary>The exclusion contract under generated (keyed) registration.</summary>
-public sealed class GeneratedRegistrationPipelineExclusionTests : PipelineExclusionContract
-{
-    /// <inheritdoc />
-    protected override ServiceProvider CreateProvider()
-        => new ServiceCollection()
-            .AddErgosfare(options => options
-                .AddCommandModule(commands => commands.RegisterGenerated(Key)))
-            .BuildServiceProvider();
-
-    /// <inheritdoc />
-    protected override ICommand NewExcludedCommand() => new KeyedExclusionTypes.ExcludedCommand();
-
-    /// <inheritdoc />
-    protected override ICommand NewIncludedCommand() => new KeyedExclusionTypes.IncludedCommand();
-}
-
-/// <summary>The same contract under explicit runtime registration.</summary>
-public sealed class RuntimeRegistrationPipelineExclusionTests : PipelineExclusionContract
-{
-    /// <inheritdoc />
-    protected override ServiceProvider CreateProvider()
-        => new ServiceCollection()
-            .AddErgosfare(options => options
-                .AddCommandModule(commands => commands
-                    .Register<FallbackExclusionTypes.ExcludedCommandHandler>()
-                    .Register<FallbackExclusionTypes.ExcludedCommandDirectPre>()
-                    .Register<FallbackExclusionTypes.IncludedCommandHandler>()
-                    .Register<FallbackExclusionTypes.AuditedPre>()))
-            .BuildServiceProvider();
-
-    /// <inheritdoc />
-    protected override ICommand NewExcludedCommand() => new FallbackExclusionTypes.ExcludedCommand();
-
-    /// <inheritdoc />
-    protected override ICommand NewIncludedCommand() => new FallbackExclusionTypes.IncludedCommand();
 }

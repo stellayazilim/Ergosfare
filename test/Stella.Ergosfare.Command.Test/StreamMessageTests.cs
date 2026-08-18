@@ -8,6 +8,106 @@ using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
 namespace Stella.Ergosfare.Command.Test;
 
+public sealed record UploadMeta(string FileName, long DeclaredLength);
+
+public sealed record UploadReport(long Bytes, int Chunks, string FileName);
+
+public sealed class FileUpload : ErgosfareCommandStream<byte[], UploadMeta, UploadReport>
+{
+    public FileUpload(UploadMeta meta) : base(meta) { }
+
+    public FileUpload(UploadMeta meta, IAsyncEnumerable<byte[]> source) : base(meta, source) { }
+}
+
+public sealed class FileUploadHandler : ICommandHandler<FileUpload, UploadReport>
+{
+    public async ValueTask<UploadReport> HandleAsync(FileUpload command, ErgosfareContext context)
+    {
+        long bytes = 0;
+        var chunks = 0;
+
+        await foreach (var chunk in command.WithCancellation(context.CancellationToken))
+        {
+            bytes += chunk.Length;
+            chunks++;
+        }
+
+        return new UploadReport(bytes, chunks, command.Meta.FileName);
+    }
+}
+
+/// <summary>
+/// The guarded twin of <see cref="FileUpload"/>: the pre-stage interceptor below is part
+/// of this message's compiled pipeline, so the unguarded upload tests keep their own
+/// message type — a compiled plan bakes the full discoverable pipeline, and one message
+/// cannot be dispatched both with and without the guard.
+/// </summary>
+public sealed class GuardedFileUpload : ErgosfareCommandStream<byte[], UploadMeta, UploadReport>
+{
+    public GuardedFileUpload(UploadMeta meta) : base(meta) { }
+
+    public GuardedFileUpload(UploadMeta meta, IAsyncEnumerable<byte[]> source) : base(meta, source) { }
+}
+
+public sealed class GuardedFileUploadHandler : ICommandHandler<GuardedFileUpload, UploadReport>
+{
+    public async ValueTask<UploadReport> HandleAsync(GuardedFileUpload command, ErgosfareContext context)
+    {
+        long bytes = 0;
+        var chunks = 0;
+
+        await foreach (var chunk in command.WithCancellation(context.CancellationToken))
+        {
+            bytes += chunk.Length;
+            chunks++;
+        }
+
+        return new UploadReport(bytes, chunks, command.Meta.FileName);
+    }
+}
+
+public sealed class TooLarge(string message) : Exception(message);
+
+/// <summary>
+/// The stage that runs before the payload moves. It reads what is known up front and
+/// nothing else, which is what lets it refuse an upload without a byte of it arriving.
+/// </summary>
+public sealed class RejectOversizedUploads : ICommandPreInterceptor<GuardedFileUpload>
+{
+    public ValueTask<GuardedFileUpload> HandleAsync(GuardedFileUpload command, ErgosfareContext context)
+        => command.Meta.DeclaredLength > 1_000
+            ? throw new TooLarge($"'{command.Meta.FileName}' declares {command.Meta.DeclaredLength} bytes")
+            : ValueTask.FromResult(command);
+}
+
+public sealed record CopyMeta(string FileName);
+
+public sealed record CopyReport(long Bytes);
+
+/// <summary>
+/// The byte shape: chunks are memory segments, which is what the bridge to
+/// <see cref="Stream"/> is written against.
+/// </summary>
+public sealed class FileCopy : ErgosfareCommandStream<ReadOnlyMemory<byte>, CopyMeta, CopyReport>
+{
+    public FileCopy(CopyMeta meta, IAsyncEnumerable<ReadOnlyMemory<byte>> source) : base(meta, source) { }
+}
+
+public sealed class FileCopyHandler : ICommandHandler<FileCopy, CopyReport>
+{
+    public async ValueTask<CopyReport> HandleAsync(FileCopy command, ErgosfareContext context)
+    {
+        // The handler wants a Stream, and the message is a sequence: the bridge is one
+        // call, and nothing is buffered whole on the way.
+        await using var payload = command.AsStream();
+        using var destination = new MemoryStream();
+
+        await payload.CopyToAsync(destination, context.CancellationToken);
+
+        return new CopyReport(destination.Length);
+    }
+}
+
 /// <summary>
 /// A message whose payload arrives in chunks, dispatched through the ordinary command
 /// surface: no streaming verb, no streaming handler contract, no lane of its own. What makes
@@ -16,34 +116,6 @@ namespace Stella.Ergosfare.Command.Test;
 /// </summary>
 public class StreamMessageTests
 {
-    public sealed record UploadMeta(string FileName, long DeclaredLength);
-
-    public sealed record UploadReport(long Bytes, int Chunks, string FileName);
-
-    public sealed class FileUpload : ErgosfareCommandStream<byte[], UploadMeta, UploadReport>
-    {
-        public FileUpload(UploadMeta meta) : base(meta) { }
-
-        public FileUpload(UploadMeta meta, IAsyncEnumerable<byte[]> source) : base(meta, source) { }
-    }
-
-    public sealed class FileUploadHandler : ICommandHandler<FileUpload, UploadReport>
-    {
-        public async ValueTask<UploadReport> HandleAsync(FileUpload command, ErgosfareContext context)
-        {
-            long bytes = 0;
-            var chunks = 0;
-
-            await foreach (var chunk in command.WithCancellation(context.CancellationToken))
-            {
-                bytes += chunk.Length;
-                chunks++;
-            }
-
-            return new UploadReport(bytes, chunks, command.Meta.FileName);
-        }
-    }
-
     private static ServiceProvider BuildProvider()
         => new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c => c.Register<FileUploadHandler>()))
@@ -180,34 +252,6 @@ public class StreamMessageTests
         Assert.Equal(StreamCompletion.Faulted, upload.Info.Completion);
     }
 
-    public sealed record CopyMeta(string FileName);
-
-    public sealed record CopyReport(long Bytes);
-
-    /// <summary>
-    /// The byte shape: chunks are memory segments, which is what the bridge to
-    /// <see cref="Stream"/> is written against.
-    /// </summary>
-    public sealed class FileCopy : ErgosfareCommandStream<ReadOnlyMemory<byte>, CopyMeta, CopyReport>
-    {
-        public FileCopy(CopyMeta meta, IAsyncEnumerable<ReadOnlyMemory<byte>> source) : base(meta, source) { }
-    }
-
-    public sealed class FileCopyHandler : ICommandHandler<FileCopy, CopyReport>
-    {
-        public async ValueTask<CopyReport> HandleAsync(FileCopy command, ErgosfareContext context)
-        {
-            // The handler wants a Stream, and the message is a sequence: the bridge is one
-            // call, and nothing is buffered whole on the way.
-            await using var payload = command.AsStream();
-            using var destination = new MemoryStream();
-
-            await payload.CopyToAsync(destination, context.CancellationToken);
-
-            return new CopyReport(destination.Length);
-        }
-    }
-
     [Fact]
     [Trait("Category", "Unit")]
     public async Task AByteStream_BridgesToAndFromSystemIOStream()
@@ -248,33 +292,19 @@ public class StreamMessageTests
         Assert.Equal(new byte[] { 5, 6 }, kept[2].ToArray());
     }
 
-    public sealed class TooLarge(string message) : Exception(message);
-
-    /// <summary>
-    /// The stage that runs before the payload moves. It reads what is known up front and
-    /// nothing else, which is what lets it refuse an upload without a byte of it arriving.
-    /// </summary>
-    public sealed class RejectOversizedUploads : ICommandPreInterceptor<FileUpload>
-    {
-        public ValueTask<FileUpload> HandleAsync(FileUpload command, ErgosfareContext context)
-            => command.Meta.DeclaredLength > 1_000
-                ? throw new TooLarge($"'{command.Meta.FileName}' declares {command.Meta.DeclaredLength} bytes")
-                : ValueTask.FromResult(command);
-    }
-
     [Fact]
     [Trait("Category", "Unit")]
     public async Task ThePreStage_RefusesTheUploadBeforeAChunkMoves()
     {
         await using var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c => c
-                .Register<FileUploadHandler>()
+                .Register<GuardedFileUploadHandler>()
                 .Register<RejectOversizedUploads>()))
             .BuildServiceProvider();
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        var upload = new FileUpload(new UploadMeta("huge.mp4", 4_000_000_000));
+        var upload = new GuardedFileUpload(new UploadMeta("huge.mp4", 4_000_000_000));
 
         var thrown = await Assert.ThrowsAsync<TooLarge>(async () => await mediator.SendAsync(upload));
 
@@ -294,13 +324,13 @@ public class StreamMessageTests
     {
         await using var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c => c
-                .Register<FileUploadHandler>()
+                .Register<GuardedFileUploadHandler>()
                 .Register<RejectOversizedUploads>()))
             .BuildServiceProvider();
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        var upload = new FileUpload(new UploadMeta("huge.mp4", 4_000_000_000));
+        var upload = new GuardedFileUpload(new UploadMeta("huge.mp4", 4_000_000_000));
         var call = mediator.SendAsync(upload);
 
         await Assert.ThrowsAsync<TooLarge>(async () => await call);

@@ -3,6 +3,7 @@ using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -208,7 +209,7 @@ public class GeneratedPlanDirectConstructionTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task ForceMemoizedHandlers_KeepsTheMemoizedInstance()
+    public async Task ForceMemoizedHandlers_FailsTheDispatch()
     {
         GeneratedDispatchRoots.AddVoidPlan<MemoizedPlanCommand, MemoizedPlanCommandHandler>(
             static () => new MemoizedPlanCommandHandler());
@@ -224,11 +225,13 @@ public class GeneratedPlanDirectConstructionTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        var first = new ErgosfareContext();
-        await mediator.SendAsync(new MemoizedPlanCommand(), first);
-        var second = new ErgosfareContext();
-        await mediator.SendAsync(new MemoizedPlanCommand(), second);
+        // A memoized pipeline caches instances inside its references, and a compiled plan
+        // resolves or constructs fresh ones — the two contracts cannot both hold, so the
+        // construct is unplanned until the generator learns it and every dispatch fails.
+        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
+            await mediator.SendAsync(new MemoizedPlanCommand(), new ErgosfareContext()));
 
-        Assert.Equal(first.Items["handlerId"], second.Items["handlerId"]);
+        Assert.Equal(UnplannedDispatchReason.MemoizedInstances, thrown.Reason);
+        Assert.Equal(typeof(MemoizedPlanCommand), thrown.MessageType);
     }
 }

@@ -3,6 +3,7 @@ using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,7 +13,8 @@ namespace Stella.Ergosfare.Command.Test;
 /// Runtime behavior of generated result pipeline plans, installed through the public
 /// <see cref="GeneratedDispatchRoots.AddResultPlan{TMessage, TResult, THandler}()"/>
 /// surface exactly as generated code would — the result-producing counterpart of
-/// <see cref="GeneratedVoidPlanExecutionTests"/>. Helper types are excluded from discovery
+/// <see cref="GeneratedVoidPlanExecutionTests"/>, including the failure of a plan whose
+/// claimed handler is not the registered one. Helper types are excluded from discovery
 /// so assembly scans (the registry is process-wide) cannot alter these pipelines.
 /// </summary>
 public class GeneratedResultPlanExecutionTests
@@ -79,7 +81,7 @@ public class GeneratedResultPlanExecutionTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task ResultPlanClaimingTheWrongHandler_StillDispatchesTheRegisteredOne()
+    public async Task ResultPlanClaimingTheWrongHandler_FailsTheDispatch()
     {
         GeneratedDispatchRoots.AddResultPlan<MismatchedEcho, string, ClaimedMismatchedEchoHandler>(
             static () => new ClaimedMismatchedEchoHandler());
@@ -91,11 +93,13 @@ public class GeneratedResultPlanExecutionTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        // The plan claims a handler the registry never saw: the factory must stay unused
-        // (its type differs from the registered reference) and the registered handler
-        // must run, exactly as the runtime executor would dispatch it.
-        var result = await mediator.SendAsync(new MismatchedEcho());
+        // The plan claims a handler the registry never saw: the live pipeline is not the
+        // compiled one, and with no runtime lane left the dispatch fails naming the
+        // divergence rather than quietly running the registered handler.
+        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
+            await mediator.SendAsync(new MismatchedEcho()));
 
-        Assert.Equal("actual", result);
+        Assert.Equal(UnplannedDispatchReason.CompositionDiverged, thrown.Reason);
+        Assert.Equal(typeof(MismatchedEcho), thrown.MessageType);
     }
 }

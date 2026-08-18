@@ -2,7 +2,7 @@
 
 An executable specification of Ergosfare's **currently observable** public behavior.
 
-This suite exists for one reason: the core is about to be redesigned. Internals may change
+This suite exists for one reason: the core is being redesigned. Internals may change
 freely; this suite — and only this suite — defines what "unchanged behavior" means. It is
 written as characterization tests, so **the current behavior is correct by definition**.
 Where a behavior looked wrong, it was still pinned as-is and written down under
@@ -17,89 +17,115 @@ dotnet test test/Stella.Ergosfare.Contract.Test
 
 Public types from the `Stella.Ergosfare.*` packages only: `AddErgosfare`, the module
 builders, `ICommandMediator` / `IQueryMediator` / `IEventMediator`, the mediation settings
-and `GroupSet`, `ErgosfareContext`, and the handler/interceptor
-contract interfaces. No `InternalsVisibleTo`, no `*.Internal` namespaces, no reflection
-into non-public members. A behavior that cannot be observed through the public surface is
-out of scope by design — if the suite could see internals, the modernization could not keep
-it green and the whole point would collapse.
+and `GroupSet`, `ErgosfareContext`, the public exception types, and the
+handler/interceptor contract interfaces. No `InternalsVisibleTo`, no `*.Internal`
+namespaces, no reflection into non-public members. A behavior that cannot be observed
+through the public surface is out of scope by design — if the suite could see internals,
+the modernization could not keep it green and the whole point would collapse.
 
 ## Registration axes
 
-Source-generated registration is the primary axis: the generator is referenced as an
-analyzer, and containers are built with `RegisterGenerated(<discovery key>)`. Explicit
-`Register<T>()` is the fallback axis — the path the generated one degrades to.
+There is one dispatch lane now: the compiled plan. The source generator is referenced as
+an analyzer, models every discoverable construct in this assembly at compile time, and
+emits a plan for every pipeline it can prove; plans load through module initializers. At
+run time the executor resolves a container's live participants once, verifies them
+against the plan's baked composition, and runs the plan — or refuses the dispatch.
+Nothing degrades into a runtime lane anymore, because there is none.
 
-Three areas run under **both** axes, each sharing its scenarios through an abstract
-contract class and closing it over a per-axis type set:
+A dispatch the plans cannot serve fails precisely:
 
-| Area | Contract | Generated types | Fallback types |
-| --- | --- | --- | --- |
-| Pipeline semantics | `Pipeline/PipelineSemanticsContract.cs` | `Pipeline/GeneratedPipelineTypes.cs` | `Pipeline/FallbackPipelineTypes.cs` |
-| Synchronous interceptors | `Sync/SyncSemanticsContract.cs` | `Sync/GeneratedSyncTypes.cs` | `Sync/FallbackSyncTypes.cs` |
-| Post-interceptor abort | `Abort/PostAbortSemanticsContract.cs` | `Abort/GeneratedPostAbortTypes.cs` | `Abort/FallbackPostAbortTypes.cs` |
-| Typed exception filters | `ExceptionFilters/ExceptionFilterSemanticsContract.cs` | `ExceptionFilters/GeneratedExceptionFilterTypes.cs` | `ExceptionFilters/FallbackExceptionFilterTypes.cs` |
+- a message nobody serves still raises `NoHandlerFoundException`, and a contested level
+  still raises `MultipleHandlerFoundException` — the throw path inspects the live
+  participants, so both work without any plan;
+- everything else raises `UnplannedDispatchException`, whose `Reason` says why without
+  parsing: `NoCompiledPlan`, `NoDispatchRoot`, `CompositionDiverged`,
+  `MemoizedInstances`, `UnplannedResultAdapter`, `ForeignDependenciesFactory` or
+  `UnplannedGroupSet`.
 
-| Axis | Types | Registration | Executors actually reached |
-| --- | --- | --- | --- |
-| `GeneratedRegistration*Tests` | top-level, unkeyed, ungrouped | `RegisterGenerated()` | `FrozenVoidDispatch`/`FrozenResultDispatch` plan arms, `GeneratedVoidPipelineExecutor` + the emitted `StagedPlanN` classes |
-| `RuntimeRegistration*Tests` | `[ExcludeFromDiscovery]` | `Register<T>()` | `FrozenVoidDispatch`/`FrozenResultDispatch` runtime arms + `VoidPipelineBody`/`ResultPipelineBody` |
+Events keep their fire-and-forget half: a publish that reaches nobody is a silent no-op
+(`ThrowIfNoHandlerFound` unchanged), while a publish that would reach somebody without a
+plan throws — a subscriber must never be skipped silently. Broadcast plans include
+covariant subscribers and interceptor-free events.
 
-> Plans load through module initializers now — not through `RegisterGenerated()` — so the
-> registration surface no longer decides plan availability. What keeps the runtime axis on
-> the runtime arms is `[ExcludeFromDiscovery]`: the generator bakes no plan for those types,
-> so their dispatches exercise the frozen runtime bodies by construction.
+Two registration styles remain, and both feed the same lane:
 
-Both halves of that table are load-bearing, and both are easy to break by accident:
+- **The pattern-less `RegisterGenerated()`** — reserved for the four contract areas
+  below. It registers every default-discovery construct in the assembly, including every
+  other area's unkeyed types. That is safe only while each unkeyed message stays scoped
+  to its own test class and no interceptor targets a shared or marker type: a
+  registered-but-never-dispatched pipeline is inert.
+- **Explicit `Register<T>()`** — the norm everywhere else. The plan gate demands each
+  dispatched message's full compiled pipeline per container: register the handler and
+  every discoverable participant of that message, or the dispatch fails with
+  `CompositionDiverged` naming the diverged stage (pinned in
+  `Unplanned/UnplannedDispatchTests.cs`).
 
-- **The generated axis must stay top-level, unkeyed and ungrouped.** The generator
-  disqualifies keyed, grouped and nested types from its compile-time plans
-  (`TryGetSolePlannableHandler` requires `DiscoveryKeys.IsEmpty`; staged-plan participants
-  additionally must not be nested). Adding a `[DiscoveryKey]` here still registers through
-  generated descriptors — and silently dispatches on the reflective executors, testing
-  nothing the fallback axis does not already cover. The pattern-less `RegisterGenerated()`
-  is therefore **reserved for the four areas above**, and every type they declare is local
-  to its own area: a message type shared with another area, or an interceptor registered
-  against something outside the area, would cross-contaminate the shared unkeyed pool.
-- **The fallback axis must stay `[ExcludeFromDiscovery]`.** The generator's descriptor
-  catalog is populated by a module initializer for *every* type it models, so a type the
-  generator has seen gets pre-computed descriptors even when registered with
-  `Register<T>()`. Excluding them is the only way to make the reflective path run.
+The four contract areas run their scenarios through an abstract contract class closed
+over one type set each. They used to close it a second time, over
+`[ExcludeFromDiscovery]` twins, for a runtime-registration axis; that axis was deleted
+with the lane it exercised — and it had already stopped testing that lane before the
+removal (see [suspicious behavior 12](#suspicious-behaviors-observed)).
 
-Every other area registers by its own discovery key (`contract.dispatch`,
-`contract.lifetime`, `contract.scope`, `contract.groups`, `contract.polymorphism`,
-`contract.events`, `contract.broadcast`, `contract.mutation`, `contract.context`,
-`contract.stream`, `contract.sync`, `contract.multi`, `contract.exclude`), which is also
-what keeps the pattern-less call above selecting only the three axes. Types that must never be
-auto-registered — never-registered messages, late-registered interceptors — carry
-`[ExcludeFromDiscovery]`.
+| Area | Contract | Types |
+| --- | --- | --- |
+| Pipeline semantics | `Pipeline/PipelineSemanticsContract.cs` | `Pipeline/GeneratedPipelineTypes.cs` |
+| Synchronous interceptors | `Sync/SyncSemanticsContract.cs` | `Sync/GeneratedSyncTypes.cs` |
+| Post-interceptor abort | `Abort/PostAbortSemanticsContract.cs` | `Abort/GeneratedPostAbortTypes.cs` |
+| Typed exception filters | `ExceptionFilters/ExceptionFilterSemanticsContract.cs` | `ExceptionFilters/GeneratedExceptionFilterTypes.cs` |
 
-Four of the keyed areas are keyed *because* no plan can serve them, so both of their axes
-reach the reflective path by construction and the key costs nothing:
+The formerly keyed areas — dispatch, context, groups, lifetime, scope, events,
+polymorphism — are unkeyed and plan-served now: their fixture types were hoisted to
+top level, their `[DiscoveryKey]`s dropped, and their containers register each dispatched
+message's pipeline explicitly. Where the old behavior survives on the plan lane, the
+assertions are unchanged; where it cannot, the scenario pins the loud failure instead.
 
-- **`contract.sync`** (`Sync/SyncMainHandlerTests.cs`) — the bare-result contracts
-  (`IHandler<T, object>`, `IHandler<T, string>`) put the bare result type in their
-  descriptor rather than the `ValueTask` carrier every plan computation matches against
-  (`ErgosfareRegistrationGenerator.cs:1668`), so they are disqualified before discovery
-  keys are even considered. The `ValueTask`-shaped ones must stay keyed for a different and
-  worse reason — see [suspicious behavior 10](#suspicious-behaviors-observed). Synchronous
-  *interceptors* are neither: they do reach the emitted plans, which is why they live on
-  the unkeyed axis above.
-- **`contract.broadcast`** (`Events/SyncEventHandlerTests.cs`) — a publish never enters a
-  compile-time plan: the generator emits plans for sole-handler command and query
-  dispatches only, so every event fans out through the reflective broadcast strategy and
-  its own synchronous pattern-match arms. The fan-out twin of `contract.sync`.
-- **`contract.multi`** (`Handlers/MultipleMainHandlerTests.cs`) — the sole-handler gate
-  drops any message with more than one main handler.
-- **`contract.exclude`** (`Exclusion/PipelineExclusionTests.cs`) — the generator skips
-  messages carrying `[ExcludeFromPipeline]` rather than modeling the exclusion.
+### What is unplannable today
 
-One gate is deliberately left unpinned, because no assertion can see it: an exception
-interceptor that implements the non-generic `IExceptionInterceptorFilter` by hand — rather
-than declaring one `IExceptionInterceptorFilter<TException>` — has no compile-time exception
-type, so the generator disqualifies the whole plan and the dispatch falls back to the
-reflective stage, which asks the instance. Both paths then produce the same observable
-behavior; only the lane map would show the difference. Do not write such an interceptor in
-the unkeyed pool: it would take an area's plans down without failing a single test.
+These shapes have no compiled plan, so dispatching them fails loudly — each is pinned
+where listed:
+
+- **Nested types** — anything declared inside a class. Every fixture in the migrated
+  areas is top-level for exactly this reason.
+- **`[DiscoveryKey]`-keyed and `[ExcludeFromDiscovery]` types.** A hand-registered
+  excluded handler serves nothing, void, result and publish alike:
+  `Unplanned/UnplannedDispatchTests.cs`.
+- **Synchronous main handlers**, all four shapes: `Sync/UnplannedSyncMainHandlerTests.cs`
+  for sends, `Events/UnplannedSyncEventHandlerTests.cs` for publishes. The
+  ValueTask-shaped pair cannot even be pinned unkeyed — unkeying them breaks the build;
+  see [suspicious behavior 10](#suspicious-behaviors-observed).
+- **`[ExcludeFromPipeline]` messages that would need a staged plan** —
+  `Exclusion/PipelineExclusionTests.cs`. Only the degenerate bare-handler case is
+  planned, and there the covariant suppression genuinely works.
+- **Sends claimed only covariantly** — `Polymorphism/PolymorphicDispatchTests.cs`. A
+  direct handler beside covariant claims is planned and wins its ladder; publishes keep
+  covariance outright.
+- **Open-generic pipelines** — `Dispatch/GenericHandlerDispatchTests.cs`. The dispatch
+  sites record the open definition and no closed form gets a plan (engine suspect; see
+  entry 12).
+- **Sends mixing grouped and ungrouped participants** — `Groups/GroupFilteringTests.cs`
+  (engine suspect; the broadcast side models the same mix fine).
+- **Memoized pipelines** — `ForceMemoizedHandlers`, and any pipeline whose participants
+  are all singletons, which a user's `AddSingleton` of the only handler produces:
+  `Lifetime/HandlerLifetimeTests.cs`.
+
+One area keeps a discovery key, because being unkeyed is impossible for it:
+
+- **`contract.multi`** (`Handlers/MultipleMainHandlerTests.cs`) — two discoverable
+  handlers claiming one message is a build error now (ERGO010/ERGO023), so the contested
+  pairs must stay out of the generator's model for the dispatch-time contest to be
+  observable at all.
+
+The streaming area (`Streaming/StreamQueryTests.cs`) is plan-served like everything
+else now: the generator compiles a stream plan per (query, item) pair — sole direct
+handler through the stream contract, default set only — so its fixtures are top-level
+and unkeyed like the other areas', and its behavioral assertions are unchanged. Grouped
+streams have no per-set plans yet; naming a set on a stream fails as
+`UnplannedGroupSet`.
+
+One historical gate note: an exception interceptor implementing the non-generic
+`IExceptionInterceptorFilter` by hand has no compile-time exception type. It used to
+demote a plan silently; today an unplannable pipeline cannot run at all, so writing one
+beside an unkeyed message takes that message's dispatches down loudly. Do not.
 
 ## Rules for anyone adding tests here
 
@@ -109,13 +135,14 @@ the test process, and it never forgets. Everything below follows from that.
 1. **Give every test class its own message, handler and interceptor types.** Never share a
    message type across classes. Cross-class isolation is type isolation; there is nothing
    else.
-2. **Give your area its own discovery key, and never call the pattern-less
+2. **Register your area's participants explicitly, and never call the pattern-less
    `RegisterGenerated()`.** That overload registers every default-discovery construct in
-   the assembly, and it belongs to the four both-axis areas alone (see
-   [Registration axes](#registration-axes)). An unkeyed message anywhere else joins those
-   containers and can break their plan expectations. Reach for it only when the scenario
-   genuinely needs to run inside an emitted plan — and then keep every type the scenario
-   declares local to the new area.
+   the assembly, and it belongs to the four contract areas alone (see
+   [Registration axes](#registration-axes)). A new area declares top-level, unkeyed,
+   message-scoped types and lists each dispatched message's full pipeline with
+   `Register<T>()` — the plan gate insists on the full pipeline, and an explicit list is
+   the honest spelling of it. A discovery key is not an isolation tool anymore: keyed
+   types are unplannable, so a key buys a loud failure, not a lane.
 3. **Never assert on registry contents or counts, and never assume an empty registry.** By
    the time your test runs, other classes have registered their types into the same
    registry.
@@ -126,12 +153,12 @@ the test process, and it never forgets. Everything below follows from that.
    `PolymorphicDispatchTests` does. If a scenario ever genuinely needs a marker-wide
    registration, it belongs in its own collection with `DisableParallelization = true`.
 5. **Mutating the registry after a container is live goes in
-   `RegistryMutationCollection`** (`DisableParallelization = true`). The types it
-   registers land in the process-wide registry for good, and the freeze-order semantics
-   it pins would blur beside parallel neighbors.
+   `RegistryMutationCollection`** (`DisableParallelization = true`). The engine surgery
+   removed the last scenarios that did; the collection definition stays for the next
+   one, because the registry is still process-wide and still never forgets.
 6. **Do not pin internals.** Instance identity is contract only where lifetime says so
-   (transient = new per dispatch, memoized = reused). No assertions on pooling, caching,
-   plan or strategy selection, or timing.
+   (transient = new per dispatch). No assertions on pooling, caching, plan or strategy
+   selection, or timing.
 7. **No sleeps.** Use `TaskCompletionSource` if async coordination is ever needed. Every
    scenario here completes synchronously today.
 8. **Hand-written stubs, no Moq.** The repository is phasing mocks out.
@@ -159,11 +186,12 @@ ERGOSFARE_CONTRACT_STACKDUMP=1 ERGOSFARE_CONTRACT_DUMP_PATH=./contract-stackdump
 ```
 
 Each section is labelled with the scenario and the axis, so a redesigned core can be
-diffed against the current one frame by frame. The same scenario under the two axes is
-what the [Registration axes](#registration-axes) table asserts in prose — the compiled
-plan on one side, the strategy-and-invoker stack on the other (both excerpts are the
-`pre` stage of `A_post_interceptor_rewrite_is_the_result_the_caller_receives`, trimmed of
-their test-side frames):
+diffed against the current one frame by frame. The excerpt pair below is historical —
+captured while both lanes existed — and is kept because it shows exactly what the
+runtime-lane removal deleted: the same scenario served by the compiled plan on one side
+and by the strategy-and-invoker stack on the other (both excerpts are the `pre` stage of
+`A_post_interceptor_rewrite_is_the_result_the_caller_receives`, trimmed of their
+test-side frames):
 
 ```
 GeneratedRegistrationPipelineTests — stages: [pre, handler, post, final]
@@ -213,16 +241,21 @@ ERGOSFARE_CONTRACT_STACKDUMP=1 ERGOSFARE_CONTRACT_DUMP_PATH=./lane-map.txt dotne
 diff test/Stella.Ergosfare.Contract.Test/baselines/lane-map.txt ./lane-map.txt
 ```
 
-Green tests say the *behavior* survived. They cannot say which lane produced it: a
-compiled plan that quietly stops qualifying falls back to the reflective executors and
-every assertion in this suite still passes. **A changed lane map under green tests is the
-only early warning that the plan lanes silently degraded.** So a diff is not a failure —
-it is a question that must be answered in the PR:
+Green tests say the *behavior* survived. They cannot say which lane produced it — which
+is what made the map the early warning while a fallback lane still existed, and what
+makes it the proof now that only the plan frames remain. A diff is not a failure — it is
+a question that must be answered in the PR:
 
 - Expected (the phase moved a lane on purpose): re-capture and commit the new baseline in
   the same PR, and say in the body which frames moved and why.
 - Unexpected: the lanes diverged. Stop and report; do not update the baseline to make the
   diff go away.
+
+The stored baseline predates the runtime-lane removal and this suite's migration onto the
+plan lane, so the next deliberate re-capture will be a wholesale rewrite: every
+`RuntimeRegistration*` section drops out, and the renamed areas re-key their sections.
+That diff is expected; [suspicious behavior 12](#suspicious-behaviors-observed) is its
+explanation.
 
 One diff shape is mechanical rather than behavioral: the emitted plan classes are numbered
 positionally (`StagedPlan0`, `StagedPlan1`, …), so adding an unkeyed message that qualifies
@@ -306,12 +339,13 @@ than change by accident.
    app. This area keeps its own `[ExcludeFromDiscovery]` types and registers nothing at
    marker level (rule 3 above), which is what makes `UnknownEvent` mean what it says here.
 
-4. ~~**Covariance applies to interceptors but not to main handlers.**~~ *Fixed.* An
-   interceptor registered against a supertype joins a derived message's pipeline; a
-   *handler* registered against a supertype used to serve a derived message only while that
-   message had no descriptor of its own. Registering the derived type — which
-   `RegisterGenerated` does for every discovered message — filed the base handler as an
-   indirect one, and single-handler mediation never looked there, so the dispatch failed.
+4. ~~**Covariance applies to interceptors but not to main handlers.**~~ *Fixed, then
+   narrowed by the plan lane — see entry 12.* An interceptor registered against a
+   supertype joins a derived message's pipeline; a *handler* registered against a
+   supertype used to serve a derived message only while that message had no descriptor of
+   its own. Registering the derived type — which discovery does for every discovered
+   message — filed the base handler as an indirect one, and single-handler mediation never
+   looked there, so the dispatch failed.
 
    Direct and indirect handlers are read as one priority ladder now, so whether a message
    has a descriptor of its own no longer decides who serves it. A sole direct handler wins
@@ -319,72 +353,51 @@ than change by accident.
    directly, not a competitor — and without one, the covariant level serves. The ladder has
    no tiebreaker *within* a level: two claimants on the same level are a contest and fail
    the dispatch with `MultipleHandlerFoundException`, counted before anything resolves so
-   neither claimant runs. Pinned by the two `A_base_typed_handler_*` scenarios,
-   `A_direct_handler_beats_a_base_typed_one_claiming_the_same_message` and
-   `Two_covariant_claimants_with_no_direct_handler_fail_the_dispatch`.
+   neither claimant runs.
 
-   Two consequences worth knowing:
-
-   - **A group filter that empties the direct set now falls through to a covariantly
-     matched handler** rather than failing with `NoHandlerFoundException`. The filter is
-     applied to both sets while the shape is built, so an indirect handler that survives it
-     is a candidate like any other. No scenario pins this corner yet.
-   - **The compiled plans give such a message up.** A message with any base-typed main
-     handler is disqualified from every staged and single-handler plan: a plan bakes one
-     handler in and cannot express "this is contested", and the model cannot prove the
-     supertype registration is the only one the runtime will see. Those dispatches take the
-     reflective path, and the lane map is what says so.
+   On the plan lane the ladder's direct level survives — a message with its own handler is
+   planned, covariant claims and all, and the direct handler wins — but the covariant
+   *fallback* level does not: a message claimed only covariantly has no plan, and its
+   dispatch fails unplanned rather than running the base handler. Pinned by
+   `A_direct_handler_beats_a_base_typed_one_claiming_the_same_message`,
+   `Two_covariant_claimants_with_no_direct_handler_fail_the_dispatch`, and the two
+   `*_claimed_only_through_its_base_*` scenarios that used to pin the fallback serving.
 
 5. ~~**Runtime registry mutation is half-supported.**~~ *Partly fixed — the diagnosis, not
-   the constraint; since the dependency freeze, resolved by contract — see the closing
-   paragraph.* Registering an interceptor type after the container is built changes
-   the next dispatch only if that type is also in DI. It used to fail with an opaque
-   `InvalidOperationException: No service for type ...`, raised part-way through the
-   dispatch by whichever stage first asked for the participant. Pipeline construction now
-   checks every planned participant against the container up front and raises
-   `UnresolvableParticipantException`, which names the message, names the participant and
-   states the remedy, before any stage runs.
+   the constraint; since the dependency freeze, resolved by contract; the mutation
+   scenarios themselves were removed with the runtime lane.* Registering an interceptor
+   type after the container is built changed the next dispatch only if that type was also
+   in DI, and used to fail with an opaque `InvalidOperationException` part-way through the
+   dispatch. Pipeline construction later checked every planned participant against the
+   container up front (`UnresolvableParticipantException`), and the dependency freeze then
+   retired registration-after-first-dispatch observability altogether. On the plan-only
+   engine the question has moved: a participant the generator saw but the container did
+   not register fails the dispatch as `CompositionDiverged`, named per stage — pinned in
+   `Unplanned/UnplannedDispatchTests.cs`.
 
    **The underlying constraint stands and cannot be fixed here:** the registry is
    process-wide, has no removal, and a container is per-application, so a participant
    resolvable in one container may be absent from another. That is also why the check
    cannot live in `Register` — only a pipeline being built in a container's context can
-   answer the question. The check runs when the pipeline first materializes: a participant
-   the container cannot resolve fails the message's first dispatch, named and explained,
-   before any stage runs. Pinned by
-   `A_participant_the_container_cannot_resolve_fails_the_first_dispatch`.
+   answer the question.
 
-   **The observability half of this entry is retired.** Since the dependency freeze, a
-   registration made after a message's first dispatch is not observed at all: the version
-   guard that made "the next dispatch picks it up" true was the fast path's one recurring
-   cost, and the contract it bought — registration-after-use — was exercised by nothing
-   but these scenarios. Registration up to the first dispatch keeps its full meaning,
-   pinned by `A_registration_before_the_first_dispatch_joins_the_pipeline`. The two
-   `..._picks_up_an_interceptor_registered_after_it_ran` scenarios invert into
-   `..._first_dispatch_is_not_observed` successors on both axes, and the cross-container
-   recovery pin is deferred to the per-container snapshot rework, where that contract gets
-   a non-shared executor to stand on.
-
-   The check covers indirect main handlers too, which was the one corner where it could
-   have broken a dispatch that always worked: single-handler mediation never read that slot,
-   so an unresolvable handler sitting in it was harmless. Entry 4 closed that gap from the
-   other side — the slot is a candidate set now, so anything in it genuinely has to be
-   resolvable, and checking it is no longer eager. Only the events fan-out ever read it
-   before, and it always resolved what it read.
-
-6. ~~**A void pipeline's "result" is a `ValueTask` sentinel, except on abort.**~~ *Fixed.*
-   Post, final and exception interceptors of a void command used to be handed a non-null
-   `ValueTask` even though the handler produced nothing, while an aborted dispatch handed
-   the final interceptor `null` — three values for "there is no result." A resultless
-   pipeline now carries one: `Unit.Value`, the single instance of
-   `Stella.Ergosfare.Core.Abstractions.Unit`, from the moment the handler completes.
+6. ~~**A void pipeline's "result" is a `ValueTask` sentinel, except on abort.**~~ *Fixed;
+   the publish half superseded on the plan lane — see entry 12.* Post, final and exception
+   interceptors of a void command used to be handed a non-null `ValueTask` even though the
+   handler produced nothing, while an aborted dispatch handed the final interceptor `null`
+   — three values for "there is no result." A resultless pipeline now carries one:
+   `Unit.Value`, the single instance of `Stella.Ergosfare.Core.Abstractions.Unit`, from
+   the moment the handler completes.
 
    `null` is no longer a synonym for it; it kept its own meaning. It is the slot *before*
    anything was produced, which is what the exception stage of a failed dispatch and the
-   final stage of a pre-interceptor abort see. A publish has nothing to produce and fills
-   the slot up front, so all three of its stages see `Unit.Value`. Pinned by
+   final stage of a pre-interceptor abort see. A successful publish fills the slot before
+   its post stage runs, so post and final see `Unit.Value`; a **failed** publish's
+   exception and final stages see the empty slot now — the compiled broadcast plan fills
+   the slot only after each handler completes, where the retired runtime fan-out filled it
+   up front. Pinned by
    `A_void_pipelines_result_agnostic_stages_are_handed_the_shared_unit_instance`,
-   `A_void_pipelines_result_slot_is_empty_until_the_handler_has_run`, and the two publish
+   `A_void_pipelines_result_slot_is_empty_until_the_handler_has_run`, and the publish
    scenarios in `Events/EventPublishTests.cs`.
 
    **`Unit` is a class, not a struct**, and that is load-bearing rather than a taste call —
@@ -392,9 +405,11 @@ than change by accident.
 
    - The result key of a resultless pipeline changed from `ValueTask` to `Unit`, and no
      compiler can see it. An interceptor still written against
-     `IPostInterceptor<T, ValueTask>` registers exactly as before and then matches no arm,
-     so the dispatch fails with `NotSupportedException` instead of quietly skipping the
-     stage. The noise is deliberate. Pinned by
+     `IPostInterceptor<T, ValueTask>` registers exactly as before and then matches no arm.
+     On the plan lane that leaves its whole message without a compiled plan, so the
+     dispatch fails with `UnplannedDispatchException` (`NoCompiledPlan`) instead of
+     quietly skipping the stage. The noise is deliberate; only the messenger changed —
+     it used to be the stage's own `NotSupportedException`. Pinned by
      `A_void_interceptor_keyed_on_the_old_result_type_fails_the_dispatch_loudly`.
    - The event facades moved with the key: `IEventExceptionInterceptor<T>` and
      `IEventFinalInterceptor<T>` close over `Unit` now. `IEventPostInterceptor<T>` did not
@@ -437,46 +452,73 @@ than change by accident.
    (`CommandModuleBuilder.Register`), and the module-flavored interceptor facades inherit
    that marker themselves — `ICommandPreInterceptor<T> : ICommand`. The synchronous
    contracts in `Core.Abstractions.Handlers` have no such facade, so a bare
-   `IPreInterceptor<T>` is silently skipped by `RegisterGenerated`, and the dispatch fails
-   later with `NoHandlerFoundException: No handler is registered for X`. The silence is
-   the scan path's alone: handing the same bare type to the explicit `Register<T>()` throws
-   `NotSupportedException` at registration instead. Every synchronous participant in this
-   suite therefore declares `: ICommand, IPreInterceptor<T>` — see `Sync/SyncContracts.cs`
-   (and `: IEvent, IHandler<T, ·>` on the broadcast side, `Events/SyncEventHandlerTests.cs`).
+   `IPreInterceptor<T>` is silently skipped by discovery, and handing the same bare type
+   to the explicit `Register<T>()` throws `NotSupportedException` at registration.
+   Every synchronous participant in this suite therefore declares
+   `: ICommand, IPreInterceptor<T>` — see `Sync/SyncContracts.cs` (and `: IEvent,
+   IHandler<T, ·>` on the broadcast side, `Events/UnplannedSyncEventHandlerTests.cs`).
 
-10. **A `ValueTask`-shaped synchronous main handler breaks the consumer's build.** The plan
-    computations gate on the descriptor's result type, and `IHandler<T, ValueTask>` /
+10. **A `ValueTask`-shaped synchronous main handler breaks the consumer's build.**
+    Re-verified on the plan-only engine (2026-08-18), and it grew a broadcast flavor. The
+    plan computations gate on the descriptor's result type, and `IHandler<T, ValueTask>` /
     `IHandler<T, ValueTask<TResult>>` record exactly the carrier they look for — so an
     unkeyed one qualifies and the generator emits `AddVoidPlan<TMessage, THandler>` /
     `AddResultPlan<…>` for it. Those methods constrain `THandler` to `IAsyncHandler<…>`,
     which a synchronous handler does not implement, and the emitted file fails to compile
-    with `CS0311`. Both shapes were verified by temporarily un-keying them; both fail. This
-    is why `Sync/SyncMainHandlerTests.cs` keeps its types keyed — a compile error cannot be
-    pinned by a test, so this entry is the record. The runtime is not at fault:
-    `VoidPipelineExecutor` and the mediation strategies both have a working arm for these
-    handlers, and the keyed axis exercises it.
+    with `CS0311`. An unkeyed `IHandler<TEvent, ValueTask>` *subscriber* is likewise baked
+    into the emitted broadcast plan as a `HandleAsync` call it does not have, and fails
+    with `CS1061`. A compile error cannot be pinned by a test, so this entry is the
+    record, and the `Unplanned*` pin classes keep those shapes `[ExcludeFromDiscovery]`
+    and reach the runtime throw through hand registration instead. The bare-result shapes
+    (`IHandler<T, object>`, `IHandler<T, string>`) are declined cleanly and are pinned
+    unkeyed.
 
 11. ~~**A memoized handler instance survives only until the next registration anywhere in the
-    process.**~~ *Closed by the dependency freeze — see the closing paragraph.*
-    `ForceMemoizedHandlers` caches the instance inside the handler reference held
-    by a `MessageDependencies` object, and that object is cached against the registry
-    version (`MessageDependenciesFactory.Create` →
-    `MessageDescriptorCache.InvalidateIfRegistryChanged`). Registering a *new* type — in any
-    container, for any unrelated message — bumps `MessageRegistry.Version`, drops the cache
-    and rebuilds the references, so the next dispatch constructs a fresh "memoized"
-    instance. Duplicate registrations are free; only genuinely new types bump.
-    <br />This one was found the hard way. `ForceMemoizedHandlers_reuses_one_instance_across_dispatches`
-    had been passing since the suite was written, but the phase-1 areas added six more
-    classes whose first container build registers new types, widening the window enough to
-    fail roughly one run in ten. It is not a test defect and not a race in the registry: a
-    registration between two dispatches genuinely resets memoization. The scenario is now in
-    `RegistryMutationCollection` so nothing registers beside it — the only change this phase
-    made to an existing test file, and the reason is this entry.
-    <br />The dependency freeze closed this entry from the other side: executors stop
-    consulting the registry version after their first dispatch, so a later registration no
-    longer resets memoization — the memoized instance survives any registration, and the
-    flake mechanism above is structurally gone. The scenario stays in the collection for
-    the registrations it performs, not the ones it fears.
+    process.**~~ *Closed by the dependency freeze, then mooted by the runtime-lane
+    removal: memoized pipelines no longer dispatch at all — see entry 12.*
+    `ForceMemoizedHandlers` cached the instance inside the handler reference held by a
+    `MessageDependencies` object, and that object was cached against the registry version,
+    so registering a new type anywhere in the process rebuilt the references and reset the
+    "memoized" instance — a one-in-ten flake found the hard way. The dependency freeze
+    closed the flake (executors stopped consulting the registry version after their first
+    dispatch), and the plan-only engine then retired the contract itself: a compiled plan
+    resolves or constructs its participants fresh, so a memoized pipeline is refused, on
+    every dispatch, with `UnplannedDispatchException` (`MemoizedInstances`). Pinned by
+    `ForceMemoizedHandlers_fails_the_dispatch`.
+
+12. **The runtime lane is gone (2026-08-18), and this suite now describes the plan-only
+    engine.** A deliberate contract change, not a regression: nothing is dispatched at run
+    time that was not produced at compile time by the source generator. A pipeline without
+    a compiled plan fails loudly with `UnplannedDispatchException` — its `Reason` naming
+    the cause — instead of degrading into a reflective lane; a message nobody serves still
+    raises `NoHandlerFoundException` and a contested one still raises
+    `MultipleHandlerFoundException`, both computed from the live participants without any
+    plan. The casualties, all failing loudly pending generator coverage: synchronous main
+    handlers (sends and publishes; entries 9 and 10), `[ExcludeFromPipeline]` messages
+    that need a staged plan, sends claimed only covariantly (entry 4), open-generic
+    pipelines, sends mixing grouped and ungrouped participants, and memoized pipelines —
+    `ForceMemoizedHandlers`, and the all-singleton pipeline a user's `AddSingleton` of the
+    only handler produces, so the "user's own singleton wins" idiom now fails where a
+    user's transient factory still wins. A failed publish's exception and final stages now
+    see the empty result slot (`null`), superseding the publish half of entry 6.
+
+    Three of these look like engine gaps rather than doctrine, and are pinned as observed
+    with engine-suspect comments at the pin: **open-generic sends** (the dispatch sites
+    record the open definition — `Wrap`1`, no type arguments — and no closed form gets a
+    plan, though the compilation names `Wrap<int>` and `Wrap<string>` at the call sites),
+    **the mixed grouped/ungrouped send** (`MixedAudience` gets no plan at all, default or
+    per-set, while the broadcast side bakes both a default and a per-set plan for the
+    same mix), and **the all-singleton memoization refusal** (the plan's resolving
+    variant would return the same instance per dispatch anyway).
+
+    Two things were true before the removal and belong in the record. The fallback axis
+    had already stopped testing the fallback: commit `ae21f35` dropped the
+    `using …Fallback` imports from the Pipeline and Sync runtime-axis classes, so their
+    `Register<T>()` calls silently bound to the generated twin types in the same
+    namespace and their scenarios rode the compiled plans — green tests, wrong lane, on
+    the axis whose whole purpose was the other lane. And the Abort and ExceptionFilters
+    runtime axes, which did still use their excluded twins, failed every dispatch the
+    moment the lane went — which is the removal working as designed.
 
 ## Where it runs
 

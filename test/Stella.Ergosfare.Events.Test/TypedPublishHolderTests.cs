@@ -8,6 +8,22 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Events.Test;
 
+// The fixtures live at the top level so the source generator compiles the derived event's
+// broadcast plan; owned by TypedPublishHolderTests alone.
+
+public class HolderBaseEvent : IEvent { }
+
+public sealed class HolderDerivedEvent : HolderBaseEvent { }
+
+public sealed class HolderDerivedEventHandler : IEventHandler<HolderDerivedEvent>
+{
+    public ValueTask HandleAsync(HolderDerivedEvent @event, ErgosfareContext context)
+    {
+        context.Set("derivedRan", true);
+        return ValueTask.CompletedTask;
+    }
+}
+
 /// <summary>
 /// Covers the static-generic slot behind the typed publish overload: it must serve the same
 /// pipeline the runtime-type lookup does (one composition cache per message type), it must not
@@ -24,19 +40,6 @@ public class TypedPublishHolderTests
         public IMessageDependencies? Find(Type messageType, IEnumerable<string> groups) => null;
     }
 
-    public class BaseEvent : IEvent { }
-
-    public sealed class DerivedEvent : BaseEvent { }
-
-    public sealed class DerivedEventHandler : IEventHandler<DerivedEvent>
-    {
-        public ValueTask HandleAsync(DerivedEvent @event, ErgosfareContext context)
-        {
-            context.Set("derivedRan", true);
-            return ValueTask.CompletedTask;
-        }
-    }
-
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
@@ -44,8 +47,8 @@ public class TypedPublishHolderTests
     {
         var table = new FrozenBroadcastTable(new NoCompositionFactory());
 
-        var fromSlot = table.Get<DerivedEvent>();
-        var fromLookup = table.Get(typeof(DerivedEvent));
+        var fromSlot = table.Get<HolderDerivedEvent>();
+        var fromLookup = table.Get(typeof(HolderDerivedEvent));
 
         // Two entries per type would mean two composition caches and two gate verdicts for
         // one pipeline — the typed slot has to be a shortcut to the dictionary, not a second
@@ -60,14 +63,14 @@ public class TypedPublishHolderTests
         var first = new FrozenBroadcastTable(new NoCompositionFactory());
         var second = new FrozenBroadcastTable(new NoCompositionFactory());
 
-        var fromFirst = first.Get<DerivedEvent>();
-        var fromSecond = second.Get<DerivedEvent>();
+        var fromFirst = first.Get<HolderDerivedEvent>();
+        var fromSecond = second.Get<HolderDerivedEvent>();
 
         // The slot is process-wide while the table is per container, so it carries a table
         // identity check; without it the second container would be served the first's
         // pipeline — and with it, the first still reads its own on the next publish.
         Assert.NotSame(fromFirst, fromSecond);
-        Assert.Same(fromFirst, first.Get<DerivedEvent>());
+        Assert.Same(fromFirst, first.Get<HolderDerivedEvent>());
     }
 
     [Fact]
@@ -76,15 +79,15 @@ public class TypedPublishHolderTests
     public async Task Publish_ThroughABaseTypedVariable_DispatchesByRuntimeType()
     {
         var provider = new ServiceCollection()
-            .AddErgosfare(x => x.AddEventModule(e => e.Register<DerivedEventHandler>()))
+            .AddErgosfare(x => x.AddEventModule(e => e.Register<HolderDerivedEventHandler>()))
             .BuildServiceProvider();
         await using var _ = provider;
 
         var mediator = provider.GetRequiredService<IEventMediator>();
 
-        // The variable's static type closes the generic overload over BaseEvent; the
-        // holder guard must reject it and resolve the DerivedEvent pipeline instead.
-        BaseEvent @event = new DerivedEvent();
+        // The variable's static type closes the generic overload over HolderBaseEvent; the
+        // holder guard must reject it and resolve the HolderDerivedEvent pipeline instead.
+        HolderBaseEvent @event = new HolderDerivedEvent();
         var settings = new ErgosfareContext();
 
         await mediator.PublishAsync(@event, settings);
@@ -98,7 +101,7 @@ public class TypedPublishHolderTests
     public async Task Publish_ThroughTheConcreteType_TakesTheHolderAndDispatches()
     {
         var provider = new ServiceCollection()
-            .AddErgosfare(x => x.AddEventModule(e => e.Register<DerivedEventHandler>()))
+            .AddErgosfare(x => x.AddEventModule(e => e.Register<HolderDerivedEventHandler>()))
             .BuildServiceProvider();
         await using var _ = provider;
 
@@ -106,7 +109,7 @@ public class TypedPublishHolderTests
 
         var settings = new ErgosfareContext();
 
-        await mediator.PublishAsync(new DerivedEvent(), settings);
+        await mediator.PublishAsync(new HolderDerivedEvent(), settings);
 
         Assert.Equal(true, settings.Items["derivedRan"]);
     }

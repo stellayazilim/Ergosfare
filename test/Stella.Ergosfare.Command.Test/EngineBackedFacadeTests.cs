@@ -8,43 +8,45 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Command.Test;
 
+public sealed class FacadeScopedProbe
+{
+    public Guid Id { get; } = Guid.NewGuid();
+}
+
+public sealed class ProbeCommand : ICommand { }
+
+public sealed class ProbeCommandHandler(FacadeScopedProbe probe) : ICommandHandler<ProbeCommand>
+{
+    public ValueTask HandleAsync(ProbeCommand command, ErgosfareContext context)
+    {
+        context.Set("probeId", probe.Id);
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class EchoCommand : ICommand<string>
+{
+    public string Payload { get; init; } = string.Empty;
+}
+
+public sealed class EchoCommandHandler : ICommandHandler<EchoCommand, string>
+{
+    public ValueTask<string> HandleAsync(EchoCommand command, ErgosfareContext context)
+    {
+        context.Set("sawPayload", command.Payload);
+        return ValueTask.FromResult(command.Payload + "!");
+    }
+}
+
 /// <summary>
 /// Covers the engine-backed facade shape: DI resolves a single-object facade bound to the
 /// process-wide <see cref="MessageDispatchEngine"/>, handler resolution still binds to the
 /// calling scope (verified under <c>ValidateScopes</c>), and the facade's two public
-/// constructors dispatch identically.
+/// constructors dispatch identically. Fixtures are top-level and discoverable, so the
+/// dispatches run through compiled plans.
 /// </summary>
 public class EngineBackedFacadeTests
 {
-    public sealed class ScopedProbe
-    {
-        public Guid Id { get; } = Guid.NewGuid();
-    }
-
-    public sealed class ProbeCommand : ICommand { }
-
-    public sealed class ProbeCommandHandler(ScopedProbe probe) : ICommandHandler<ProbeCommand>
-    {
-        public ValueTask HandleAsync(ProbeCommand command, ErgosfareContext context)
-        {
-            context.Set("probeId", probe.Id);
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    public sealed class EchoCommand : ICommand<string>
-    {
-        public string Payload { get; init; } = string.Empty;
-    }
-
-    public sealed class EchoCommandHandler : ICommandHandler<EchoCommand, string>
-    {
-        public ValueTask<string> HandleAsync(EchoCommand command, ErgosfareContext context)
-        {
-            context.Set("sawPayload", command.Payload);
-            return ValueTask.FromResult(command.Payload + "!");
-        }
-    }
 
     [Fact]
     [Trait("Category", "Unit")]
@@ -70,7 +72,7 @@ public class EngineBackedFacadeTests
     public async Task DiResolvedFacade_WithValidateScopes_BindsHandlerResolutionToTheCallingScope()
     {
         var provider = new ServiceCollection()
-            .AddScoped<ScopedProbe>()
+            .AddScoped<FacadeScopedProbe>()
             .AddErgosfare(x => x.AddCommandModule(c => c.Register<ProbeCommandHandler>()))
             .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         await using var _ = provider;

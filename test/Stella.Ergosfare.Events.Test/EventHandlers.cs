@@ -7,6 +7,8 @@ namespace Stella.Ergosfare.Events.Test;
 
 /// <summary>
 /// A stub event handler for <see cref="StubNonGenericEvent"/> that tracks execution.
+/// The event's one compiled subscriber: a second handler would enter the compiled
+/// broadcast plan too, and every container publishing the event would have to register it.
 /// </summary>
 public class StubNonGenericEventHandler1: IEventHandler<StubNonGenericEvent>
 {
@@ -14,28 +16,7 @@ public class StubNonGenericEventHandler1: IEventHandler<StubNonGenericEvent>
     /// Gets a value indicating whether the handler has been executed.
     /// </summary>
     public bool IsRuned { get; private set; }
-    
-    /// <summary>
-    /// Handles the event and sets <see cref="IsRuned"/> to true.
-    /// </summary>
-    public async ValueTask HandleAsync(StubNonGenericEvent message, ErgosfareContext context)
-    {
-        IsRuned = true;
-        await ValueTask.CompletedTask;
-    }
-}
 
-
-/// <summary>
-/// Another stub event handler for <see cref="StubNonGenericEvent"/> that tracks execution.
-/// </summary>
-public class StubNonGenericEventHandler2: IEventHandler<StubNonGenericEvent>
-{
-    /// <summary>
-    /// Gets a value indicating whether the handler has been executed.
-    /// </summary>
-    public bool IsRuned { get; private set; }
-    
     /// <summary>
     /// Handles the event and sets <see cref="IsRuned"/> to true.
     /// </summary>

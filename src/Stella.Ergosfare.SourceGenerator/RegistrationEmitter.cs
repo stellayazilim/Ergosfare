@@ -746,10 +746,14 @@ internal static class RegistrationEmitter
 
             // A broadcast goes into its own store: a publish looks there while a send looks
             // at the resultless plans, so which store answered settles the delivery
-            // difference and no dispatch has to branch on the message.
-            var addMethod = plan.IsGroupFiltering
-                ? plan.IsBroadcast ? ".AddFilteredBroadcastPlan<" : ".AddFilteredPlan<"
-                : plan.IsBroadcast ? ".AddBroadcastPlan<" : ".AddStagedPlan<";
+            // difference and no dispatch has to branch on the message. A stream plan has its
+            // own store too, keyed by (query, item) with no group set — per-set stream plans
+            // do not exist yet.
+            var addMethod = plan.IsStream
+                ? ".AddStreamPlan<"
+                : plan.IsGroupFiltering
+                    ? plan.IsBroadcast ? ".AddFilteredBroadcastPlan<" : ".AddFilteredPlan<"
+                    : plan.IsBroadcast ? ".AddBroadcastPlan<" : ".AddStagedPlan<";
 
             sb.Append("            ").Append(DispatchRootsFullName)
               .Append(addMethod)
@@ -921,12 +925,19 @@ internal static class RegistrationEmitter
         {
             var plan = stagedPlans[i];
             var isVoid = plan.ResultTypeExpression is null;
-            var emitDirect = supportsDirectConstruction && plan.SupportsDirectConstruction;
+            // A stream plan's base declares no directly constructed entry point, so the
+            // variant is never written for one.
+            var emitDirect = supportsDirectConstruction && plan.SupportsDirectConstruction && !plan.IsStream;
 
             StartMember(sb, ref wroteMember);
             sb.Append("        private sealed class StagedPlan").Append(i).Append(" : global::Stella.Ergosfare.Core.Abstractions.StagedPlans.");
 
-            if (plan.IsBroadcast)
+            if (plan.IsStream)
+            {
+                sb.Append("StagedStreamPlan<").Append(plan.MessageTypeExpression)
+                  .Append(", ").Append(plan.ResultTypeExpression).AppendLine(">");
+            }
+            else if (plan.IsBroadcast)
             {
                 sb.Append("StagedBroadcastPlan<").Append(plan.MessageTypeExpression).AppendLine(">");
             }
@@ -999,6 +1010,36 @@ internal static class RegistrationEmitter
                 sb.AppendLine("                get { return CoveredGroups; }");
                 sb.AppendLine("            }");
                 sb.AppendLine();
+            }
+
+            if (plan.IsStream)
+            {
+                // A stream plan's entry is an asynchronous iterator over the item type, and
+                // the enumeration token arrives as a plain parameter: the body hands it to
+                // GetAsyncEnumerator itself, which is what CS8425 cannot see.
+                sb.AppendLine("            #pragma warning disable CS8425");
+                sb.Append("            public override async ").Append(EmittedExpressions.AsyncEnumerable)
+                  .Append('<').Append(plan.ResultTypeExpression).AppendLine("> Execute(");
+                sb.Append("                ").Append(plan.MessageTypeExpression).AppendLine(" message,");
+                sb.Append("                ").Append(ExecutionContextFullName).AppendLine(" context,");
+                sb.AppendLine("                global::System.IServiceProvider serviceProvider,");
+                sb.AppendLine("                global::System.Threading.CancellationToken cancellationToken)");
+                sb.AppendLine("            #pragma warning restore CS8425");
+                sb.AppendLine("            {");
+                EmitStreamExecuteBody(sb, plan);
+                sb.AppendLine("            }");
+                sb.AppendLine();
+                // What stands in for the stream when the handler never produced one, so the
+                // enumeration needs no null branch. The await keeps the iterator an honest
+                // asynchronous one without a warning suppression.
+                sb.Append("            private static async ").Append(EmittedExpressions.AsyncEnumerable)
+                  .Append('<').Append(plan.ResultTypeExpression).AppendLine("> Empty()");
+                sb.AppendLine("            {");
+                sb.AppendLine("                await global::System.Threading.Tasks.Task.CompletedTask;");
+                sb.AppendLine("                yield break;");
+                sb.AppendLine("            }");
+                sb.AppendLine("        }");
+                continue;
             }
 
             sb.Append("            public override async ").Append(ValueTaskFullName);
@@ -1380,8 +1421,8 @@ internal static class RegistrationEmitter
         string? exceptionArgument,
         string indent)
     {
-        var pipelineResult = plan.ResultTypeExpression ?? UnitFullName;
-        var pipelineResultIsValueType = plan.ResultTypeExpression is not null && plan.ResultIsValueType;
+        var pipelineResult = plan.PipelineResultTypeExpression;
+        var pipelineResultIsValueType = plan.PipelineResultIsValueType;
         var extraArgument = exceptionArgument is null ? string.Empty : ", " + exceptionArgument;
 
         // The exception argument also tells the stages apart: only the exception stage
@@ -1439,8 +1480,8 @@ internal static class RegistrationEmitter
     /// </remarks>
     private static void EmitFinalCalls(StringBuilder sb, StagedPlanModel plan, bool direct, string resultExpressionText, string indent)
     {
-        var pipelineResult = plan.ResultTypeExpression ?? UnitFullName;
-        var pipelineResultIsValueType = plan.ResultTypeExpression is not null && plan.ResultIsValueType;
+        var pipelineResult = plan.PipelineResultTypeExpression;
+        var pipelineResultIsValueType = plan.PipelineResultIsValueType;
 
         // A final interceptor declares `TResult? result`: the stage runs from a finally, so
         // there may be no result to hand it.
@@ -1835,6 +1876,205 @@ internal static class RegistrationEmitter
     }
 
     private const string ExceptionDispatchInfoFullName = "global::System.Runtime.ExceptionServices.ExceptionDispatchInfo";
+
+    /// <summary>
+    /// Writes the body of a stream plan: an asynchronous iterator running the pre stage,
+    /// the handler, the enumeration and the stages after it.
+    /// </summary>
+    /// <param name="sb">The buffer to write to.</param>
+    /// <param name="plan">The plan being written.</param>
+    /// <remarks>
+    /// The retired stream strategy's exact structure, as straight-line typed calls. A
+    /// failure before or during enumeration defers to the exception stage — the caller
+    /// keeps every item that preceded it — while <c>ExecutionAbortedException</c>
+    /// propagates immediately and skips the final stage. The post stage runs once
+    /// enumeration ends cleanly and receives the enumerator: the items are already with
+    /// the caller, so there is nothing for an interceptor to replace. A pending failure
+    /// nobody accepted is rethrown with its original stack.
+    /// </remarks>
+    private static void EmitStreamExecuteBody(StringBuilder sb, StagedPlanModel plan)
+    {
+        // As in the other bodies, the abort flag exists for the final stage alone.
+        var hasFinalStage = !plan.FinalCalls.IsEmpty;
+
+        sb.AppendLine("                global::System.Exception? exception = null;");
+
+        if (hasFinalStage)
+        {
+            sb.AppendLine("                var aborted = false;");
+        }
+
+        sb.AppendLine("                var consume = true;");
+        sb.Append("                ").Append(EmittedExpressions.AsyncEnumerable)
+          .Append('<').Append(plan.ResultTypeExpression).AppendLine(">? enumerable = null;");
+        sb.AppendLine();
+        sb.AppendLine("                try");
+        sb.AppendLine("                {");
+        EmitPreCalls(sb, plan, direct: false, "                    ");
+
+        // Calling Handle only builds the sequence; the handler body runs as the caller
+        // enumerates below. The concrete handler implements the contract through a default
+        // member, so the call goes through the interface.
+        sb.Append("                    enumerable = ((").Append(HandlersNamespace).Append("IHandler<")
+          .Append(plan.MessageTypeExpression).Append(", ").Append(EmittedExpressions.AsyncEnumerable)
+          .Append('<').Append(plan.ResultTypeExpression).Append(">>)");
+        AppendResolve(sb, plan.HandlerTypeExpression);
+        sb.AppendLine(").Handle(message, context);");
+        sb.AppendLine("                }");
+        // Stopped before a single item existed: nothing else runs, the final stage
+        // included, and the signal reaches whoever is enumerating.
+        sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
+        sb.AppendLine("                {");
+
+        if (hasFinalStage)
+        {
+            sb.AppendLine("                    aborted = true;");
+        }
+
+        sb.AppendLine("                    throw;");
+        sb.AppendLine("                }");
+        sb.AppendLine("                catch (global::System.Exception e)");
+        sb.AppendLine("                {");
+        // The stream never came to be, so there is nothing to enumerate; the failure goes
+        // straight to the stages below.
+        sb.AppendLine("                    consume = false;");
+        sb.AppendLine("                    exception = e;");
+        sb.AppendLine("                }");
+        sb.AppendLine();
+        sb.AppendLine("                if (enumerable == null)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    enumerable = Empty();");
+        sb.AppendLine("                }");
+        sb.AppendLine();
+        sb.AppendLine("                await using var enumerator = enumerable.GetAsyncEnumerator(cancellationToken);");
+        sb.AppendLine();
+        sb.AppendLine("                while (consume)");
+        sb.AppendLine("                {");
+        sb.Append("                    var item = default(").Append(plan.ResultTypeExpression).AppendLine(")!;");
+        sb.AppendLine();
+        sb.AppendLine("                    try");
+        sb.AppendLine("                    {");
+        sb.AppendLine("                        consume = await enumerator.MoveNextAsync().ConfigureAwait(false);");
+        sb.AppendLine("                        item = consume ? enumerator.Current : default!;");
+        sb.AppendLine("                    }");
+        // Stopped mid-stream: the items already yielded stand, nothing further is
+        // produced, and the signal reaches the enumerating caller.
+        sb.Append("                    catch (").Append(AbortedExceptionFullName).AppendLine(")");
+        sb.AppendLine("                    {");
+
+        if (hasFinalStage)
+        {
+            sb.AppendLine("                        aborted = true;");
+        }
+
+        sb.AppendLine("                        throw;");
+        sb.AppendLine("                    }");
+        sb.AppendLine("                    catch (global::System.Exception e)");
+        sb.AppendLine("                    {");
+        sb.AppendLine("                        consume = false;");
+        sb.AppendLine("                        exception = e;");
+        sb.AppendLine("                    }");
+        sb.AppendLine();
+        // Whether MoveNextAsync produced an item is the only thing that decides this:
+        // null is a legitimate element, so testing the item itself would drop it and hand
+        // the caller a shorter, well-formed sequence.
+        sb.AppendLine("                    if (consume && exception == null)");
+        sb.AppendLine("                    {");
+        sb.AppendLine("                        yield return item;");
+        sb.AppendLine("                    }");
+        sb.AppendLine();
+        sb.AppendLine("                    if (!consume || exception != null)");
+        sb.AppendLine("                    {");
+        sb.AppendLine("                        break;");
+        sb.AppendLine("                    }");
+        sb.AppendLine("                }");
+
+        if (!plan.PostCalls.IsEmpty)
+        {
+            sb.AppendLine();
+            sb.AppendLine("                try");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    if (exception == null)");
+            sb.AppendLine("                    {");
+            // The stage receives the enumerator rather than a result: the items are
+            // already with the caller, so there is nothing for an interceptor to replace.
+            sb.AppendLine("                        object? postChain = enumerator;");
+
+            foreach (var call in plan.PostCalls)
+            {
+                EmitChainCall(sb, plan, call, direct: false, "PostInterceptor", "postChain", null, "                        ");
+            }
+
+            sb.AppendLine("                    }");
+            sb.AppendLine("                }");
+            sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
+            sb.AppendLine("                {");
+
+            if (hasFinalStage)
+            {
+                sb.AppendLine("                    aborted = true;");
+            }
+
+            sb.AppendLine("                    throw;");
+            sb.AppendLine("                }");
+            sb.AppendLine("                catch (global::System.Exception e)");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    exception = e;");
+            sb.AppendLine("                }");
+        }
+
+        sb.AppendLine();
+
+        // The exception stage, and the final stage in a finally when there is one. An
+        // abort thrown from an exception interceptor propagates without setting the flag,
+        // exactly as the strategy left it: the final stage still runs on that path.
+        var stageIndent = "                ";
+
+        if (hasFinalStage)
+        {
+            sb.AppendLine("                try");
+            sb.AppendLine("                {");
+            stageIndent = "                    ";
+        }
+
+        sb.Append(stageIndent).AppendLine("if (exception != null)");
+        sb.Append(stageIndent).AppendLine("{");
+
+        var inner = stageIndent + "    ";
+
+        if (plan.ExceptionCalls.IsEmpty)
+        {
+            // Nobody could accept the failure, so it reaches the caller with its original
+            // stack rather than one rooted here.
+            sb.Append(inner).Append(ExceptionDispatchInfoFullName).AppendLine(".Capture(exception).Throw();");
+        }
+        else
+        {
+            sb.Append(inner).AppendLine("object? exceptionChain = enumerator;");
+
+            if (!EmitExceptionCallLoop(sb, plan, direct: false, "exceptionChain", "exception", trackMatched: true, inner))
+            {
+                sb.Append(inner).AppendLine("if (!matchedExceptionInterceptor)");
+                sb.Append(inner).AppendLine("{");
+                sb.Append(inner).Append("    ").Append(ExceptionDispatchInfoFullName).AppendLine(".Capture(exception).Throw();");
+                sb.Append(inner).AppendLine("}");
+            }
+        }
+
+        sb.Append(stageIndent).AppendLine("}");
+
+        if (hasFinalStage)
+        {
+            sb.AppendLine("                }");
+            sb.AppendLine("                finally");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    if (!aborted)");
+            sb.AppendLine("                    {");
+            EmitFinalCalls(sb, plan, direct: false, "enumerator", "                        ");
+            sb.AppendLine("                    }");
+            sb.AppendLine("                }");
+        }
+    }
 
     /// <summary>
     /// Writes the expression that turns a thrown exception into a failed carrier.

@@ -8,10 +8,11 @@ using Stella.Ergosfare.Queries.Abstractions;
 namespace Stella.Ergosfare.Contract.Test.Pipeline;
 
 /// <summary>
-/// The pipeline semantics every registration axis must reproduce: what runs, in what
-/// order, and what each stage is handed. Both the source-generated axis and the runtime
-/// fallback axis inherit these scenarios verbatim, so a divergence between the two shows
-/// up as one subclass failing.
+/// The pipeline semantics a dispatch must reproduce: what runs, in what order, and what
+/// each stage is handed. One axis inherits these scenarios today — the compiled plans are
+/// the only lane left — but the contract stays abstract so a future second lane (a
+/// composite plan, a new registration surface) closes it over its own types instead of
+/// copying the scenarios.
 /// </summary>
 public abstract class PipelineSemanticsContract
 {

@@ -7,47 +7,70 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Events.Test;
 
+// The fixtures live at the top level so the source generator compiles the plans grouped
+// publishes run — the group sets below reach the dispatch as runtime values, which is what
+// the group-filtering plan exists for. Every type is owned by GroupedBroadcastFastLaneTests
+// alone, and each container registers its events' full compiled pipelines.
+
+public sealed class LaneEvent : IEvent { }
+
+[Group("lane.alpha")]
+public sealed class LaneAlphaHandler : IEventHandler<LaneEvent>
+{
+    public ValueTask HandleAsync(LaneEvent @event, ErgosfareContext context)
+    {
+        context.Set("alphaRan", true);
+        return ValueTask.CompletedTask;
+    }
+}
+
+[Group("lane.beta")]
+public sealed class LaneBetaHandler : IEventHandler<LaneEvent>
+{
+    public ValueTask HandleAsync(LaneEvent @event, ErgosfareContext context)
+    {
+        context.Set("betaRan", true);
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class InterceptedLaneEvent : IEvent { }
+
+[Group("lane.guarded")]
+public sealed class LaneGuardedHandler : IEventHandler<InterceptedLaneEvent>
+{
+    public ValueTask HandleAsync(InterceptedLaneEvent @event, ErgosfareContext context)
+    {
+        context.Set("guardedRan", true);
+        return ValueTask.CompletedTask;
+    }
+}
+
+[Group("lane.guarded")]
+public sealed class LaneGuardedInterceptor : IEventPreInterceptor<InterceptedLaneEvent>
+{
+    public ValueTask<InterceptedLaneEvent> HandleAsync(InterceptedLaneEvent @event, ErgosfareContext context)
+    {
+        context.Set("guardedInterceptorRan", true);
+        return ValueTask.FromResult(@event);
+    }
+}
+
 /// <summary>
-/// The grouped broadcast fast lane: grouped publishes resolve the same group-filtered
-/// pipeline the Mediate path built, served from a last-used (factory, group set) plan
-/// slot. The tests stress the slot's weak spots — alternating group sets, a reused
-/// settings instance whose group list is mutated in place, and a grouped pipeline that
-/// carries an interceptor (which must keep the strategy path, not the straight-through
-/// loop).
+/// Grouped publishes whose group set is a runtime value: they run through the compiled
+/// group-filtering plan, served from a last-used (group set) slot. The tests stress the
+/// slot's weak spots — alternating group sets, a reused settings instance whose group list
+/// is mutated in place, and a grouped pipeline that carries an interceptor (which must run
+/// the interceptor before the handler).
 /// </summary>
 public class GroupedBroadcastFastLaneTests
 {
-    [ExcludeFromDiscovery]
-    public sealed class LaneEvent : IEvent { }
-
-    [ExcludeFromDiscovery]
-    [Group("alpha")]
-    public sealed class AlphaHandler : IEventHandler<LaneEvent>
-    {
-        public ValueTask HandleAsync(LaneEvent @event, ErgosfareContext context)
-        {
-            context.Set("alphaRan", true);
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    [ExcludeFromDiscovery]
-    [Group("beta")]
-    public sealed class BetaHandler : IEventHandler<LaneEvent>
-    {
-        public ValueTask HandleAsync(LaneEvent @event, ErgosfareContext context)
-        {
-            context.Set("betaRan", true);
-            return ValueTask.CompletedTask;
-        }
-    }
-
     private static ServiceProvider Build()
         => new ServiceCollection()
             .AddErgosfare(x => x.AddEventModule(e =>
             {
-                e.Register<AlphaHandler>();
-                e.Register<BetaHandler>();
+                e.Register<LaneAlphaHandler>();
+                e.Register<LaneBetaHandler>();
             }))
             .BuildServiceProvider();
 
@@ -73,15 +96,15 @@ public class GroupedBroadcastFastLaneTests
 
         // alpha populates the slot, beta must not be served alpha's plan, and alpha
         // again must survive the slot having moved on.
-        var first = await Publish(mediator, "alpha");
+        var first = await Publish(mediator, "lane.alpha");
         Assert.Equal(true, first.Items["alphaRan"]);
         Assert.False(first.Items.ContainsKey("betaRan"));
 
-        var second = await Publish(mediator, "beta");
+        var second = await Publish(mediator, "lane.beta");
         Assert.Equal(true, second.Items["betaRan"]);
         Assert.False(second.Items.ContainsKey("alphaRan"));
 
-        var third = await Publish(mediator, "alpha");
+        var third = await Publish(mediator, "lane.alpha");
         Assert.Equal(true, third.Items["alphaRan"]);
         Assert.False(third.Items.ContainsKey("betaRan"));
     }
@@ -99,7 +122,7 @@ public class GroupedBroadcastFastLaneTests
         // One settings instance, one List instance — mutated between publishes. The slot
         // snapshots group contents, so the second publish must re-resolve, not replay
         // alpha's plan.
-        var groups = new List<string> { "alpha" };
+        var groups = new List<string> { "lane.alpha" };
         var settings = new ErgosfareContext();
         var groupFilter = groups;
 
@@ -107,7 +130,7 @@ public class GroupedBroadcastFastLaneTests
         Assert.Equal(true, settings.Items["alphaRan"]);
 
         groups.Clear();
-        groups.Add("beta");
+        groups.Add("lane.beta");
         settings.Items.Clear();
 
         await mediator.PublishAsync(new LaneEvent(), settings, groupFilter);
@@ -115,58 +138,30 @@ public class GroupedBroadcastFastLaneTests
         Assert.False(settings.Items.ContainsKey("alphaRan"));
     }
 
-    [ExcludeFromDiscovery]
-    public sealed class InterceptedLaneEvent : IEvent { }
-
-    [ExcludeFromDiscovery]
-    [Group("guarded")]
-    public sealed class GuardedHandler : IEventHandler<InterceptedLaneEvent>
-    {
-        public ValueTask HandleAsync(InterceptedLaneEvent @event, ErgosfareContext context)
-        {
-            context.Set("guardedRan", true);
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    [ExcludeFromDiscovery]
-    [Group("guarded")]
-    public sealed class GuardedInterceptor : IEventPreInterceptor<InterceptedLaneEvent>
-    {
-        public ValueTask<InterceptedLaneEvent> HandleAsync(InterceptedLaneEvent @event, ErgosfareContext context)
-        {
-            context.Set("guardedInterceptorRan", true);
-            return ValueTask.FromResult(@event);
-        }
-    }
-
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
     public async Task GroupedPipelineWithInterceptor_RunsTheFullStrategy()
     {
-        var provider = Build();
-        await using var _ = provider;
-
         // Register the intercepted pipeline in its own container to keep the fixture
         // handlers' pipelines interceptor-free.
         await using var guarded = new ServiceCollection()
             .AddErgosfare(x => x.AddEventModule(e =>
             {
-                e.Register<GuardedHandler>();
-                e.Register<GuardedInterceptor>();
+                e.Register<LaneGuardedHandler>();
+                e.Register<LaneGuardedInterceptor>();
             }))
             .BuildServiceProvider();
 
         var mediator = guarded.GetRequiredService<IEventMediator>();
 
         var settings = new ErgosfareContext();
-        string[] groupFilter = ["guarded"];
+        string[] groupFilter = ["lane.guarded"];
 
         await mediator.PublishAsync(new InterceptedLaneEvent(), settings, groupFilter);
 
-        // A grouped pipeline that carries an interceptor must leave the straight-through
-        // loop to the strategy, which runs the interceptor before the handler.
+        // A grouped pipeline that carries an interceptor runs the interceptor before the
+        // handler — the plan bakes both.
         Assert.Equal(true, settings.Items["guardedInterceptorRan"]);
         Assert.Equal(true, settings.Items["guardedRan"]);
     }

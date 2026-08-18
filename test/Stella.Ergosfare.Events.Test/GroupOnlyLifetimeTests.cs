@@ -7,6 +7,22 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Events.Test;
 
+// The fixtures live at the top level so the source generator compiles the per-set plan the
+// grouped publishes below run; owned by GroupOnlyLifetimeTests alone.
+
+public sealed class GroupOnlyEvent : IEvent { }
+
+[Group("lifetime")]
+public sealed class GroupOnlyHandler : IEventHandler<GroupOnlyEvent>
+{
+    public ValueTask HandleAsync(GroupOnlyEvent @event, ErgosfareContext context)
+    {
+        var instances = (HashSet<int>)context.Items["instances"]!;
+        instances.Add(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this));
+        return ValueTask.CompletedTask;
+    }
+}
+
 /// <summary>
 /// Pins DI lifetimes for a message whose every handler lives in a named group. The
 /// group-less shape of such a message is empty, and an empty shape is vacuously
@@ -16,19 +32,6 @@ namespace Stella.Ergosfare.Events.Test;
 /// </summary>
 public class GroupOnlyLifetimeTests
 {
-    public sealed class GroupOnlyEvent : IEvent { }
-
-    [Group("lifetime")]
-    public sealed class GroupOnlyHandler : IEventHandler<GroupOnlyEvent>
-    {
-        public ValueTask HandleAsync(GroupOnlyEvent @event, ErgosfareContext context)
-        {
-            var instances = (HashSet<int>)context.Items["instances"]!;
-            instances.Add(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this));
-            return ValueTask.CompletedTask;
-        }
-    }
-
     private static readonly GroupSet LifetimeGroup = GroupSet.Of("lifetime");
 
     [Fact]

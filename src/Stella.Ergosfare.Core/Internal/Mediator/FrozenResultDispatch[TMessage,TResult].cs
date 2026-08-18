@@ -5,7 +5,6 @@
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Abstractions.Factories;
-using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Results;
 using Stella.Ergosfare.Core.Abstractions.StagedPlans;
 using Stella.Ergosfare.Core.Internal.Factories;
@@ -20,10 +19,11 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// <typeparam name="TMessage">The message type this pipeline serves.</typeparam>
 /// <typeparam name="TResult">The result type it produces.</typeparam>
 /// <remarks>
-/// Having a real result adds one more condition the void side does not have: a plan is only
-/// used while the adapter it was compiled against is exactly the one bound here — both
-/// absent, in the common case — so a plan compiled without the branches an adapter needs
-/// never serves an adapted pipeline.
+/// Having a real result adds one more condition the void side does not have: the plan is
+/// verified only while the adapter it was compiled against is exactly the one bound here —
+/// both absent, in the common case — so a plan compiled without the branches an adapter
+/// needs never serves an adapted pipeline, and the mismatch fails the dispatch naming both
+/// types.
 /// </remarks>
 #pragma warning disable CS8714 // TResult is used as a pattern type argument; handler contracts declare notnull results
 internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecutor<TResult>
@@ -35,26 +35,16 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
     private readonly GroupedCompositions _grouped;
 
     // The adapter bound to this pipeline's result type, resolved on the first dispatch as in
-    // the void pipeline. Which adapter it is also decides whether a plan may be used.
+    // the void pipeline. Which adapter it is decides whether the plan may run at all.
     private IResultAdapter<TResult>? _resultAdapter;
-    private IResultMaterializer<TResult>? _resultMaterializer;
     private volatile bool _resultAdapterResolved;
-
-    private IMessageDependencies? _cachedDependencies;
-    private MessageDependencies? _cachedFastDependencies;
 
     /// <inheritdoc cref="FrozenVoidDispatch{TMessage}._verdict"/>
     private volatile int _verdict;
 
-    /// <inheritdoc cref="FrozenVoidDispatch{TMessage}.Foreign"/>
-    private const int Foreign = -1;
-
     /// <inheritdoc cref="FrozenVoidDispatch{TMessage}.Undecided"/>
     // ReSharper disable once UnusedMember.Local
     private const int Undecided = 0;
-
-    /// <inheritdoc cref="FrozenVoidDispatch{TMessage}.UseBody"/>
-    private const int UseBody = 1;
 
     /// <inheritdoc cref="FrozenVoidDispatch{TMessage}.UsePlan"/>
     private const int UsePlan = 2;
@@ -66,21 +56,16 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
     /// Initializes the pipeline over a container's factory and the plan compiled for this
     /// pair, if any.
     /// </summary>
-    /// <param name="dependenciesFactory">The factory participants are resolved through.</param>
-    /// <param name="plan">The compiled plan for this pair, or <c>null</c>.</param>
-    /// <remarks>
-    /// Public despite the type being internal, for the same reason its void twin is.
-    /// </remarks>
+    /// <param name="dependenciesFactory">The factory participants are verified through.</param>
+    /// <param name="plan">
+    /// The compiled plan for the unfiltered pipeline, or <c>null</c> for a pair whose plans
+    /// are all per-set; see <see cref="FrozenVoidDispatch{TMessage}"/>.
+    /// </param>
     public FrozenResultDispatch(IMessageDependenciesFactory dependenciesFactory, StagedResultPlan<TMessage, TResult>? plan)
     {
         _factory = dependenciesFactory;
         _plan = plan;
         _grouped = new GroupedCompositions(dependenciesFactory, typeof(TMessage), AdmitGroupedPlan);
-
-        if (dependenciesFactory is not MessageDependenciesFactory)
-        {
-            _verdict = Foreign;
-        }
     }
 
     /// <inheritdoc />
@@ -142,30 +127,20 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
 
         var verdict = _verdict;
 
-        if (verdict == UseBody)
-        {
-            return ExecuteRuntimeLane(message, _cachedDependencies!, _cachedFastDependencies, context, serviceProvider);
-        }
-
         if (verdict >= UsePlan)
         {
+            // A settled verdict proves the plan: only ExecuteUndecided writes one, and it
+            // has thrown by then for a pair without an unfiltered plan.
             return verdict == UsePlanDirect
                 ? _plan!.ExecuteDirect((TMessage)message, context, serviceProvider)
                 : _plan!.Execute((TMessage)message, context, serviceProvider);
-        }
-
-        if (verdict == Foreign)
-        {
-            EnsureResultAdapter(serviceProvider);
-            return ExecuteRuntimeLane(
-                message, _factory.Create(typeof(TMessage), []), fast: null, context, serviceProvider);
         }
 
         return ExecuteUndecided(message, context, serviceProvider);
     }
 
     /// <summary>
-    /// Runs the first dispatch and settles which route the rest take; see
+    /// Runs the first dispatch and settles the plan variant the rest run; see
     /// <see cref="FrozenVoidDispatch{TMessage}.ExecuteUndecided"/>.
     /// </summary>
     /// <param name="message">The message to dispatch.</param>
@@ -174,74 +149,51 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
     /// <returns>The result the pipeline produced.</returns>
     private ValueTask<TResult> ExecuteUndecided(object message, ErgosfareContext context, IServiceProvider serviceProvider)
     {
+        if (_factory is not MessageDependenciesFactory typedFactory)
+        {
+            throw UnplannedDispatch.ForForeignFactory(typeof(TMessage));
+        }
+
         EnsureResultAdapter(serviceProvider);
 
-        var typedFactory = (MessageDependenciesFactory)_factory;
-
-        var dependencies = typedFactory.Create(typeof(TMessage), []);
-        var fastDependencies = dependencies as MessageDependencies;
-        _cachedFastDependencies = fastDependencies;
-        _cachedDependencies = dependencies;
-
-        var usePlan = _plan is not null
-            && _plan.Composition.ResultAdapterType == _resultAdapter?.GetType()
-            && fastDependencies is { MemoizedInstances: false }
-            && StagedPlanGate.Matches(fastDependencies, _plan.Composition);
-
-        _verdict = usePlan
-            ? _plan!.SupportsDirectConstruction
-              && StagedPlanGate.AllPlainTransient(typedFactory, _plan.Composition)
-                ? UsePlanDirect
-                : UsePlan
-            : UseBody;
-
-        if (_verdict >= UsePlan)
+        // Throws for a message no composition serves — and on every dispatch of such a
+        // message, since nothing is cached until the plan is verified.
+        if (typedFactory.Create(typeof(TMessage), []) is not MessageDependencies dependencies)
         {
-            return _verdict == UsePlanDirect
-                ? _plan!.ExecuteDirect((TMessage)message, context, serviceProvider)
-                : _plan!.Execute((TMessage)message, context, serviceProvider);
+            throw UnplannedDispatch.ForForeignFactory(typeof(TMessage));
         }
 
-        return ExecuteRuntimeLane(message, dependencies, fastDependencies, context, serviceProvider);
-    }
-
-    /// <summary>
-    /// Runs the resolved participants; see
-    /// <see cref="FrozenVoidDispatch{TMessage}.ExecuteRuntimeLane"/>.
-    /// </summary>
-    /// <param name="message">The message to dispatch.</param>
-    /// <param name="dependencies">The participants to run.</param>
-    /// <param name="fast">
-    /// The same participants as their concrete type, when they are one; <c>null</c> rules
-    /// out the single-handler route.
-    /// </param>
-    /// <param name="context">The execution context of this dispatch.</param>
-    /// <param name="serviceProvider">The provider participants are resolved from.</param>
-    /// <returns>The result the pipeline produced.</returns>
-    private ValueTask<TResult> ExecuteRuntimeLane(
-        object message, IMessageDependencies dependencies, MessageDependencies? fast,
-        ErgosfareContext context, IServiceProvider serviceProvider)
-    {
-        if (fast?.FastSingleHandler is { } handlerReference && _resultAdapter is null)
+        // Every plan this pair has is per-set, so the unfiltered dispatch has nothing to
+        // run — a contested default set fails as the contest it is.
+        if (_plan is null)
         {
-            var handler = handlerReference.Resolve(serviceProvider);
-
-            switch (handler)
-            {
-                case IAsyncHandler<TMessage, TResult> asyncHandler:
-                    return asyncHandler.HandleAsync((TMessage)message, context);
-                case IHandler<TMessage, ValueTask<TResult>> valueTaskShaped:
-                    return valueTaskShaped.Handle((TMessage)message, context);
-                case IHandler<TMessage, TResult> syncHandler:
-                    return ValueTask.FromResult(syncHandler.Handle((TMessage)message, context));
-            }
-
-            // The handler implements no contract this route can call; falling through lets
-            // the body raise the one exception that says so.
+            throw UnplannedDispatch.ForMissingPlan(typeof(TMessage), dependencies);
         }
 
-        return ResultPipelineBody<TMessage, TResult>.Run(
-            (TMessage)message, dependencies, _resultAdapter, _resultMaterializer, context, serviceProvider);
+        if (_plan.Composition.ResultAdapterType != _resultAdapter?.GetType())
+        {
+            throw UnplannedDispatch.ForResultAdapterMismatch(
+                typeof(TMessage), _plan.Composition.ResultAdapterType, _resultAdapter?.GetType());
+        }
+
+        if (dependencies.ForcedMemoization)
+        {
+            throw UnplannedDispatch.ForMemoizedInstances(typeof(TMessage));
+        }
+
+        if (!StagedPlanGate.Matches(dependencies, _plan.Composition))
+        {
+            throw UnplannedDispatch.ForDivergedComposition(typeof(TMessage), dependencies, _plan.Composition);
+        }
+
+        _verdict = _plan.SupportsDirectConstruction
+                   && StagedPlanGate.AllPlainTransient(typedFactory, _plan.Composition)
+            ? UsePlanDirect
+            : UsePlan;
+
+        return _verdict == UsePlanDirect
+            ? _plan.ExecuteDirect((TMessage)message, context, serviceProvider)
+            : _plan.Execute((TMessage)message, context, serviceProvider);
     }
 
     /// <summary>
@@ -259,29 +211,25 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
         EnsureResultAdapter(serviceProvider);
 
         var composition = _grouped.Resolve(groups);
+        var groupedPlan = (StagedResultPlan<TMessage, TResult>)composition.Admission.Plan!;
 
-        if (composition.Admission.Plan is StagedResultPlan<TMessage, TResult> groupedPlan)
+        // A plan compiled for this exact set already knows its participants; the filtering
+        // plan works them out from the set it is handed.
+        if (groupedPlan.FilterGroups is not null)
         {
-            // A plan compiled for this exact set already knows its participants; the
-            // filtering plan works them out from the set it is handed.
-            if (groupedPlan.FilterGroups is not null)
-            {
-                return composition.Admission.Direct
-                    ? groupedPlan.ExecuteFilteredDirect((TMessage)message, context, serviceProvider, composition.Groups)
-                    : groupedPlan.ExecuteFiltered((TMessage)message, context, serviceProvider, composition.Groups);
-            }
-
             return composition.Admission.Direct
-                ? groupedPlan.ExecuteDirect((TMessage)message, context, serviceProvider)
-                : groupedPlan.Execute((TMessage)message, context, serviceProvider);
+                ? groupedPlan.ExecuteFilteredDirect((TMessage)message, context, serviceProvider, composition.Groups)
+                : groupedPlan.ExecuteFiltered((TMessage)message, context, serviceProvider, composition.Groups);
         }
 
-        return ExecuteRuntimeLane(message, composition.Dependencies, composition.Fast, context, serviceProvider);
+        return composition.Admission.Direct
+            ? groupedPlan.ExecuteDirect((TMessage)message, context, serviceProvider)
+            : groupedPlan.Execute((TMessage)message, context, serviceProvider);
     }
 
     /// <summary>
-    /// Decides which compiled plan, if any, may serve one group set; see
-    /// <see cref="FrozenVoidDispatch{TMessage}.AdmitGroupedPlan"/>.
+    /// Decides which compiled plan serves one group set, or fails the dispatch when none
+    /// verifiably does; see <see cref="FrozenVoidDispatch{TMessage}.AdmitGroupedPlan"/>.
     /// </summary>
     /// <param name="groups">The group set being decided for.</param>
     /// <param name="dependencies">The participants that set selects.</param>
@@ -296,12 +244,8 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
 
         if (plan is not null)
         {
-            if (plan.Composition.ResultAdapterType != _resultAdapter?.GetType()
-                || dependencies is not MessageDependencies { MemoizedInstances: false } keyed
-                || !StagedPlanGate.Matches(keyed, plan.Composition))
-            {
-                return default;
-            }
+            VerifyAdapter(plan.Composition);
+            VerifyComposition(dependencies, plan.Composition);
         }
         else
         {
@@ -310,13 +254,19 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
             plan = GeneratedDispatchRoots.FindFilteredResultPlan(typeof(TMessage), typeof(TResult))
                 as StagedResultPlan<TMessage, TResult>;
 
-            if (plan?.FilterGroups is not { } covered
-                || plan.Composition.ResultAdapterType != _resultAdapter?.GetType()
-                || _factory.Find(typeof(TMessage), covered) is not MessageDependencies { MemoizedInstances: false } full
-                || !StagedPlanGate.Matches(full, plan.Composition))
+            if (plan?.FilterGroups is not { } covered)
             {
-                return default;
+                throw UnplannedDispatch.ForUnplannedGroupSet(typeof(TMessage), groups);
             }
+
+            VerifyAdapter(plan.Composition);
+
+            if (_factory.Find(typeof(TMessage), covered) is not { } full)
+            {
+                throw UnplannedDispatch.ForUnplannedGroupSet(typeof(TMessage), groups);
+            }
+
+            VerifyComposition(full, plan.Composition);
         }
 
         var direct = plan.SupportsDirectConstruction
@@ -324,6 +274,39 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
                      && StagedPlanGate.AllPlainTransient(typedFactory, plan.Composition);
 
         return new GroupedPlanAdmission(plan, direct);
+    }
+
+    /// <summary>
+    /// Verifies that the adapter bound here is the one <paramref name="composition"/> was
+    /// compiled against.
+    /// </summary>
+    /// <param name="composition">The pipeline the plan was compiled against.</param>
+    private void VerifyAdapter(StagedPlanKey composition)
+    {
+        if (composition.ResultAdapterType != _resultAdapter?.GetType())
+        {
+            throw UnplannedDispatch.ForResultAdapterMismatch(
+                typeof(TMessage), composition.ResultAdapterType, _resultAdapter?.GetType());
+        }
+    }
+
+    /// <inheritdoc cref="FrozenVoidDispatch{TMessage}.VerifyComposition"/>
+    private static void VerifyComposition(IMessageDependencies dependencies, StagedPlanKey composition)
+    {
+        if (dependencies is not MessageDependencies fast)
+        {
+            throw UnplannedDispatch.ForForeignFactory(typeof(TMessage));
+        }
+
+        if (fast.ForcedMemoization)
+        {
+            throw UnplannedDispatch.ForMemoizedInstances(typeof(TMessage));
+        }
+
+        if (!StagedPlanGate.Matches(fast, composition))
+        {
+            throw UnplannedDispatch.ForDivergedComposition(typeof(TMessage), fast, composition);
+        }
     }
 
     /// <inheritdoc cref="FrozenVoidDispatch{TMessage}.EnsureResultAdapter"/>
@@ -334,9 +317,7 @@ internal sealed class FrozenResultDispatch<TMessage, TResult> : IPipelineExecuto
             return;
         }
 
-        var adapter = ResultAdapterBinding.For<TMessage, TResult>(serviceProvider);
-        _resultAdapter = adapter;
-        _resultMaterializer = adapter as IResultMaterializer<TResult>;
+        _resultAdapter = ResultAdapterBinding.For<TMessage, TResult>(serviceProvider);
         _resultAdapterResolved = true;
     }
 }

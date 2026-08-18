@@ -8,6 +8,21 @@ using Stella.Ergosfare.Events.Abstractions;
 namespace Stella.Ergosfare.Events.Test;
 
 /// <summary>
+/// A stub event owned by <see cref="EventModuleTests"/>; top-level so the source generator
+/// compiles its broadcast plan.
+/// </summary>
+public record ModuleStubEvent : IEvent;
+
+/// <summary>
+/// The one compiled subscriber of <see cref="ModuleStubEvent"/>.
+/// </summary>
+public sealed class ModuleStubEventHandler : IEventHandler<ModuleStubEvent>
+{
+    public ValueTask HandleAsync(ModuleStubEvent message, ErgosfareContext context)
+        => ValueTask.CompletedTask;
+}
+
+/// <summary>
 /// Contains unit tests for <see cref="EventModule"/> registration and behavior,
 /// ensuring that event handlers are correctly registered and non-event handlers are rejected.
 /// </summary>
@@ -38,13 +53,13 @@ public class EventModuleTests
     {
         var serviceCollection = new ServiceCollection()
             .AddErgosfare(x => x.AddEventModule(c =>
-                c.Register<StubNonGenericEventHandler1>()
+                c.Register<ModuleStubEventHandler>()
             )).BuildServiceProvider();
         var mediator = serviceCollection.GetRequiredService<IEventMediator>();
 
-        await mediator.PublishAsync((IEvent) new StubNonGenericEvent());
-        await mediator.PublishAsync(new StubNonGenericEvent());
-        
+        await mediator.PublishAsync((IEvent) new ModuleStubEvent());
+        await mediator.PublishAsync(new ModuleStubEvent());
+
     }
 
     /// <summary>

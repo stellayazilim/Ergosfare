@@ -8,6 +8,37 @@ using Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
 
 namespace Stella.Ergosfare.Queries.Test;
 
+// The fixtures live at the top level so the source generator compiles the default and
+// per-set plans the calls below run; every type is owned by TypedQueryFacadeConvenienceTests
+// alone, and the container below registers each query's full compiled pipeline.
+
+public sealed record TqfRoutedQuery : IQuery<string>;
+
+[Group("tqf.east")]
+public sealed class TqfEastRoutedHandler : IQueryHandler<TqfRoutedQuery, string>
+{
+    public ValueTask<string> HandleAsync(TqfRoutedQuery query, ErgosfareContext context)
+        => ValueTask.FromResult("east");
+}
+
+[Group("tqf.west")]
+public sealed class TqfWestRoutedHandler : IQueryHandler<TqfRoutedQuery, string>
+{
+    public ValueTask<string> HandleAsync(TqfRoutedQuery query, ErgosfareContext context)
+        => ValueTask.FromResult("west");
+}
+
+public sealed record TqfPlainQuery : IQuery<string>;
+
+public sealed class TqfPlainQueryHandler : IQueryHandler<TqfPlainQuery, string>
+{
+    public ValueTask<string> HandleAsync(TqfPlainQuery query, ErgosfareContext context)
+    {
+        context.Set("tqf.token", context.CancellationToken);
+        return ValueTask.FromResult("plain");
+    }
+}
+
 /// <summary>
 /// The typed conveniences carried by <see cref="QueryMediator"/> itself, exercised through a
 /// facade-typed receiver — which is the only way to reach them, since a concrete-typed call
@@ -25,43 +56,13 @@ public class TypedQueryFacadeConvenienceTests
     private static readonly GroupSet East = GroupSet.Of("tqf.east");
     private static readonly GroupSet West = GroupSet.Of("tqf.west");
 
-    public sealed record RoutedQuery : IQuery<string>;
-
-    [ExcludeFromDiscovery]
-    [Group("tqf.east")]
-    public sealed class EastRoutedHandler : IQueryHandler<RoutedQuery, string>
-    {
-        public ValueTask<string> HandleAsync(RoutedQuery query, ErgosfareContext context)
-            => ValueTask.FromResult("east");
-    }
-
-    [ExcludeFromDiscovery]
-    [Group("tqf.west")]
-    public sealed class WestRoutedHandler : IQueryHandler<RoutedQuery, string>
-    {
-        public ValueTask<string> HandleAsync(RoutedQuery query, ErgosfareContext context)
-            => ValueTask.FromResult("west");
-    }
-
-    public sealed record PlainQuery : IQuery<string>;
-
-    [ExcludeFromDiscovery]
-    public sealed class PlainQueryHandler : IQueryHandler<PlainQuery, string>
-    {
-        public ValueTask<string> HandleAsync(PlainQuery query, ErgosfareContext context)
-        {
-            context.Set("tqf.token", context.CancellationToken);
-            return ValueTask.FromResult("plain");
-        }
-    }
-
     private static ServiceProvider Build()
         => new ServiceCollection()
             .AddErgosfare(x => x.AddQueryModule(q =>
             {
-                q.Register<EastRoutedHandler>();
-                q.Register<WestRoutedHandler>();
-                q.Register<PlainQueryHandler>();
+                q.Register<TqfEastRoutedHandler>();
+                q.Register<TqfWestRoutedHandler>();
+                q.Register<TqfPlainQueryHandler>();
             }))
             .BuildServiceProvider();
 
@@ -78,7 +79,7 @@ public class TypedQueryFacadeConvenienceTests
         using var cts = new CancellationTokenSource();
         var context = new ErgosfareContext(cancellationToken: cts.Token);
 
-        Assert.Equal("plain", await mediator.QueryAsync<PlainQuery, string>(new PlainQuery(), context));
+        Assert.Equal("plain", await mediator.QueryAsync<TqfPlainQuery, string>(new TqfPlainQuery(), context));
 
         // The nested-dispatch path's whole promise: cancellation flows from the context the
         // caller owns, so the handler must observe that token and not a default one.
@@ -95,11 +96,11 @@ public class TypedQueryFacadeConvenienceTests
 
         // Repetition is deliberate: the canonical instance is what the executor cache
         // matches on a single reference check, so the second call takes the fast path.
-        Assert.Equal("east", await mediator.QueryAsync<RoutedQuery, string>(new RoutedQuery(), East));
-        Assert.Equal("east", await mediator.QueryAsync<RoutedQuery, string>(new RoutedQuery(), East));
-        Assert.Equal("west", await mediator.QueryAsync<RoutedQuery, string>(new RoutedQuery(), West));
+        Assert.Equal("east", await mediator.QueryAsync<TqfRoutedQuery, string>(new TqfRoutedQuery(), East));
+        Assert.Equal("east", await mediator.QueryAsync<TqfRoutedQuery, string>(new TqfRoutedQuery(), East));
+        Assert.Equal("west", await mediator.QueryAsync<TqfRoutedQuery, string>(new TqfRoutedQuery(), West));
 
-        Assert.Equal("plain", await mediator.QueryAsync<PlainQuery, string>(new PlainQuery(), GroupSet.Empty));
+        Assert.Equal("plain", await mediator.QueryAsync<TqfPlainQuery, string>(new TqfPlainQuery(), GroupSet.Empty));
     }
 
     [Fact]
@@ -110,7 +111,7 @@ public class TypedQueryFacadeConvenienceTests
         await using var provider = Build();
         var mediator = Facade(provider);
 
-        Assert.Equal("west", await mediator.QueryAsync<RoutedQuery, string>(new RoutedQuery(), ["tqf.west"]));
+        Assert.Equal("west", await mediator.QueryAsync<TqfRoutedQuery, string>(new TqfRoutedQuery(), ["tqf.west"]));
     }
 
     [Fact]
@@ -124,7 +125,7 @@ public class TypedQueryFacadeConvenienceTests
         // Synchronously, before any dispatch: a missing filter object is a mistake in the
         // call, not a dispatch that produced nothing.
         var thrown = Assert.Throws<ArgumentNullException>(
-            () => mediator.QueryAsync<PlainQuery, string>(new PlainQuery(), (GroupSet)null!));
+            () => mediator.QueryAsync<TqfPlainQuery, string>(new TqfPlainQuery(), (GroupSet)null!));
 
         Assert.Equal("groups", thrown.ParamName);
     }

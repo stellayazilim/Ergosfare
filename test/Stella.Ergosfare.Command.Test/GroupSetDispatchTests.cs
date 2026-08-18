@@ -7,78 +7,70 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Command.Test;
 
+public sealed class SlottedCommand : ICommand { }
+
+[Group("gs.east")]
+public sealed class EastSlottedHandler : ICommandHandler<SlottedCommand>
+{
+    public ValueTask HandleAsync(SlottedCommand command, ErgosfareContext context)
+    {
+        GroupSetDispatchTests.LastRan = "east";
+        return ValueTask.CompletedTask;
+    }
+}
+
+[Group("gs.west")]
+public sealed class WestSlottedHandler : ICommandHandler<SlottedCommand>
+{
+    public ValueTask HandleAsync(SlottedCommand command, ErgosfareContext context)
+    {
+        GroupSetDispatchTests.LastRan = "west";
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class GroupSetDefaultCommand : ICommand { }
+
+public sealed class GroupSetDefaultCommandHandler : ICommandHandler<GroupSetDefaultCommand>
+{
+    public ValueTask HandleAsync(GroupSetDefaultCommand command, ErgosfareContext context)
+    {
+        GroupSetDispatchTests.LastRan = "default";
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class SlottedEcho : ICommand<string> { }
+
+[Group("gs.east")]
+public sealed class EastEchoSlottedHandler : ICommandHandler<SlottedEcho, string>
+{
+    public ValueTask<string> HandleAsync(SlottedEcho command, ErgosfareContext context)
+        => ValueTask.FromResult("east");
+}
+
+[Group("gs.west")]
+public sealed class WestEchoSlottedHandler : ICommandHandler<SlottedEcho, string>
+{
+    public ValueTask<string> HandleAsync(SlottedEcho command, ErgosfareContext context)
+        => ValueTask.FromResult("west");
+}
+
 /// <summary>
 /// The <see cref="GroupSet"/> facade overloads on the command mediator: filtering
 /// correctness for the void and result shapes, the canonical slot fast path under
 /// repetition and alternation, the empty set routing to the default pipeline, and the
 /// legacy settings lane accepting a <see cref="GroupSet"/> as its group sequence.
-/// Helper types are excluded from discovery so assembly scans cannot alter these
-/// pipelines; handlers record into a static slot, which is safe because the types are
-/// private to this class and tests within a class run sequentially.
+/// Fixtures are top-level and discoverable so the generator bakes their grouped
+/// pipelines; handlers record into a static slot, which is safe because the message types
+/// belong to this class alone and tests within a class run sequentially.
 /// </summary>
 public class GroupSetDispatchTests
 {
     private static readonly GroupSet East = GroupSet.Of("gs.east");
     private static readonly GroupSet West = GroupSet.Of("gs.west");
 
-    private static string? _lastRan;
-
-    [ExcludeFromDiscovery]
-    public sealed class SlottedCommand : ICommand { }
-
-    [ExcludeFromDiscovery]
-    [Group("gs.east")]
-    public sealed class EastSlottedHandler : ICommandHandler<SlottedCommand>
-    {
-        public ValueTask HandleAsync(SlottedCommand command, ErgosfareContext context)
-        {
-            _lastRan = "east";
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    [ExcludeFromDiscovery]
-    [Group("gs.west")]
-    public sealed class WestSlottedHandler : ICommandHandler<SlottedCommand>
-    {
-        public ValueTask HandleAsync(SlottedCommand command, ErgosfareContext context)
-        {
-            _lastRan = "west";
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    [ExcludeFromDiscovery]
-    public sealed class DefaultCommand : ICommand { }
-
-    [ExcludeFromDiscovery]
-    public sealed class DefaultCommandHandler : ICommandHandler<DefaultCommand>
-    {
-        public ValueTask HandleAsync(DefaultCommand command, ErgosfareContext context)
-        {
-            _lastRan = "default";
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    [ExcludeFromDiscovery]
-    public sealed class SlottedEcho : ICommand<string> { }
-
-    [ExcludeFromDiscovery]
-    [Group("gs.east")]
-    public sealed class EastEchoSlottedHandler : ICommandHandler<SlottedEcho, string>
-    {
-        public ValueTask<string> HandleAsync(SlottedEcho command, ErgosfareContext context)
-            => ValueTask.FromResult("east");
-    }
-
-    [ExcludeFromDiscovery]
-    [Group("gs.west")]
-    public sealed class WestEchoSlottedHandler : ICommandHandler<SlottedEcho, string>
-    {
-        public ValueTask<string> HandleAsync(SlottedEcho command, ErgosfareContext context)
-            => ValueTask.FromResult("west");
-    }
+    internal static string? LastRan;
 
     private static ServiceProvider Build()
         => new ServiceCollection()
@@ -86,7 +78,7 @@ public class GroupSetDispatchTests
             {
                 c.Register<EastSlottedHandler>();
                 c.Register<WestSlottedHandler>();
-                c.Register<DefaultCommandHandler>();
+                c.Register<GroupSetDefaultCommandHandler>();
                 c.Register<EastEchoSlottedHandler>();
                 c.Register<WestEchoSlottedHandler>();
             }))
@@ -102,18 +94,18 @@ public class GroupSetDispatchTests
 
         // Repetition exercises the canonical reference fast path; alternation exercises
         // the slot refresh with the authoritative store underneath.
-        _lastRan = null;
+        LastRan = null;
         await mediator.SendAsync(new SlottedCommand(), East);
-        Assert.Equal("east", _lastRan);
+        Assert.Equal("east", LastRan);
 
         await mediator.SendAsync(new SlottedCommand(), East);
-        Assert.Equal("east", _lastRan);
+        Assert.Equal("east", LastRan);
 
         await mediator.SendAsync(new SlottedCommand(), West);
-        Assert.Equal("west", _lastRan);
+        Assert.Equal("west", LastRan);
 
         await mediator.SendAsync(new SlottedCommand(), East);
-        Assert.Equal("east", _lastRan);
+        Assert.Equal("east", LastRan);
     }
 
     [Fact]
@@ -139,11 +131,11 @@ public class GroupSetDispatchTests
         await using var provider = Build();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        _lastRan = null;
-        await mediator.SendAsync(new DefaultCommand(), GroupSet.Empty);
+        LastRan = null;
+        await mediator.SendAsync(new GroupSetDefaultCommand(), GroupSet.Empty);
 
         // Empty filter == no filter: the default-group pipeline runs.
-        Assert.Equal("default", _lastRan);
+        Assert.Equal("default", LastRan);
     }
 
     [Fact]
@@ -156,10 +148,10 @@ public class GroupSetDispatchTests
 
         // The legacy lane: a GroupSet assigned to Filters.Groups behaves as the same
         // filter, and the caches recognize the canonical instance there too.
-        _lastRan = null;
+        LastRan = null;
         var settings = West;
         await mediator.SendAsync(new SlottedCommand(), settings);
 
-        Assert.Equal("west", _lastRan);
+        Assert.Equal("west", LastRan);
     }
 }

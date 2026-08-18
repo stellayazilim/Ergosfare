@@ -152,9 +152,11 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
     /// </remarks>
     private IPipelineExecutor<TResult> GetExecutorSlow<TResult>(Type messageType)
     {
+        // The factory keeps the caller's TResult, which is what lets a planless pair get
+        // its failing executor as ordinary compiled code — no root lookup, no reflection.
         var executor = (IPipelineExecutor<TResult>)_resultExecutorsByType.GetOrAdd(
             (messageType, typeof(TResult)),
-            static (k, cache) => cache.CreateResultExecutor(k.MessageType, k.ResultType), this);
+            static (k, cache) => cache.CreateResultExecutor<TResult>(k.MessageType), this);
 
         _resultSlotsByType[messageType] = new ResultExecutorSlot(typeof(TResult), executor);
 
@@ -227,10 +229,8 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
     /// <returns>The pipeline for that pair.</returns>
     /// <remarks>
     /// The plan branches are the same as the runtime-typed path's, since a plan carries its
-    /// own closed generics. Only the last branch differs: where that path asks the root
-    /// table and, for a message without a root, closes a generic reflectively, here the
-    /// closed type is the one the caller named — ordinary compiled code, with no root lookup
-    /// and an answer Native AOT can give even for a message the generator never saw.
+    /// own closed generics. A pair without one gets the executor that fails every dispatch,
+    /// which needs no root and no reflection either way.
     /// </remarks>
     private object CreateResultExecutor<TMessage, TResult>()
         where TMessage : IMessage
@@ -249,7 +249,14 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
                 new ExecutorState(dependenciesFactory, plan.DirectHandlerFactory));
         }
 
-        return new FrozenResultDispatch<TMessage, TResult>(dependenciesFactory, plan: null);
+        // A pair whose plans are all per-set still gets the plan-hosting executor, and here
+        // the closed type is the one the caller named.
+        if (GeneratedDispatchRoots.FindAnyStagedResultPlan(typeof(TMessage), typeof(TResult)) is not null)
+        {
+            return new FrozenResultDispatch<TMessage, TResult>(dependenciesFactory, plan: null);
+        }
+
+        return new UnplannedResultExecutor<TResult>(dependenciesFactory, typeof(TMessage));
     }
 
     /// <summary>
@@ -312,27 +319,33 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
                 new ExecutorState(dependenciesFactory, plan.DirectHandlerFactory));
         }
 
-        // No plan covers this message: the general pipeline, closed over the generated root
-        // when there is one and reflectively when there is not.
-        return DispatchLookup.OverMessage(
-            messageType,
-            VoidExecutorVisitor.Instance,
-            new ExecutorState(dependenciesFactory),
-            typeof(FrozenVoidDispatch<>),
-            [dependenciesFactory, null]);
+        // A message whose plans are all per-set — a contested default set that only groups
+        // can resolve — still gets the plan-hosting executor, closed over one of its own
+        // plans: grouped dispatches run their plans, ungrouped ones fail as the contest
+        // they are.
+        if (GeneratedDispatchRoots.FindAnyStagedVoidPlan(messageType) is { } groupedPlan)
+        {
+            return groupedPlan.Accept(
+                GroupedOnlyVoidExecutorVisitor.Instance,
+                new ExecutorState(dependenciesFactory));
+        }
+
+        // No plan covers this message, so nothing will dispatch it: the executor that fails
+        // every dispatch, as precisely as the participants allow.
+        return new UnplannedVoidExecutor(dependenciesFactory, messageType);
     }
 
     /// <summary>
     /// Builds the pipeline of a (message, result) pair, choosing the most specific compiled
     /// form available.
     /// </summary>
+    /// <typeparam name="TResult">The result type.</typeparam>
     /// <param name="messageType">The message's runtime type.</param>
-    /// <param name="resultType">The result type.</param>
     /// <returns>The pipeline for that pair.</returns>
-    private object CreateResultExecutor(Type messageType, Type resultType)
+    private object CreateResultExecutor<TResult>(Type messageType)
     {
         // Staged plan first, as on the void side.
-        if (GeneratedDispatchRoots.FindStagedResultPlan(messageType, resultType) is { } stagedPlan)
+        if (GeneratedDispatchRoots.FindStagedResultPlan(messageType, typeof(TResult)) is { } stagedPlan)
         {
             return stagedPlan.Accept(
                 StagedResultExecutorVisitor.Instance,
@@ -340,20 +353,25 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
         }
 
         // A single-handler plan, closed over message, result and handler at compile time.
-        if (GeneratedDispatchRoots.FindResultPlan(messageType, resultType) is { } plan)
+        if (GeneratedDispatchRoots.FindResultPlan(messageType, typeof(TResult)) is { } plan)
         {
             return plan.Accept(
                 GeneratedResultExecutorVisitor.Instance,
                 new ExecutorState(dependenciesFactory, plan.DirectHandlerFactory));
         }
 
-        return DispatchLookup.OverResult(
-            messageType,
-            resultType,
-            ResultExecutorVisitor.Instance,
-            new ExecutorState(dependenciesFactory),
-            typeof(FrozenResultDispatch<,>),
-            [dependenciesFactory, null]);
+        // A pair whose plans are all per-set still gets the plan-hosting executor; see the
+        // void side.
+        if (GeneratedDispatchRoots.FindAnyStagedResultPlan(messageType, typeof(TResult)) is { } groupedPlan)
+        {
+            return groupedPlan.Accept(
+                GroupedOnlyResultExecutorVisitor.Instance,
+                new ExecutorState(dependenciesFactory));
+        }
+
+        // No plan covers this pair, so nothing will dispatch it: the executor that fails
+        // every dispatch, as precisely as the participants allow.
+        return new UnplannedResultExecutor<TResult>(dependenciesFactory, messageType);
     }
 
     /// <summary>
@@ -373,38 +391,6 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
         IMessageDependenciesFactory DependenciesFactory,
         object? DirectHandlerFactory = null,
         object? StagedPlan = null);
-
-    /// <summary>
-    /// Constructs a general void pipeline inside a generic context carrying the root's
-    /// message type.
-    /// </summary>
-    private sealed class VoidExecutorVisitor : IMessageRootVisitor<IPipelineExecutor, ExecutorState>
-    {
-        /// <summary>
-        /// The shared instance; the visitor holds no state.
-        /// </summary>
-        public static readonly VoidExecutorVisitor Instance = new();
-
-        /// <inheritdoc />
-        public IPipelineExecutor Visit<TMessage>(ExecutorState state) where TMessage : IMessage
-            => new FrozenVoidDispatch<TMessage>(state.DependenciesFactory, plan: null);
-    }
-
-    /// <summary>
-    /// Constructs a general result pipeline; the counterpart of
-    /// <see cref="VoidExecutorVisitor"/>.
-    /// </summary>
-    private sealed class ResultExecutorVisitor : IMessageResultRootVisitor<object, ExecutorState>
-    {
-        /// <summary>
-        /// The shared instance; the visitor holds no state.
-        /// </summary>
-        public static readonly ResultExecutorVisitor Instance = new();
-
-        /// <inheritdoc />
-        public object Visit<TMessage, TResult>(ExecutorState state) where TMessage : IMessage
-            => new FrozenResultDispatch<TMessage, TResult>(state.DependenciesFactory, plan: null);
-    }
 
     /// <summary>
     /// Constructs a single-handler void pipeline inside a generic context carrying the
@@ -484,5 +470,38 @@ internal sealed class PipelineExecutorCache(IMessageDependenciesFactory dependen
             => new FrozenResultDispatch<TMessage, TResult>(
                 state.DependenciesFactory,
                 (StagedResultPlan<TMessage, TResult>)state.StagedPlan!);
+    }
+
+    /// <summary>
+    /// Constructs the plan-hosting void executor for a message whose plans are all per-set,
+    /// inside a generic context the filtering plan carries.
+    /// </summary>
+    private sealed class GroupedOnlyVoidExecutorVisitor : IStagedVoidPlanVisitor<IPipelineExecutor, ExecutorState>
+    {
+        /// <summary>
+        /// The shared instance; the visitor holds no state.
+        /// </summary>
+        public static readonly GroupedOnlyVoidExecutorVisitor Instance = new();
+
+        /// <inheritdoc />
+        public IPipelineExecutor Visit<TMessage>(ExecutorState state)
+            where TMessage : IMessage
+            => new FrozenVoidDispatch<TMessage>(state.DependenciesFactory, plan: null);
+    }
+
+    /// <summary>
+    /// The result counterpart of <see cref="GroupedOnlyVoidExecutorVisitor"/>.
+    /// </summary>
+    private sealed class GroupedOnlyResultExecutorVisitor : IStagedResultPlanVisitor<object, ExecutorState>
+    {
+        /// <summary>
+        /// The shared instance; the visitor holds no state.
+        /// </summary>
+        public static readonly GroupedOnlyResultExecutorVisitor Instance = new();
+
+        /// <inheritdoc />
+        public object Visit<TMessage, TResult>(ExecutorState state)
+            where TMessage : IMessage
+            => new FrozenResultDispatch<TMessage, TResult>(state.DependenciesFactory, plan: null);
     }
 }

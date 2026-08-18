@@ -13,10 +13,9 @@ namespace Stella.Ergosfare.Contract.Test.Abort;
 /// the signal itself.
 /// </summary>
 /// <remarks>
-/// Both registration axes inherit these scenarios verbatim: the generated axis aborts
-/// inside the emitted staged-plan body, the runtime axis inside the reflective mediation
-/// strategy. Those are two separate implementations of the same shell, and a divergence
-/// shows up as one subclass failing.
+/// The abort unwinds out of the emitted staged-plan body — the only lane left since the
+/// runtime one's removal. The contract stays abstract so a future second lane closes it
+/// over its own types instead of copying the scenarios.
 /// </remarks>
 public abstract class PostAbortSemanticsContract
 {

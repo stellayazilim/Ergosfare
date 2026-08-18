@@ -1,10 +1,8 @@
 using System.Runtime.CompilerServices;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
-using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Abstractions.StagedPlans;
-using Stella.Ergosfare.Core.Abstractions.Strategies.InvocationStrategies;
 using Stella.Ergosfare.Core.Internal.Factories;
 
 namespace Stella.Ergosfare.Core.Internal.Mediator;
@@ -14,18 +12,12 @@ namespace Stella.Ergosfare.Core.Internal.Mediator;
 /// </summary>
 /// <typeparam name="TEvent">The event type this dispatch publishes.</typeparam>
 /// <remarks>
-/// <para>
-/// Everything is decided in the constructor: the ungrouped participants are resolved once,
-/// the compiled plan is accepted or rejected against them once, and what comes out is a
-/// mode that never changes. No publish consults a gate or resolves participants. Deciding
-/// this early is safe because the composition is settled before the container is built, so
-/// the constructor sees exactly what the first publish would.
-/// </para>
-/// <para>
-/// The delivery bodies live here too: a plain loop when there are no interceptors, and the
-/// full staged body when there are. A pipeline with a single handler is just the one-handler
-/// case of those bodies.
-/// </para>
+/// Everything is decided in the constructor: the ungrouped participants are resolved once
+/// and the compiled plan is verified against them once, and what comes out is a mode that
+/// never changes. Deciding this early is safe because the composition is settled before the
+/// container is built, so the constructor sees exactly what the first publish would. A
+/// publish the plan cannot serve fails on every publish with the reason settled here; an
+/// event nobody serves still publishes to nobody, which is not an error.
 /// </remarks>
 internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
     where TEvent : notnull
@@ -35,8 +27,7 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
 
     /// <summary>
     /// The plan compiled for this event type, or <c>null</c> when the generator produced
-    /// none — an event with no interceptors, or one whose subscribers it could not model
-    /// exactly.
+    /// none.
     /// </summary>
     // ReSharper disable once StaticMemberInGenericType
     private static readonly StagedBroadcastPlan<TEvent>? Plan =
@@ -48,14 +39,10 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
     private const int NoPipelineMode = 0;
 
     /// <summary>
-    /// No interceptors: loop over the handlers directly.
+    /// The pipeline cannot be verified against a compiled plan; every publish fails with
+    /// the settled reason.
     /// </summary>
-    private const int StraightMode = 1;
-
-    /// <summary>
-    /// Interceptors are present and no plan covers them: run the full staged body.
-    /// </summary>
-    private const int StagedMode = 2;
+    private const int UnplannedMode = 1;
 
     /// <summary>
     /// Run the compiled plan.
@@ -75,26 +62,21 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
     private readonly int _mode;
 
     /// <summary>
-    /// The ungrouped participants; <c>null</c> only in <see cref="NoPipelineMode"/>.
+    /// Builds the failure an <see cref="UnplannedMode"/> publish raises; <c>null</c> in
+    /// every other mode.
     /// </summary>
-    private readonly IMessageDependencies? _dependencies;
-
-    /// <summary>
-    /// The same participants as their concrete type, which is what the plain loop indexes.
-    /// </summary>
-    private readonly MessageDependencies? _fast;
+    /// <remarks>
+    /// A factory rather than one instance, so every publish throws a fresh exception with
+    /// its own stack.
+    /// </remarks>
+    private readonly Func<Exception>? _unplanned;
 
     private GroupedSlot? _cachedGroupedSlot;
 
     /// <summary>
     /// Resolves this event's participants and settles how it will be published.
     /// </summary>
-    /// <param name="dependenciesFactory">The factory participants are resolved through.</param>
-    /// <remarks>
-    /// Public despite the type being internal: the reflective fallback for event types
-    /// without a generated root constructs through <c>Activator</c>, which only binds public
-    /// constructors.
-    /// </remarks>
+    /// <param name="dependenciesFactory">The factory participants are verified through.</param>
     public FrozenBroadcastDispatch(IMessageDependenciesFactory dependenciesFactory)
     {
         _factory = dependenciesFactory;
@@ -109,22 +91,50 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
             return;
         }
 
-        _dependencies = dependencies;
-        _fast = dependencies as MessageDependencies;
-
-        if (Plan is not null
-            && _fast is { MemoizedInstances: false }
-            && StagedPlanGate.Matches(_fast, Plan.Composition))
+        if (dependencies is not MessageDependencies fast)
         {
-            _mode = Plan.SupportsDirectConstruction
-                    && dependenciesFactory is MessageDependenciesFactory typedFactory
-                    && StagedPlanGate.AllPlainTransient(typedFactory, Plan.Composition)
-                ? PlanDirectMode
-                : PlanMode;
+            _mode = UnplannedMode;
+            _unplanned = static () => UnplannedDispatch.ForForeignFactory(typeof(TEvent));
             return;
         }
 
-        _mode = _fast is { HasNoInterceptors: true } ? StraightMode : StagedMode;
+        if (fast.HandlerArray.Length == 0 && fast.IndirectHandlerArray.Length == 0)
+        {
+            // The default set selects no handler — a group-only event published without
+            // groups, or a composition carrying nothing but interceptor rows. Reaching
+            // nobody is not an error, and it needs no plan to happen; checked before the
+            // plan is verified because an empty shape proves nothing about one.
+            _mode = NoPipelineMode;
+            return;
+        }
+
+        if (Plan is null)
+        {
+            _mode = UnplannedMode;
+            _unplanned = static () => UnplannedDispatch.ForMissingBroadcastPlan(typeof(TEvent));
+            return;
+        }
+
+        if (fast.ForcedMemoization)
+        {
+            _mode = UnplannedMode;
+            _unplanned = static () => UnplannedDispatch.ForMemoizedInstances(typeof(TEvent));
+            return;
+        }
+
+        if (!StagedPlanGate.Matches(fast, Plan.Composition))
+        {
+            _mode = UnplannedMode;
+            _unplanned = () => UnplannedDispatch.ForDivergedBroadcastComposition(
+                typeof(TEvent), fast, Plan.Composition);
+            return;
+        }
+
+        _mode = Plan.SupportsDirectConstruction
+                && dependenciesFactory is MessageDependenciesFactory typedFactory
+                && StagedPlanGate.AllPlainTransient(typedFactory, Plan.Composition)
+            ? PlanDirectMode
+            : PlanMode;
     }
 
     /// <inheritdoc />
@@ -181,7 +191,7 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
     }
 
     /// <summary>
-    /// Delivers a publish through whichever body its mode names.
+    /// Delivers a publish through whichever plan its mode names, or fails it.
     /// </summary>
     /// <param name="message">The event to publish.</param>
     /// <param name="context">The execution context of this publish.</param>
@@ -200,15 +210,7 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
             return PublishGrouped(message, context, serviceProvider, groups);
         }
 
-        // Ordered by how often each is taken: an event with no interceptors is the case the
-        // whole design protects, the plan arms carry the intercepted pipelines, and the
-        // staged body serves the compositions no plan covered.
         var mode = _mode;
-
-        if (mode == StraightMode)
-        {
-            return PublishStraightThrough((TEvent)message, _fast!, context, serviceProvider);
-        }
 
         if (mode >= PlanMode)
         {
@@ -217,16 +219,16 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
                 : Plan!.Execute((TEvent)message, context, serviceProvider);
         }
 
-        if (mode == StagedMode)
+        if (mode == UnplannedMode)
         {
-            return PublishThroughStages((TEvent)message, _dependencies!, context, serviceProvider);
+            throw _unplanned!();
         }
 
         return NoPipeline();
     }
 
     /// <summary>
-    /// Delivers a publish that named groups, to the handlers those groups select.
+    /// Delivers a publish that named groups, through the plan those groups admit.
     /// </summary>
     /// <param name="message">The event to publish.</param>
     /// <param name="context">The execution context of this publish.</param>
@@ -236,7 +238,8 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
     /// <remarks>
     /// A single last-used slot serves the common shape of one stable group set per event
     /// type; a miss rebuilds through the factory's own per-(type, set) cache, so alternating
-    /// sets stay cheap and each set gets its own settled participants.
+    /// sets stay cheap and each set gets its own settled decision. A set that fails
+    /// admission fails on every publish, since a failed decision is never slotted.
     /// </remarks>
     private ValueTask PublishGrouped(
         object message,
@@ -265,59 +268,53 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
                 return NoPipeline();
             }
 
-            var admitted = AdmitGroupedPlan(materialized, dependencies, out var planDirect);
-            slot = new GroupedSlot(materialized, canonical, dependencies, admitted, planDirect);
+            if (dependencies is MessageDependencies { HandlerArray.Length: 0, IndirectHandlerArray.Length: 0 })
+            {
+                // The set selects no handler; reaching nobody is not an error and needs no
+                // plan. Not slotted, for the same reason the null case is not.
+                return NoPipeline();
+            }
+
+            var (plan, planDirect) = AdmitGroupedPlan(materialized, dependencies);
+            slot = new GroupedSlot(materialized, canonical, plan, planDirect);
             _cachedGroupedSlot = slot;
         }
 
-        if (slot.GroupedPlan is { } plan)
-        {
-            // A plan compiled for this exact set already knows its participants; the
-            // filtering plan works them out from the set it is handed.
-            if (plan.FilterGroups is not null)
-            {
-                return slot.PlanDirect
-                    ? plan.ExecuteFilteredDirect((TEvent)message, context, serviceProvider, slot.Groups)
-                    : plan.ExecuteFiltered((TEvent)message, context, serviceProvider, slot.Groups);
-            }
+        var groupedPlan = slot.GroupedPlan;
 
+        // A plan compiled for this exact set already knows its participants; the filtering
+        // plan works them out from the set it is handed.
+        if (groupedPlan.FilterGroups is not null)
+        {
             return slot.PlanDirect
-                ? plan.ExecuteDirect((TEvent)message, context, serviceProvider)
-                : plan.Execute((TEvent)message, context, serviceProvider);
+                ? groupedPlan.ExecuteFilteredDirect((TEvent)message, context, serviceProvider, slot.Groups)
+                : groupedPlan.ExecuteFiltered((TEvent)message, context, serviceProvider, slot.Groups);
         }
 
-        return slot.Fast is { HasNoInterceptors: true } fast
-            ? PublishStraightThrough((TEvent)message, fast, context, serviceProvider)
-            : PublishThroughStages((TEvent)message, slot.Dependencies, context, serviceProvider);
+        return slot.PlanDirect
+            ? groupedPlan.ExecuteDirect((TEvent)message, context, serviceProvider)
+            : groupedPlan.Execute((TEvent)message, context, serviceProvider);
     }
 
     /// <summary>
-    /// Decides which compiled plan, if any, may serve one group set.
+    /// Decides which compiled plan serves one group set, or fails the publish when none
+    /// verifiably does.
     /// </summary>
     /// <param name="groups">The group set being decided for.</param>
     /// <param name="dependencies">The participants that set selects.</param>
-    /// <param name="direct">
-    /// Set to <c>true</c> when the plan may construct participants itself.
-    /// </param>
-    /// <returns>The plan, or <c>null</c> when none may serve the set.</returns>
+    /// <returns>The plan and whether it may construct participants itself.</returns>
     /// <remarks>
     /// The same question the constructor answers for the default set, asked once per set as
     /// its slot is filled rather than on every publish.
     /// </remarks>
-    private StagedBroadcastPlan<TEvent>? AdmitGroupedPlan(
-        string[] groups, IMessageDependencies dependencies, out bool direct)
+    private (StagedBroadcastPlan<TEvent> Plan, bool Direct) AdmitGroupedPlan(
+        string[] groups, IMessageDependencies dependencies)
     {
-        direct = false;
-
         var plan = GeneratedDispatchRoots.FindBroadcastPlan(typeof(TEvent), groups) as StagedBroadcastPlan<TEvent>;
 
         if (plan is not null)
         {
-            if (dependencies is not MessageDependencies { MemoizedInstances: false } keyed
-                || !StagedPlanGate.Matches(keyed, plan.Composition))
-            {
-                return null;
-            }
+            VerifyComposition(dependencies, plan.Composition);
         }
         else
         {
@@ -327,230 +324,47 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
             // groups it covers: that is the one set reproducing everything its body holds.
             plan = GeneratedDispatchRoots.FindFilteredBroadcastPlan(typeof(TEvent)) as StagedBroadcastPlan<TEvent>;
 
-            if (plan?.FilterGroups is not { } covered
-                || _factory.Find(typeof(TEvent), covered) is not MessageDependencies { MemoizedInstances: false } full
-                || !StagedPlanGate.Matches(full, plan.Composition))
+            if (plan?.FilterGroups is not { } covered)
             {
-                return null;
+                throw UnplannedDispatch.ForUnplannedGroupSet(typeof(TEvent), groups);
             }
+
+            if (_factory.Find(typeof(TEvent), covered) is not { } full)
+            {
+                throw UnplannedDispatch.ForUnplannedGroupSet(typeof(TEvent), groups);
+            }
+
+            VerifyComposition(full, plan.Composition);
         }
 
-        direct = plan.SupportsDirectConstruction
-                 && _factory is MessageDependenciesFactory typedFactory
-                 && StagedPlanGate.AllPlainTransient(typedFactory, plan.Composition);
+        var direct = plan.SupportsDirectConstruction
+                     && _factory is MessageDependenciesFactory typedFactory
+                     && StagedPlanGate.AllPlainTransient(typedFactory, plan.Composition);
 
-        return plan;
+        return (plan, direct);
     }
 
     /// <summary>
-    /// Delivers the event to each handler in turn, direct handlers before covariant ones.
+    /// Verifies one live composition against what a plan compiled, failing the publish
+    /// with the precise reason when they cannot be reconciled.
     /// </summary>
-    /// <param name="message">The event to publish.</param>
-    /// <param name="plan">The participants to deliver to.</param>
-    /// <param name="context">The execution context of this publish.</param>
-    /// <param name="serviceProvider">The provider handlers are resolved from.</param>
-    /// <returns>A task that completes when every handler has run.</returns>
-    /// <remarks>
-    /// No async machinery is used while handlers keep completing synchronously; the first
-    /// one that suspends hands the remainder to a helper, which keeps the order strictly
-    /// sequential either way. Failures propagate untouched, and an event with no handlers
-    /// simply completes.
-    /// </remarks>
-    private static ValueTask PublishStraightThrough(
-        TEvent message,
-        MessageDependencies plan,
-        ErgosfareContext context,
-        IServiceProvider serviceProvider)
+    /// <param name="dependencies">The live participants.</param>
+    /// <param name="composition">The pipeline the plan was compiled against.</param>
+    private static void VerifyComposition(IMessageDependencies dependencies, StagedPlanKey composition)
     {
-        var direct = plan.HandlerArray;
-        var indirect = plan.IndirectHandlerArray;
-
-        if (direct.Length == 0 && indirect.Length == 0)
+        if (dependencies is not MessageDependencies fast)
         {
-            // Reaching nobody is not raised here: a publish that no subscriber in the
-            // compilation serves already fails the build (ERGO005), so what is left at run
-            // time is the selection this container made.
-            return default;
+            throw UnplannedDispatch.ForForeignFactory(typeof(TEvent));
         }
 
-        for (var i = 0; i < direct.Length; i++)
+        if (fast.ForcedMemoization)
         {
-            var pending = Invoke(direct[i], message, context, serviceProvider);
-
-            if (!pending.IsCompletedSuccessfully)
-            {
-                return AwaitRemaining(pending, message, plan, context, serviceProvider, i + 1, inIndirect: false);
-            }
+            throw UnplannedDispatch.ForMemoizedInstances(typeof(TEvent));
         }
 
-        for (var i = 0; i < indirect.Length; i++)
+        if (!StagedPlanGate.Matches(fast, composition))
         {
-            var pending = Invoke(indirect[i], message, context, serviceProvider);
-
-            if (!pending.IsCompletedSuccessfully)
-            {
-                return AwaitRemaining(pending, message, plan, context, serviceProvider, i + 1, inIndirect: true);
-            }
-        }
-
-        return default;
-
-        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
-        static async ValueTask AwaitRemaining(
-            ValueTask pending, TEvent message, MessageDependencies plan, ErgosfareContext context,
-            IServiceProvider serviceProvider, int next, bool inIndirect)
-        {
-            await pending;
-
-            var direct = plan.HandlerArray;
-            var indirect = plan.IndirectHandlerArray;
-
-            if (!inIndirect)
-            {
-                for (var i = next; i < direct.Length; i++)
-                {
-                    await Invoke(direct[i], message, context, serviceProvider);
-                }
-
-                next = 0;
-            }
-
-            for (var i = next; i < indirect.Length; i++)
-            {
-                await Invoke(indirect[i], message, context, serviceProvider);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Delivers the event through the full set of interceptor stages.
-    /// </summary>
-    /// <param name="message">The event to publish.</param>
-    /// <param name="dependencies">The participants to run.</param>
-    /// <param name="context">The execution context of this publish.</param>
-    /// <param name="serviceProvider">The provider participants are resolved from.</param>
-    /// <returns>A task that completes when the pipeline has run.</returns>
-    /// <exception cref="ExecutionAbortedException">A participant stopped the publish.</exception>
-    private static async ValueTask PublishThroughStages(
-        TEvent message,
-        IMessageDependencies dependencies,
-        ErgosfareContext context,
-        IServiceProvider serviceProvider)
-    {
-        var handlers = dependencies.Handlers;
-        var indirectHandlers = dependencies.IndirectHandlers;
-
-        if (handlers.Count == 0 && indirectHandlers.Count == 0)
-        {
-            return;
-        }
-
-        Exception? exception = null;
-        var aborted = false;
-
-        try
-        {
-            // Empty stages are skipped outright. Running one changes nothing, so these
-            // guards only cut work.
-            if (dependencies.PreInterceptors.Count > 0)
-            {
-                // A pre-interceptor may replace the event entirely, and the publish
-                // continues with what it returned — as the single-handler pipelines do.
-                // Events bind no result adapter.
-                message = (TEvent)await PreInterceptorInvocationStrategy<TEvent>.Invoke(
-                    dependencies, serviceProvider, message, context);
-            }
-
-            for (var i = 0; i < handlers.Count; i++)
-            {
-                await Invoke(handlers[i], message, context, serviceProvider);
-            }
-
-            for (var i = 0; i < indirectHandlers.Count; i++)
-            {
-                await Invoke(indirectHandlers[i], message, context, serviceProvider);
-            }
-
-            if (dependencies.PostInterceptors.Count > 0)
-            {
-                // A publish produces nothing, so the stages receive the one value a
-                // resultless pipeline has.
-                _ = await PostInterceptorInvocationStrategy<TEvent, Unit>.Invoke(
-                    dependencies, null, serviceProvider, message, Unit.Value, context);
-            }
-        }
-        catch (ExecutionAbortedException)
-        {
-            // A participant stopped the publish. Nothing else runs — neither the exception
-            // stage nor the final stage — and the signal continues to the publisher.
-            aborted = true;
-            throw;
-        }
-        catch (Exception e)
-        {
-            exception = e;
-
-            // With no exception interceptors the failure goes straight out; the final
-            // interceptors still run, from the finally block.
-            if (dependencies.ExceptionInterceptors.Count == 0)
-            {
-                throw;
-            }
-
-            var (matched, _) = await ExceptionInterceptorInvocationStrategy<TEvent, Unit>.Invoke(
-                dependencies, serviceProvider, message, Unit.Value, e, context);
-
-            // Every interceptor filtered the failure out, so nothing handled it and it
-            // continues with its original stack.
-            if (!matched)
-            {
-                throw;
-            }
-        }
-        finally
-        {
-            if (dependencies.FinalInterceptors.Count > 0 && !aborted)
-            {
-                await FinalInterceptorInvocationStrategy<TEvent, Unit>.Invoke(
-                    dependencies, serviceProvider, message, Unit.Value, exception, context);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Calls one handler through whichever main-handler contract it implements.
-    /// </summary>
-    /// <param name="reference">The handler to resolve and call.</param>
-    /// <param name="message">The event to hand it.</param>
-    /// <param name="context">The execution context of this publish.</param>
-    /// <param name="serviceProvider">The provider the handler is resolved from.</param>
-    /// <returns>A task that completes when the handler is done.</returns>
-    /// <exception cref="NotSupportedException">
-    /// The handler implements no main-handler contract accepting
-    /// <typeparamref name="TEvent"/>, which happens when an event is published through a
-    /// static type that erases its own.
-    /// </exception>
-    private static ValueTask Invoke(
-        IHandlerReference<Abstractions.Handlers.IHandler> reference,
-        TEvent message,
-        ErgosfareContext context,
-        IServiceProvider serviceProvider)
-    {
-        var handler = reference.Resolve(serviceProvider);
-
-        switch (handler)
-        {
-            case Abstractions.Handlers.IAsyncHandler<TEvent> asyncHandler:
-                return asyncHandler.HandleAsync(message, context);
-            case Abstractions.Handlers.IHandler<TEvent, ValueTask> valueTaskShaped:
-                return valueTaskShaped.Handle(message, context);
-            case Abstractions.Handlers.IHandler<TEvent, object> syncHandler:
-                syncHandler.Handle(message, context);
-                return ValueTask.CompletedTask;
-            default:
-                throw new NotSupportedException(
-                    $"'{handler.GetType()}' does not implement a supported handler contract for event '{typeof(TEvent)}'. " +
-                    "Interface-erased dispatch is not supported; publish with the concrete event type.");
+            throw UnplannedDispatch.ForDivergedBroadcastComposition(typeof(TEvent), fast, composition);
         }
     }
 
@@ -569,14 +383,12 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
     /// </summary>
     /// <param name="groups">The group names this slot was built for.</param>
     /// <param name="canonical">The canonical set it came from, when it came from one.</param>
-    /// <param name="dependencies">The participants for the set.</param>
-    /// <param name="plan">The plan serving the set, or <c>null</c>.</param>
+    /// <param name="plan">The plan serving the set.</param>
     /// <param name="planDirect">Whether that plan may construct participants itself.</param>
     private sealed class GroupedSlot(
         string[] groups,
         GroupSet? canonical,
-        IMessageDependencies dependencies,
-        StagedBroadcastPlan<TEvent>? plan,
+        StagedBroadcastPlan<TEvent> plan,
         bool planDirect)
     {
         /// <summary>
@@ -590,20 +402,9 @@ internal sealed class FrozenBroadcastDispatch<TEvent> : FrozenBroadcastDispatch
         public readonly GroupSet? Canonical = canonical;
 
         /// <summary>
-        /// The participants for this group set.
+        /// The plan serving this group set.
         /// </summary>
-        public readonly IMessageDependencies Dependencies = dependencies;
-
-        /// <summary>
-        /// The same participants as their concrete type, or <c>null</c> when they came from
-        /// elsewhere.
-        /// </summary>
-        public readonly MessageDependencies? Fast = dependencies as MessageDependencies;
-
-        /// <summary>
-        /// The plan serving this group set, or <c>null</c> when none does.
-        /// </summary>
-        public readonly StagedBroadcastPlan<TEvent>? GroupedPlan = plan;
+        public readonly StagedBroadcastPlan<TEvent> GroupedPlan = plan;
 
         /// <summary>
         /// Whether the plan may construct participants itself in this container.

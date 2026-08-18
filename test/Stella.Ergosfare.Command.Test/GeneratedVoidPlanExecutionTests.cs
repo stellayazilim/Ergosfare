@@ -3,6 +3,7 @@ using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -11,11 +12,11 @@ namespace Stella.Ergosfare.Command.Test;
 /// <summary>
 /// Runtime behavior of generated void pipeline plans, installed here through the public
 /// <see cref="GeneratedDispatchRoots.AddVoidPlan{TMessage, THandler}()"/> surface exactly as
-/// generated code would: the plan-closed executor dispatches the handler, runtime
-/// registrations still invalidate the cached pipeline, and a plan whose handler type does
-/// not match the actual registration falls back to the runtime dispatch shape without any
-/// behavioral difference. Helper types are excluded from discovery so assembly scans (the
-/// registry is process-wide) cannot alter the pipelines these facts construct.
+/// generated code would: the plan-closed executor dispatches the handler, and a plan whose
+/// handler type does not match the actual registration fails the dispatch naming the
+/// divergence — nothing is dispatched at run time that was not produced at compile time.
+/// Helper types are excluded from discovery so assembly scans (the registry is
+/// process-wide) cannot alter the pipelines these facts construct.
 /// </summary>
 public class GeneratedVoidPlanExecutionTests
 {
@@ -55,26 +56,6 @@ public class GeneratedVoidPlanExecutionTests
     }
 
     [ExcludeFromDiscovery]
-    public sealed class LatePlannedCommand : ICommand { }
-
-    [ExcludeFromDiscovery]
-    public sealed class LatePlannedCommandHandler : ICommandHandler<LatePlannedCommand>
-    {
-        public ValueTask HandleAsync(LatePlannedCommand command, ErgosfareContext context)
-            => ValueTask.CompletedTask;
-    }
-
-    [ExcludeFromDiscovery]
-    public sealed class LatePlannedInterceptor : ICommandPreInterceptor<LatePlannedCommand>
-    {
-        public ValueTask<LatePlannedCommand> HandleAsync(LatePlannedCommand command, ErgosfareContext context)
-        {
-            context.Set("lateInterceptorRan", true);
-            return ValueTask.FromResult(command);
-        }
-    }
-
-    [ExcludeFromDiscovery]
     public sealed class MismatchedCommand : ICommand { }
 
     /// <summary>Registered handler — not the type the plan claims.</summary>
@@ -99,7 +80,7 @@ public class GeneratedVoidPlanExecutionTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task PlanClaimingTheWrongHandler_StillDispatchesTheRegisteredOne()
+    public async Task PlanClaimingTheWrongHandler_FailsTheDispatch()
     {
         GeneratedDispatchRoots.AddVoidPlan<MismatchedCommand, ClaimedMismatchedHandler>();
 
@@ -109,10 +90,13 @@ public class GeneratedVoidPlanExecutionTests
         await using var _ = provider;
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
-        var settings = new ErgosfareContext();
 
-        await mediator.SendAsync(new MismatchedCommand(), settings);
+        // The plan names one handler and the live pipeline holds another: there is no
+        // runtime lane to hand the dispatch to, so it fails naming the divergence.
+        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
+            await mediator.SendAsync(new MismatchedCommand(), new ErgosfareContext()));
 
-        Assert.Equal(true, settings.Items["actualRan"]);
+        Assert.Equal(UnplannedDispatchReason.CompositionDiverged, thrown.Reason);
+        Assert.Equal(typeof(MismatchedCommand), thrown.MessageType);
     }
 }

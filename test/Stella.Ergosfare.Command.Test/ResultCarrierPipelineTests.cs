@@ -2,41 +2,253 @@ using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions.Results;
 
 namespace Stella.Ergosfare.Command.Test;
 
+public sealed record CarrierCommand(bool Fail) : ICommand<Result<string>>;
+
+public sealed class CarrierHandler : ICommandHandler<CarrierCommand, Result<string>>
+{
+    public ValueTask<Result<string>> HandleAsync(CarrierCommand message, ErgosfareContext context)
+        => new(message.Fail
+            ? Result<string>.Fail(new InvalidOperationException("carried"))
+            : Result<string>.Ok("done"));
+}
+
+public sealed class CarrierExceptionObserver
+    : ICommandExceptionInterceptorFor<CarrierCommand, Result<string>, InvalidOperationException>
+{
+    public static Exception? Observed;
+
+    public ValueTask<Result<string>> HandleAsync(CarrierCommand message, Result<string> result, InvalidOperationException exception, ErgosfareContext context)
+    {
+        Observed = exception;
+        return new ValueTask<Result<string>>(Result<string>.Fail(exception));
+    }
+}
+
+/// <summary>
+/// The observer-less twin of <see cref="CarrierCommand"/>: a compiled plan bakes a
+/// message's full discoverable pipeline, so the "nobody to tell" case needs its own
+/// message type rather than a container that registers less than the plan holds.
+/// </summary>
+public sealed record LoneCarrierCommand(bool Fail) : ICommand<Result<string>>;
+
+public sealed class LoneCarrierHandler : ICommandHandler<LoneCarrierCommand, Result<string>>
+{
+    public ValueTask<Result<string>> HandleAsync(LoneCarrierCommand message, ErgosfareContext context)
+        => new(message.Fail
+            ? Result<string>.Fail(new InvalidOperationException("carried"))
+            : Result<string>.Ok("done"));
+}
+
+/// <summary>
+/// A pass-through pre stage, not an exception stage — "nobody to tell" still holds. It
+/// exists because an interceptorless pipeline collapses onto the single-handler plan
+/// family, which models no result adapter, while this message's carrier binds the native
+/// one; the interceptor pulls the pipeline into a staged plan that bakes that adapter.
+/// </summary>
+public sealed class LoneCarrierPassThrough : ICommandPreInterceptor<LoneCarrierCommand>
+{
+    public ValueTask<LoneCarrierCommand> HandleAsync(LoneCarrierCommand message, ErgosfareContext context)
+        => ValueTask.FromResult(message);
+}
+
+public sealed record ThrowingCarrierCommand : ICommand<Result<string>>;
+
+public sealed class ThrowingCarrierHandler : ICommandHandler<ThrowingCarrierCommand, Result<string>>
+{
+    public ValueTask<Result<string>> HandleAsync(ThrowingCarrierCommand message, ErgosfareContext context)
+        => throw new InvalidOperationException("thrown");
+}
+
+public sealed class ThrowingCarrierFinalObserver : ICommandFinalInterceptor<ThrowingCarrierCommand>
+{
+    public static Exception? Observed;
+
+    public ValueTask HandleAsync(ThrowingCarrierCommand message, object? messageResult, Exception? exception, ErgosfareContext context)
+    {
+        Observed = exception;
+        return default;
+    }
+}
+
+public sealed record FilteredCarrierCommand : ICommand<Result<string>>;
+
+public sealed class FilteredCarrierHandler : ICommandHandler<FilteredCarrierCommand, Result<string>>
+{
+    public ValueTask<Result<string>> HandleAsync(FilteredCarrierCommand message, ErgosfareContext context)
+        => throw new InvalidOperationException("thrown");
+}
+
+public sealed class FilteredCarrierObserver
+    : ICommandExceptionInterceptorFor<FilteredCarrierCommand, Result<string>, ArgumentException>
+{
+    public static bool Ran;
+
+    public ValueTask<Result<string>> HandleAsync(FilteredCarrierCommand message, Result<string> result, ArgumentException exception, ErgosfareContext context)
+    {
+        Ran = true;
+        return new ValueTask<Result<string>>(result);
+    }
+}
+
+public sealed record PostCarrierCommand : ICommand<Result<string>>;
+
+public sealed class PostCarrierHandler : ICommandHandler<PostCarrierCommand, Result<string>>
+{
+    public ValueTask<Result<string>> HandleAsync(PostCarrierCommand message, ErgosfareContext context)
+        => new(Result<string>.Ok("done"));
+}
+
+public sealed class PostCarrierFailingPost : ICommandPostInterceptor<PostCarrierCommand, Result<string>>
+{
+    public ValueTask<Result<string>> HandleAsync(PostCarrierCommand message, Result<string> messageResult, ErgosfareContext context)
+        => new(Result<string>.Fail(new InvalidOperationException("post-carried")));
+}
+
+public sealed class PostCarrierRecordingPost : ICommandPostInterceptor<PostCarrierCommand, Result<string>>
+{
+    public static bool Ran;
+
+    public ValueTask<Result<string>> HandleAsync(PostCarrierCommand message, Result<string> messageResult, ErgosfareContext context)
+    {
+        Ran = true;
+        return new(messageResult);
+    }
+}
+
+public sealed class ForeignOutcome
+{
+    public Exception? Error { get; init; }
+    public string? Value { get; init; }
+}
+
+public sealed class ForeignOutcomeAdapter : IResultAdapter<ForeignOutcome>
+{
+    public bool TryGetException(in ForeignOutcome result, out Exception? exception)
+    {
+        exception = result.Error;
+        return exception is not null;
+    }
+}
+
+[ResultAdapter(typeof(ForeignOutcomeAdapter))]
+public sealed record ForeignCarrierCommand : ICommand<ForeignOutcome>;
+
+public sealed class ForeignCarrierHandler : ICommandHandler<ForeignCarrierCommand, ForeignOutcome>
+{
+    public ValueTask<ForeignOutcome> HandleAsync(ForeignCarrierCommand message, ErgosfareContext context)
+        => new(new ForeignOutcome { Error = new InvalidOperationException("foreign-carried") });
+}
+
+public sealed class ForeignCarrierFinalObserver : ICommandFinalInterceptor<ForeignCarrierCommand>
+{
+    public static Exception? Observed;
+
+    public ValueTask HandleAsync(ForeignCarrierCommand message, object? messageResult, Exception? exception, ErgosfareContext context)
+    {
+        Observed = exception;
+        return default;
+    }
+}
+
+public sealed class DefaultBoundOutcome
+{
+    public Exception? Error { get; init; }
+    public string? Value { get; init; }
+}
+
+public sealed record DefaultBoundCommand : ICommand<DefaultBoundOutcome>;
+
+public sealed class DefaultBoundHandler : ICommandHandler<DefaultBoundCommand, DefaultBoundOutcome>
+{
+    public ValueTask<DefaultBoundOutcome> HandleAsync(DefaultBoundCommand message, ErgosfareContext context)
+        => new(new DefaultBoundOutcome { Error = new InvalidOperationException("default-carried") });
+}
+
+public sealed class DefaultBoundObserver : ICommandExceptionInterceptor<DefaultBoundCommand>
+{
+    public static Exception? Observed;
+
+    public ValueTask<object> HandleAsync(DefaultBoundCommand message, object? messageResult, Exception exception, ErgosfareContext context)
+    {
+        Observed = exception;
+        return ValueTask.FromResult<object>(new DefaultBoundOutcome { Value = "recovered" });
+    }
+}
+
+[IgnoreResultAdapter]
+public sealed record OptedOutCommand : ICommand<DefaultBoundOutcome>;
+
+public sealed class OptedOutHandler : ICommandHandler<OptedOutCommand, DefaultBoundOutcome>
+{
+    public ValueTask<DefaultBoundOutcome> HandleAsync(OptedOutCommand message, ErgosfareContext context)
+        => new(new DefaultBoundOutcome { Error = new InvalidOperationException("opted-out") });
+}
+
+public sealed class OptedOutObserver : ICommandExceptionInterceptor<OptedOutCommand>
+{
+    public static bool Ran;
+
+    public ValueTask<object> HandleAsync(OptedOutCommand message, object? messageResult, Exception exception, ErgosfareContext context)
+    {
+        Ran = true;
+        return ValueTask.FromResult(messageResult!);
+    }
+}
+
+[IgnoreResultAdapter]
+public sealed record OptedOutNativeCommand : ICommand<Result<string>>;
+
+public sealed class OptedOutNativeHandler : ICommandHandler<OptedOutNativeCommand, Result<string>>
+{
+    public ValueTask<Result<string>> HandleAsync(OptedOutNativeCommand message, ErgosfareContext context)
+        => throw new InvalidOperationException("native-opt-out");
+}
+
+public sealed class OptedOutNativeFinal : ICommandFinalInterceptor<OptedOutNativeCommand>
+{
+    public ValueTask HandleAsync(OptedOutNativeCommand message, object? messageResult, Exception? exception, ErgosfareContext context)
+        => default;
+}
+
+[IgnoreResultAdapter]
+public sealed record OptedOutThrowingCommand(bool Throw) : ICommand<Result<string>>;
+
+public sealed class OptedOutThrowingHandler : ICommandHandler<OptedOutThrowingCommand, Result<string>>
+{
+    public ValueTask<Result<string>> HandleAsync(OptedOutThrowingCommand message, ErgosfareContext context)
+        => message.Throw
+            ? throw new InvalidOperationException("classic-thrown")
+            : new ValueTask<Result<string>>(Result<string>.Fail(new InvalidOperationException("carried-unseen")));
+}
+
+public sealed class OptedOutThrowingObserver
+    : ICommandExceptionInterceptorFor<OptedOutThrowingCommand, Result<string>, InvalidOperationException>
+{
+    public static Exception? Observed;
+
+    public ValueTask<Result<string>> HandleAsync(OptedOutThrowingCommand message, Result<string> result, InvalidOperationException exception, ErgosfareContext context)
+    {
+        Observed = exception;
+        return new ValueTask<Result<string>>(Result<string>.Ok("handled"));
+    }
+}
+
 /// <summary>
 /// End-to-end value channel: a handler that returns a failed <see cref="Result{TValue}"/>
 /// bypasses throw entirely, yet the pipeline still routes the carried exception to the
-/// exception-interceptor stage through the carrier's built-in adapter.
+/// exception-interceptor stage through the carrier's built-in adapter. Fixtures are
+/// top-level and discoverable, so every carrier pipeline runs through its compiled plan
+/// with the adapter identity the plan was baked against.
 /// </summary>
 public class ResultCarrierPipelineTests
 {
-    public sealed record CarrierCommand(bool Fail) : ICommand<Result<string>>;
-
-    public sealed class CarrierHandler : ICommandHandler<CarrierCommand, Result<string>>
-    {
-        public ValueTask<Result<string>> HandleAsync(CarrierCommand message, ErgosfareContext context)
-            => new(message.Fail
-                ? Result<string>.Fail(new InvalidOperationException("carried"))
-                : Result<string>.Ok("done"));
-    }
-
-    public sealed class CarrierExceptionObserver
-        : ICommandExceptionInterceptorFor<CarrierCommand, Result<string>, InvalidOperationException>
-    {
-        public static Exception? Observed;
-
-        public ValueTask<Result<string>> HandleAsync(CarrierCommand message, Result<string> result, InvalidOperationException exception, ErgosfareContext context)
-        {
-            Observed = exception;
-            return new ValueTask<Result<string>>(Result<string>.Fail(exception));
-        }
-    }
-
     [Fact]
     public async Task A_carried_failure_reaches_the_exception_stage_without_a_throw_from_the_handler()
     {
@@ -64,34 +276,17 @@ public class ResultCarrierPipelineTests
     public async Task A_carried_failure_with_nobody_to_tell_flows_out_as_the_failed_carrier()
     {
         var provider = new ServiceCollection()
-            .AddErgosfare(x => x.AddCommandModule(c => c.Register<CarrierHandler>()))
+            .AddErgosfare(x => x.AddCommandModule(c => c
+                .Register<LoneCarrierHandler>()
+                .Register<LoneCarrierPassThrough>()))
             .BuildServiceProvider();
 
         // Choosing a materializable carrier is choosing throwlessness: with no exception
         // stage at all, the failed carrier is the result — nothing is thrown.
-        var failed = await provider.GetRequiredService<ICommandMediator>().SendAsync(new CarrierCommand(Fail: true));
+        var failed = await provider.GetRequiredService<ICommandMediator>().SendAsync(new LoneCarrierCommand(Fail: true));
 
         Assert.False(failed.IsSuccess);
         Assert.Equal("carried", failed.Exception!.Message);
-    }
-
-    public sealed record ThrowingCarrierCommand : ICommand<Result<string>>;
-
-    public sealed class ThrowingCarrierHandler : ICommandHandler<ThrowingCarrierCommand, Result<string>>
-    {
-        public ValueTask<Result<string>> HandleAsync(ThrowingCarrierCommand message, ErgosfareContext context)
-            => throw new InvalidOperationException("thrown");
-    }
-
-    public sealed class ThrowingCarrierFinalObserver : ICommandFinalInterceptor<ThrowingCarrierCommand>
-    {
-        public static Exception? Observed;
-
-        public ValueTask HandleAsync(ThrowingCarrierCommand message, object? messageResult, Exception? exception, ErgosfareContext context)
-        {
-            Observed = exception;
-            return default;
-        }
     }
 
     [Fact]
@@ -115,26 +310,6 @@ public class ResultCarrierPipelineTests
         Assert.Equal("thrown", ThrowingCarrierFinalObserver.Observed.Message);
     }
 
-    public sealed record FilteredCarrierCommand : ICommand<Result<string>>;
-
-    public sealed class FilteredCarrierHandler : ICommandHandler<FilteredCarrierCommand, Result<string>>
-    {
-        public ValueTask<Result<string>> HandleAsync(FilteredCarrierCommand message, ErgosfareContext context)
-            => throw new InvalidOperationException("thrown");
-    }
-
-    public sealed class FilteredCarrierObserver
-        : ICommandExceptionInterceptorFor<FilteredCarrierCommand, Result<string>, ArgumentException>
-    {
-        public static bool Ran;
-
-        public ValueTask<Result<string>> HandleAsync(FilteredCarrierCommand message, Result<string> result, ArgumentException exception, ErgosfareContext context)
-        {
-            Ran = true;
-            return new ValueTask<Result<string>>(result);
-        }
-    }
-
     [Fact]
     public async Task An_unmatched_exception_stage_leaves_the_materialized_failure_standing()
     {
@@ -153,31 +328,6 @@ public class ResultCarrierPipelineTests
         Assert.False(FilteredCarrierObserver.Ran);
         Assert.False(failed.IsSuccess);
         Assert.Equal("thrown", failed.Exception!.Message);
-    }
-
-    public sealed record PostCarrierCommand : ICommand<Result<string>>;
-
-    public sealed class PostCarrierHandler : ICommandHandler<PostCarrierCommand, Result<string>>
-    {
-        public ValueTask<Result<string>> HandleAsync(PostCarrierCommand message, ErgosfareContext context)
-            => new(Result<string>.Ok("done"));
-    }
-
-    public sealed class PostCarrierFailingPost : ICommandPostInterceptor<PostCarrierCommand, Result<string>>
-    {
-        public ValueTask<Result<string>> HandleAsync(PostCarrierCommand message, Result<string> messageResult, ErgosfareContext context)
-            => new(Result<string>.Fail(new InvalidOperationException("post-carried")));
-    }
-
-    public sealed class PostCarrierRecordingPost : ICommandPostInterceptor<PostCarrierCommand, Result<string>>
-    {
-        public static bool Ran;
-
-        public ValueTask<Result<string>> HandleAsync(PostCarrierCommand message, Result<string> messageResult, ErgosfareContext context)
-        {
-            Ran = true;
-            return new(messageResult);
-        }
     }
 
     [Fact]
@@ -201,41 +351,6 @@ public class ResultCarrierPipelineTests
         Assert.Equal("post-carried", failed.Exception!.Message);
     }
 
-    public sealed class ForeignOutcome
-    {
-        public Exception? Error { get; init; }
-        public string? Value { get; init; }
-    }
-
-    public sealed class ForeignOutcomeAdapter : IResultAdapter<ForeignOutcome>
-    {
-        public bool TryGetException(in ForeignOutcome result, out Exception? exception)
-        {
-            exception = result.Error;
-            return exception is not null;
-        }
-    }
-
-    [ResultAdapter(typeof(ForeignOutcomeAdapter))]
-    public sealed record ForeignCarrierCommand : ICommand<ForeignOutcome>;
-
-    public sealed class ForeignCarrierHandler : ICommandHandler<ForeignCarrierCommand, ForeignOutcome>
-    {
-        public ValueTask<ForeignOutcome> HandleAsync(ForeignCarrierCommand message, ErgosfareContext context)
-            => new(new ForeignOutcome { Error = new InvalidOperationException("foreign-carried") });
-    }
-
-    public sealed class ForeignCarrierFinalObserver : ICommandFinalInterceptor<ForeignCarrierCommand>
-    {
-        public static Exception? Observed;
-
-        public ValueTask HandleAsync(ForeignCarrierCommand message, object? messageResult, Exception? exception, ErgosfareContext context)
-        {
-            Observed = exception;
-            return default;
-        }
-    }
-
     [Fact]
     public async Task A_carried_failure_in_a_non_materializable_carrier_surfaces_as_a_throw_after_finals()
     {
@@ -249,38 +364,14 @@ public class ResultCarrierPipelineTests
 
         // The foreign adapter can extract but not absorb: with nobody handling the
         // carried failure, the classic contract stands — it surfaces as a throw, and the
-        // final stage has already observed it.
+        // final stage has already observed it. The adapter is annotated on the type, so
+        // it is baked into the compiled plan.
         var thrown = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await provider.GetRequiredService<ICommandMediator>().SendAsync(new ForeignCarrierCommand()));
 
         Assert.Equal("foreign-carried", thrown.Message);
         Assert.NotNull(ForeignCarrierFinalObserver.Observed);
         Assert.Equal("foreign-carried", ForeignCarrierFinalObserver.Observed.Message);
-    }
-
-    public sealed class DefaultBoundOutcome
-    {
-        public Exception? Error { get; init; }
-        public string? Value { get; init; }
-    }
-
-    public sealed record DefaultBoundCommand : ICommand<DefaultBoundOutcome>;
-
-    public sealed class DefaultBoundHandler : ICommandHandler<DefaultBoundCommand, DefaultBoundOutcome>
-    {
-        public ValueTask<DefaultBoundOutcome> HandleAsync(DefaultBoundCommand message, ErgosfareContext context)
-            => new(new DefaultBoundOutcome { Error = new InvalidOperationException("default-carried") });
-    }
-
-    public sealed class DefaultBoundObserver : ICommandExceptionInterceptor<DefaultBoundCommand>
-    {
-        public static Exception? Observed;
-
-        public ValueTask<object> HandleAsync(DefaultBoundCommand message, object? messageResult, Exception exception, ErgosfareContext context)
-        {
-            Observed = exception;
-            return ValueTask.FromResult<object>(new DefaultBoundOutcome { Value = "recovered" });
-        }
     }
 
     [Fact]
@@ -306,7 +397,7 @@ public class ResultCarrierPipelineTests
     }
 
     [Fact]
-    public async Task Without_a_default_adapter_the_same_pipeline_keeps_the_classic_semantics()
+    public async Task Without_the_assemblys_default_adapter_the_dispatch_fails()
     {
         DefaultBoundObserver.Observed = null;
 
@@ -316,33 +407,16 @@ public class ResultCarrierPipelineTests
                 .Register<DefaultBoundObserver>()))
             .BuildServiceProvider();
 
-        // Nobody is forced onto the value channel: with no default configured and no
-        // annotation, nothing probes — the failed carrier is just a return value and the
-        // exception stage never runs.
-        var result = await provider.GetRequiredService<ICommandMediator>().SendAsync(new DefaultBoundCommand());
+        // The generator read this assembly's one UseDefaultResultAdapter call and baked
+        // the adapter into the message's plan, so the adapter identity is part of the
+        // compiled pipeline: a container that does not configure that default holds a
+        // pipeline the plan was not baked against, and the dispatch fails naming both
+        // adapter types instead of quietly skipping the value channel.
+        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
+            await provider.GetRequiredService<ICommandMediator>().SendAsync(new DefaultBoundCommand()));
 
+        Assert.Equal(UnplannedDispatchReason.UnplannedResultAdapter, thrown.Reason);
         Assert.Null(DefaultBoundObserver.Observed);
-        Assert.Equal("default-carried", result.Error!.Message);
-    }
-
-    [IgnoreResultAdapter]
-    public sealed record OptedOutCommand : ICommand<DefaultBoundOutcome>;
-
-    public sealed class OptedOutHandler : ICommandHandler<OptedOutCommand, DefaultBoundOutcome>
-    {
-        public ValueTask<DefaultBoundOutcome> HandleAsync(OptedOutCommand message, ErgosfareContext context)
-            => new(new DefaultBoundOutcome { Error = new InvalidOperationException("opted-out") });
-    }
-
-    public sealed class OptedOutObserver : ICommandExceptionInterceptor<OptedOutCommand>
-    {
-        public static bool Ran;
-
-        public ValueTask<object> HandleAsync(OptedOutCommand message, object? messageResult, Exception exception, ErgosfareContext context)
-        {
-            Ran = true;
-            return ValueTask.FromResult(messageResult!);
-        }
     }
 
     [Fact]
@@ -366,21 +440,6 @@ public class ResultCarrierPipelineTests
         Assert.Equal("opted-out", result.Error!.Message);
     }
 
-    [IgnoreResultAdapter]
-    public sealed record OptedOutNativeCommand : ICommand<Result<string>>;
-
-    public sealed class OptedOutNativeHandler : ICommandHandler<OptedOutNativeCommand, Result<string>>
-    {
-        public ValueTask<Result<string>> HandleAsync(OptedOutNativeCommand message, ErgosfareContext context)
-            => throw new InvalidOperationException("native-opt-out");
-    }
-
-    public sealed class OptedOutNativeFinal : ICommandFinalInterceptor<OptedOutNativeCommand>
-    {
-        public ValueTask HandleAsync(OptedOutNativeCommand message, object? messageResult, Exception? exception, ErgosfareContext context)
-            => default;
-    }
-
     [Fact]
     public async Task IgnoreResultAdapter_RestoresTheClassicThrowEvenForTheNativeCarrier()
     {
@@ -396,29 +455,6 @@ public class ResultCarrierPipelineTests
             await provider.GetRequiredService<ICommandMediator>().SendAsync(new OptedOutNativeCommand()));
 
         Assert.Equal("native-opt-out", thrown.Message);
-    }
-
-    [IgnoreResultAdapter]
-    public sealed record OptedOutThrowingCommand(bool Throw) : ICommand<Result<string>>;
-
-    public sealed class OptedOutThrowingHandler : ICommandHandler<OptedOutThrowingCommand, Result<string>>
-    {
-        public ValueTask<Result<string>> HandleAsync(OptedOutThrowingCommand message, ErgosfareContext context)
-            => message.Throw
-                ? throw new InvalidOperationException("classic-thrown")
-                : new ValueTask<Result<string>>(Result<string>.Fail(new InvalidOperationException("carried-unseen")));
-    }
-
-    public sealed class OptedOutThrowingObserver
-        : ICommandExceptionInterceptorFor<OptedOutThrowingCommand, Result<string>, InvalidOperationException>
-    {
-        public static Exception? Observed;
-
-        public ValueTask<Result<string>> HandleAsync(OptedOutThrowingCommand message, Result<string> result, InvalidOperationException exception, ErgosfareContext context)
-        {
-            Observed = exception;
-            return new ValueTask<Result<string>>(Result<string>.Ok("handled"));
-        }
     }
 
     [Fact]

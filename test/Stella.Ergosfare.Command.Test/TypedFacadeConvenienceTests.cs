@@ -8,6 +8,30 @@ using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
 namespace Stella.Ergosfare.Command.Test;
 
+public sealed class FacadeRoutedEcho : ICommand<string>;
+
+[Group("facade.east")]
+public sealed class FacadeEastRoutedEchoHandler : ICommandHandler<FacadeRoutedEcho, string>
+{
+    public ValueTask<string> HandleAsync(FacadeRoutedEcho command, ErgosfareContext context)
+        => ValueTask.FromResult("east");
+}
+
+[Group("facade.west")]
+public sealed class FacadeWestRoutedEchoHandler : ICommandHandler<FacadeRoutedEcho, string>
+{
+    public ValueTask<string> HandleAsync(FacadeRoutedEcho command, ErgosfareContext context)
+        => ValueTask.FromResult("west");
+}
+
+public sealed class PlainEcho : ICommand<string>;
+
+public sealed class PlainEchoHandler : ICommandHandler<PlainEcho, string>
+{
+    public ValueTask<string> HandleAsync(PlainEcho command, ErgosfareContext context)
+        => ValueTask.FromResult("plain");
+}
+
 /// <summary>
 /// The typed conveniences carried by <see cref="CommandMediator"/> itself, exercised through
 /// a facade-typed receiver — which is the only way to reach them, since a concrete-typed call
@@ -31,39 +55,12 @@ public class TypedFacadeConvenienceTests
     private static readonly GroupSet East = GroupSet.Of("facade.east");
     private static readonly GroupSet West = GroupSet.Of("facade.west");
 
-    public sealed class RoutedEcho : ICommand<string>;
-
-    [ExcludeFromDiscovery]
-    [Group("facade.east")]
-    public sealed class EastRoutedEchoHandler : ICommandHandler<RoutedEcho, string>
-    {
-        public ValueTask<string> HandleAsync(RoutedEcho command, ErgosfareContext context)
-            => ValueTask.FromResult("east");
-    }
-
-    [ExcludeFromDiscovery]
-    [Group("facade.west")]
-    public sealed class WestRoutedEchoHandler : ICommandHandler<RoutedEcho, string>
-    {
-        public ValueTask<string> HandleAsync(RoutedEcho command, ErgosfareContext context)
-            => ValueTask.FromResult("west");
-    }
-
-    public sealed class PlainEcho : ICommand<string>;
-
-    [ExcludeFromDiscovery]
-    public sealed class PlainEchoHandler : ICommandHandler<PlainEcho, string>
-    {
-        public ValueTask<string> HandleAsync(PlainEcho command, ErgosfareContext context)
-            => ValueTask.FromResult("plain");
-    }
-
     private static ServiceProvider Build()
         => new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c =>
             {
-                c.Register<EastRoutedEchoHandler>();
-                c.Register<WestRoutedEchoHandler>();
+                c.Register<FacadeEastRoutedEchoHandler>();
+                c.Register<FacadeWestRoutedEchoHandler>();
                 c.Register<PlainEchoHandler>();
             }))
             .BuildServiceProvider();
@@ -80,9 +77,9 @@ public class TypedFacadeConvenienceTests
         var mediator = Facade(provider);
 
         Assert.Equal("east",
-            await mediator.SendAsync<RoutedEcho, string>(new RoutedEcho(), (IEnumerable<string>?)East, default));
+            await mediator.SendAsync<FacadeRoutedEcho, string>(new FacadeRoutedEcho(), (IEnumerable<string>?)East, default));
         Assert.Equal("west",
-            await mediator.SendAsync<RoutedEcho, string>(new RoutedEcho(), (IEnumerable<string>?)West, default));
+            await mediator.SendAsync<FacadeRoutedEcho, string>(new FacadeRoutedEcho(), (IEnumerable<string>?)West, default));
 
         // No filter at all reaches the group-less lane, which is a different pipeline —
         // not the union of the grouped ones.
@@ -111,9 +108,9 @@ public class TypedFacadeConvenienceTests
 
         // Repetition is deliberate: the canonical instance is what the executor cache
         // matches on a single reference check, so the second call takes the fast path.
-        Assert.Equal("east", await mediator.SendAsync<RoutedEcho, string>(new RoutedEcho(), East));
-        Assert.Equal("east", await mediator.SendAsync<RoutedEcho, string>(new RoutedEcho(), East));
-        Assert.Equal("west", await mediator.SendAsync<RoutedEcho, string>(new RoutedEcho(), West));
+        Assert.Equal("east", await mediator.SendAsync<FacadeRoutedEcho, string>(new FacadeRoutedEcho(), East));
+        Assert.Equal("east", await mediator.SendAsync<FacadeRoutedEcho, string>(new FacadeRoutedEcho(), East));
+        Assert.Equal("west", await mediator.SendAsync<FacadeRoutedEcho, string>(new FacadeRoutedEcho(), West));
 
         Assert.Equal("plain", await mediator.SendAsync<PlainEcho, string>(new PlainEcho(), GroupSet.Empty));
     }
@@ -126,7 +123,7 @@ public class TypedFacadeConvenienceTests
         await using var provider = Build();
         var mediator = Facade(provider);
 
-        Assert.Equal("west", await mediator.SendAsync<RoutedEcho, string>(new RoutedEcho(), ["facade.west"]));
+        Assert.Equal("west", await mediator.SendAsync<FacadeRoutedEcho, string>(new FacadeRoutedEcho(), ["facade.west"]));
     }
 
     [Fact]

@@ -24,17 +24,19 @@ internal sealed class FrozenBroadcastTable(IMessageDependenciesFactory dependenc
     /// <param name="messageType">The event's runtime type.</param>
     /// <returns>The pipeline for that type.</returns>
     /// <remarks>
-    /// A generated root closes the generic without reflection; a type the generator never
-    /// saw falls back to reflective construction.
+    /// A generated root closes the generic without reflection. A type the generator never
+    /// saw gets the rootless pipeline instead: publishing it to nobody stays a no-op, and
+    /// publishing it to somebody fails — nothing is dispatched at run time that was not
+    /// produced at compile time.
     /// </remarks>
     internal FrozenBroadcastDispatch Get(Type messageType)
         => _byType.TryGetValue(messageType, out var dispatch)
             ? dispatch
             : _byType.GetOrAdd(
                 messageType,
-                DispatchLookup.OverMessage(
-                    messageType, DispatchVisitor.Instance, dependenciesFactory,
-                    typeof(FrozenBroadcastDispatch<>), [dependenciesFactory]));
+                GeneratedDispatchRoots.FindMessage(messageType) is { } root
+                    ? root.Accept(DispatchVisitor.Instance, dependenciesFactory)
+                    : new UnplannedBroadcastDispatch(dependenciesFactory, messageType));
 
     /// <summary>
     /// Returns the publish pipeline of an event type named at compile time.

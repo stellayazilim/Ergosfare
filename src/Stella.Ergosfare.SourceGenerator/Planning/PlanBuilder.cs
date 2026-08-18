@@ -80,6 +80,22 @@ internal sealed partial class PlanBuilder(
             resultPlans = WithoutMessages(resultPlans, stagedMessages, static plan => plan.MessageTypeExpression);
         }
 
+        // The stream plans join the staged list after the reconciliation above: a streaming
+        // pair never has a single-handler plan to reconcile against, and one list is what
+        // keeps the emitted plan classes on a single numbering.
+        if (availability.DispatchRootsHasStreamPlans)
+        {
+            var streamPlans = ComputeStreamPlans(findings, types, excludedShadows, availability.HasKeyedServiceExtensions);
+
+            if (streamPlans.Count > 0)
+            {
+                var combined = new List<StagedPlanModel>(stagedPlans.Count + streamPlans.Count);
+                combined.AddRange(stagedPlans);
+                combined.AddRange(streamPlans);
+                stagedPlans = combined;
+            }
+        }
+
         var frozenCompositions = availability.DispatchRootsHasFrozenCompositions
             ? ComputeFrozenCompositions(types, excludedShadows)
             : (IReadOnlyList<FrozenCompositionModel>)Array.Empty<FrozenCompositionModel>();

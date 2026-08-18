@@ -13,9 +13,10 @@ namespace Stella.Ergosfare.Contract.Test.Abort;
 /// its <c>finally</c>.
 /// </summary>
 /// <remarks>
-/// The pattern-less overload is deliberate: plan eligibility requires default-discovery,
-/// top-level, ungrouped participants, so a keyed selection would abort inside the
-/// reflective strategy the other axis already covers.
+/// The pattern-less overload registers every default-discovery construct in the assembly —
+/// the migrated areas' unkeyed types included. That is safe because every unkeyed message
+/// stays scoped to its own area, so the extra pipelines are registered and never
+/// dispatched here.
 /// </remarks>
 public sealed class GeneratedRegistrationPostAbortTests : PostAbortSemanticsContract
 {

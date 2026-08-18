@@ -27,6 +27,7 @@ public static class GeneratedDispatchRoots
     private static readonly ConcurrentDictionary<(Type MessageType, string Groups), StagedVoidPlan> StagedVoidPlans = new();
     private static readonly ConcurrentDictionary<(Type MessageType, string Groups), StagedBroadcastPlan> BroadcastPlans = new();
     private static readonly ConcurrentDictionary<(Type MessageType, Type ResultType, string Groups), StagedResultPlan> StagedResultPlans = new();
+    private static readonly ConcurrentDictionary<(Type MessageType, Type ResultType), StagedStreamPlan> StagedStreamPlans = new();
     private static readonly ConcurrentDictionary<(Type MessageType, Type ResultType), object> ResultAdapters = new();
     private static readonly ConcurrentDictionary<Type, object> DefaultResultAdapters = new();
     private static readonly ConcurrentDictionary<Type, object?> IgnoredResultAdapters = new();
@@ -479,6 +480,69 @@ public static class GeneratedDispatchRoots
     /// <param name="messageType">The event type to look up.</param>
     public static StagedBroadcastPlan? FindFilteredBroadcastPlan(Type messageType)
         => BroadcastPlans.TryGetValue((messageType, FilteredPlanKey), out var plan) ? plan : null;
+
+    /// <summary>
+    /// Registers the staged stream plan of a (query, item) pair.
+    /// </summary>
+    /// <typeparam name="TQuery">The streaming query the plan serves.</typeparam>
+    /// <typeparam name="TResult">The type of the items it streams.</typeparam>
+    /// <param name="plan">The generated plan.</param>
+    public static void AddStreamPlan<TQuery, TResult>(StagedStreamPlan<TQuery, TResult> plan)
+        where TQuery : notnull
+        => StagedStreamPlans.TryAdd((typeof(TQuery), typeof(TResult)), plan);
+
+    /// <summary>
+    /// Returns the staged stream plan of a (query, item) pair, or <c>null</c> when none was
+    /// generated.
+    /// </summary>
+    /// <param name="messageType">The query type to look up.</param>
+    /// <param name="resultType">The item type to look up.</param>
+    public static StagedStreamPlan? FindStagedStreamPlan(Type messageType, Type resultType)
+        => StagedStreamPlans.TryGetValue((messageType, resultType), out var plan) ? plan : null;
+
+    /// <summary>
+    /// Returns any staged void plan compiled for <paramref name="messageType"/> — per-set,
+    /// filtering or unfiltered — or <c>null</c> when none was.
+    /// </summary>
+    /// <param name="messageType">The message type to look up.</param>
+    /// <remarks>
+    /// A message whose default set is contested carries per-set plans and no unfiltered
+    /// one; the executor being built for it still needs a plan to close its generic context
+    /// over, and any of the message's plans can serve. A scan rather than a lookup, paid
+    /// once per (container, message type) while the executor is built.
+    /// </remarks>
+    public static StagedVoidPlan? FindAnyStagedVoidPlan(Type messageType)
+    {
+        foreach (var pair in StagedVoidPlans)
+        {
+            if (pair.Key.MessageType == messageType)
+            {
+                return pair.Value;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Returns any staged result plan compiled for the pair — per-set, filtering or
+    /// unfiltered — or <c>null</c> when none was; see
+    /// <see cref="FindAnyStagedVoidPlan"/>.
+    /// </summary>
+    /// <param name="messageType">The message type to look up.</param>
+    /// <param name="resultType">The result type to look up.</param>
+    public static StagedResultPlan? FindAnyStagedResultPlan(Type messageType, Type resultType)
+    {
+        foreach (var pair in StagedResultPlans)
+        {
+            if (pair.Key.MessageType == messageType && pair.Key.ResultType == resultType)
+            {
+                return pair.Value;
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Builds the canonical key of a group set: sorted ordinally, deduplicated and joined.

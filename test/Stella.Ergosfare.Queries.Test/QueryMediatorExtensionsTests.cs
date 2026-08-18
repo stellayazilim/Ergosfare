@@ -2,6 +2,7 @@
 // deliberate call sites of the surface as it stands today.
 #pragma warning disable CS0618
 
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Queries.Abstractions;
 using Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
@@ -93,29 +94,34 @@ public class QueryMediatorExtensionsTests
     }
 
     /// <summary>
-    /// Tests that a streaming query with a specific group returns the expected sequence of results
-    /// and that the handler is invoked.
+    /// Tests that a streaming query naming a group set is refused: stream plans are
+    /// compiled for the default set alone, so any named set — the explicit
+    /// <c>"default"</c> included — is an unplanned dispatch. The query overload above
+    /// serves the same spelling through a per-set plan; the stream store carries no set
+    /// key yet.
     /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task QueryMediatorExtensionsShouldQueryStreamWithGroup()
+    public async Task QueryMediatorExtensionsShouldRefuseGroupedStream()
     {
         var query = new StubNonGenericStreamStringResultQuery();
         var services = new ServiceCollection()
-            .AddErgosfare(options => 
+            .AddErgosfare(options =>
                 options.AddQueryModule(queryBuilder =>
                 {
                     queryBuilder.Register<StubNonGenericStreamStringResultQueryHandler>();
                 }))
             .BuildServiceProvider();
-        var results = new List<string>();
         var mediator = services.GetRequiredService<IQueryMediator>();
-        await foreach (var result in mediator.StreamAsync(query,["default"], CancellationToken.None))
+
+        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
         {
-            results.Add(result);
-        }
-        Assert.Equal(["Foo", "Bar", "Baz"], results);
-        Assert.True(StubNonGenericStreamStringResultQueryHandler.IsCalled);
+            await foreach (var _ in mediator.StreamAsync(query, ["default"], CancellationToken.None))
+            {
+            }
+        });
+
+        Assert.Equal(UnplannedDispatchReason.UnplannedGroupSet, thrown.Reason);
     }
 }
