@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Abstractions.Factories;
+using Stella.Ergosfare.Core.Abstractions.StagedPlans;
 
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
@@ -25,8 +26,10 @@ internal sealed class StreamDispatchTable(IMessageDependenciesFactory dependenci
     /// <param name="queryType">The query's runtime type.</param>
     /// <returns>The pipeline for that pair.</returns>
     /// <remarks>
-    /// A generated stream root closes the generic without reflection; a pair the generator
-    /// never saw falls back to reflective construction.
+    /// The plan closes the generic without reflection — a compiled stream plan carries its
+    /// own query and item types. A pair without one gets the pipeline that fails every
+    /// stream, as precisely as the participants allow: nothing is dispatched at run time
+    /// that was not produced at compile time.
     /// </remarks>
     internal IStreamDispatch<TResult> Get<TResult>(Type queryType)
     {
@@ -39,25 +42,36 @@ internal sealed class StreamDispatchTable(IMessageDependenciesFactory dependenci
 
         return (IStreamDispatch<TResult>)_byPair.GetOrAdd(
             key,
-            DispatchLookup.OverStream(
-                queryType, typeof(TResult), DispatchVisitor.Instance, dependenciesFactory,
-                typeof(StreamDispatch<,>), [dependenciesFactory]));
+            GeneratedDispatchRoots.FindStagedStreamPlan(queryType, typeof(TResult)) is { } plan
+                ? plan.Accept(PlanDispatchVisitor.Instance, new DispatchState(dependenciesFactory, plan))
+                : new UnplannedStreamDispatch<TResult>(dependenciesFactory, queryType));
     }
 
     /// <summary>
-    /// Constructs a streaming pipeline inside a generic context carrying the root's query
-    /// and item types, so nothing is built reflectively.
+    /// What the visitor needs to construct the executor inside the plan's generic context.
     /// </summary>
-    private sealed class DispatchVisitor : IMessageResultRootVisitor<object, IMessageDependenciesFactory>
+    /// <param name="DependenciesFactory">The factory the executor verifies participants through.</param>
+    /// <param name="Plan">The plan, held without its type and cast back inside the context.</param>
+    private readonly record struct DispatchState(
+        IMessageDependenciesFactory DependenciesFactory,
+        object Plan);
+
+    /// <summary>
+    /// Constructs the executor that hosts a stream plan, inside the generic context the
+    /// plan carries.
+    /// </summary>
+    private sealed class PlanDispatchVisitor : IStagedStreamPlanVisitor<object, DispatchState>
     {
         /// <summary>
         /// The shared instance; the visitor holds no state.
         /// </summary>
-        public static readonly DispatchVisitor Instance = new();
+        public static readonly PlanDispatchVisitor Instance = new();
 
         /// <inheritdoc />
-        public object Visit<TMessage, TResult>(IMessageDependenciesFactory state)
-            where TMessage : IMessage
-            => new StreamDispatch<TMessage, TResult>(state);
+        public object Visit<TQuery, TResult>(DispatchState state)
+            where TQuery : notnull
+            => new FrozenStreamDispatch<TQuery, TResult>(
+                state.DependenciesFactory,
+                (StagedStreamPlan<TQuery, TResult>)state.Plan);
     }
 }

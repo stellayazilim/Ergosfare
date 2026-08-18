@@ -62,14 +62,12 @@ internal sealed class GroupedCompositions(
     /// </remarks>
     internal Entry Resolve(IEnumerable<string> groups)
     {
-        // A factory from outside gets the un-slotted behavior: nothing about a foreign
-        // implementation promises the same answer twice.
+        // A foreign factory promises nothing about answering the same twice, so no pipeline
+        // it produces can be verified against a compiled plan — and nothing is dispatched
+        // at run time that was not produced at compile time.
         if (dependenciesFactory is not MessageDependenciesFactory)
         {
-            var materializedForeign = Materialize(groups);
-
-            return new Entry(materializedForeign, null,
-                dependenciesFactory.Create(messageType, materializedForeign), null, default);
+            throw UnplannedDispatch.ForForeignFactory(messageType);
         }
 
         var slot = _slot;

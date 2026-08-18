@@ -3,10 +3,28 @@ using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
 namespace Stella.Ergosfare.Command.Test;
+
+public sealed class SlowCommand : ICommand;
+
+public sealed class SlowEcho : ICommand<string>;
+
+public sealed class SlowCommandHandler : ICommandHandler<SlowCommand>
+{
+    public ValueTask HandleAsync(SlowCommand command, ErgosfareContext context)
+        => SuspendedDispatchTests.Observed.YieldOn(context);
+}
+
+public sealed class SlowEchoHandler : ICommandHandler<SlowEcho, string>
+{
+    public async ValueTask<string> HandleAsync(SlowEcho command, ErgosfareContext context)
+    {
+        await SuspendedDispatchTests.Observed.YieldOn(context);
+        return "slow";
+    }
+}
 
 /// <summary>
 /// Dispatches whose pipeline genuinely suspends. Every other suite's handlers complete
@@ -32,12 +50,8 @@ namespace Stella.Ergosfare.Command.Test;
 /// </remarks>
 public class SuspendedDispatchTests
 {
-    public sealed class SlowCommand : ICommand;
-
-    public sealed class SlowEcho : ICommand<string>;
-
     /// <summary>What a handler saw while it ran, kept outside the context it is judging.</summary>
-    private static class Observed
+    internal static class Observed
     {
         public static ErgosfareContext? Context;
 
@@ -64,23 +78,6 @@ public class SuspendedDispatchTests
             // Task.Yield never completes synchronously, so the dispatch above this frame
             // cannot take its IsCompletedSuccessfully shortcut.
             await Task.Yield();
-        }
-    }
-
-    [ExcludeFromDiscovery]
-    public sealed class SlowCommandHandler : ICommandHandler<SlowCommand>
-    {
-        public ValueTask HandleAsync(SlowCommand command, ErgosfareContext context)
-            => Observed.YieldOn(context);
-    }
-
-    [ExcludeFromDiscovery]
-    public sealed class SlowEchoHandler : ICommandHandler<SlowEcho, string>
-    {
-        public async ValueTask<string> HandleAsync(SlowEcho command, ErgosfareContext context)
-        {
-            await Observed.YieldOn(context);
-            return "slow";
         }
     }
 

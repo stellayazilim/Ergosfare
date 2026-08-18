@@ -2,12 +2,120 @@ using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Generated;
 
 namespace Stella.Ergosfare.Contract.Test.Context;
+
+// Top-level and unkeyed so the generator bakes each message's plan; every type stays scoped
+// to this area and no interceptor targets anything but its own message.
+
+/// <summary>Command whose stages report what the execution context carried to them.</summary>
+public sealed class Carrier : ICommand
+{
+    /// <summary>Whether the handler saw the pre-interceptor's write.</summary>
+    public bool HandlerSawPreValue;
+
+    /// <summary>Whether the handler saw a value left behind by an earlier dispatch.</summary>
+    public bool HandlerSawStaleValue;
+
+    /// <summary>Whether the final interceptor saw the pre-interceptor's write.</summary>
+    public bool FinalSawPreValue;
+
+    /// <summary>The token the handler was given.</summary>
+    public CancellationToken SeenToken;
+}
+
+/// <inheritdoc />
+public sealed class CarrierPre : ICommandPreInterceptor<Carrier>
+{
+    /// <inheritdoc />
+    public ValueTask<Carrier> HandleAsync(Carrier command, ErgosfareContext context)
+    {
+        context.Set(ExecutionContextDataFlowTests.WrittenByPre, "yes");
+        return ValueTask.FromResult(command);
+    }
+}
+
+/// <inheritdoc />
+public sealed class CarrierHandler : ICommandHandler<Carrier>
+{
+    /// <inheritdoc />
+    public ValueTask HandleAsync(Carrier command, ErgosfareContext context)
+    {
+        command.HandlerSawPreValue = context.Has(ExecutionContextDataFlowTests.WrittenByPre);
+        command.HandlerSawStaleValue = context.Has(ExecutionContextDataFlowTests.WrittenByHandler);
+        command.SeenToken = context.CancellationToken;
+        context.Set(ExecutionContextDataFlowTests.WrittenByHandler, "yes");
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <inheritdoc />
+public sealed class CarrierFinal : ICommandFinalInterceptor<Carrier>
+{
+    /// <inheritdoc />
+    public ValueTask HandleAsync(Carrier command, object? result, Exception? exception, ErgosfareContext context)
+    {
+        command.FinalSawPreValue = context.Has(ExecutionContextDataFlowTests.WrittenByPre);
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>Dispatched from inside another handler, through a child scope.</summary>
+public sealed class NestedInner : ICommand;
+
+/// <summary>Aborts its own dispatch and nothing else.</summary>
+public sealed class NestedInnerHandler : ICommandHandler<NestedInner>
+{
+    /// <inheritdoc />
+    public ValueTask HandleAsync(NestedInner command, ErgosfareContext context)
+    {
+        context.Abort();
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>The outer dispatch, which nests the aborting one.</summary>
+public sealed class NestedOuter : ICommand
+{
+    /// <summary>Whether the outer handler carried on past the nested abort.</summary>
+    public bool ReachedTheEnd;
+
+    /// <summary>Whether the outer handler caught the nested abort itself.</summary>
+    public bool CaughtTheAbort;
+
+    /// <summary>Whether the outer handler should catch it rather than let it travel.</summary>
+    public bool CatchIt;
+}
+
+/// <inheritdoc cref="NestedOuter"/>
+public sealed class NestedOuterHandler(ICommandMediator mediator) : ICommandHandler<NestedOuter>
+{
+    /// <inheritdoc />
+    public async ValueTask HandleAsync(NestedOuter command, ErgosfareContext context)
+    {
+        using var scope = context.CreateScope();
+
+        if (command.CatchIt)
+        {
+            try
+            {
+                await mediator.SendAsync(new NestedInner(), scope.Context);
+            }
+            catch (ExecutionAbortedException)
+            {
+                command.CaughtTheAbort = true;
+            }
+        }
+        else
+        {
+            await mediator.SendAsync(new NestedInner(), scope.Context);
+        }
+
+        command.ReachedTheEnd = true;
+    }
+}
 
 /// <summary>
 /// What the execution context carries: values written by one stage reaching the later
@@ -16,62 +124,21 @@ namespace Stella.Ergosfare.Contract.Test.Context;
 /// </summary>
 public sealed class ExecutionContextDataFlowTests
 {
-    private const string Key = "contract.context";
-    private const string WrittenByPre = "written-by-pre";
-    private const string WrittenByHandler = "written-by-handler";
+    /// <summary>The context key the pre-interceptor writes.</summary>
+    public const string WrittenByPre = "written-by-pre";
 
-    [DiscoveryKey(Key)]
-    public sealed class Carrier : ICommand
-    {
-        /// <summary>Whether the handler saw the pre-interceptor's write.</summary>
-        public bool HandlerSawPreValue;
-
-        /// <summary>Whether the handler saw a value left behind by an earlier dispatch.</summary>
-        public bool HandlerSawStaleValue;
-
-        /// <summary>Whether the final interceptor saw the pre-interceptor's write.</summary>
-        public bool FinalSawPreValue;
-
-        /// <summary>The token the handler was given.</summary>
-        public CancellationToken SeenToken;
-    }
-
-    [DiscoveryKey(Key)]
-    public sealed class CarrierPre : ICommandPreInterceptor<Carrier>
-    {
-        public ValueTask<Carrier> HandleAsync(Carrier command, ErgosfareContext context)
-        {
-            context.Set(WrittenByPre, "yes");
-            return ValueTask.FromResult(command);
-        }
-    }
-
-    [DiscoveryKey(Key)]
-    public sealed class CarrierHandler : ICommandHandler<Carrier>
-    {
-        public ValueTask HandleAsync(Carrier command, ErgosfareContext context)
-        {
-            command.HandlerSawPreValue = context.Has(WrittenByPre);
-            command.HandlerSawStaleValue = context.Has(WrittenByHandler);
-            command.SeenToken = context.CancellationToken;
-            context.Set(WrittenByHandler, "yes");
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    [DiscoveryKey(Key)]
-    public sealed class CarrierFinal : ICommandFinalInterceptor<Carrier>
-    {
-        public ValueTask HandleAsync(Carrier command, object? result, Exception? exception, ErgosfareContext context)
-        {
-            command.FinalSawPreValue = context.Has(WrittenByPre);
-            return ValueTask.CompletedTask;
-        }
-    }
+    /// <summary>The context key the handler writes.</summary>
+    public const string WrittenByHandler = "written-by-handler";
 
     private static ServiceProvider CreateProvider()
         => new ServiceCollection()
-            .AddErgosfare(options => options.AddCommandModule(commands => commands.RegisterGenerated(Key)))
+            .AddErgosfare(options => options
+                .AddCommandModule(commands => commands
+                    .Register<CarrierPre>()
+                    .Register<CarrierHandler>()
+                    .Register<CarrierFinal>()
+                    .Register<NestedInnerHandler>()
+                    .Register<NestedOuterHandler>()))
             .BuildServiceProvider();
 
     [Fact]
@@ -150,74 +217,12 @@ public sealed class ExecutionContextDataFlowTests
         Assert.Equal("data", first.Items["secret"]);
     }
 
-    // --- a nested dispatch that aborts ------------------------------------------
-    //
-    // Appended rather than filed with the other types: a member inserted above renumbers
-    // the state machines below it and churns the lane map for no reason.
-
-    /// <summary>Dispatched from inside another handler, through a child scope.</summary>
-    [DiscoveryKey(Key)]
-    public sealed class Inner : ICommand;
-
-    /// <summary>Aborts its own dispatch and nothing else.</summary>
-    [DiscoveryKey(Key)]
-    public sealed class InnerHandler : ICommandHandler<Inner>
-    {
-        public ValueTask HandleAsync(Inner command, ErgosfareContext context)
-        {
-            context.Abort();
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    /// <summary>The outer dispatch, which nests the aborting one.</summary>
-    [DiscoveryKey(Key)]
-    public sealed class Outer : ICommand
-    {
-        /// <summary>Whether the outer handler carried on past the nested abort.</summary>
-        public bool ReachedTheEnd;
-
-        /// <summary>Whether the outer handler caught the nested abort itself.</summary>
-        public bool CaughtTheAbort;
-
-        /// <summary>Whether the outer handler should catch it rather than let it travel.</summary>
-        public bool CatchIt;
-    }
-
-    /// <inheritdoc cref="Outer"/>
-    [DiscoveryKey(Key)]
-    public sealed class OuterHandler(ICommandMediator mediator) : ICommandHandler<Outer>
-    {
-        public async ValueTask HandleAsync(Outer command, ErgosfareContext context)
-        {
-            using var scope = context.CreateScope();
-
-            if (command.CatchIt)
-            {
-                try
-                {
-                    await mediator.SendAsync(new Inner(), scope.Context);
-                }
-                catch (ExecutionAbortedException)
-                {
-                    command.CaughtTheAbort = true;
-                }
-            }
-            else
-            {
-                await mediator.SendAsync(new Inner(), scope.Context);
-            }
-
-            command.ReachedTheEnd = true;
-        }
-    }
-
     [Fact]
     [Trait("Category", "Contract")]
     public async Task A_nested_dispatchs_abort_surfaces_to_the_handler_that_nested_it()
     {
         await using var provider = CreateProvider();
-        var command = new Outer();
+        var command = new NestedOuter();
 
         // The outer handler is the inner dispatch's call site, so it is who hears that the
         // inner one did not happen. Not catching it ends the outer dispatch too.
@@ -232,7 +237,7 @@ public sealed class ExecutionContextDataFlowTests
     public async Task A_handler_that_catches_a_nested_abort_carries_on()
     {
         await using var provider = CreateProvider();
-        var command = new Outer { CatchIt = true };
+        var command = new NestedOuter { CatchIt = true };
 
         // Catching it is how a handler says "that inner step was optional" — the outer
         // pipeline then completes normally.

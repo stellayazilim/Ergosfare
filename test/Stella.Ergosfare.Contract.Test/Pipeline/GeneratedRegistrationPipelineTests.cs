@@ -13,10 +13,10 @@ namespace Stella.Ergosfare.Contract.Test.Pipeline;
 /// pre-computed descriptors, dispatch roots and the compile-time pipeline plans.
 /// </summary>
 /// <remarks>
-/// The pattern-less overload is deliberate and is reserved for this axis: plan eligibility
-/// requires default-discovery types, so a keyed selection would quietly fall back to the
-/// reflective executors. It is safe because every other construct in the assembly is keyed
-/// or excluded from discovery.
+/// The pattern-less overload registers every default-discovery construct in the assembly —
+/// including the migrated areas' unkeyed types. That is safe because every unkeyed message
+/// stays scoped to its own area and no interceptor targets a shared or marker type, so the
+/// extra pipelines are registered and never dispatched here.
 /// </remarks>
 public sealed class GeneratedRegistrationPipelineTests : PipelineSemanticsContract
 {

@@ -6,16 +6,14 @@ using Stella.Ergosfare.Core.Internal.Mediator;
 using Stella.Ergosfare.Events.Abstractions;
 using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
-using Xunit.Abstractions;
 
 namespace Stella.Ergosfare.Events.Test;
 
 /// <summary>
-/// Contains unit tests for <see cref="EventMediator"/>'s interceptor-bearing broadcast lane,
+/// Contains unit tests for <see cref="EventMediator"/>'s compiled broadcast plans,
 /// validating handler execution and exception handling behavior.
 /// </summary>
 public class BroadcastPipelineTests
-(ITestOutputHelper  testOutputHelper)
 {
     /// <summary>
     /// A dispatch engine over a bare provider — the directly-constructed counterpart of

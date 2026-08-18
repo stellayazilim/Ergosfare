@@ -21,9 +21,9 @@ internal sealed partial class PlanBuilder
     /// <para>
     /// Pipeline shape is not a filter: no hook carries a result, so one declaration serves a
     /// resultless command, a result-producing query and a broadcast alike. The one family
-    /// this path does not reach is streaming, which has no plan to write into — so a plugin
-    /// naming the query family covers a query's single-result dispatches but not its
-    /// streaming ones.
+    /// this path does not reach is streaming, whose plan bodies carry no hook points yet —
+    /// so a plugin naming the query family covers a query's single-result dispatches but not
+    /// its streaming ones.
     /// </para>
     /// <para>
     /// The order is by service type and then method name. Ordering by registration would

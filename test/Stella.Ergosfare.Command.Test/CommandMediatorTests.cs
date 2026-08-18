@@ -18,11 +18,12 @@ public class CommandMediatorTests
 {
     /// <summary>
     /// Tests that <see cref="CommandMediator"/> can resolve and send a command
-    /// of type <see cref="StubNonGenericCommand"/> without returning a result.
+    /// of type <see cref="StubPlainCommand"/> without returning a result.
     /// </summary>
     /// <remarks>
     /// This test ensures that the command mediator can instantiate the correct handler
-    /// and that sending a command does not return null.
+    /// and that sending a command does not return null. The ungrouped stub is the fixture
+    /// here: the group-attributed stub's default-set pipeline has no compiled plan.
     /// </remarks>
     [Fact]
     [Trait("Category", "Unit")]
@@ -34,14 +35,16 @@ public class CommandMediatorTests
             {
                 options.AddCommandModule(x =>
                 {
-                    x.Register<StubNonGenericCommandHandler>();
+                    x.Register<StubPlainCommandHandler>();
                 });
             }).BuildServiceProvider();
 
         var mediator = new CommandMediator(
             serviceCollection.GetRequiredService<MessageDispatchEngine>(), serviceCollection);
 
-        await mediator.SendAsync(new StubNonGenericCommand(), new ErgosfareContext());
+        await mediator.SendAsync(new StubPlainCommand(), new ErgosfareContext());
+
+        Assert.True(StubPlainCommandHandler.HasCalled);
     }
 
     /// <summary>

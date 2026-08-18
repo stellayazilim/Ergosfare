@@ -82,8 +82,8 @@ public interface ISyncPayloadResultCommand : ICommand<string>
 /// <summary>
 /// The main handler stays asynchronous on purpose: a synchronous main handler disqualifies
 /// its message from every compile-time plan, and these scenarios exist to run the emitted
-/// synchronous interceptor calls. <see cref="SyncMainHandlerContract"/> covers the
-/// synchronous main-handler contracts themselves.
+/// synchronous interceptor calls. <see cref="UnplannedSyncMainHandlerTests"/> pins the
+/// synchronous main-handler contracts themselves — dead since the runtime lane's removal.
 /// </summary>
 [ExcludeFromDiscovery]
 public abstract class SyncVoidHandlerBase<TCommand> : ICommandHandler<TCommand>

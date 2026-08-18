@@ -1,11 +1,61 @@
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Queries.Abstractions;
 using Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Queries.Test;
+
+// The fixtures live at the top level so the source generator compiles their pipelines;
+// every type is owned by FlavoredQueryInterceptorTests alone, and each container below
+// registers its query's full compiled pipeline. The final interceptor is the typed,
+// query-scoped contract — the non-generic IQueryFinalInterceptor declares IQuery itself,
+// and a module-marker-wide participant would enter every query's compiled composition in
+// the assembly.
+
+public sealed class FinalizedIntQuery : IQuery<int> { }
+
+public sealed class FinalizedIntQueryHandler : IQueryHandler<FinalizedIntQuery, int>
+{
+    public ValueTask<int> HandleAsync(FinalizedIntQuery query, ErgosfareContext context)
+        => ValueTask.FromResult(7);
+}
+
+public sealed class FinalizedIntQueryFinalInterceptor : IQueryFinalInterceptor<FinalizedIntQuery, int>
+{
+    public ValueTask HandleAsync(FinalizedIntQuery query, int result, Exception? exception, ErgosfareContext context)
+    {
+        context.Set("finalRan", true);
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class TargetedQuery : IQuery<int> { }
+
+public sealed class TargetedQueryHandler : IQueryHandler<TargetedQuery, int>
+{
+    public ValueTask<int> HandleAsync(TargetedQuery query, ErgosfareContext context)
+        => ValueTask.FromResult(1);
+}
+
+public sealed class UntargetedQuery : IQuery<int> { }
+
+public sealed class UntargetedQueryHandler : IQueryHandler<UntargetedQuery, int>
+{
+    public ValueTask<int> HandleAsync(UntargetedQuery query, ErgosfareContext context)
+        => ValueTask.FromResult(2);
+}
+
+public sealed class TargetedQueryPostInterceptor : IQueryPostInterceptor<TargetedQuery>
+{
+    public ValueTask<object> HandleAsync(TargetedQuery query, object messageResult, ErgosfareContext context)
+    {
+        context.Set("postRan", true);
+        return ValueTask.FromResult(messageResult);
+    }
+}
 
 /// <summary>
 /// Regression coverage for two flavored query interceptor contracts. The non-generic
@@ -19,36 +69,36 @@ namespace Stella.Ergosfare.Queries.Test;
 /// </summary>
 public class FlavoredQueryInterceptorTests
 {
+    /// <summary>
+    /// A probe for the non-generic contract, invoked directly by the test below and never
+    /// dispatched — a discoverable <see cref="IQueryFinalInterceptor"/> would enter every
+    /// query's compiled composition in the assembly.
+    /// </summary>
     [ExcludeFromDiscovery]
-    public sealed class FinalizedIntQuery : IQuery<int> { }
-
-    [ExcludeFromDiscovery]
-    public sealed class FinalizedIntQueryHandler : IQueryHandler<FinalizedIntQuery, int>
+    private sealed class RecordingQueryFinalInterceptor : IQueryFinalInterceptor
     {
-        public ValueTask<int> HandleAsync(FinalizedIntQuery query, ErgosfareContext context)
-            => ValueTask.FromResult(7);
-    }
+        public object? SeenResult;
 
-    [ExcludeFromDiscovery]
-    public sealed class RecordingQueryFinalInterceptor : IQueryFinalInterceptor
-    {
         public ValueTask HandleAsync(IQuery query, object? messageResult, Exception? exception, ErgosfareContext context)
         {
-            context.Set("finalRan", true);
+            SeenResult = messageResult;
             return ValueTask.CompletedTask;
         }
     }
 
+    [ExcludeFromDiscovery]
+    private sealed record ContractProbeQuery : IQuery<int>;
+
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task ValueTypedResult_RunsTheNonGenericFinalInterceptor()
+    public async Task ValueTypedResult_RunsAFinalInterceptor()
     {
         var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddQueryModule(q =>
             {
                 q.Register<FinalizedIntQueryHandler>();
-                q.Register<RecordingQueryFinalInterceptor>();
+                q.Register<FinalizedIntQueryFinalInterceptor>();
             }))
             .BuildServiceProvider();
         await using var _ = provider;
@@ -56,41 +106,29 @@ public class FlavoredQueryInterceptorTests
         var settings = new ErgosfareContext();
 
         // Before the contract fix the final stage itself threw NotSupportedException for
-        // value-typed results; now it observes the outcome like any final interceptor.
+        // value-typed results; now it observes the outcome like any final interceptor —
+        // here through the compiled plan that bakes it.
         var result = await provider.GetRequiredService<IQueryMediator>().QueryAsync(new FinalizedIntQuery(), settings);
 
         Assert.Equal(7, result);
         Assert.Equal(true, settings.Items["finalRan"]);
     }
 
-    [ExcludeFromDiscovery]
-    public sealed class TargetedQuery : IQuery<int> { }
-
-    [ExcludeFromDiscovery]
-    public sealed class TargetedQueryHandler : IQueryHandler<TargetedQuery, int>
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task NonGenericFinalInterceptor_ReceivesAValueTypedResult_ThroughTheResultAgnosticBase()
     {
-        public ValueTask<int> HandleAsync(TargetedQuery query, ErgosfareContext context)
-            => ValueTask.FromResult(1);
-    }
+        // The regression was the contract's base: IAsyncFinalInterceptor<IQuery, object>
+        // has no arm a value-typed result can match, while the result-agnostic
+        // IAsyncFinalInterceptor<IQuery> receives any result boxed. This cast compiles
+        // only against the fixed base, and the boxed int must arrive intact.
+        var interceptor = new RecordingQueryFinalInterceptor();
 
-    [ExcludeFromDiscovery]
-    public sealed class UntargetedQuery : IQuery<int> { }
+        await ((IAsyncFinalInterceptor<IQuery>)interceptor)
+            .HandleAsync(new ContractProbeQuery(), 7, null, null!);
 
-    [ExcludeFromDiscovery]
-    public sealed class UntargetedQueryHandler : IQueryHandler<UntargetedQuery, int>
-    {
-        public ValueTask<int> HandleAsync(UntargetedQuery query, ErgosfareContext context)
-            => ValueTask.FromResult(2);
-    }
-
-    [ExcludeFromDiscovery]
-    public sealed class TargetedQueryPostInterceptor : IQueryPostInterceptor<TargetedQuery>
-    {
-        public ValueTask<object> HandleAsync(TargetedQuery query, object messageResult, ErgosfareContext context)
-        {
-            context.Set("postRan", true);
-            return ValueTask.FromResult(messageResult);
-        }
+        Assert.Equal(7, interceptor.SeenResult);
     }
 
     [Fact]

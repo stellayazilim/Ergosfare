@@ -3,12 +3,30 @@ using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Internal.Mediator;
 
 namespace Stella.Ergosfare.Command.Test;
+
+public sealed class RelayedCommand : ICommand;
+
+public sealed class RelayedEcho : ICommand<string>;
+
+public sealed class RelayedCommandHandler : ICommandHandler<RelayedCommand>
+{
+    public ValueTask HandleAsync(RelayedCommand command, ErgosfareContext context)
+    {
+        context.Set("relayed", true);
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class RelayedEchoHandler : ICommandHandler<RelayedEcho, string>
+{
+    public ValueTask<string> HandleAsync(RelayedEcho command, ErgosfareContext context)
+        => ValueTask.FromResult("relayed");
+}
 
 /// <summary>
 /// The untyped mediator behind the module facades: it holds the scope's provider, validates
@@ -24,26 +42,6 @@ namespace Stella.Ergosfare.Command.Test;
 /// </remarks>
 public class MessageMediatorDispatchTests
 {
-    public sealed class RelayedCommand : ICommand;
-
-    public sealed class RelayedEcho : ICommand<string>;
-
-    [ExcludeFromDiscovery]
-    public sealed class RelayedCommandHandler : ICommandHandler<RelayedCommand>
-    {
-        public ValueTask HandleAsync(RelayedCommand command, ErgosfareContext context)
-        {
-            context.Set("relayed", true);
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    [ExcludeFromDiscovery]
-    public sealed class RelayedEchoHandler : ICommandHandler<RelayedEcho, string>
-    {
-        public ValueTask<string> HandleAsync(RelayedEcho command, ErgosfareContext context)
-            => ValueTask.FromResult("relayed");
-    }
 
     private static ServiceProvider Build()
         => new ServiceCollection()

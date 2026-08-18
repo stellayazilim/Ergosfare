@@ -8,10 +8,124 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Events.Test;
 
+// The fixtures live at the top level so the source generator compiles their broadcast
+// plans — nothing is dispatched at run time that was not produced at compile time. Every
+// type is owned by BroadcastFastLaneTests alone, and each container below registers its
+// events' full compiled pipelines.
+
+public sealed class FastLaneEvent : IEvent { public string? Tag { get; init; } }
+
+public sealed class FastLaneEventHandler : IEventHandler<FastLaneEvent>
+{
+    public ValueTask HandleAsync(FastLaneEvent @event, ErgosfareContext context)
+    {
+        context.Set("writtenByHandler", @event.Tag ?? "-");
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class FastLaneSecondHandler : IEventHandler<FastLaneEvent>
+{
+    public ValueTask HandleAsync(FastLaneEvent @event, ErgosfareContext context)
+    {
+        context.Set("secondHandlerRan", true);
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class RewrittenEvent : IEvent { public string Payload { get; init; } = "original"; }
+
+public sealed class RewritingPreInterceptor : IEventPreInterceptor<RewrittenEvent>
+{
+    public ValueTask<RewrittenEvent> HandleAsync(RewrittenEvent @event, ErgosfareContext context)
+        => ValueTask.FromResult(new RewrittenEvent { Payload = @event.Payload + "+rewritten" });
+}
+
+public sealed class RewrittenEventHandler : IEventHandler<RewrittenEvent>
+{
+    public ValueTask HandleAsync(RewrittenEvent @event, ErgosfareContext context)
+    {
+        context.Set("observedPayload", @event.Payload);
+        context.Set("observedInstance", @event);
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class ThrowingEvent : IEvent { }
+
+public sealed class ThrowingEventHandler : IEventHandler<ThrowingEvent>
+{
+    public ValueTask HandleAsync(ThrowingEvent @event, ErgosfareContext context)
+        => throw new InvalidOperationException("evt-boom");
+}
+
 /// <summary>
-/// Covers the broadcast fast lane: pooled execution contexts with caller-owned items
-/// semantics, the cached default-settings strategy, the invoker-cached pipeline plan and
-/// its registry-version invalidation, and the pre-interceptor message transformation.
+/// An event no handler anywhere subscribes to. Nothing participates, so the generator
+/// emits no composition for it and a publish reaches nobody — silently.
+/// </summary>
+public sealed class HandlerlessEvent : IEvent { }
+
+public sealed class SlowEvent : IEvent { }
+
+public sealed class SlowEventHandler : IEventHandler<SlowEvent>
+{
+    public async ValueTask HandleAsync(SlowEvent @event, ErgosfareContext context)
+    {
+        await Task.Delay(10);
+        context.Set("afterAwait", 42);
+    }
+}
+
+public sealed class OuterEvent : IEvent { }
+public sealed class InnerEvent : IEvent { }
+
+public sealed class InnerEventHandler : IEventHandler<InnerEvent>
+{
+    public ValueTask HandleAsync(InnerEvent @event, ErgosfareContext context)
+    {
+        context.Set("innerRan", true);
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class OuterEventHandler(IEventMediator events) : IEventHandler<OuterEvent>
+{
+    public async ValueTask HandleAsync(OuterEvent @event, ErgosfareContext context)
+    {
+        using var scope = context.CreateScope();
+        await events.PublishAsync(new InnerEvent(), scope.Context);
+        context.Set("outerSawInner", scope.Context.Has("innerRan"));
+    }
+}
+
+public sealed class ScopedProbe { }
+
+public sealed class ScopedEvent : IEvent { }
+
+public sealed class ScopedEventHandler(ScopedProbe probe) : IEventHandler<ScopedEvent>
+{
+    public ValueTask HandleAsync(ScopedEvent @event, ErgosfareContext context)
+    {
+        context.Set("probe", probe);
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class IsolatedEvent : IEvent { }
+
+public sealed class IsolatedEventHandler : IEventHandler<IsolatedEvent>
+{
+    public ValueTask HandleAsync(IsolatedEvent @event, ErgosfareContext context)
+    {
+        context.Set("handlerInstance", this);
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Covers publishing through the compiled broadcast plans: pooled execution contexts with
+/// caller-owned items semantics, group-less delivery, the pre-interceptor message
+/// transformation, and the loud failure of a pipeline no plan can serve.
 /// </summary>
 public class BroadcastFastLaneTests
 {
@@ -24,26 +138,6 @@ public class BroadcastFastLaneTests
                 extra?.Invoke(e);
             }))
             .BuildServiceProvider();
-
-    public sealed class FastLaneEvent : IEvent { public string? Tag { get; init; } }
-
-    public sealed class FastLaneEventHandler : IEventHandler<FastLaneEvent>
-    {
-        public ValueTask HandleAsync(FastLaneEvent @event, ErgosfareContext context)
-        {
-            context.Set("writtenByHandler", @event.Tag ?? "-");
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    public sealed class FastLaneSecondHandler : IEventHandler<FastLaneEvent>
-    {
-        public ValueTask HandleAsync(FastLaneEvent @event, ErgosfareContext context)
-        {
-            context.Set("secondHandlerRan", true);
-            return ValueTask.CompletedTask;
-        }
-    }
 
     [Fact]
     [Trait("Category", "Unit")]
@@ -101,24 +195,6 @@ public class BroadcastFastLaneTests
         Assert.NotEqual("probe", settings.Items["writtenByHandler"]);
     }
 
-    public sealed class RewrittenEvent : IEvent { public string Payload { get; init; } = "original"; }
-
-    public sealed class RewritingPreInterceptor : IEventPreInterceptor<RewrittenEvent>
-    {
-        public ValueTask<RewrittenEvent> HandleAsync(RewrittenEvent @event, ErgosfareContext context)
-            => ValueTask.FromResult(new RewrittenEvent { Payload = @event.Payload + "+rewritten" });
-    }
-
-    public sealed class RewrittenEventHandler : IEventHandler<RewrittenEvent>
-    {
-        public ValueTask HandleAsync(RewrittenEvent @event, ErgosfareContext context)
-        {
-            context.Set("observedPayload", @event.Payload);
-            context.Set("observedInstance", @event);
-            return ValueTask.CompletedTask;
-        }
-    }
-
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
@@ -140,14 +216,6 @@ public class BroadcastFastLaneTests
         Assert.NotSame(original, settings.Items["observedInstance"]);
     }
 
-    public sealed class ThrowingEvent : IEvent { }
-
-    public sealed class ThrowingEventHandler : IEventHandler<ThrowingEvent>
-    {
-        public ValueTask HandleAsync(ThrowingEvent @event, ErgosfareContext context)
-            => throw new InvalidOperationException("evt-boom");
-    }
-
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
@@ -162,30 +230,18 @@ public class BroadcastFastLaneTests
         Assert.Equal("evt-boom", exception.Message);
     }
 
-    public sealed class HandlerlessEvent : IEvent { }
-
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task Publish_ShouldHonorThrowIfNoHandlerFound()
+    public async Task Publish_OfAHandlerlessEvent_IsSilent()
     {
         await using var provider = Build(e => e.Register<HandlerlessEvent>());
         var mediator = provider.GetRequiredService<IEventMediator>();
 
-        // Silent, and unconditionally so: the build is what reports a publish nobody serves.
+        // Silent, and unconditionally so: nothing in the compilation participates in this
+        // event, so it has no composition and a publish reaches nobody.
         Assert.Null(await Record.ExceptionAsync(
             async () => await mediator.PublishAsync(new HandlerlessEvent())));
-    }
-
-    public sealed class SlowEvent : IEvent { }
-
-    public sealed class SlowEventHandler : IEventHandler<SlowEvent>
-    {
-        public async ValueTask HandleAsync(SlowEvent @event, ErgosfareContext context)
-        {
-            await Task.Delay(10);
-            context.Set("afterAwait", 42);
-        }
     }
 
     [Fact]
@@ -200,28 +256,6 @@ public class BroadcastFastLaneTests
         await mediator.PublishAsync(new SlowEvent(), settings);
 
         Assert.Equal(42, settings.Items["afterAwait"]);
-    }
-
-    public sealed class OuterEvent : IEvent { }
-    public sealed class InnerEvent : IEvent { }
-
-    public sealed class InnerEventHandler : IEventHandler<InnerEvent>
-    {
-        public ValueTask HandleAsync(InnerEvent @event, ErgosfareContext context)
-        {
-            context.Set("innerRan", true);
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    public sealed class OuterEventHandler(IEventMediator events) : IEventHandler<OuterEvent>
-    {
-        public async ValueTask HandleAsync(OuterEvent @event, ErgosfareContext context)
-        {
-            using var scope = context.CreateScope();
-            await events.PublishAsync(new InnerEvent(), scope.Context);
-            context.Set("outerSawInner", scope.Context.Has("innerRan"));
-        }
     }
 
     [Fact]
@@ -240,23 +274,6 @@ public class BroadcastFastLaneTests
         await mediator.PublishAsync(new OuterEvent(), settings);
 
         Assert.Equal(true, settings.Items["outerSawInner"]);
-    }
-
-    public sealed class LateEvent : IEvent { }
-
-    /// <summary>
-    /// Excluded from discovery: the fact below registers this type at runtime to observe
-    /// the version bump — another test's assembly scan (the registry is process-wide)
-    /// must not slip it into the pipeline before the warm publishes run.
-    /// </summary>
-    [ExcludeFromDiscovery]
-    public sealed class LateEventHandler : IEventHandler<LateEvent>
-    {
-        public ValueTask HandleAsync(LateEvent @event, ErgosfareContext context)
-        {
-            context.Set("lateHandlerRan", true);
-            return ValueTask.CompletedTask;
-        }
     }
 
     [Fact]
@@ -287,62 +304,32 @@ public class BroadcastFastLaneTests
         Assert.Equal(0, mismatches);
     }
 
-    public sealed class ScopedProbe { }
-
-    public sealed class ScopedEvent : IEvent { }
-
-    public sealed class ScopedEventHandler(ScopedProbe probe) : IEventHandler<ScopedEvent>
-    {
-        public ValueTask HandleAsync(ScopedEvent @event, ErgosfareContext context)
-        {
-            context.Set("probe", probe);
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    public sealed class IsolatedEvent : IEvent { }
-
-    public sealed class IsolatedEventHandler : IEventHandler<IsolatedEvent>
-    {
-        public ValueTask HandleAsync(IsolatedEvent @event, ErgosfareContext context)
-        {
-            context.Set("handlerInstance", this);
-            return ValueTask.CompletedTask;
-        }
-    }
-
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task Publish_WithMemoizedPipeline_ShouldNeverServeAnotherContainersPlan()
+    public async Task Publish_WithASingletonSubscriber_DeliversTheOneInstanceEveryTime()
     {
-        // Singleton-registered handler => memoized pipeline, whose plan pins the creating
-        // container's root provider. The process-wide invoker must key its cached plan by
-        // factory, so two containers publishing the same event type each hit their own
-        // handler instance.
-        static ServiceProvider BuildContainer() => new ServiceCollection()
+        // A singleton-registered handler makes the pipeline memoized underneath, but only
+        // demanded memoization (ForceMemoizedHandlers) bars a compiled plan: the plan's
+        // resolving variant returns the one singleton per publish, which is exactly what
+        // memoization promises, so the publish runs — and every delivery is the same
+        // instance.
+        await using var provider = new ServiceCollection()
             .AddSingleton<IsolatedEventHandler>()
             .AddErgosfare(x => x.AddEventModule(e => e.Register<IsolatedEventHandler>()))
             .BuildServiceProvider();
 
-        await using var first = BuildContainer();
-        await using var second = BuildContainer();
+        var mediator = provider.GetRequiredService<IEventMediator>();
 
-        var firstInstance = first.GetRequiredService<IsolatedEventHandler>();
-        var secondInstance = second.GetRequiredService<IsolatedEventHandler>();
-        Assert.NotSame(firstInstance, secondInstance);
+        var firstContext = new ErgosfareContext();
+        await mediator.PublishAsync(new IsolatedEvent(), firstContext);
 
-        var settings = new ErgosfareContext();
-        await first.GetRequiredService<IEventMediator>().PublishAsync(new IsolatedEvent(), settings);
-        Assert.Same(firstInstance, settings.Items["handlerInstance"]);
+        var secondContext = new ErgosfareContext();
+        await mediator.PublishAsync(new IsolatedEvent(), secondContext);
 
-        settings = new ErgosfareContext();
-        await second.GetRequiredService<IEventMediator>().PublishAsync(new IsolatedEvent(), settings);
-        Assert.Same(secondInstance, settings.Items["handlerInstance"]);
-
-        settings = new ErgosfareContext();
-        await first.GetRequiredService<IEventMediator>().PublishAsync(new IsolatedEvent(), settings);
-        Assert.Same(firstInstance, settings.Items["handlerInstance"]);
+        var delivered = Assert.IsType<IsolatedEventHandler>(firstContext.Get<object>("handlerInstance"));
+        Assert.Same(delivered, secondContext.Get<object>("handlerInstance"));
+        Assert.Same(delivered, provider.GetRequiredService<IsolatedEventHandler>());
     }
 
     [Fact]
@@ -366,19 +353,24 @@ public class BroadcastFastLaneTests
         Assert.Same(expected, settings.Items["probe"]);
     }
 
+    /// <summary>
+    /// Kept nested and excluded on purpose: the generator never sees a pipeline for it, so
+    /// no composition and no plan exist — the exact shape of an event nobody ever wired up.
+    /// </summary>
     [ExcludeFromDiscovery]
     public sealed class NeverRegisteredEvent : IEvent { }
 
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task Publish_ShouldHonorThrowIfNoHandlerFound_ForAnUnregisteredType()
+    public async Task Publish_OfANeverRegisteredType_IsSilent()
     {
         await using var provider = Build();
 
         var mediator = provider.GetRequiredService<IEventMediator>();
 
-        // Default: silent, exactly as for a registered event nobody handles.
+        // Silent, exactly as for a registered event nobody handles: no composition serves
+        // the type, so the publish reaches nobody and reaching nobody is not an error.
         await mediator.PublishAsync(new NeverRegisteredEvent());
         Assert.Null(await Record.ExceptionAsync(
             async () => await mediator.PublishAsync(new NeverRegisteredEvent())));

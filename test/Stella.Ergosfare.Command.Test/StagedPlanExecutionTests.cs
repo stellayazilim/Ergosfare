@@ -3,6 +3,7 @@ using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.StagedPlans;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,14 +14,14 @@ namespace Stella.Ergosfare.Command.Test;
 /// <summary>
 /// Runtime skeleton of the staged pipeline plans: a hand-written
 /// <see cref="StagedVoidPlan{TMessage}"/>/<see cref="StagedResultPlan{TMessage,TResult}"/>
-/// stands in for what the generator will emit, so these tests validate the hosting
-/// executor's advisory gate — the plan runs only while the live pipeline matches its
-/// baked composition, and any divergence (a runtime registration, a mismatched
-/// composition, memoized instances) routes the dispatch back through the runtime
-/// strategy with identical behavior. Participants record execution into the message
-/// instance itself, and only the plan writes the "staged" marker, so the chosen path is
-/// observable. Helper types are excluded from discovery so assembly scans (the registry
-/// is process-wide) cannot alter these pipelines.
+/// stands in for what the generator emits, so these tests validate the hosting
+/// executor's gate — the plan runs only while the live pipeline matches its baked
+/// composition, and any divergence (a mismatched composition, memoized instances, an
+/// adapter the plan was not compiled against) fails the dispatch naming what diverged;
+/// there is no runtime lane to fall back to. Participants record execution into the
+/// message instance itself, and only the plan writes the "staged" marker, so the chosen
+/// path is observable. Helper types are excluded from discovery so assembly scans (the
+/// registry is process-wide) cannot alter these pipelines.
 /// </summary>
 public class StagedPlanExecutionTests
 {
@@ -104,61 +105,6 @@ public class StagedPlanExecutionTests
     }
 
     [ExcludeFromDiscovery]
-    public sealed class FallbackCommand : ICommand
-    {
-        public List<string> Order { get; } = [];
-    }
-
-    [ExcludeFromDiscovery]
-    public sealed class FallbackCommandHandler : ICommandHandler<FallbackCommand>
-    {
-        public ValueTask HandleAsync(FallbackCommand command, ErgosfareContext context)
-        {
-            command.Order.Add("handler");
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    [ExcludeFromDiscovery]
-    public sealed class FallbackCommandPreInterceptor : ICommandPreInterceptor<FallbackCommand>
-    {
-        public ValueTask<FallbackCommand> HandleAsync(FallbackCommand command, ErgosfareContext context)
-        {
-            command.Order.Add("pre");
-            return ValueTask.FromResult(command);
-        }
-    }
-
-    [ExcludeFromDiscovery]
-    public sealed class ExtraFallbackCommandPreInterceptor : ICommandPreInterceptor<FallbackCommand>
-    {
-        public ValueTask<FallbackCommand> HandleAsync(FallbackCommand command, ErgosfareContext context)
-        {
-            command.Order.Add("extra-pre");
-            return ValueTask.FromResult(command);
-        }
-    }
-
-    // Declared to prove the shape compiles against the plan base; never registered, because the point is the fallback that runs without it.
-    // ReSharper disable once UnusedType.Local
-    private sealed class FallbackCommandPlan : StagedVoidPlan<FallbackCommand>
-    {
-        public override StagedPlanKey Composition { get; } = new(
-            typeof(FallbackCommandHandler),
-            [typeof(FallbackCommandPreInterceptor)],
-            [],
-            [],
-            []);
-
-        public override async ValueTask Execute(FallbackCommand message, ErgosfareContext context, IServiceProvider serviceProvider)
-        {
-            message.Order.Add("staged");
-            message = await serviceProvider.GetRequiredService<FallbackCommandPreInterceptor>().HandleAsync(message, context);
-            await serviceProvider.GetRequiredService<FallbackCommandHandler>().HandleAsync(message, context);
-        }
-    }
-
-    [ExcludeFromDiscovery]
     public sealed class MismatchedCommand : ICommand
     {
         public List<string> Order { get; } = [];
@@ -187,7 +133,8 @@ public class StagedPlanExecutionTests
     private sealed class MismatchedCommandPlan : StagedVoidPlan<MismatchedCommand>
     {
         // Baked against a post-interceptor stage the registry never sees — the gate must
-        // fail on the very first rebuild and keep the dispatch on the strategy path.
+        // fail on the very first dispatch, and with no runtime lane left that failure is
+        // the dispatch's outcome.
         public override StagedPlanKey Composition { get; } = new(
             typeof(MismatchedCommandHandler),
             [typeof(MismatchedCommandPreInterceptor)],
@@ -205,7 +152,7 @@ public class StagedPlanExecutionTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task MismatchedComposition_FallsBackToTheStrategy()
+    public async Task MismatchedComposition_FailsTheDispatch()
     {
         GeneratedDispatchRoots.AddStagedPlan(new MismatchedCommandPlan());
 
@@ -220,10 +167,14 @@ public class StagedPlanExecutionTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
+        // The live pipeline lacks the post-interceptor the plan was baked against; the
+        // dispatch fails naming the divergence, and nothing of the pipeline runs.
         var command = new MismatchedCommand();
-        await mediator.SendAsync(command);
+        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(
+            async () => await mediator.SendAsync(command));
 
-        Assert.Equal(["pre", "handler"], command.Order);
+        Assert.Equal(UnplannedDispatchReason.CompositionDiverged, thrown.Reason);
+        Assert.Empty(command.Order);
     }
 
     [ExcludeFromDiscovery]
@@ -271,7 +222,7 @@ public class StagedPlanExecutionTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task ForceMemoizedHandlers_FallsBackToTheStrategy()
+    public async Task ForceMemoizedHandlers_FailsTheDispatch()
     {
         GeneratedDispatchRoots.AddStagedPlan(new MemoizedStagedCommandPlan());
 
@@ -291,11 +242,15 @@ public class StagedPlanExecutionTests
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
         // Memoized pipelines cache instances inside their references; a plan resolving
-        // from the provider would construct fresh ones — the gate keeps the strategy path.
+        // from the provider would construct fresh ones. The two contracts cannot both
+        // hold, so the construct is unplanned until the generator learns it — every
+        // dispatch under ForceMemoizedHandlers fails loudly.
         var command = new MemoizedStagedCommand();
-        await mediator.SendAsync(command);
+        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(
+            async () => await mediator.SendAsync(command));
 
-        Assert.Equal(["pre", "handler"], command.Order);
+        Assert.Equal(UnplannedDispatchReason.MemoizedInstances, thrown.Reason);
+        Assert.Empty(command.Order);
     }
 
     [ExcludeFromDiscovery]
@@ -638,7 +593,7 @@ public class StagedPlanExecutionTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task AdapterMismatch_KeepsTheDispatchOffThePlan()
+    public async Task AdapterMismatch_FailsTheDispatch()
     {
         GeneratedDispatchRoots.AddStagedPlan(new AdapterGateCommandPlan());
 
@@ -653,15 +608,16 @@ public class StagedPlanExecutionTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        var command = new AdapterGateCommand();
-        var result = await mediator.SendAsync(command);
-
         // A plan emitted without the slot's value-path branches must never serve an
-        // adapted pipeline: the adapter-identity gate routes the dispatch back through
-        // the runtime strategy, which owns the probing.
-        Assert.True(result.IsSuccess);
-        Assert.Equal(42, result.Value);
-        Assert.Equal(["pre", "handler"], command.Order);
+        // adapted pipeline — the Result<int> slot binds the native adapter at runtime,
+        // the plan bakes none, and with no runtime strategy left the mismatch fails the
+        // dispatch naming both types.
+        var command = new AdapterGateCommand();
+        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(
+            async () => await mediator.SendAsync(command));
+
+        Assert.Equal(UnplannedDispatchReason.UnplannedResultAdapter, thrown.Reason);
+        Assert.Empty(command.Order);
     }
 
     public sealed class DefaultGateOutcome
@@ -718,7 +674,7 @@ public class StagedPlanExecutionTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task ConfiguredDefaultAdapter_KeepsTheDispatchOffAnUnadaptedPlan()
+    public async Task ConfiguredDefaultAdapter_FailsADispatchOnAnUnadaptedPlan()
     {
         GeneratedDispatchRoots.AddStagedPlan(new DefaultGateCommandPlan());
 
@@ -735,13 +691,14 @@ public class StagedPlanExecutionTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
+        // A default adapter configured only in AddErgosfare options is runtime-only:
+        // this plan carries no branches for it, and an adapter the plan does not know
+        // would silently not run — so the dispatch fails naming both adapter types.
         var command = new DefaultGateCommand();
-        var result = await mediator.SendAsync(command);
+        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(
+            async () => await mediator.SendAsync(command));
 
-        // The generator cannot see the container's default adapter, so its plans carry
-        // no branches for it — the adapter-identity gate keeps such dispatches on the
-        // runtime strategy, which consults the default.
-        Assert.Equal(42, result.Value);
-        Assert.Equal(["pre", "handler"], command.Order);
+        Assert.Equal(UnplannedDispatchReason.UnplannedResultAdapter, thrown.Reason);
+        Assert.Empty(command.Order);
     }
 }

@@ -3,10 +3,52 @@ using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
 namespace Stella.Ergosfare.Command.Test;
+
+public sealed class FastCommand : ICommand;
+
+public sealed class ExplodingCommand : ICommand;
+
+public sealed class ExplodingEcho : ICommand<string>;
+
+public sealed class SlowExplodingCommand : ICommand;
+
+public sealed class FastCommandHandler : ICommandHandler<FastCommand>
+{
+    public ValueTask HandleAsync(FastCommand command, ErgosfareContext context)
+    {
+        PooledContextFailureTests.Record(context);
+        return ValueTask.CompletedTask;
+    }
+}
+
+// Expression-bodied throw: no state machine, no task — the exception leaves through the
+// dispatch's own frame while the rented context is still in hand.
+public sealed class ExplodingCommandHandler : ICommandHandler<ExplodingCommand>
+{
+    public ValueTask HandleAsync(ExplodingCommand command, ErgosfareContext context)
+        => throw PooledContextFailureTests.Recorded(context);
+}
+
+public sealed class ExplodingEchoHandler : ICommandHandler<ExplodingEcho, string>
+{
+    public ValueTask<string> HandleAsync(ExplodingEcho command, ErgosfareContext context)
+        => throw PooledContextFailureTests.Recorded(context);
+}
+
+public sealed class SlowExplodingCommandHandler : ICommandHandler<SlowExplodingCommand>
+{
+    public async ValueTask HandleAsync(SlowExplodingCommand command, ErgosfareContext context)
+    {
+        PooledContextFailureTests.Record(context);
+
+        await Task.Yield();
+
+        throw new InvalidOperationException("boom");
+    }
+}
 
 /// <summary>
 /// What happens to the rented execution context when a dispatch does not end the ordinary
@@ -29,61 +71,17 @@ namespace Stella.Ergosfare.Command.Test;
 /// </remarks>
 public class PooledContextFailureTests
 {
-    public sealed class FastCommand : ICommand;
-
-    public sealed class ExplodingCommand : ICommand;
-
-    public sealed class ExplodingEcho : ICommand<string>;
-
-    public sealed class SlowExplodingCommand : ICommand;
-
     private static ErgosfareContext? _seen;
 
-    [ExcludeFromDiscovery]
-    public sealed class FastCommandHandler : ICommandHandler<FastCommand>
-    {
-        public ValueTask HandleAsync(FastCommand command, ErgosfareContext context)
-        {
-            _seen = context;
-            context.Set("pooled.marker", true);
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    // Expression-bodied throw: no state machine, no task — the exception leaves through the
-    // dispatch's own frame while the rented context is still in hand.
-    [ExcludeFromDiscovery]
-    public sealed class ExplodingCommandHandler : ICommandHandler<ExplodingCommand>
-    {
-        public ValueTask HandleAsync(ExplodingCommand command, ErgosfareContext context)
-            => throw Recorded(context);
-    }
-
-    [ExcludeFromDiscovery]
-    public sealed class ExplodingEchoHandler : ICommandHandler<ExplodingEcho, string>
-    {
-        public ValueTask<string> HandleAsync(ExplodingEcho command, ErgosfareContext context)
-            => throw Recorded(context);
-    }
-
-    [ExcludeFromDiscovery]
-    public sealed class SlowExplodingCommandHandler : ICommandHandler<SlowExplodingCommand>
-    {
-        public async ValueTask HandleAsync(SlowExplodingCommand command, ErgosfareContext context)
-        {
-            _seen = context;
-            context.Set("pooled.marker", true);
-
-            await Task.Yield();
-
-            throw new InvalidOperationException("boom");
-        }
-    }
-
-    private static InvalidOperationException Recorded(ErgosfareContext context)
+    internal static void Record(ErgosfareContext context)
     {
         _seen = context;
         context.Set("pooled.marker", true);
+    }
+
+    internal static InvalidOperationException Recorded(ErgosfareContext context)
+    {
+        Record(context);
 
         return new InvalidOperationException("boom");
     }

@@ -12,32 +12,58 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Queries.Test;
 
+// The planned fixtures live at the top level, unkeyed, so the source generator compiles
+// the stream plan the dispatches below run; every type is owned by StreamFastLaneTests
+// alone, and the container registers each streamed query's full pipeline.
+
+public sealed record NumberStream : IStreamQuery<int>;
+
+public sealed class NumberStreamHandler : IStreamQueryHandler<NumberStream, int>
+{
+    public async IAsyncEnumerable<int> StreamAsync(NumberStream query, ErgosfareContext context)
+    {
+        context.Set("streamRan", true);
+        yield return 1;
+        await Task.Yield();
+        yield return 2;
+        yield return 3;
+    }
+}
+
+public sealed record RoutedStream : IStreamQuery<string>;
+
+[Group("east")]
+public sealed class EastStreamHandler : IStreamQueryHandler<RoutedStream, string>
+{
+    public async IAsyncEnumerable<string> StreamAsync(RoutedStream query, ErgosfareContext context)
+    {
+        await Task.Yield();
+        yield return "east";
+    }
+}
+
+[Group("west")]
+public sealed class WestStreamHandler : IStreamQueryHandler<RoutedStream, string>
+{
+    public async IAsyncEnumerable<string> StreamAsync(RoutedStream query, ErgosfareContext context)
+    {
+        await Task.Yield();
+        yield return "west";
+    }
+}
+
+/// <summary>Never registered anywhere: the no-handler scenario dispatches this.</summary>
+[ExcludeFromDiscovery]
+public sealed record UnhandledStream : IStreamQuery<int>;
+
 /// <summary>
-/// The engine-backed streaming fast lane: streams run against the invoker-cached,
-/// registry-version-guarded pipeline plan instead of the per-call Mediate options path.
-/// Covers plan reuse across streams, grouped streams alternating group sets on the
-/// last-used slot, caller-visible items, and the unregistered-query failure parity.
-/// Helper types are excluded from discovery so assembly scans (the registry is
-/// process-wide) cannot alter these pipelines.
+/// The compiled stream plan: streams run the generated pipeline body the engine verifies
+/// once and reuses. Covers plan reuse across streams, caller-visible items, the
+/// unregistered-query failure parity, and the refusal a grouped stream meets — no per-set
+/// stream plans are compiled yet, so naming a set is an unplanned dispatch.
 /// </summary>
 public class StreamFastLaneTests
 {
-    [ExcludeFromDiscovery]
-    public sealed record NumberStream : IStreamQuery<int>;
-
-    [ExcludeFromDiscovery]
-    public sealed class NumberStreamHandler : IStreamQueryHandler<NumberStream, int>
-    {
-        public async IAsyncEnumerable<int> StreamAsync(NumberStream query, ErgosfareContext context)
-        {
-            context.Set("streamRan", true);
-            yield return 1;
-            await Task.Yield();
-            yield return 2;
-            yield return 3;
-        }
-    }
-
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
@@ -49,8 +75,9 @@ public class StreamFastLaneTests
 
         var mediator = provider.GetRequiredService<IQueryMediator>();
 
-        // First stream builds the invoker's plan, second is served from it; both must
-        // yield the full sequence and surface handler writes through the settings items.
+        // First stream verifies the plan against the live pipeline, second is served from
+        // the settled verdict; both must yield the full sequence and surface handler
+        // writes through the settings items.
         for (var i = 0; i < 2; i++)
         {
             var context = new ErgosfareContext();
@@ -66,35 +93,10 @@ public class StreamFastLaneTests
         }
     }
 
-    [ExcludeFromDiscovery]
-    public sealed record RoutedStream : IStreamQuery<string>;
-
-    [ExcludeFromDiscovery]
-    [Group("east")]
-    public sealed class EastStreamHandler : IStreamQueryHandler<RoutedStream, string>
-    {
-        public async IAsyncEnumerable<string> StreamAsync(RoutedStream query, ErgosfareContext context)
-        {
-            await Task.Yield();
-            yield return "east";
-        }
-    }
-
-    [ExcludeFromDiscovery]
-    [Group("west")]
-    public sealed class WestStreamHandler : IStreamQueryHandler<RoutedStream, string>
-    {
-        public async IAsyncEnumerable<string> StreamAsync(RoutedStream query, ErgosfareContext context)
-        {
-            await Task.Yield();
-            yield return "west";
-        }
-    }
-
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task GroupedStreams_AlternatingGroupSets_RunTheRequestedGroup()
+    public async Task GroupedStream_IsRefusedAsUnplanned()
     {
         await using var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddQueryModule(q =>
@@ -106,25 +108,18 @@ public class StreamFastLaneTests
 
         var mediator = provider.GetRequiredService<IQueryMediator>();
 
-        Assert.Equal("east", await StreamOne(mediator, "east"));
-        Assert.Equal("west", await StreamOne(mediator, "west"));
-        Assert.Equal("east", await StreamOne(mediator, "east"));
-
-        static async Task<string> StreamOne(IQueryMediator mediator, params string[] groups)
+        // No per-set stream plans are compiled yet, and a pair whose handlers all live in
+        // named groups has no default plan either — so a grouped stream fails as
+        // unplanned rather than running a pipeline no plan produced.
+        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
         {
-            var settings = groups;
-
-            await foreach (var item in mediator.StreamAsync(new RoutedStream(), settings))
+            await foreach (var _ in mediator.StreamAsync(new RoutedStream(), new[] { "east" }))
             {
-                return item;
             }
+        });
 
-            throw new InvalidOperationException("stream yielded nothing");
-        }
+        Assert.Equal(UnplannedDispatchReason.NoCompiledPlan, thrown.Reason);
     }
-
-    [ExcludeFromDiscovery]
-    public sealed record UnhandledStream : IStreamQuery<int>;
 
     [Fact]
     [Trait("Category", "Unit")]
@@ -137,13 +132,12 @@ public class StreamFastLaneTests
 
         var mediator = provider.GetRequiredService<IQueryMediator>();
 
-        // The Mediate path threw from the StreamAsync call itself (descriptor resolution
-        // precedes enumeration); the fast lane must keep that timing. The registry is
-        // process-wide, though: another suite's marker-targeted (IQuery-assignable)
-        // interceptor may have given every query a descriptor, in which case both paths
-        // defer and fail at enumeration with the strategy's no-handler error instead —
-        // the fast-lane/Mediate parity this test guards holds either way. Both timings now
-        // raise NoHandlerFoundException; only the timing tells them apart.
+        // A query nothing handles is a failed dispatch, not an empty stream, and the
+        // failure is raised from the StreamAsync call itself — descriptor resolution
+        // precedes enumeration. The registry is process-wide, though: another suite's
+        // marker-targeted (IQuery-assignable) interceptor may have given every query a
+        // descriptor, in which case the failure surfaces at enumeration instead. Both
+        // timings raise NoHandlerFoundException; only the timing tells them apart.
         try
         {
             var stream = mediator.StreamAsync(new UnhandledStream());

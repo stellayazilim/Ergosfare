@@ -3,6 +3,7 @@ using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Internal.Mediator;
@@ -11,22 +12,22 @@ namespace Stella.Ergosfare.Command.Test;
 
 /// <summary>
 /// A frozen dispatch built on a dependencies factory that is not the framework's own. The
-/// whole freezing mechanism rests on the factory answering the same thing twice — that is
-/// what makes a composition safe to cache and a staged plan safe to admit — and a foreign
-/// implementation promises nothing of the sort.
+/// whole plan gate rests on the factory answering the same thing twice — that is what makes
+/// a composition verifiable against a compiled plan — and a foreign implementation promises
+/// nothing of the sort.
 /// </summary>
 /// <remarks>
 /// <para>
-/// So it freezes nothing: the verdict is decided at construction rather than on the first
-/// dispatch, every dispatch asks the factory again, and the runtime body runs even when a
-/// plan was handed in. That is the pre-freezing contract, kept for anyone who supplied their
-/// own factory before there was one to keep.
+/// So nothing it produces can be verified, and nothing is dispatched at run time that was
+/// not produced at compile time: every dispatch under a foreign factory fails with
+/// <see cref="UnplannedDispatchException"/> naming
+/// <see cref="UnplannedDispatchReason.ForeignDependenciesFactory"/>, before the factory is
+/// ever asked for participants. The pre-freezing contract — ask again on every dispatch —
+/// is gone with the runtime lane that kept it.
 /// </para>
 /// <para>
-/// The observable difference is the repeat call, which is why these count what the factory
-/// was asked rather than only checking the result: a dispatch that answered correctly from a
-/// cached composition would pass a result-only assertion while breaking exactly the promise
-/// this branch exists to keep.
+/// The fixtures stay excluded from discovery on purpose: these tests construct the frozen
+/// executors directly, planless, and pin the failures of that shape.
 /// </para>
 /// </remarks>
 public class ForeignDependenciesFactoryTests
@@ -100,89 +101,88 @@ public class ForeignDependenciesFactoryTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task VoidDispatch_AsksTheForeignFactoryEveryTime()
+    public async Task VoidDispatch_UnderAForeignFactory_FailsEveryDispatch()
     {
         await using var provider = Build();
         var foreign = new ForeignFactory(provider.GetRequiredService<IMessageDependenciesFactory>());
         var dispatch = new FrozenVoidDispatch<ForeignCommand>(foreign, plan: null);
 
-        var first = new ErgosfareContext();
-        await dispatch.Execute(new ForeignCommand(), first, provider, groups: null);
+        // The failure is decided by the factory's type alone, before participants are ever
+        // asked for — and it is decided again on every dispatch, since a failed
+        // verification caches nothing.
+        for (var i = 0; i < 2; i++)
+        {
+            var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
+                await dispatch.Execute(new ForeignCommand(), new ErgosfareContext(), provider, groups: null));
 
-        Assert.Equal(true, first.Items["foreign.ran"]);
-        Assert.Equal(1, foreign.Asked);
+            Assert.Equal(UnplannedDispatchReason.ForeignDependenciesFactory, thrown.Reason);
+            Assert.Equal(typeof(ForeignCommand), thrown.MessageType);
+        }
 
-        var second = new ErgosfareContext();
-        await dispatch.Execute(new ForeignCommand(), second, provider, groups: null);
-
-        // Nothing was frozen on the first dispatch, so the second is a fresh question.
-        Assert.Equal(true, second.Items["foreign.ran"]);
-        Assert.Equal(2, foreign.Asked);
+        Assert.Equal(0, foreign.Asked);
     }
 
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task ResultDispatch_AsksTheForeignFactoryEveryTime()
+    public async Task ResultDispatch_UnderAForeignFactory_FailsEveryDispatch()
     {
         await using var provider = Build();
         var foreign = new ForeignFactory(provider.GetRequiredService<IMessageDependenciesFactory>());
         var dispatch = new FrozenResultDispatch<ForeignEcho, string>(foreign, plan: null);
 
-        Assert.Equal("foreign",
-            await dispatch.Execute(new ForeignEcho(), new ErgosfareContext(), provider, groups: null));
-        Assert.Equal(1, foreign.Asked);
+        for (var i = 0; i < 2; i++)
+        {
+            var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
+                await dispatch.Execute(new ForeignEcho(), new ErgosfareContext(), provider, groups: null));
 
-        Assert.Equal("foreign",
-            await dispatch.Execute(new ForeignEcho(), new ErgosfareContext(), provider, groups: null));
-        Assert.Equal(2, foreign.Asked);
+            Assert.Equal(UnplannedDispatchReason.ForeignDependenciesFactory, thrown.Reason);
+        }
+
+        Assert.Equal(0, foreign.Asked);
     }
 
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task GroupedDispatch_ThroughAForeignFactory_SlotsNothingEither()
+    public async Task GroupedDispatch_ThroughAForeignFactory_FailsTheSameWay()
     {
         await using var provider = Build();
         var foreign = new ForeignFactory(provider.GetRequiredService<IMessageDependenciesFactory>());
         var dispatch = new FrozenVoidDispatch<GroupedForeignCommand>(foreign, plan: null);
         var filter = GroupSet.Of("foreign.group");
 
-        var first = new ErgosfareContext();
-        await dispatch.Execute(new GroupedForeignCommand(), first, provider, filter);
+        // The grouped lane verifies per set, and a foreign factory fails that verification
+        // for every set it is asked about.
+        for (var i = 0; i < 2; i++)
+        {
+            var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
+                await dispatch.Execute(new GroupedForeignCommand(), new ErgosfareContext(), provider, filter));
 
-        Assert.Equal(true, first.Items["foreign.ran"]);
-
-        var asked = foreign.Asked;
-
-        var second = new ErgosfareContext();
-        await dispatch.Execute(new GroupedForeignCommand(), second, provider, filter);
-
-        Assert.Equal(true, second.Items["foreign.ran"]);
-
-        // The grouped lane keeps a last-used slot for the framework's factory and none for a
-        // foreign one — repeating the very same canonical filter must still ask again.
-        Assert.True(foreign.Asked > asked,
-            "a repeated grouped dispatch was served from a slot the foreign lane must not keep");
+            Assert.Equal(UnplannedDispatchReason.ForeignDependenciesFactory, thrown.Reason);
+        }
     }
 
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task TheFrameworksOwnFactory_AsksOnceAndThenServesTheFrozenComposition()
+    public async Task TheFrameworksOwnFactory_StillRefusesAPlanlessDispatch()
     {
         await using var provider = Build();
         var dispatch = new FrozenVoidDispatch<ForeignCommand>(
             provider.GetRequiredService<IMessageDependenciesFactory>(), plan: null);
 
-        // The contrast that gives the cases above their meaning: the same dispatches against
-        // the framework's factory resolve the composition once and read a field afterwards.
+        // The contrast that gives the cases above their meaning: the framework's own factory
+        // is verifiable, but a dispatch without a compiled plan still has nothing to run —
+        // the excluded handler kept the generator from baking one, so the failure names the
+        // missing plan rather than the factory. Nothing is cached: every dispatch re-derives
+        // the same answer.
         for (var i = 0; i < 3; i++)
         {
-            var context = new ErgosfareContext();
-            await dispatch.Execute(new ForeignCommand(), context, provider, groups: null);
+            var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
+                await dispatch.Execute(new ForeignCommand(), new ErgosfareContext(), provider, groups: null));
 
-            Assert.Equal(true, context.Items["foreign.ran"]);
+            Assert.Equal(UnplannedDispatchReason.NoCompiledPlan, thrown.Reason);
         }
     }
 }

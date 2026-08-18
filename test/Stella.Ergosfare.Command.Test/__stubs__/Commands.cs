@@ -24,6 +24,14 @@ public record StubNonGenericCommandStringResult: ICommand<string>;
 
 
 /// <summary>
+/// A stub command served by an ungrouped handler, for the ungrouped mediator overloads.
+/// The grouped stub's handler carries group attributes, which keeps its default-set
+/// pipeline out of the compiled plans — this one's pipeline is the plain single-handler
+/// shape the generator always plans.
+/// </summary>
+public record StubPlainCommand : ICommand;
+
+/// <summary>
 /// Represents a test command with no return value.
 /// </summary>
 public record TestCommand: ICommand;

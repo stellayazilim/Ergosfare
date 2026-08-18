@@ -4,11 +4,17 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 
 /// <summary>
 /// A plan for a message whose whole pipeline — its main handlers plus at least one
-/// interceptor stage or plugin call — could be modelled exactly.
+/// interceptor stage or plugin call — could be modelled exactly. A streaming pair gets a
+/// plan even bare: streaming has no single-handler family to fall back on, so the plain
+/// enumeration is the plan.
 /// </summary>
 /// <param name="MessageTypeExpression">The message this plan serves.</param>
 /// <param name="Groups">The group set this plan was compiled for, empty for the default one.</param>
 /// <param name="IsBroadcast">Whether the plan delivers to every handler rather than one.</param>
+/// <param name="IsStream">
+/// Whether the plan streams its results. The result type is then the streamed item type,
+/// and the stages around the enumeration carry the enumerator rather than a result value.
+/// </param>
 /// <param name="ResultTypeExpression">The result type, or <c>null</c> when there is none.</param>
 /// <param name="ResultIsValueType">Whether that result is a value type.</param>
 /// <param name="Handlers">Main handlers registered for the message type itself.</param>
@@ -41,6 +47,7 @@ internal sealed record StagedPlanModel(
     string MessageTypeExpression,
     ImmutableArray<string> Groups,
     bool IsBroadcast,
+    bool IsStream,
     string? ResultTypeExpression,
     bool ResultIsValueType,
     ImmutableArray<StagedHandlerModel> Handlers,
@@ -62,6 +69,26 @@ internal sealed record StagedPlanModel(
     /// decided.
     /// </summary>
     public bool IsGroupFiltering => !GroupGuards.IsEmpty;
+
+    /// <summary>
+    /// The type the interceptor stages carry in their result slot: the enumerator for a
+    /// streaming plan, the declared result otherwise, <c>Unit</c> for a void pipeline.
+    /// </summary>
+    /// <remarks>
+    /// A streaming pipeline's post, exception and final stages receive the enumerator
+    /// rather than a result value — the items are already with the caller — so the stage
+    /// contracts close over it instead of the item type.
+    /// </remarks>
+    public string PipelineResultTypeExpression => IsStream
+        ? EmittedExpressions.AsyncEnumerator + "<" + ResultTypeExpression + ">"
+        : ResultTypeExpression ?? EmittedExpressions.Unit;
+
+    /// <summary>
+    /// Whether the stage-carried result is a value type; see
+    /// <see cref="PipelineResultTypeExpression"/>. An enumerator is a reference type
+    /// whatever the item type is.
+    /// </summary>
+    public bool PipelineResultIsValueType => !IsStream && ResultTypeExpression is not null && ResultIsValueType;
 
     /// <summary>
     /// The one main handler's type. Meaningful only when the plan is not a broadcast.

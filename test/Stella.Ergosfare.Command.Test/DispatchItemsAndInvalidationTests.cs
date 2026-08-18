@@ -1,31 +1,38 @@
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Command.Test;
 
+public sealed class ItemsCommand : ICommand { }
+
+public sealed class ItemsCommandHandler : ICommandHandler<ItemsCommand>
+{
+    public ValueTask HandleAsync(ItemsCommand command, ErgosfareContext context)
+    {
+        context.Set("writtenByHandler", "yes");
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class ItemsResultCommand : ICommand<int> { }
+
+public sealed class ItemsResultCommandHandler : ICommandHandler<ItemsResultCommand, int>
+{
+    public ValueTask<int> HandleAsync(ItemsResultCommand command, ErgosfareContext context)
+        => ValueTask.FromResult(42);
+}
+
 /// <summary>
 /// Covers the dispatch fast path's interaction with caller-supplied settings items —
 /// the pooled context adopts the caller's dictionary for the dispatch and detaches it
-/// untouched on return — and the executor-level plan cache's registry-version
-/// invalidation for runtime registrations.
+/// untouched on return. Fixtures are top-level and discoverable, so the generator bakes
+/// their pipelines and the dispatches run through compiled plans.
 /// </summary>
 public class DispatchItemsAndInvalidationTests
 {
-    public sealed class ItemsCommand : ICommand { }
-
-    public sealed class ItemsCommandHandler : ICommandHandler<ItemsCommand>
-    {
-        public ValueTask HandleAsync(ItemsCommand command, ErgosfareContext context)
-        {
-            context.Set("writtenByHandler", "yes");
-            return ValueTask.CompletedTask;
-        }
-    }
-
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
@@ -71,46 +78,13 @@ public class DispatchItemsAndInvalidationTests
         Assert.Equal("data", first.Items["secret"]);
     }
 
-    public sealed class LateInterceptedCommand : ICommand { }
-
-    // ERGO007 (suppressed in the csproj): dispatched after a runtime registration below,
-    // a site the closed-world dispatch-site analysis cannot see.
-    public sealed class LateInterceptedCommandHandler : ICommandHandler<LateInterceptedCommand>
-    {
-        public ValueTask HandleAsync(LateInterceptedCommand command, ErgosfareContext context)
-            => ValueTask.CompletedTask;
-    }
-
-    /// <summary>
-    /// Excluded from discovery: the fact below registers this type at runtime to observe
-    /// the version bump — another test's assembly scan (the registry is process-wide)
-    /// must not slip it into the pipeline before the warm dispatches run.
-    /// </summary>
-    [ExcludeFromDiscovery]
-    public sealed class LateRegisteredInterceptor : ICommandPreInterceptor<LateInterceptedCommand>
-    {
-        public ValueTask<LateInterceptedCommand> HandleAsync(LateInterceptedCommand command, ErgosfareContext context)
-        {
-            context.Set("lateInterceptorRan", true);
-            return ValueTask.FromResult(command);
-        }
-    }
-
-    public sealed class ResultCommand : ICommand<int> { }
-
-    public sealed class ResultCommandHandler : ICommandHandler<ResultCommand, int>
-    {
-        public ValueTask<int> HandleAsync(ResultCommand command, ErgosfareContext context)
-            => ValueTask.FromResult(42);
-    }
-
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
     public async Task Send_ResultCommand_ShouldFlowThroughTheResultFastPath()
     {
         var provider = new ServiceCollection()
-            .AddErgosfare(x => x.AddCommandModule(c => c.Register<ResultCommandHandler>()))
+            .AddErgosfare(x => x.AddCommandModule(c => c.Register<ItemsResultCommandHandler>()))
             .BuildServiceProvider();
         await using var _ = provider;
 
@@ -119,7 +93,7 @@ public class DispatchItemsAndInvalidationTests
         // Repeated sends exercise the cached result-executor lookup.
         for (var i = 0; i < 3; i++)
         {
-            Assert.Equal(42, await mediator.SendAsync(new ResultCommand()));
+            Assert.Equal(42, await mediator.SendAsync(new ItemsResultCommand()));
         }
     }
 }

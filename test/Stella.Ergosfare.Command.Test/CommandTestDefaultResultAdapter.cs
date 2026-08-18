@@ -16,11 +16,11 @@ namespace Stella.Ergosfare.Command.Test;
 /// <see cref="IResultAdapter{TResult}"/> implementation each.
 /// </remarks>
 public sealed class CommandTestDefaultResultAdapter :
-    IResultAdapter<ResultCarrierPipelineTests.DefaultBoundOutcome>,
+    IResultAdapter<DefaultBoundOutcome>,
     IResultAdapter<StagedPlanExecutionTests.DefaultGateOutcome>
 {
     /// <inheritdoc />
-    public bool TryGetException(in ResultCarrierPipelineTests.DefaultBoundOutcome result, out Exception? exception)
+    public bool TryGetException(in DefaultBoundOutcome result, out Exception? exception)
     {
         exception = result.Error;
         return exception is not null;

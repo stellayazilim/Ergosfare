@@ -4,13 +4,64 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Generated;
 using Stella.Ergosfare.Queries.Abstractions;
 using Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
 
 namespace Stella.Ergosfare.Contract.Test.Streaming;
+
+// This area's fixture types are top-level and unkeyed so the generator bakes a stream
+// plan for each pair — only compiled plans dispatch now, streams included. Every message
+// stays scoped to this area: no other class may share these types.
+
+/// <summary>Thrown from the middle of a stream.</summary>
+public sealed class StreamFailure() : Exception("stream failed");
+
+/// <summary>Streamed query whose handler can stop mid-stream by throwing.</summary>
+public sealed class Ticks : IStreamQuery<int>
+{
+    /// <summary>Whether the handler stops mid-stream by throwing.</summary>
+    public bool FailMidway;
+}
+
+/// <inheritdoc />
+public sealed class TicksHandler : IStreamQueryHandler<Ticks, int>
+{
+    /// <inheritdoc />
+    public async IAsyncEnumerable<int> StreamAsync(Ticks query, ErgosfareContext context)
+    {
+        yield return 1;
+
+        // A real await between items, so the scenario is not a synchronous shortcut.
+        await Task.Yield();
+        yield return 2;
+
+        if (query.FailMidway)
+        {
+            throw new StreamFailure();
+        }
+
+        yield return 3;
+    }
+}
+
+/// <summary>Streamed query whose sequence carries a <c>null</c> element.</summary>
+public sealed class Names : IStreamQuery<string?>;
+
+/// <inheritdoc />
+public sealed class NamesHandler : IStreamQueryHandler<Names, string?>
+{
+    /// <inheritdoc />
+    public async IAsyncEnumerable<string?> StreamAsync(Names query, ErgosfareContext context)
+    {
+        yield return "a";
+
+        await Task.Yield();
+        yield return null;
+
+        yield return "c";
+    }
+}
 
 /// <summary>
 /// The streaming surface as it stands today, pinned shallowly on purpose: it is marked
@@ -20,58 +71,11 @@ namespace Stella.Ergosfare.Contract.Test.Streaming;
 /// </summary>
 public sealed class StreamQueryTests
 {
-    private const string Key = "contract.stream";
-
-    /// <summary>Thrown from the middle of a stream.</summary>
-    public sealed class StreamFailure() : Exception("stream failed");
-
-    [DiscoveryKey(Key)]
-    public sealed class Ticks : IStreamQuery<int>
-    {
-        /// <summary>Whether the handler stops mid-stream by throwing.</summary>
-        public bool FailMidway;
-    }
-
-    [DiscoveryKey(Key)]
-    public sealed class TicksHandler : IStreamQueryHandler<Ticks, int>
-    {
-        public async IAsyncEnumerable<int> StreamAsync(Ticks query, ErgosfareContext context)
-        {
-            yield return 1;
-
-            // A real await between items, so the scenario is not a synchronous shortcut.
-            await Task.Yield();
-            yield return 2;
-
-            if (query.FailMidway)
-            {
-                throw new StreamFailure();
-            }
-
-            yield return 3;
-        }
-    }
-
-    [DiscoveryKey(Key)]
-    public sealed class Names : IStreamQuery<string?>;
-
-    [DiscoveryKey(Key)]
-    public sealed class NamesHandler : IStreamQueryHandler<Names, string?>
-    {
-        public async IAsyncEnumerable<string?> StreamAsync(Names query, ErgosfareContext context)
-        {
-            yield return "a";
-
-            await Task.Yield();
-            yield return null;
-
-            yield return "c";
-        }
-    }
-
     private static ServiceProvider CreateProvider()
         => new ServiceCollection()
-            .AddErgosfare(options => options.AddQueryModule(queries => queries.RegisterGenerated(Key)))
+            .AddErgosfare(options => options.AddQueryModule(queries => queries
+                .Register<TicksHandler>()
+                .Register<NamesHandler>()))
             .BuildServiceProvider();
 
     [Fact]

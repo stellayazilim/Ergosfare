@@ -46,6 +46,9 @@ internal sealed class ModuleBuilderAvailabilityReader(Compilation compilation)
             DispatchRootsHasStagedPlans: dispatchRoots is not null
                 && !dispatchRoots.GetMembers("AddStagedPlan").IsEmpty
                 && compilation.GetTypeByMetadataName(ContractMetadataNames.ServiceProviderExtensions) is not null,
+            DispatchRootsHasStreamPlans: dispatchRoots is not null
+                && !dispatchRoots.GetMembers("AddStreamPlan").IsEmpty
+                && compilation.GetTypeByMetadataName(ContractMetadataNames.ServiceProviderExtensions) is not null,
             StagedPlansSupportDirectConstruction:
                 compilation.GetTypeByMetadataName(ContractMetadataNames.StagedVoidPlan) is { } stagedVoidPlan
                 && !stagedVoidPlan.GetMembers("SupportsDirectConstruction").IsEmpty,

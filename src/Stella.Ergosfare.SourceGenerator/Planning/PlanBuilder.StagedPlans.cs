@@ -261,6 +261,7 @@ internal sealed partial class PlanBuilder
                 type.TypeofExpression,
                 filter.Filtering ? filter.CoveredGroups : targetGroups,
                 isBroadcast,
+                IsStream: false,
                 resultTypeExpression,
                 resultIsValueType,
                 handlers,

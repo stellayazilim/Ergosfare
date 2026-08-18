@@ -126,11 +126,16 @@ internal sealed class MessageDependenciesFactory(IServiceProvider serviceProvide
         // failure here does not stick.
         EnsureParticipantsResolvable(shape, messageType, _resolvabilityProbe);
 
-        var memoizeInstances = (_runtimeOptions?.MemoizeAllHandlers ?? false)
+        // Demanded memoization bars a compiled plan; the all-singleton kind does not —
+        // resolving a singleton per dispatch returns the one instance anyway, so the plan
+        // and the memoized references cannot be told apart. The dependencies carry which
+        // kind this is so the executors refuse only what genuinely conflicts.
+        var forcedMemoization = _runtimeOptions?.MemoizeAllHandlers ?? false;
+        var memoizeInstances = forcedMemoization
                                || (_handlerLifetimes?.AreAllParticipantsSingleton(messageType, shape) ?? false);
 
         return new MessageDependencies(
-            shape, memoizeInstances ? _memoizedGraphProvider ?? serviceProvider : null);
+            shape, memoizeInstances ? _memoizedGraphProvider ?? serviceProvider : null, forcedMemoization);
     }
 
     /// <summary>

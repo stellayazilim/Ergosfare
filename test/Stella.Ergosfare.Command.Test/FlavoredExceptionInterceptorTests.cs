@@ -1,11 +1,27 @@
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Command.Test;
+
+public sealed class VoidFailingCommand : ICommand { }
+
+public sealed class VoidFailingCommandHandler : ICommandHandler<VoidFailingCommand>
+{
+    public ValueTask HandleAsync(VoidFailingCommand command, ErgosfareContext context)
+        => throw new InvalidOperationException("boom");
+}
+
+public sealed class VoidFailingCommandExceptionInterceptor : ICommandExceptionInterceptor<VoidFailingCommand>
+{
+    public ValueTask<object> HandleAsync(VoidFailingCommand command, object? messageResult, Exception exception, ErgosfareContext context)
+    {
+        context.Set("observed", exception.Message);
+        return ValueTask.FromResult(messageResult!);
+    }
+}
 
 /// <summary>
 /// Regression coverage for the flavored exception interceptor contract: it used to extend
@@ -14,30 +30,11 @@ namespace Stella.Ergosfare.Command.Test;
 /// <see cref="ValueTask"/> result carrier is a value type — no variance), so the exception
 /// stage itself threw <see cref="NotSupportedException"/> and buried the handler's
 /// exception. Re-based on the result-agnostic contract, the interceptor observes the
-/// exception and the strategy swallows it — the documented contract.
+/// exception and the pipeline swallows it — the documented contract, running through the
+/// compiled plan.
 /// </summary>
 public class FlavoredExceptionInterceptorTests
 {
-    [ExcludeFromDiscovery]
-    public sealed class VoidFailingCommand : ICommand { }
-
-    [ExcludeFromDiscovery]
-    public sealed class VoidFailingCommandHandler : ICommandHandler<VoidFailingCommand>
-    {
-        public ValueTask HandleAsync(VoidFailingCommand command, ErgosfareContext context)
-            => throw new InvalidOperationException("boom");
-    }
-
-    [ExcludeFromDiscovery]
-    public sealed class VoidFailingCommandExceptionInterceptor : ICommandExceptionInterceptor<VoidFailingCommand>
-    {
-        public ValueTask<object> HandleAsync(VoidFailingCommand command, object? messageResult, Exception exception, ErgosfareContext context)
-        {
-            context.Set("observed", exception.Message);
-            return ValueTask.FromResult(messageResult!);
-        }
-    }
-
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]

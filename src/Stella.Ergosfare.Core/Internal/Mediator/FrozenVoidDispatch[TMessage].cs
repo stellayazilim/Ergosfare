@@ -5,7 +5,6 @@
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
 using Stella.Ergosfare.Core.Abstractions.Factories;
-using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.Results;
 using Stella.Ergosfare.Core.Abstractions.StagedPlans;
 using Stella.Ergosfare.Core.Internal.Factories;
@@ -13,17 +12,17 @@ using Stella.Ergosfare.Core.Internal.Factories;
 namespace Stella.Ergosfare.Core.Internal.Mediator;
 
 /// <summary>
-/// One container's void pipeline for one message type: it runs the compiled plan when this
-/// container's participants are the ones the plan was compiled against, and the general
-/// body otherwise.
+/// One container's void pipeline for one message type: it runs the compiled plan, and
+/// nothing else. A dispatch the plan cannot serve fails, precisely.
 /// </summary>
 /// <typeparam name="TMessage">The message type this pipeline serves.</typeparam>
 /// <remarks>
-/// Both are the same pipeline reached two ways, so one type covers them. Everything is
-/// settled on the first dispatch — the participants are resolved, the adapter is bound, and
-/// the plan is accepted or rejected against them — after which every dispatch reads one
-/// field and runs what it names. A group-filtered dispatch picks its own participants
-/// through a per-set slot and runs the same body.
+/// Everything is settled on the first dispatch — the participants are resolved once and the
+/// plan is verified against them — after which every dispatch reads one field and runs the
+/// plan. A pipeline the plan was not compiled against does not degrade into a runtime lane;
+/// it raises <see cref="Abstractions.Exceptions.UnplannedDispatchException"/> naming what
+/// diverged, on every dispatch, since nothing is cached when the verification fails. A
+/// group-filtered dispatch picks its own plan through a per-set slot the same way.
 /// </remarks>
 internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
     where TMessage : IMessage
@@ -33,32 +32,21 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
     private readonly StagedVoidPlan<TMessage>? _plan;
     private readonly GroupedCompositions _grouped;
 
-    // The adapter bound to this pipeline's Unit slot, together with its materializer facet.
-    // Resolved on the first dispatch because the container's default tier needs a provider,
-    // and null unless a Unit adapter was deliberately bound.
+    // The adapter bound to this pipeline's Unit slot. Resolved on the first dispatch because
+    // the container's default tier needs a provider. Void plans never assume an adapter, so
+    // one being bound fails the dispatch rather than silently skipping the adapter.
     private IResultAdapter<Unit>? _resultAdapter;
-    private IResultMaterializer<Unit>? _resultMaterializer;
     private volatile bool _resultAdapterResolved;
 
-    private IMessageDependencies? _cachedDependencies;
-    private MessageDependencies? _cachedFastDependencies;
-
     /// <summary>
-    /// Which route an ungrouped dispatch takes, decided on the first one and never
+    /// Which plan variant an ungrouped dispatch runs, decided on the first one and never
     /// revisited.
     /// </summary>
     /// <remarks>
     /// Volatile because writing it publishes everything decided alongside it: a reader that
-    /// sees a settled verdict must also see the cached participants and the resolved
-    /// adapter, which are written first.
+    /// sees a settled verdict must also see the resolved adapter, which is written first.
     /// </remarks>
     private volatile int _verdict;
-
-    /// <summary>
-    /// The factory came from outside, so nothing is settled and every dispatch asks it
-    /// again.
-    /// </summary>
-    private const int Foreign = -1;
 
     /// <summary>
     /// Nothing has been decided yet — the value a new instance starts at, which is why it is
@@ -66,11 +54,6 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
     /// </summary>
     // ReSharper disable once UnusedMember.Local
     private const int Undecided = 0;
-
-    /// <summary>
-    /// Run the general body over the resolved participants.
-    /// </summary>
-    private const int UseBody = 1;
 
     /// <summary>
     /// Run the compiled plan.
@@ -86,25 +69,17 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
     /// Initializes the pipeline over a container's factory and the plan compiled for this
     /// message, if any.
     /// </summary>
-    /// <param name="dependenciesFactory">The factory participants are resolved through.</param>
-    /// <param name="plan">The compiled plan for this message, or <c>null</c>.</param>
-    /// <remarks>
-    /// Public despite the type being internal: the reflective fallback for message types
-    /// without a generated root constructs through <c>Activator</c>, which only binds public
-    /// constructors.
-    /// </remarks>
+    /// <param name="dependenciesFactory">The factory participants are verified through.</param>
+    /// <param name="plan">
+    /// The compiled plan for the unfiltered pipeline, or <c>null</c> for a message whose
+    /// plans are all per-set — a contested default set that only groups can resolve. An
+    /// ungrouped dispatch then fails precisely, while grouped ones run their own plans.
+    /// </param>
     public FrozenVoidDispatch(IMessageDependenciesFactory dependenciesFactory, StagedVoidPlan<TMessage>? plan)
     {
         _factory = dependenciesFactory;
         _plan = plan;
         _grouped = new GroupedCompositions(dependenciesFactory, typeof(TMessage), AdmitGroupedPlan);
-
-        if (dependenciesFactory is not MessageDependenciesFactory)
-        {
-            // A factory from outside promises nothing about answering the same twice, so
-            // nothing is settled: every dispatch asks it and runs the body.
-            _verdict = Foreign;
-        }
     }
 
     /// <inheritdoc />
@@ -166,31 +141,22 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
 
         var verdict = _verdict;
 
-        if (verdict == UseBody)
-        {
-            return ExecuteRuntimeLane(message, _cachedDependencies!, _cachedFastDependencies, context, serviceProvider);
-        }
-
         if (verdict >= UsePlan)
         {
+            // A settled verdict proves the plan: only ExecuteUndecided writes one, and it
+            // has thrown by then for a message without an unfiltered plan.
             return verdict == UsePlanDirect
                 ? _plan!.ExecuteDirect((TMessage)message, context, serviceProvider)
                 : _plan!.Execute((TMessage)message, context, serviceProvider);
-        }
-
-        if (verdict == Foreign)
-        {
-            EnsureResultAdapter(serviceProvider);
-            return ExecuteRuntimeLane(
-                message, _factory.Create(typeof(TMessage), []), fast: null, context, serviceProvider);
         }
 
         return ExecuteUndecided(message, context, serviceProvider);
     }
 
     /// <summary>
-    /// Runs the first dispatch: binds the adapter, resolves the participants, decides
-    /// whether the plan may be used, then takes the route it settled on.
+    /// Runs the first dispatch: binds the adapter, resolves the participants, verifies the
+    /// plan against them, then runs it — or fails the dispatch naming what could not be
+    /// verified.
     /// </summary>
     /// <param name="message">The message to dispatch.</param>
     /// <param name="context">The execution context of this dispatch.</param>
@@ -198,88 +164,57 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
     /// <returns>A task that completes when the pipeline has run.</returns>
     private ValueTask ExecuteUndecided(object message, ErgosfareContext context, IServiceProvider serviceProvider)
     {
+        if (_factory is not MessageDependenciesFactory typedFactory)
+        {
+            throw UnplannedDispatch.ForForeignFactory(typeof(TMessage));
+        }
+
         EnsureResultAdapter(serviceProvider);
 
-        var typedFactory = (MessageDependenciesFactory)_factory;
-
         // Throws for a message no composition serves — and on every dispatch of such a
-        // message, since nothing is cached when this throws.
-        var dependencies = typedFactory.Create(typeof(TMessage), []);
-        var fastDependencies = dependencies as MessageDependencies;
-        _cachedFastDependencies = fastDependencies;
-        _cachedDependencies = dependencies;
-
-        // Void plans never assume an adapter, so any adapter bound here keeps the dispatch
-        // on the general body, which knows how to consult one.
-        var usePlan = _plan is not null
-            && _resultAdapter is null
-            && fastDependencies is { MemoizedInstances: false }
-            && StagedPlanGate.Matches(fastDependencies, _plan.Composition);
-
-        _verdict = usePlan
-            ? _plan!.SupportsDirectConstruction
-              && StagedPlanGate.AllPlainTransient(typedFactory, _plan.Composition)
-                ? UsePlanDirect
-                : UsePlan
-            : UseBody;
-
-        if (_verdict >= UsePlan)
+        // message, since nothing is cached until the plan is verified.
+        if (typedFactory.Create(typeof(TMessage), []) is not MessageDependencies dependencies)
         {
-            return _verdict == UsePlanDirect
-                ? _plan!.ExecuteDirect((TMessage)message, context, serviceProvider)
-                : _plan!.Execute((TMessage)message, context, serviceProvider);
+            throw UnplannedDispatch.ForForeignFactory(typeof(TMessage));
         }
 
-        return ExecuteRuntimeLane(message, dependencies, fastDependencies, context, serviceProvider);
+        // Every plan this message has is per-set, so the unfiltered dispatch has nothing to
+        // run — a contested default set fails as the contest it is.
+        if (_plan is null)
+        {
+            throw UnplannedDispatch.ForMissingPlan(typeof(TMessage), dependencies);
+        }
+
+        // Void plans never assume an adapter, so one being bound means branches the plan
+        // does not have.
+        if (_resultAdapter is not null)
+        {
+            throw UnplannedDispatch.ForResultAdapterMismatch(
+                typeof(TMessage), compiledAdapterType: null, _resultAdapter.GetType());
+        }
+
+        if (dependencies.ForcedMemoization)
+        {
+            throw UnplannedDispatch.ForMemoizedInstances(typeof(TMessage));
+        }
+
+        if (!StagedPlanGate.Matches(dependencies, _plan.Composition))
+        {
+            throw UnplannedDispatch.ForDivergedComposition(typeof(TMessage), dependencies, _plan.Composition);
+        }
+
+        _verdict = _plan.SupportsDirectConstruction
+                   && StagedPlanGate.AllPlainTransient(typedFactory, _plan.Composition)
+            ? UsePlanDirect
+            : UsePlan;
+
+        return _verdict == UsePlanDirect
+            ? _plan.ExecuteDirect((TMessage)message, context, serviceProvider)
+            : _plan.Execute((TMessage)message, context, serviceProvider);
     }
 
     /// <summary>
-    /// Runs the resolved participants: the handler on its own when the pipeline is a single
-    /// handler with no interceptors, and the general body otherwise.
-    /// </summary>
-    /// <param name="message">The message to dispatch.</param>
-    /// <param name="dependencies">The participants to run.</param>
-    /// <param name="fast">
-    /// The same participants as their concrete type, when they are one; <c>null</c> rules
-    /// out the single-handler route.
-    /// </param>
-    /// <param name="context">The execution context of this dispatch.</param>
-    /// <param name="serviceProvider">The provider participants are resolved from.</param>
-    /// <returns>A task that completes when the pipeline has run.</returns>
-    /// <remarks>
-    /// There is no abort handling here on purpose: the engine's own frame owns that, and an
-    /// exception-handling region in this method would stop it being inlined into its caller
-    /// on every dispatch.
-    /// </remarks>
-    private ValueTask ExecuteRuntimeLane(
-        object message, IMessageDependencies dependencies, MessageDependencies? fast,
-        ErgosfareContext context, IServiceProvider serviceProvider)
-    {
-        if (fast?.FastSingleHandler is { } handlerReference && _resultAdapter is null)
-        {
-            var handler = handlerReference.Resolve(serviceProvider);
-
-            switch (handler)
-            {
-                case IAsyncHandler<TMessage> asyncHandler:
-                    return asyncHandler.HandleAsync((TMessage)message, context);
-                case IHandler<TMessage, ValueTask> valueTaskShaped:
-                    return valueTaskShaped.Handle((TMessage)message, context);
-                case IHandler<TMessage, object> syncHandler:
-                    syncHandler.Handle((TMessage)message, context);
-                    return ValueTask.CompletedTask;
-            }
-
-            // The handler implements no contract this route can call; falling through lets
-            // the body raise the one exception that says so.
-        }
-
-        return VoidPipelineBody<TMessage>.Run(
-            (TMessage)message, dependencies, _resultAdapter, _resultMaterializer, context, serviceProvider);
-    }
-
-    /// <summary>
-    /// Runs a dispatch that named groups, over the participants those groups select.
+    /// Runs a dispatch that named groups, through the plan those groups admit.
     /// </summary>
     /// <param name="message">The message to dispatch.</param>
     /// <param name="context">The execution context of this dispatch.</param>
@@ -292,52 +227,47 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
         EnsureResultAdapter(serviceProvider);
 
         var composition = _grouped.Resolve(groups);
+        var groupedPlan = (StagedVoidPlan<TMessage>)composition.Admission.Plan!;
 
-        if (composition.Admission.Plan is StagedVoidPlan<TMessage> groupedPlan)
+        // A plan compiled for this exact set already knows its participants; the filtering
+        // plan works them out from the set it is handed.
+        if (groupedPlan.FilterGroups is not null)
         {
-            // A plan compiled for this exact set already knows its participants; the
-            // filtering plan works them out from the set it is handed.
-            if (groupedPlan.FilterGroups is not null)
-            {
-                return composition.Admission.Direct
-                    ? groupedPlan.ExecuteFilteredDirect((TMessage)message, context, serviceProvider, composition.Groups)
-                    : groupedPlan.ExecuteFiltered((TMessage)message, context, serviceProvider, composition.Groups);
-            }
-
             return composition.Admission.Direct
-                ? groupedPlan.ExecuteDirect((TMessage)message, context, serviceProvider)
-                : groupedPlan.Execute((TMessage)message, context, serviceProvider);
+                ? groupedPlan.ExecuteFilteredDirect((TMessage)message, context, serviceProvider, composition.Groups)
+                : groupedPlan.ExecuteFiltered((TMessage)message, context, serviceProvider, composition.Groups);
         }
 
-        return ExecuteRuntimeLane(message, composition.Dependencies, composition.Fast, context, serviceProvider);
+        return composition.Admission.Direct
+            ? groupedPlan.ExecuteDirect((TMessage)message, context, serviceProvider)
+            : groupedPlan.Execute((TMessage)message, context, serviceProvider);
     }
 
     /// <summary>
-    /// Decides which compiled plan, if any, may serve one group set.
+    /// Decides which compiled plan serves one group set, or fails the dispatch when none
+    /// verifiably does.
     /// </summary>
     /// <param name="groups">The group set being decided for.</param>
     /// <param name="dependencies">The participants that set selects.</param>
     /// <returns>The plan and whether it may construct participants itself.</returns>
     /// <remarks>
     /// The same question <see cref="ExecuteUndecided"/> answers for the default set, asked
-    /// once per set as its entry is built rather than on every dispatch.
+    /// once per set as its entry is built rather than on every dispatch. A set that fails
+    /// here fails on every dispatch, since a failed decision is never slotted.
     /// </remarks>
     private GroupedPlanAdmission AdmitGroupedPlan(string[] groups, IMessageDependencies dependencies)
     {
         if (_resultAdapter is not null)
         {
-            return default;
+            throw UnplannedDispatch.ForResultAdapterMismatch(
+                typeof(TMessage), compiledAdapterType: null, _resultAdapter.GetType());
         }
 
         var plan = GeneratedDispatchRoots.FindStagedVoidPlan(typeof(TMessage), groups) as StagedVoidPlan<TMessage>;
 
         if (plan is not null)
         {
-            if (dependencies is not MessageDependencies { MemoizedInstances: false } keyed
-                || !StagedPlanGate.Matches(keyed, plan.Composition))
-            {
-                return default;
-            }
+            VerifyComposition(dependencies, plan.Composition);
         }
         else
         {
@@ -346,12 +276,17 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
             // the one set that reproduces everything its body holds.
             plan = GeneratedDispatchRoots.FindFilteredVoidPlan(typeof(TMessage)) as StagedVoidPlan<TMessage>;
 
-            if (plan?.FilterGroups is not { } covered
-                || _factory.Find(typeof(TMessage), covered) is not MessageDependencies { MemoizedInstances: false } full
-                || !StagedPlanGate.Matches(full, plan.Composition))
+            if (plan?.FilterGroups is not { } covered)
             {
-                return default;
+                throw UnplannedDispatch.ForUnplannedGroupSet(typeof(TMessage), groups);
             }
+
+            if (_factory.Find(typeof(TMessage), covered) is not { } full)
+            {
+                throw UnplannedDispatch.ForUnplannedGroupSet(typeof(TMessage), groups);
+            }
+
+            VerifyComposition(full, plan.Composition);
         }
 
         var direct = plan.SupportsDirectConstruction
@@ -359,6 +294,30 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
                      && StagedPlanGate.AllPlainTransient(typedFactory, plan.Composition);
 
         return new GroupedPlanAdmission(plan, direct);
+    }
+
+    /// <summary>
+    /// Verifies one live composition against what a plan compiled, failing the dispatch
+    /// with the precise reason when they cannot be reconciled.
+    /// </summary>
+    /// <param name="dependencies">The live participants.</param>
+    /// <param name="composition">The pipeline the plan was compiled against.</param>
+    private static void VerifyComposition(IMessageDependencies dependencies, StagedPlanKey composition)
+    {
+        if (dependencies is not MessageDependencies fast)
+        {
+            throw UnplannedDispatch.ForForeignFactory(typeof(TMessage));
+        }
+
+        if (fast.ForcedMemoization)
+        {
+            throw UnplannedDispatch.ForMemoizedInstances(typeof(TMessage));
+        }
+
+        if (!StagedPlanGate.Matches(fast, composition))
+        {
+            throw UnplannedDispatch.ForDivergedComposition(typeof(TMessage), fast, composition);
+        }
     }
 
     /// <summary>
@@ -377,12 +336,7 @@ internal sealed class FrozenVoidDispatch<TMessage> : IPipelineExecutor
             return;
         }
 
-        var adapter = ResultAdapterBinding.For<TMessage, Unit>(serviceProvider);
-        _resultAdapter = adapter;
-        // Whether an adapter can also build a failed result is up to whoever wrote it; none
-        // in this repository does, which is what the test is for.
-        // ReSharper disable once SuspiciousTypeConversion.Global
-        _resultMaterializer = adapter as IResultMaterializer<Unit>;
+        _resultAdapter = ResultAdapterBinding.For<TMessage, Unit>(serviceProvider);
         _resultAdapterResolved = true;
     }
 }

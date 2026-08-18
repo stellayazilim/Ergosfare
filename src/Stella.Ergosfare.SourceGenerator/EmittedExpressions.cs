@@ -26,6 +26,11 @@ internal static class EmittedExpressions
     internal const string AsyncEnumerator = "global::System.Collections.Generic.IAsyncEnumerator";
 
     /// <summary>
+    /// The sequence a stream handler produces, and the contract it is called through.
+    /// </summary>
+    internal const string AsyncEnumerable = "global::System.Collections.Generic.IAsyncEnumerable";
+
+    /// <summary>
     /// The framework's own result carrier.
     /// </summary>
     internal const string NativeResult = "global::Stella.Ergosfare.Core.Abstractions.Results.Result";

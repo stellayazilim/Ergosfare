@@ -45,7 +45,14 @@ internal sealed class MessageDependencies : IMessageDependencies
     /// When supplied, references resolve once from this provider and keep the instance;
     /// when <c>null</c>, they resolve per invocation from the dispatching scope's provider.
     /// </param>
-    public MessageDependencies(FrozenPipelineShape shape, IServiceProvider? memoizedProvider)
+    /// <param name="forcedMemoization">
+    /// Whether the memoization was demanded (<c>ForceMemoizedHandlers</c>) rather than
+    /// derived from every participant being a singleton. Only the demanded kind bars a
+    /// compiled plan: resolving a singleton per dispatch returns the one instance anyway,
+    /// so the derived kind and a plan cannot be told apart.
+    /// </param>
+    public MessageDependencies(FrozenPipelineShape shape, IServiceProvider? memoizedProvider,
+        bool forcedMemoization = false)
     {
         HandlerArray = Materialize<IHandler>(shape.Handlers, memoizedProvider);
         IndirectHandlerArray = Materialize<IHandler>(shape.IndirectHandlers, memoizedProvider);
@@ -75,6 +82,7 @@ internal sealed class MessageDependencies : IMessageDependencies
                 : Handlers.Count == 0 && IndirectHandlers.Count == 1 ? IndirectHandlers[0] : null
             : null;
         MemoizedInstances = memoizedProvider is not null;
+        ForcedMemoization = forcedMemoization;
     }
 
     /// <summary>
@@ -109,6 +117,12 @@ internal sealed class MessageDependencies : IMessageDependencies
     /// one instance is the contract.
     /// </remarks>
     internal bool MemoizedInstances { get; }
+
+    /// <summary>
+    /// Whether the memoization was demanded rather than derived from an all-singleton
+    /// pipeline. Only this kind bars a compiled plan; see the constructor.
+    /// </summary>
+    internal bool ForcedMemoization { get; }
 
     /// <summary>
     /// Wraps a stage's participant types in resolvable references.

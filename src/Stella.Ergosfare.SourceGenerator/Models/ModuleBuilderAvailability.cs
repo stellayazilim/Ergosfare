@@ -31,6 +31,10 @@
 /// Whether the store accepts staged plans, for messages whose pipelines carry interceptors.
 /// An older package simply gets none.
 /// </param>
+/// <param name="DispatchRootsHasStreamPlans">
+/// Whether the store accepts compiled stream plans, for streaming queries. An older package
+/// simply gets none.
+/// </param>
 /// <param name="StagedPlansSupportDirectConstruction">
 /// Whether staged plans can construct participants themselves. Against an older package the
 /// direct variant is not written and plans resolve through the provider.
@@ -62,6 +66,7 @@ internal readonly record struct ModuleBuilderAvailability(
     bool DispatchRootsHasProviderPlanFactories,
     bool HasKeyedServiceExtensions,
     bool DispatchRootsHasStagedPlans,
+    bool DispatchRootsHasStreamPlans,
     bool StagedPlansSupportDirectConstruction,
     bool HasDispatchSiteAttribute,
     bool DispatchRootsHasFrozenCompositions);

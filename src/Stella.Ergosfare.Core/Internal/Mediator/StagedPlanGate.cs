@@ -68,6 +68,52 @@ internal static class StagedPlanGate
     }
 
     /// <summary>
+    /// Names the stages where the live pipeline differs from what
+    /// <paramref name="composition"/> compiled, for the exception a mismatch raises.
+    /// </summary>
+    /// <param name="dependencies">The participants this container resolved.</param>
+    /// <param name="composition">The pipeline the plan was compiled against.</param>
+    /// <returns>One clause per diverged stage, compiled types against live ones.</returns>
+    internal static string DescribeMismatch(MessageDependencies dependencies, StagedPlanKey composition)
+    {
+        var clauses = new List<string>(2);
+
+        AppendStageMismatch(clauses, "handlers", dependencies.Handlers, composition.HandlerTypeArray);
+        AppendStageMismatch(clauses, "indirect handlers", dependencies.IndirectHandlers, composition.IndirectHandlerTypeArray);
+        AppendStageMismatch(clauses, "pre-interceptors", dependencies.PreInterceptors, composition.PreInterceptorTypeArray);
+        AppendStageMismatch(clauses, "post-interceptors", dependencies.PostInterceptors, composition.PostInterceptorTypeArray);
+        AppendStageMismatch(clauses, "exception interceptors", dependencies.ExceptionInterceptors, composition.ExceptionInterceptorTypeArray);
+        AppendStageMismatch(clauses, "final interceptors", dependencies.FinalInterceptors, composition.FinalInterceptorTypeArray);
+
+        return string.Join("; ", clauses);
+    }
+
+    /// <summary>
+    /// Adds one stage's clause to <paramref name="clauses"/> when it diverged.
+    /// </summary>
+    /// <typeparam name="THandler">The stage's participant contract.</typeparam>
+    /// <param name="clauses">The clauses collected so far.</param>
+    /// <param name="stageName">The stage's name in the exception message.</param>
+    /// <param name="stage">The live stage.</param>
+    /// <param name="baked">The types the plan was compiled with.</param>
+    private static void AppendStageMismatch<THandler>(
+        List<string> clauses,
+        string stageName,
+        IReadOnlyList<IHandlerReference<THandler>> stage,
+        Type[] baked)
+    {
+        if (StageMatches(stage, baked))
+        {
+            return;
+        }
+
+        var live = stage.Count == 0 ? "none" : string.Join(", ", stage.Select(reference => reference.HandlerType.Name));
+        var compiled = baked.Length == 0 ? "none" : string.Join(", ", baked.Select(type => type.Name));
+
+        clauses.Add($"{stageName}: compiled [{compiled}], live [{live}]");
+    }
+
+    /// <summary>
     /// Reports whether every participant of <paramref name="composition"/> was registered
     /// in the module's own plain transient shape — the further condition a plan must meet
     /// before it may construct participants itself instead of resolving them.

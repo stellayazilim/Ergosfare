@@ -2,10 +2,55 @@ using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Command.Test;
+
+public sealed class TypedProbeCommand : ICommand { }
+
+public sealed class TypedProbeCommandHandler : ICommandHandler<TypedProbeCommand>
+{
+    public ValueTask HandleAsync(TypedProbeCommand command, ErgosfareContext context)
+    {
+        context.Set("typedProbe", true);
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class TypedUnregisteredCommand : ICommand { }
+
+public sealed class IdentityProbeCommand : ICommand { }
+
+public sealed class IdentityProbeCommandHandler : ICommandHandler<IdentityProbeCommand>
+{
+    private readonly Guid _id = Guid.NewGuid();
+
+    public ValueTask HandleAsync(IdentityProbeCommand command, ErgosfareContext context)
+    {
+        context.Set("handlerId", _id);
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class TypedResultProbeCommand : ICommand<string> { }
+
+public sealed class TypedResultProbeCommandHandler : ICommandHandler<TypedResultProbeCommand, string>
+{
+    public ValueTask<string> HandleAsync(TypedResultProbeCommand command, ErgosfareContext context)
+        => ValueTask.FromResult("typed");
+}
+
+public sealed class ResultIdentityProbeCommand : ICommand<Guid> { }
+
+public sealed class ResultIdentityProbeCommandHandler : ICommandHandler<ResultIdentityProbeCommand, Guid>
+{
+    private readonly Guid _id = Guid.NewGuid();
+
+    public ValueTask<Guid> HandleAsync(ResultIdentityProbeCommand command, ErgosfareContext context)
+        => ValueTask.FromResult(_id);
+}
 
 /// <summary>
 /// Covers the typed void dispatch overload on <see cref="MessageDispatchEngine"/>: the
@@ -15,67 +60,13 @@ namespace Stella.Ergosfare.Command.Test;
 /// </summary>
 public class TypedEngineDispatchTests
 {
-    public sealed class TypedProbeCommand : ICommand { }
-
-    // ERGO007 (suppressed in the csproj): delivered through the engine's typed dispatch
-    // overloads below, which the closed-world dispatch-site analysis cannot see.
-    public sealed class TypedProbeCommandHandler : ICommandHandler<TypedProbeCommand>
-    {
-        public ValueTask HandleAsync(TypedProbeCommand command, ErgosfareContext context)
-        {
-            context.Set("typedProbe", true);
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    public sealed class UnregisteredCommand : ICommand { }
-
-    public sealed class IdentityProbeCommand : ICommand { }
-
-    // ERGO007 (suppressed in the csproj): delivered through the engine's typed dispatch
-    // overloads below.
-    public sealed class IdentityProbeCommandHandler : ICommandHandler<IdentityProbeCommand>
-    {
-        private readonly Guid _id = Guid.NewGuid();
-
-        public ValueTask HandleAsync(IdentityProbeCommand command, ErgosfareContext context)
-        {
-            context.Set("handlerId", _id);
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    public sealed class TypedResultProbeCommand : ICommand<string> { }
-
-    // ERGO007 (suppressed in the csproj): delivered through the engine's typed dispatch
-    // overloads below.
-    public sealed class TypedResultProbeCommandHandler : ICommandHandler<TypedResultProbeCommand, string>
-    {
-        public ValueTask<string> HandleAsync(TypedResultProbeCommand command, ErgosfareContext context)
-            => ValueTask.FromResult("typed");
-    }
-
-    public sealed class ResultIdentityProbeCommand : ICommand<Guid> { }
-
-    // ERGO007 (suppressed in the csproj): delivered through the engine's typed dispatch
-    // overloads below.
-    public sealed class ResultIdentityProbeCommandHandler : ICommandHandler<ResultIdentityProbeCommand, Guid>
-    {
-        private readonly Guid _id = Guid.NewGuid();
-
-        public ValueTask<Guid> HandleAsync(ResultIdentityProbeCommand command, ErgosfareContext context)
-            => ValueTask.FromResult(_id);
-    }
-
     /// <summary>
-    /// A generic message: an open definition is not a dispatchable message, so no closed
-    /// form of it is ever rooted. The untyped lane therefore has to close
-    /// <c>FrozenResultDispatch&lt;,&gt;</c> reflectively for it; the typed lane never asks.
+    /// A generic message: an open definition is not a dispatchable message, and the
+    /// generator does not plan generic message types at all — no closed form of one is
+    /// ever rooted, so every dispatch of one fails naming the missing plan.
     /// </summary>
     public sealed class WrappedProbe<T> : ICommand<string> { }
 
-    // ERGO007 (suppressed in the csproj): delivered through the engine's typed dispatch
-    // overloads below.
     public sealed class WrappedProbeHandler : ICommandHandler<WrappedProbe<int>, string>
     {
         public ValueTask<string> HandleAsync(WrappedProbe<int> command, ErgosfareContext context)
@@ -138,7 +129,8 @@ public class TypedEngineDispatchTests
         // The message registry is process-wide, so a second container can dispatch the
         // same message type. What must not leak between containers is the executor: it
         // carries the container's dependencies factory — and with it the container's
-        // lifetime semantics, made observable here via ForceMemoizedHandlers.
+        // dispatch verdict, made observable here via ForceMemoizedHandlers, whose
+        // pipelines a compiled plan refuses to serve.
         await using var transientContainer = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c => c.Register<IdentityProbeCommandHandler>()))
             .BuildServiceProvider();
@@ -159,16 +151,18 @@ public class TypedEngineDispatchTests
             .BuildServiceProvider();
         var memoizedEngine = memoizedContainer.GetRequiredService<MessageDispatchEngine>();
 
-        // Served through its own executor the memoized container reuses one handler
-        // instance; the transient container's cached executor would hand out fresh ones.
-        var memoizedFirst = await DispatchAndReadId(memoizedEngine, memoizedContainer);
-        var memoizedSecond = await DispatchAndReadId(memoizedEngine, memoizedContainer);
-        Assert.Equal(memoizedFirst, memoizedSecond);
+        // Served through its own executor the memoized container fails loudly — its
+        // pipeline memoizes instances, which no compiled plan serves. Being served the
+        // transient container's cached executor instead would dispatch just fine, which
+        // is exactly the leak the holder's cache-identity guard exists to prevent.
+        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
+            await memoizedEngine.DispatchVoidAsync(new IdentityProbeCommand(), new ErgosfareContext(), memoizedContainer));
+        Assert.Equal(UnplannedDispatchReason.MemoizedInstances, thrown.Reason);
 
         // And after the slot moved on, the original container still dispatches through
         // its own transient-resolving executor.
         var third = await DispatchAndReadId(transientEngine, transientContainer);
-        Assert.NotEqual(memoizedFirst, third);
+        Assert.NotEqual(first, third);
 
         static async Task<Guid> DispatchAndReadId(MessageDispatchEngine engine, IServiceProvider provider)
         {
@@ -191,9 +185,9 @@ public class TypedEngineDispatchTests
         // exception an unhandled message produces. The contract under test is exception
         // parity: the typed overload fails exactly like the erased one.
         var erased = await Record.ExceptionAsync(async () =>
-            await engine.DispatchAsync(new UnregisteredCommand(), provider));
+            await engine.DispatchAsync(new TypedUnregisteredCommand(), provider));
         var typed = await Record.ExceptionAsync(async () =>
-            await engine.DispatchVoidAsync(new UnregisteredCommand(), provider));
+            await engine.DispatchVoidAsync(new TypedUnregisteredCommand(), provider));
 
         Assert.NotNull(erased);
         Assert.NotNull(typed);
@@ -245,8 +239,9 @@ public class TypedEngineDispatchTests
     {
         // The result holder is keyed by the (message, result) pair and is process-wide,
         // while an executor belongs to one container. Without the cache-identity guard the
-        // second container would run the first one's pipeline — observable here through
-        // handler lifetime, exactly as the void lane's twin asserts it.
+        // second container would run the first one's pipeline — observable here because a
+        // memoized container's own executor refuses to dispatch, exactly as the void
+        // lane's twin asserts it.
         await using var transientContainer = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c => c.Register<ResultIdentityProbeCommandHandler>()))
             .BuildServiceProvider();
@@ -265,13 +260,14 @@ public class TypedEngineDispatchTests
             .BuildServiceProvider();
         var memoizedEngine = memoizedContainer.GetRequiredService<MessageDispatchEngine>();
 
-        var memoizedFirst = await DispatchAndReadId(memoizedEngine, memoizedContainer);
-        var memoizedSecond = await DispatchAndReadId(memoizedEngine, memoizedContainer);
-        Assert.Equal(memoizedFirst, memoizedSecond);
+        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
+            await memoizedEngine.DispatchAsync<ResultIdentityProbeCommand, Guid>(
+                new ResultIdentityProbeCommand(), new ErgosfareContext(), memoizedContainer));
+        Assert.Equal(UnplannedDispatchReason.MemoizedInstances, thrown.Reason);
 
         // And after the slot moved on, the original container still resolves transiently.
         var third = await DispatchAndReadId(transientEngine, transientContainer);
-        Assert.NotEqual(memoizedFirst, third);
+        Assert.NotEqual(first, third);
 
         static async Task<Guid> DispatchAndReadId(MessageDispatchEngine engine, IServiceProvider provider)
         {
@@ -285,28 +281,26 @@ public class TypedEngineDispatchTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task TypedResultDispatch_ServesAMessageWithNoGeneratedRoot()
+    public async Task AGenericMessage_IsUnplanned_AndFailsBothLanes()
     {
         await using var provider = BuildProvider();
         var engine = provider.GetRequiredService<MessageDispatchEngine>();
 
-        // A closed generic message has no root and never gets one, so the untyped lane
-        // reaches DispatchLookup's reflective arm to build its executor — an answer only a
-        // JIT can give. Naming the pair makes the closed executor type ordinary compiled
-        // code, which is what lets this shape survive a Native AOT publish.
-        //
-        // Each lane gets its own container so each builds its own executor: sharing one
-        // would let whichever ran first answer for both, which is correct at run time and
-        // useless as a test of how the executor came to exist.
-        var items = new ErgosfareContext();
+        // The generator does not plan generic message types, and nothing is dispatched at
+        // run time that was not produced at compile time — so the closed form fails on
+        // both the typed and the erased lane, naming the missing plan, until the
+        // generator learns the construct.
+        var typed = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
+            await engine.DispatchAsync<WrappedProbe<int>, string>(
+                new WrappedProbe<int>(), new ErgosfareContext(), provider));
 
-        var typed = await engine.DispatchAsync<WrappedProbe<int>, string>(
-            new WrappedProbe<int>(), items, provider);
+        Assert.Equal(UnplannedDispatchReason.NoCompiledPlan, typed.Reason);
+
         await using var fresh = BuildProvider();
-        var untyped = await fresh.GetRequiredService<MessageDispatchEngine>()
-            .DispatchAsync<string>(new WrappedProbe<int>(), fresh);
+        var erased = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
+            await fresh.GetRequiredService<MessageDispatchEngine>()
+                .DispatchAsync<string>(new WrappedProbe<int>(), fresh));
 
-        Assert.Equal("wrapped", typed);
-        Assert.Equal(typed, untyped);
+        Assert.Equal(UnplannedDispatchReason.NoCompiledPlan, erased.Reason);
     }
 }
