@@ -1,3 +1,21 @@
+## v2.3.1 – '2026-09-14'
+
+### Deprecation notice
+
+* Marked the public APIs already removed from preview as obsolete on the stable line:
+  mediation settings and their dispatch overloads, mediator extension classes, direct
+  mediator constructors, two-parameter pre-interceptors, `ForceMemoizedHandlers`, and
+  `AsyncBroadcastMediationStrategy<TMessage>`. Their existing behavior remains available
+  in this patch; they are scheduled for removal in the next stable minor release.
+* Obsolete messages describe the migration path: module mediator methods, `GroupSet`,
+  DI resolution, single-message pre-interceptors, and source-generated execution plans.
+* Experimental result-adapter APIs now emit warnings with the existing `ERGOEXP001`
+  diagnostic ID instead of default compilation errors. Existing suppressions still work;
+  projects treating warnings as errors retain control of their diagnostic policy.
+* Updated the English and Turkish compatibility policy: preview deprecation or removal
+  can precede removal in the corresponding stable minor without a separate stable
+  deprecation release. No API is removed by this patch.
+
 ## v2.3.0 – '2026-08-12'
 
 Stable release. The theme: **the pipeline becomes a compiled artifact.** The preview cycle
