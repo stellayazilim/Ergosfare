@@ -1,3 +1,48 @@
+## v2.16.0-preview – '2026-09-14'
+
+### Fluent stream inputs and conversion
+
+* Add `StreamInput<TChunk, TSelf>`, `CommandStream<TChunk, TSelf>` and
+  `QueryStream<TChunk, TSelf>`. Metadata lives on the concrete message; fluent operations
+  preserve its type. Existing experimental metadata-wrapper types remain available.
+* `Pipe` starts producing immediately, before dispatch if necessary, and waits when the
+  bounded queue fills. Capacity counts queued items rather than bytes or reachable memory.
+* Add `IPipeConverter<T>` for incremental byte-stream decoding and `IPipeConverter<S,T>`
+  for item conversion, plus `Func<byte,T>`, `Func<S,T>` and per-source-item `Func<T>` overloads.
+  Byte and owned-byte-block helpers and stateful UTF-8 line conversion leave sources open.
+* Implement explicit `IBufferWriter<T>` with growable staging separate from queue capacity.
+  `FlushAsync` publishes staged items with backpressure; manual writes and bound sources
+  cannot be mixed.
+* Move `IAsyncDisposable` to the root `ErgosfareStream`. Repeated disposal shares completion;
+  dispatch/disposal stops bound production and waits for its cleanup. Keep `ERGOEXP003`:
+  dedicated stream interceptor signatures and output-only cancellation remain open design work.
+* Keep the core `IStreamHandler` visible so consumers can combine it with module markers.
+
+### Stream termination and failures
+
+* Generated output-stream plans run cleanup on early output disposal. Pending input writers
+  and final interceptors receive `StreamOutputDisposedException`, derived from
+  `ExecutionAbortedException`. Explicit context abort continues to skip finals.
+* Output-stream failures bypass exception interceptors and propagate to the consumer and
+  final stage. Source/handler errors are preserved when cleanup also fails.
+* Command input termination forwards the original dispatch failure to waiting producers.
+  Bounded input, concurrent input/output, refusal, cancellation and producer cleanup have
+  regression coverage, included in the CI unit-test filter.
+
+### Multipart upload recipe and E2E
+
+* Add `/streams/upload`: an English browser form with progress and cancellation. The
+  endpoint pipes raw `Request.Body`; pre validates multipart headers and the file section,
+  then shares its first payload chunk and open parser with the handler through context.
+* The handler writes incrementally, preserves byte identity and SHA-256, and stores the
+  client-declared MIME in a companion JSON file. Missing MIME remains null; this is metadata
+  preservation rather than content sniffing. Partial files are removed on failure/cancellation.
+* Test a 64 MiB multipart request, writes before request EOF, WAV/UTF-8 byte identity, MIME
+  metadata, empty/missing files, extra sections and cleanup. Add `task e2e:test:upload`;
+  generated uploads and metadata are Git-ignored.
+* Document the streaming upload recipe, experimental contracts and refreshed API reference.
+
+
 ## v2.15.1-preview – '2026-09-14'
 
 ### Closed generic message plans

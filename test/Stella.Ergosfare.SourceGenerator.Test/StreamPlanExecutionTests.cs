@@ -13,13 +13,13 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Stella.Ergosfare.SourceGenerator.Test;
 
 /// <summary>
-/// Strategy-parity matrix for the emitted stream plans, executed end to end: the app
+/// Lifecycle matrix for the emitted stream plans, executed end to end: the app
 /// source below compiles with the generator, the emitted assembly loads into the test
 /// process, its <c>AddGenerated</c> wires a real container, and streams run through
 /// the public query mediator. Covered: query rewrite by pre-interceptors with the items
 /// flowing to the caller, the post and final stages observing the enumerator after
-/// enumeration, a mid-stream failure swallowed by the exception stage after the items
-/// that preceded it, and <c>ExecutionAbortedException</c> skipping every later stage.
+/// enumeration, a mid-stream failure bypassing exception interceptors and reaching final
+/// observers and the caller, and explicit participant aborts skipping later stages.
 /// </summary>
 public class StreamPlanExecutionTests
 {
@@ -86,7 +86,7 @@ public class StreamPlanExecutionTests
                 }
             }
 
-            // --- mid-stream failure swallowed by the exception stage -------------
+            // --- mid-stream failure bypasses the exception stage -----------------
 
             public sealed class GenFailStream : IStreamQuery<int>;
 
@@ -220,7 +220,7 @@ public class StreamPlanExecutionTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task MidStreamFailure_RunsTheExceptionStageAndEndsTheStreamQuietly()
+    public async Task MidStreamFailure_SkipsExceptionInterceptorsAndNotifiesFinalBeforeRethrowing()
     {
         var (assembly, provider) = Host.Value;
 
@@ -230,16 +230,16 @@ public class StreamPlanExecutionTests
         Entries.Clear();
         var items = new List<int>();
 
-        // The items before the failure reach the caller; the exception stage accepts the
-        // failure, so nothing is thrown, and the final stage still observes it.
-        await foreach (var item in provider.GetRequiredService<IQueryMediator>()
-                           .StreamAsync(CreateQuery("StreamTestApp.GenFailStream")))
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            items.Add(item);
-        }
+            await foreach (var item in provider.GetRequiredService<IQueryMediator>()
+                           .StreamAsync(CreateQuery("StreamTestApp.GenFailStream")))
+                items.Add(item);
+        });
 
+        Assert.Equal("mid-boom", error.Message);
         Assert.Equal([1, 2], items);
-        Assert.Equal(["exception:mid-boom", "final:mid-boom"], Entries);
+        Assert.Equal(["final:mid-boom"], Entries);
     }
 
     [Fact]

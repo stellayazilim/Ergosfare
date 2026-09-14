@@ -36,5 +36,7 @@
 
     <ItemGroup>
         <CompilerVisibleProperty Include="ErgosfareGeneratePlans" />
+        <!-- This HTTP upload example parses multipart streams inside its application pipeline. -->
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
     </ItemGroup>
 </Project>

@@ -36,8 +36,14 @@ internal static class MessageDispatchExecutionExtensions
     private static async ValueTask SendAndEnd(this MessageDispatchEngine engine, ErgosfareStream message, ErgosfareContext context,
         IServiceProvider provider, GroupSet? groups)
     {
+        Exception? error = null;
         try { await engine.SendCore(message, context, provider, groups).ConfigureAwait(false); }
-        finally { message.EndDispatch(); }
+        catch (Exception e) { error = e; throw; }
+        finally
+        {
+            message.EndDispatch(error);
+            await message.WaitForProducerAsync().ConfigureAwait(false);
+        }
     }
 
     internal static ValueTask<TResult> SendPlan<TResult>(this MessageDispatchEngine engine, object message, ErgosfareContext context,
@@ -52,8 +58,14 @@ internal static class MessageDispatchExecutionExtensions
     private static async ValueTask<TResult> SendAndEnd<TResult>(this MessageDispatchEngine engine, ErgosfareStream message, ErgosfareContext context,
         IServiceProvider provider, GroupSet? groups)
     {
+        Exception? error = null;
         try { return await engine.SendCore<TResult>(message, context, provider, groups).ConfigureAwait(false); }
-        finally { message.EndDispatch(); }
+        catch (Exception e) { error = e; throw; }
+        finally
+        {
+            message.EndDispatch(error);
+            await message.WaitForProducerAsync().ConfigureAwait(false);
+        }
     }
 
     private static ValueTask<TResult> SendCore<TResult>(this MessageDispatchEngine engine, object message, ErgosfareContext context,

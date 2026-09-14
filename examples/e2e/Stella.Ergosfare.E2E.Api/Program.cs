@@ -14,6 +14,8 @@ var connectionString = builder.Configuration.GetConnectionString("Todo") ?? "Dat
 // UseCases owns the registration API. This composition root's generator consumes its
 // selection manifest and combines it with endpoint dispatches to emit executable plans.
 builder.Services.AddApplication();
+builder.Services.AddSingleton(new Stella.Ergosfare.E2E.UseCases.Streaming.UploadStorage(
+    Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "upload"))));
 
 builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddSingleton<TodoStats>();

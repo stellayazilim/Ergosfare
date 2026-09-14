@@ -954,15 +954,6 @@ internal static class RegistrationEmitter
                 EmitStreamExecuteBody(sb, plan);
                 sb.AppendLine("            }");
                 sb.AppendLine();
-                // What stands in for the stream when the handler never produced one, so the
-                // enumeration needs no null branch. The await keeps the iterator an honest
-                // asynchronous one without a warning suppression.
-                sb.Append("            private static async ").Append(EmittedExpressions.AsyncEnumerable)
-                  .Append('<').Append(plan.ResultTypeExpression).AppendLine("> Empty()");
-                sb.AppendLine("            {");
-                sb.AppendLine("                await global::System.Threading.Tasks.Task.CompletedTask;");
-                sb.AppendLine("                yield break;");
-                sb.AppendLine("            }");
                 sb.AppendLine("        }");
                 continue;
             }
@@ -1774,196 +1765,87 @@ internal static class RegistrationEmitter
     /// <param name="sb">The buffer to write to.</param>
     /// <param name="plan">The plan being written.</param>
     /// <remarks>
-    /// The retired stream strategy's exact structure, as straight-line typed calls. A
-    /// failure before or during enumeration defers to the exception stage — the caller
-    /// keeps every item that preceded it — while <c>ExecutionAbortedException</c>
-    /// propagates immediately and skips the final stage. The post stage runs once
-    /// enumeration ends cleanly and receives the enumerator: the items are already with
-    /// the caller, so there is nothing for an interceptor to replace. A pending failure
-    /// nobody accepted is rethrown with its original stack.
+    /// Stream failures bypass exception interceptors and reach the final stage and caller.
+    /// The outer finally closes input and disposes the handler enumerator, including when
+    /// the consumer stops early. Explicit participant aborts skip final interceptors;
+    /// consumer disposal is observed by finals as StreamOutputDisposedException. Cleanup
+    /// failures cannot replace an existing terminal exception.
     /// </remarks>
     private static void EmitStreamExecuteBody(StringBuilder sb, StagedPlanModel plan)
     {
-        // As in the other bodies, the abort flag exists for the final stage alone.
-        var hasFinalStage = !plan.FinalCalls.IsEmpty;
-
         sb.AppendLine("                global::System.Exception? exception = null;");
-
-        if (hasFinalStage)
-        {
-            sb.AppendLine("                var aborted = false;");
-        }
-
-        sb.AppendLine("                var consume = true;");
-        sb.Append("                ").Append(EmittedExpressions.AsyncEnumerable)
-          .Append('<').Append(plan.ResultTypeExpression).AppendLine(">? enumerable = null;");
-        sb.AppendLine();
+        sb.AppendLine("                var finished = false;");
+        sb.Append("                ").Append(EmittedExpressions.AsyncEnumerator).Append('<')
+            .Append(plan.ResultTypeExpression).AppendLine(">? enumerator = null;");
         sb.AppendLine("                try");
         sb.AppendLine("                {");
-        EmitPreCalls(sb, plan, "                    ");
-
-        // Calling Handle only builds the sequence; the handler body runs as the caller
-        // enumerates below. The concrete handler implements the contract through a default
-        // member, so the call goes through the interface.
-        sb.Append("                    enumerable = ((").Append(HandlersNamespace).Append("IHandler<")
-          .Append(plan.MessageTypeExpression).Append(", ").Append(EmittedExpressions.AsyncEnumerable)
-          .Append('<').Append(plan.ResultTypeExpression).Append(">>)");
-        AppendParticipant(sb, plan.HandlerTypeExpression, plan.HandlerConstructionExpression);
-        sb.AppendLine(").Handle(message, context);");
-        sb.AppendLine("                }");
-        // Stopped before a single item existed: nothing else runs, the final stage
-        // included, and the signal reaches whoever is enumerating.
-        sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
-        sb.AppendLine("                {");
-
-        if (hasFinalStage)
-        {
-            sb.AppendLine("                    aborted = true;");
-        }
-
-        sb.AppendLine("                    throw;");
-        sb.AppendLine("                }");
-        sb.AppendLine("                catch (global::System.Exception e)");
-        sb.AppendLine("                {");
-        // The stream never came to be, so there is nothing to enumerate; the failure goes
-        // straight to the stages below.
-        sb.AppendLine("                    consume = false;");
-        sb.AppendLine("                    exception = e;");
-        sb.AppendLine("                }");
-        sb.AppendLine();
-        sb.AppendLine("                if (enumerable == null)");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    enumerable = Empty();");
-        sb.AppendLine("                }");
-        sb.AppendLine();
-        sb.AppendLine("                await using var enumerator = enumerable.GetAsyncEnumerator(cancellationToken);");
-        sb.AppendLine();
-        sb.AppendLine("                while (consume)");
-        sb.AppendLine("                {");
-        sb.Append("                    var item = default(").Append(plan.ResultTypeExpression).AppendLine(")!;");
-        sb.AppendLine();
         sb.AppendLine("                    try");
         sb.AppendLine("                    {");
-        sb.AppendLine("                        consume = await enumerator.MoveNextAsync().ConfigureAwait(false);");
-        sb.AppendLine("                        item = consume ? enumerator.Current : default!;");
+        EmitPreCalls(sb, plan, "                        ");
+        sb.Append("                        var enumerable = ((").Append(HandlersNamespace).Append("IHandler<")
+            .Append(plan.MessageTypeExpression).Append(", ").Append(EmittedExpressions.AsyncEnumerable)
+            .Append('<').Append(plan.ResultTypeExpression).Append(">>)");
+        AppendParticipant(sb, plan.HandlerTypeExpression, plan.HandlerConstructionExpression);
+        sb.AppendLine(").Handle(message, context);");
+        sb.AppendLine("                        enumerator = enumerable.GetAsyncEnumerator(cancellationToken);");
         sb.AppendLine("                    }");
-        // Stopped mid-stream: the items already yielded stand, nothing further is
-        // produced, and the signal reaches the enumerating caller.
-        sb.Append("                    catch (").Append(AbortedExceptionFullName).AppendLine(")");
+        sb.AppendLine("                    catch (global::System.Exception e) { exception = e; }");
+        sb.AppendLine("                    while (exception == null && enumerator != null)");
         sb.AppendLine("                    {");
-
-        if (hasFinalStage)
-        {
-            sb.AppendLine("                        aborted = true;");
-        }
-
-        sb.AppendLine("                        throw;");
-        sb.AppendLine("                    }");
-        sb.AppendLine("                    catch (global::System.Exception e)");
-        sb.AppendLine("                    {");
-        sb.AppendLine("                        consume = false;");
-        sb.AppendLine("                        exception = e;");
-        sb.AppendLine("                    }");
-        sb.AppendLine();
-        // Whether MoveNextAsync produced an item is the only thing that decides this:
-        // null is a legitimate element, so testing the item itself would drop it and hand
-        // the caller a shorter, well-formed sequence.
-        sb.AppendLine("                    if (consume && exception == null)");
-        sb.AppendLine("                    {");
+        sb.AppendLine("                        var consume = false;");
+        sb.Append("                        var item = default(").Append(plan.ResultTypeExpression).AppendLine(")!;");
+        sb.AppendLine("                        try");
+        sb.AppendLine("                        {");
+        sb.AppendLine("                            cancellationToken.ThrowIfCancellationRequested();");
+        sb.AppendLine("                            consume = await enumerator.MoveNextAsync().ConfigureAwait(false);");
+        sb.AppendLine("                            if (consume) item = enumerator.Current;");
+        sb.AppendLine("                        }");
+        sb.AppendLine("                        catch (global::System.Exception e) { exception = e; }");
+        sb.AppendLine("                        if (!consume || exception != null) break;");
         sb.AppendLine("                        yield return item;");
         sb.AppendLine("                    }");
-        sb.AppendLine();
-        sb.AppendLine("                    if (!consume || exception != null)");
-        sb.AppendLine("                    {");
-        sb.AppendLine("                        break;");
-        sb.AppendLine("                    }");
-        sb.AppendLine("                }");
-
         if (!plan.PostCalls.IsEmpty)
         {
-            sb.AppendLine();
-            sb.AppendLine("                try");
-            sb.AppendLine("                {");
             sb.AppendLine("                    if (exception == null)");
             sb.AppendLine("                    {");
-            // The stage receives the enumerator rather than a result: the items are
-            // already with the caller, so there is nothing for an interceptor to replace.
-            sb.AppendLine("                        object? postChain = enumerator;");
-
+            sb.AppendLine("                        try");
+            sb.AppendLine("                        {");
+            sb.AppendLine("                            object? postChain = enumerator;");
             foreach (var call in plan.PostCalls)
-            {
-                EmitChainCall(sb, plan, call, "PostInterceptor", "postChain", null, "                        ");
-            }
-
+                EmitChainCall(sb, plan, call, "PostInterceptor", "postChain", null, "                            ");
+            sb.AppendLine("                        }");
+            sb.AppendLine("                        catch (global::System.Exception e) { exception = e; }");
             sb.AppendLine("                    }");
-            sb.AppendLine("                }");
-            sb.Append("                catch (").Append(AbortedExceptionFullName).AppendLine(")");
-            sb.AppendLine("                {");
-
-            if (hasFinalStage)
-            {
-                sb.AppendLine("                    aborted = true;");
-            }
-
-            sb.AppendLine("                    throw;");
-            sb.AppendLine("                }");
-            sb.AppendLine("                catch (global::System.Exception e)");
-            sb.AppendLine("                {");
-            sb.AppendLine("                    exception = e;");
-            sb.AppendLine("                }");
         }
-
-        sb.AppendLine();
-
-        // The exception stage, and the final stage in a finally when there is one. An
-        // abort thrown from an exception interceptor propagates without setting the flag,
-        // exactly as the strategy left it: the final stage still runs on that path.
-        var stageIndent = "                ";
-
-        if (hasFinalStage)
+        sb.AppendLine("                    finished = true;");
+        sb.AppendLine("                }");
+        sb.AppendLine("                finally");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    if (!finished && exception == null)");
+        sb.AppendLine("                        exception = new global::Stella.Ergosfare.Core.Abstractions.Exceptions.StreamOutputDisposedException();");
+        sb.AppendLine("                    global::Stella.Ergosfare.Core.Abstractions.Streaming.StreamExecution.EndInput(message, exception);");
+        sb.AppendLine("                    if (enumerator != null)");
+        sb.AppendLine("                    {");
+        sb.AppendLine("                        try { await enumerator.DisposeAsync().ConfigureAwait(false); }");
+        sb.AppendLine("                        catch (global::System.Exception e) { exception ??= e; }");
+        sb.AppendLine("                    }");
+        sb.AppendLine("                    global::Stella.Ergosfare.Core.Abstractions.Streaming.StreamExecution.EndInput(message, exception);");
+        sb.AppendLine("                    await global::Stella.Ergosfare.Core.Abstractions.Streaming.StreamExecution.WaitForProducerAsync(message).ConfigureAwait(false);");
+        if (!plan.FinalCalls.IsEmpty)
         {
-            sb.AppendLine("                try");
-            sb.AppendLine("                {");
-            stageIndent = "                    ";
-        }
-
-        sb.Append(stageIndent).AppendLine("if (exception != null)");
-        sb.Append(stageIndent).AppendLine("{");
-
-        var inner = stageIndent + "    ";
-
-        if (plan.ExceptionCalls.IsEmpty)
-        {
-            // Nobody could accept the failure, so it reaches the caller with its original
-            // stack rather than one rooted here.
-            sb.Append(inner).Append(ExceptionDispatchInfoFullName).AppendLine(".Capture(exception).Throw();");
-        }
-        else
-        {
-            sb.Append(inner).AppendLine("object? exceptionChain = enumerator;");
-
-            if (!EmitExceptionCallLoop(sb, plan, "exceptionChain", "exception", trackMatched: true, inner))
-            {
-                sb.Append(inner).AppendLine("if (!matchedExceptionInterceptor)");
-                sb.Append(inner).AppendLine("{");
-                sb.Append(inner).Append("    ").Append(ExceptionDispatchInfoFullName).AppendLine(".Capture(exception).Throw();");
-                sb.Append(inner).AppendLine("}");
-            }
-        }
-
-        sb.Append(stageIndent).AppendLine("}");
-
-        if (hasFinalStage)
-        {
-            sb.AppendLine("                }");
-            sb.AppendLine("                finally");
-            sb.AppendLine("                {");
-            sb.AppendLine("                    if (!aborted)");
+            sb.Append("                    if (exception is not ").Append(AbortedExceptionFullName)
+                .AppendLine(" || exception is global::Stella.Ergosfare.Core.Abstractions.Exceptions.StreamOutputDisposedException)");
             sb.AppendLine("                    {");
-            EmitFinalCalls(sb, plan, "enumerator", "                        ");
+            sb.AppendLine("                        try");
+            sb.AppendLine("                        {");
+            EmitFinalCalls(sb, plan, "enumerator", "                            ");
+            sb.AppendLine("                        }");
+            sb.AppendLine("                        catch (global::System.Exception e) { exception ??= e; }");
             sb.AppendLine("                    }");
-            sb.AppendLine("                }");
         }
+        sb.AppendLine("                }");
+        sb.AppendLine("                if (exception != null)");
+        sb.Append("                    ").Append(ExceptionDispatchInfoFullName).AppendLine(".Capture(exception).Throw();");
     }
 
     /// <summary>

@@ -60,3 +60,4 @@ examples/e2e/**/*.db-shm
 examples/e2e/**/*.db-wal
 examples/e2e/reports/
 examples/e2e/tools/
+examples/e2e/upload/

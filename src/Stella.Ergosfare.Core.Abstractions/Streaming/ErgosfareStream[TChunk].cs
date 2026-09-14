@@ -39,6 +39,7 @@ public abstract class ErgosfareStream<TChunk> : ErgosfareStream, IAsyncEnumerabl
     /// not to hold the payload — a larger window buys throughput only when the producer is
     /// bursty, and costs memory proportional to the chunk size.
     /// </remarks>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public const int DefaultCapacity = 4;
 
     private readonly Channel<TChunk> _channel;
@@ -46,7 +47,10 @@ public abstract class ErgosfareStream<TChunk> : ErgosfareStream, IAsyncEnumerabl
     private readonly Stopwatch _elapsed = new();
 
     private int _readerTaken;
-    private bool _endedByDispatch;
+    private int _writerMode;
+    private Exception? _terminalError;
+    private bool _producerCompleted;
+    private CancellationTokenSource? _readerCancellation;
     private long _chunks;
     private StreamCompletion _completion = StreamCompletion.Open;
 
@@ -97,11 +101,13 @@ public abstract class ErgosfareStream<TChunk> : ErgosfareStream, IAsyncEnumerabl
     /// One value rather than three loose members, because this is what the stages are handed:
     /// they see what the stream did, never what it carried.
     /// </remarks>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public StreamInfo Info => new(Interlocked.Read(ref _chunks), _elapsed.Elapsed, _completion);
 
     /// <summary>
     /// Whether this stream was created over an existing source rather than to be written to.
     /// </summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public bool IsAdopted => _adopted is not null;
 
     /// <summary>
@@ -114,18 +120,37 @@ public abstract class ErgosfareStream<TChunk> : ErgosfareStream, IAsyncEnumerabl
     /// it does not, the producer slowing down is the correct behaviour.
     /// </remarks>
     /// <exception cref="InvalidOperationException">The stream adopted an existing source.</exception>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public ValueTask WriteAsync(TChunk chunk, CancellationToken cancellationToken = default)
     {
         ThrowIfAdopted();
+        return WriteFromSourceAsync(chunk, cancellationToken);
+    }
+
+    /// <summary>Writes from the single bound source without claiming the manual writer.</summary>
+    protected ValueTask WriteFromSourceAsync(TChunk chunk, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
 
         // A closed channel answers with ChannelClosedException, whose message says nothing
         // about what actually happened. Where the dispatch is what closed it, say so.
-        if (_endedByDispatch)
+        if (Volatile.Read(ref _terminalError) is { } error)
         {
-            throw DispatchEnded();
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error).Throw();
         }
 
-        return _channel.Writer.WriteAsync(chunk, cancellationToken);
+        var write = _channel.Writer.WriteAsync(chunk, cancellationToken);
+        return write.IsCompletedSuccessfully ? write : ObserveWrite(write);
+    }
+
+    private static async ValueTask ObserveWrite(ValueTask write)
+    {
+        try { await write.ConfigureAwait(false); }
+        catch (ChannelClosedException e) when (e.InnerException is not null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(e.InnerException).Throw();
+            throw;
+        }
     }
 
     /// <summary>
@@ -139,13 +164,14 @@ public abstract class ErgosfareStream<TChunk> : ErgosfareStream, IAsyncEnumerabl
     /// of dropping silently.
     /// </remarks>
     /// <exception cref="InvalidOperationException">The stream adopted an existing source.</exception>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public bool TryWrite(TChunk chunk)
     {
         ThrowIfAdopted();
 
-        if (_endedByDispatch)
+        if (Volatile.Read(ref _terminalError) is { } error)
         {
-            throw DispatchEnded();
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error).Throw();
         }
 
         return _channel.Writer.TryWrite(chunk);
@@ -159,12 +185,19 @@ public abstract class ErgosfareStream<TChunk> : ErgosfareStream, IAsyncEnumerabl
     /// never arrives, which is the one hazard of the writing form.
     /// </remarks>
     /// <exception cref="InvalidOperationException">The stream adopted an existing source.</exception>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public void Complete()
     {
         ThrowIfAdopted();
+        CompleteFromSource();
+    }
 
+    /// <summary>Completes the writing end owned by the bound source.</summary>
+    protected void CompleteFromSource()
+    {
         if (_channel.Writer.TryComplete())
         {
+            Volatile.Write(ref _producerCompleted, true);
             Settle(StreamCompletion.Completed);
         }
     }
@@ -177,12 +210,11 @@ public abstract class ErgosfareStream<TChunk> : ErgosfareStream, IAsyncEnumerabl
     /// Used by the producer when its own source broke, and by the dispatch when nothing will
     /// consume the stream. Either way the sequence is over: a faulted stream is not resumed.
     /// </remarks>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public void Fault(Exception exception)
     {
-        if (_channel.Writer.TryComplete(exception))
-        {
-            Settle(StreamCompletion.Faulted);
-        }
+        ArgumentNullException.ThrowIfNull(exception);
+        EndDispatch(exception);
     }
 
     /// <summary>
@@ -199,8 +231,10 @@ public abstract class ErgosfareStream<TChunk> : ErgosfareStream, IAsyncEnumerabl
     /// asked for, not at the first move.
     /// </remarks>
     /// <exception cref="InvalidOperationException">The chunks were already taken.</exception>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public IAsyncEnumerator<TChunk> GetAsyncEnumerator(CancellationToken cancellationToken = default)
     {
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
         if (Interlocked.Exchange(ref _readerTaken, 1) == 1)
         {
             throw new InvalidOperationException(
@@ -208,7 +242,8 @@ public abstract class ErgosfareStream<TChunk> : ErgosfareStream, IAsyncEnumerabl
                 "consumes it, so it cannot be read twice or read by a stage before the handler.");
         }
 
-        return Read(cancellationToken).GetAsyncEnumerator(cancellationToken);
+        _readerCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        return Read(_readerCancellation.Token).GetAsyncEnumerator();
     }
 
     /// <summary>
@@ -250,22 +285,42 @@ public abstract class ErgosfareStream<TChunk> : ErgosfareStream, IAsyncEnumerabl
                     ? StreamCompletion.Cancelled
                     : StreamCompletion.Completed);
             }
+            Interlocked.Exchange(ref _readerCancellation, null)?.Dispose();
         }
     }
 
-    /// <inheritdoc />
-    internal override void EndDispatch()
+    internal override async ValueTask DisposeCoreAsync()
     {
-        // An adopted source has no writing side to release, and a stream that already ended
-        // has nothing to say. What is left is the case this exists for: the dispatch is over
-        // and the payload was still arriving.
-        if (_adopted is not null || _completion != StreamCompletion.Open)
+        if (_completion == StreamCompletion.Open)
+            EndDispatch(new Stella.Ergosfare.Core.Abstractions.Exceptions.StreamOutputDisposedException());
+        else
+            EndDispatch();
+        try { _readerCancellation?.Cancel(); }
+        catch (AggregateException) { }
+        catch (ObjectDisposedException) { }
+        await WaitForProducerAsync().ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    internal override void EndDispatch(Exception? exception = null)
+    {
+        // An adopted source has no writing side, but its outcome still follows dispatch.
+        if (exception is not null)
+            _completion = exception is OperationCanceledException
+                ? StreamCompletion.Cancelled : StreamCompletion.Faulted;
+        if (_adopted is not null)
         {
             return;
         }
 
-        _endedByDispatch = true;
-        Fault(DispatchEnded());
+        if (exception is null && Volatile.Read(ref _producerCompleted))
+            return;
+        var error = exception ?? DispatchEnded();
+        // Reader disposal may already have settled Info; it does not close the writer.
+        if (_channel.Writer.TryComplete(error))
+            Interlocked.CompareExchange(ref _terminalError, error, null);
+        if (_completion == StreamCompletion.Open)
+            Settle(StreamCompletion.Faulted);
     }
 
     /// <summary>
@@ -300,11 +355,19 @@ public abstract class ErgosfareStream<TChunk> : ErgosfareStream, IAsyncEnumerabl
     /// <exception cref="InvalidOperationException">The stream adopted an existing source.</exception>
     private void ThrowIfAdopted()
     {
-        if (_adopted is not null)
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        if (_adopted is not null || Interlocked.CompareExchange(ref _writerMode, 1, 0) == 2)
         {
             throw new InvalidOperationException(
                 $"'{GetType()}' was created over a source that already exists, so it has no writing side. Write to " +
                 "the underlying source, or create the stream with the capacity constructor instead.");
         }
+    }
+
+    /// <summary>Claims the writing end for one source, before any manual writes.</summary>
+    protected void ClaimSource()
+    {
+        if (_adopted is not null || Interlocked.CompareExchange(ref _writerMode, 2, 0) != 0)
+            throw new InvalidOperationException("Bind one source before writing; Pipe cannot be combined with manual writes.");
     }
 }

@@ -36,6 +36,25 @@ public sealed class FileUploadHandler : ICommandHandler<FileUpload, UploadReport
     }
 }
 
+public sealed class BufferedUpload() : ErgosfareCommandStream<byte[], string, int>("upload", capacity: 1)
+{
+    public TaskCompletionSource HandlerStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public TaskCompletionSource AllowReading { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+}
+
+public sealed class BufferedUploadHandler : ICommandHandler<BufferedUpload, int>
+{
+    public async ValueTask<int> HandleAsync(BufferedUpload command, ErgosfareContext context)
+    {
+        command.HandlerStarted.SetResult();
+        await command.AllowReading.Task.WaitAsync(context.CancellationToken);
+        var bytes = 0;
+        await foreach (var chunk in command.WithCancellation(context.CancellationToken))
+            bytes += chunk.Length;
+        return bytes;
+    }
+}
+
 /// <summary>
 /// The guarded twin of <see cref="FileUpload"/>: the pre-stage interceptor below is part
 /// of this message's compiled pipeline, so the unguarded upload tests keep their own
@@ -134,6 +153,7 @@ public class StreamMessageTests
         // pulling, and awaiting here would wait for chunks this method has not written yet.
         var call = mediator.SendAsync(upload);
 
+        Assert.False(call.IsCompleted);
         await upload.WriteAsync([1, 2, 3]);
         await upload.WriteAsync([4, 5]);
         upload.Complete();
@@ -175,21 +195,32 @@ public class StreamMessageTests
     [Trait("Category", "Unit")]
     public async Task TheBoundedBuffer_MakesTheWriterWaitForTheHandler()
     {
-        await using var provider = BuildProvider();
-        var mediator = provider.GetRequiredService<ICommandMediator>();
+        await using var provider = new ServiceCollection()
+            .AddErgosfare(x => x.AddCommandModule(c => c.Register<BufferedUploadHandler>()))
+            .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var scope = provider.CreateAsyncScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<ICommandMediator>();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var upload = new BufferedUpload();
 
-        // One slot: the second write cannot complete until the handler has taken the first,
-        // which is the back-pressure that keeps a payload from existing as one value.
-        var upload = new FileUpload(new UploadMeta("slow.mp4", 2)) { };
-        var call = mediator.SendAsync(upload);
+        // Dispatch first, with no input. No Task.Run or background producer is required.
+        var call = mediator.SendAsync(upload, timeout.Token);
+        await upload.HandlerStarted.Task.WaitAsync(timeout.Token);
+        Assert.False(call.IsCompleted);
 
-        await upload.WriteAsync([1]);
-        await upload.WriteAsync([2]);
+        // The handler is held at a gate, so a one-slot buffer must block the second write.
+        await upload.WriteAsync([1], timeout.Token);
+        var secondWrite = upload.WriteAsync([2, 3], timeout.Token);
+        Assert.False(secondWrite.IsCompleted);
+
+        upload.AllowReading.SetResult();
+        await secondWrite;
+        Assert.False(call.IsCompleted); // Input is still open; the result cannot be final.
         upload.Complete();
 
-        var report = await call;
-
-        Assert.Equal(2, report.Bytes);
+        Assert.Equal(3, await call);
+        Assert.Equal(2, upload.Info.Chunks);
+        Assert.Equal(StreamCompletion.Completed, upload.Info.Completion);
     }
 
     [Fact]
@@ -333,15 +364,15 @@ public class StreamMessageTests
         var upload = new GuardedFileUpload(new UploadMeta("huge.mp4", 4_000_000_000));
         var call = mediator.SendAsync(upload);
 
-        await Assert.ThrowsAsync<TooLarge>(async () => await call);
+        var refusal = await Assert.ThrowsAsync<TooLarge>(async () => await call);
 
         // Without the pipeline ending the stream, this producer would fill the buffer and
         // then wait on a reader the refusal took away. It finds out on the next write
-        // instead, and the message says what to do about it.
-        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(
+        // instead, with the same refusal that ended dispatch.
+        var thrown = await Assert.ThrowsAsync<TooLarge>(
             async () => await upload.WriteAsync([1]).AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
 
-        Assert.Contains("Await the dispatch to see why", thrown.Message);
+        Assert.Same(refusal, thrown);
         Assert.Equal(StreamCompletion.Faulted, upload.Info.Completion);
     }
 

@@ -16,4 +16,5 @@ namespace Stella.Ergosfare.E2E.Api.Contracts;
 [JsonSerializable(typeof(CreatedTodoResponse))]
 [JsonSerializable(typeof(StatsResponse))]
 [JsonSerializable(typeof(string))]
+[JsonSerializable(typeof(Stella.Ergosfare.E2E.Contracts.Streaming.UploadReceipt))]
 public sealed partial class ApiJsonContext : JsonSerializerContext;

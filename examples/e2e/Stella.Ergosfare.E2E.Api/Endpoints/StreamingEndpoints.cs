@@ -27,7 +27,8 @@ public sealed class StreamingEndpoints : IEndpoint
         using var socket = await http.WebSockets.AcceptWebSocketAsync();
         try
         {
-            var text = await mediator.SendAsync<string>(new CollectText(ReadInput(socket, http.RequestAborted)), http.RequestAborted);
+            await using var input = new CollectText().Pipe(ReadInput(socket, http.RequestAborted), http.RequestAborted);
+            var text = await mediator.SendAsync<string>(input, http.RequestAborted);
             if (socket.State == WebSocketState.Open) await Send(socket, text, http.RequestAborted);
             await Finish(socket, http.RequestAborted);
         }
@@ -35,7 +36,7 @@ public sealed class StreamingEndpoints : IEndpoint
         catch (WebSocketException) { }
     }
 
-    // These endpoints deliberately exercise the existing stream API pending its revision.
+    // These endpoints deliberately exercise the experimental stream API.
 #pragma warning disable CS0618
     private static async Task Accumulate(HttpContext http, IQueryMediator mediator)
     {
@@ -43,7 +44,7 @@ public sealed class StreamingEndpoints : IEndpoint
         using var socket = await http.WebSockets.AcceptWebSocketAsync();
         try
         {
-            var query = new AccumulateText(ReadInput(socket, http.RequestAborted));
+            await using var query = new AccumulateText().Pipe(ReadInput(socket, http.RequestAborted), http.RequestAborted);
             await foreach (var text in mediator.StreamAsync(query, http.RequestAborted))
                 if (socket.State == WebSocketState.Open) await Send(socket, text, http.RequestAborted);
             await Finish(socket, http.RequestAborted);

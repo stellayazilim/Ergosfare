@@ -129,7 +129,7 @@ public class StreamPlanEmissionTests
         Assert.Contains(").HandleAsync(message, enumerator, exception, context);", result.GeneratedSource);
 
         // The final stage runs from a finally, skipped when a participant aborted.
-        Assert.Contains("if (!aborted)", result.GeneratedSource);
+        Assert.Contains("if (exception is not global::Stella.Ergosfare.Core.Abstractions.Exceptions.ExecutionAbortedException", result.GeneratedSource);
     }
 
     [Fact]

@@ -27,7 +27,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Exceptions;
 /// }
 /// </code>
 /// <para>
-/// This is the exception-shaped channel and it behaves the same whether or not the pipeline
+/// This is the exception-shaped channel, and it behaves the same whether the pipeline
 /// has interceptors. To carry outcomes as values instead, use the result-adapter surface.
 /// </para>
 /// </remarks>

@@ -26,3 +26,8 @@ tasks:
     desc: Test streams against an already running API (optional URL after --).
     cmds:
       - node ./scripts/test-streams.mjs {{.CLI_ARGS}}
+
+  test:upload:
+    desc: Test 64 MiB multipart upload against a running local API (optional URL after --).
+    cmds:
+      - node ./scripts/test-upload.mjs {{.CLI_ARGS}}
