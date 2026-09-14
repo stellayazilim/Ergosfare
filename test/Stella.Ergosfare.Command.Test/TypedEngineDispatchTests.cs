@@ -61,9 +61,7 @@ public sealed class ResultIdentityProbeCommandHandler : ICommandHandler<ResultId
 public class TypedEngineDispatchTests
 {
     /// <summary>
-    /// A generic message: an open definition is not a dispatchable message, and the
-    /// generator does not plan generic message types at all — no closed form of one is
-    /// ever rooted, so every dispatch of one fails naming the missing plan.
+    /// A generic message whose int instantiation is supplied by the selected handler contract.
     /// </summary>
     public sealed class WrappedProbe<T> : ICommand<string> { }
 
@@ -243,26 +241,18 @@ public class TypedEngineDispatchTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task AGenericMessage_IsUnplanned_AndFailsBothLanes()
+    public async Task AClosedGenericMessage_ExecutesThroughBothLanes()
     {
         await using var provider = BuildProvider();
         var engine = provider.GetRequiredService<MessageDispatchEngine>();
 
-        // The generator does not plan generic message types, and nothing is dispatched at
-        // run time that was not produced at compile time — so the closed form fails on
-        // both the typed and the erased lane, naming the missing plan, until the
-        // generator learns the construct.
-        var typed = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
-            await engine.DispatchAsync<WrappedProbe<int>, string>(
-                new WrappedProbe<int>(), new ErgosfareContext(), provider));
-
-        Assert.Equal(UnplannedDispatchReason.NoCompiledPlan, typed.Reason);
+        var typed = await engine.DispatchAsync<WrappedProbe<int>, string>(
+            new WrappedProbe<int>(), new ErgosfareContext(), provider);
+        Assert.Equal("wrapped", typed);
 
         await using var fresh = BuildProvider();
-        var erased = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
-            await fresh.GetRequiredService<MessageDispatchEngine>()
-                .DispatchAsync<string>(new WrappedProbe<int>(), fresh));
-
-        Assert.Equal(UnplannedDispatchReason.NoCompiledPlan, erased.Reason);
+        var erased = await fresh.GetRequiredService<MessageDispatchEngine>()
+            .DispatchAsync<string>(new WrappedProbe<int>(), fresh);
+        Assert.Equal("wrapped", erased);
     }
 }

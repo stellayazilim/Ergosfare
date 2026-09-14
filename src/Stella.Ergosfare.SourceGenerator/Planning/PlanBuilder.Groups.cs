@@ -31,7 +31,7 @@ internal sealed partial class PlanBuilder
             {
                 if (site.HasUnprovableGroups)
                 {
-                    keys.Add(TypeExpressions.DefinitionKey(site.MessageTypeExpression));
+                    keys.Add(site.MessageTypeExpression);
                 }
             }
         }
@@ -54,14 +54,14 @@ internal sealed partial class PlanBuilder
             return false;
         }
 
-        if (unprovableKeys.Contains(TypeExpressions.DefinitionKey(type.TypeofExpression)))
+        if (unprovableKeys.Contains(type.TypeofExpression))
         {
             return true;
         }
 
         foreach (var assignableKey in type.AssignableKeys)
         {
-            if (unprovableKeys.Contains(TypeExpressions.DefinitionKey(assignableKey)))
+            if (unprovableKeys.Contains(assignableKey))
             {
                 return true;
             }
@@ -103,7 +103,7 @@ internal sealed partial class PlanBuilder
                     continue;
                 }
 
-                var key = TypeExpressions.DefinitionKey(site.MessageTypeExpression);
+                var key = site.MessageTypeExpression;
 
                 if (!byKey.TryGetValue(key, out var sets))
                 {
@@ -150,11 +150,11 @@ internal sealed partial class PlanBuilder
             return;
         }
 
-        AddFrom(TypeExpressions.DefinitionKey(type.TypeofExpression));
+        AddFrom(type.TypeofExpression);
 
         foreach (var assignableKey in type.AssignableKeys)
         {
-            AddFrom(TypeExpressions.DefinitionKey(assignableKey));
+            AddFrom(assignableKey);
         }
 
         void AddFrom(string key)

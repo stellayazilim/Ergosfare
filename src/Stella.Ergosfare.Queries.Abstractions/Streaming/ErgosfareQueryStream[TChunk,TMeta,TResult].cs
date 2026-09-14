@@ -17,7 +17,7 @@ namespace Stella.Ergosfare.Queries.Abstractions.Streaming;
 /// a search over an uploaded file, a checksum, a validation pass — is written here and
 /// dispatched with the ordinary query verb.
 /// </remarks>
-[Experimental(ExperimentalIds.StreamingSurface)]
+[Obsolete("Experimental API: subject to change or removal in any release.", false, DiagnosticId = ExperimentalIds.StreamingSurface)]
 public abstract class ErgosfareQueryStream<TChunk, TMeta, TResult> : ErgosfareStream<TChunk>, IQuery<TResult>
     where TMeta : notnull
 {

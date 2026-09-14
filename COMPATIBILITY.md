@@ -9,7 +9,7 @@ compatibility. This document tells you exactly what you can rely on — and what
 > 1. **Defective APIs may be fixed or removed in any release, without an obsolete step.**
 >    Behavior that only exists because of a bug is not part of the contract.
 > 2. **APIs marked `[Obsolete]` may be removed in a minor release** — at the earliest, the
->    minor release after the one that marked them (section 4).
+>    minor release after the one that marked them, or the stable minor release whose preview deprecated or removed them (section 4).
 
 ## 1. Scope
 
@@ -23,7 +23,7 @@ registration APIs.
 |------|------|---------|
 | **Stable** | Public APIs of the module packages (Commands, Queries, Events, Contracts) and the documented registration/dispatch surface | Covered by sections 3–4 |
 | **Internal surface** | `Stella.Ergosfare.Core` / `Stella.Ergosfare.Core.Abstractions` implementation machinery — public only so first-party modules can consume it across assembly boundaries | **No promise.** May change in any release; not a third-party plugin contract |
-| **Experimental** | APIs marked `[Experimental]` (diagnostic IDs prefixed `ERGOEXP`) | **No promise.** May change or disappear in any release; consuming one is a compile-time error until you suppress its diagnostic — opting in is always deliberate |
+| **Experimental** | Experimental APIs identified by `ERGOEXP` diagnostics (diagnostic IDs prefixed `ERGOEXP`) | **No promise.** May change or disappear in any release; consuming one is a compile-time error until you suppress its diagnostic — opting in is always deliberate |
 
 ## 3. Versioning rules
 
@@ -33,7 +33,7 @@ registration APIs.
    as long as they are maintained, and staying on one is a fully supported choice.
 2. **Minor releases (`vX.Y.0`)** add features and improvements. They do not break healthy,
    non-obsolete stable APIs — but they may (a) fix or remove **defective** APIs and
-   (b) remove APIs that an earlier minor marked `[Obsolete]`.
+   (b) remove APIs deprecated in an earlier minor or deprecated/removed in a preview of that stable minor.
 3. **Patch releases (`vX.Y.Z`)** contain fixes only — including fixes that change
    defective behavior. **Patches never remove APIs.**
 4. **Pre-releases (`vX.Y.Z-preview.N`)** carry no promises of any kind, including between
@@ -48,24 +48,14 @@ breaking change is worth shipping.
 documented contract may be corrected or removed **immediately, in any release, without an
 obsolete step**. Correctness beats compatibility; bug-for-bug compatibility is never kept.
 
-**Healthy but superseded APIs** follow the deprecation lifecycle:
+**Healthy but superseded APIs.** Deprecation messages identify the replacement or migration path. An API deprecated or removed in a preview may be absent from the corresponding stable minor release, even if no earlier stable release marked it `[Obsolete]`. A separate stable deprecation release is not required. APIs deprecated in an earlier stable minor may also be removed in a later minor. Patch releases do not remove healthy APIs.
 
-1. The API is marked `[Obsolete]`; the attribute message always names the replacement.
-2. It remains present and functional for the rest of its minor line — **patches never
-   remove APIs**.
-3. **The next minor release is the earliest point it may be removed**; any later minor or
-   major release may also remove it. There is no time-based window — an obsolete API may
-   well survive longer, but plan as if it will not.
-
-The compiler is the contract: aside from the defective-API exception, **a warning-free
-build is safe through every patch update and through the next minor release.**
+A warning-free build against a previous stable release does not guarantee compatibility with the next minor. Review its preview migration notes before upgrading.
 
 ## 5. Experimental APIs
 
-* APIs marked `[Experimental]` (diagnostic IDs prefixed `ERGOEXP`, e.g. `ERGOEXP001`) sit
-  **entirely outside this policy** — even when they ship in a stable release.
-* They may change or be removed in **any** release without an obsolete step.
-* Consuming an experimental API is a **compile-time error** unless the consumer explicitly
-  suppresses its diagnostic ID (e.g. `#pragma warning disable ERGOEXP001` or `<NoWarn>`).
-* An experimental API graduates by having the attribute removed in a stable release; from
-  that release on, it is a stable API covered by this policy.
+* Experimental APIs carry `ERGOEXP001`, `ERGOEXP002` or `ERGOEXP003` diagnostics and sit **entirely outside this policy**, including in stable releases.
+* They may change or disappear in any release without a deprecation period.
+* They use `[Obsolete(..., false, DiagnosticId = "ERGOEXP...")]` to emit a **warning**, not a default compilation error. The message identifies an experimental surface, not a discontinued API. IDEs may still display obsolete styling.
+* Existing `#pragma warning disable ERGOEXP001` and `<NoWarn>` suppressions remain supported. Consumers that promote warnings to errors must suppress or downgrade the diagnostic themselves.
+* Removing the experimental marker in a stable release graduates the API into the stable contract.

@@ -120,23 +120,22 @@ internal static class RegistrableTypeReader
             ResultAdapter = resultAdapter,
             HasIgnoredResultAdapter = hasIgnoredResultAdapter,
             ImplementsMessageMarker = true,
-            DerivedEventMessages = DeriveEventMessages(symbol),
+            DerivedMessages = DeriveMessages(symbol),
             MetadataSortKey = SymbolNaming.BuildMetadataName(symbol),
         };
     }
 
     /// <summary>
-    /// Builds models for the event messages a subscriber names but that carry no marker of
-    /// their own.
+    /// Derives closed generic messages and unmarked events from main-handler contracts.
     /// </summary>
     /// <param name="symbol">The type to read subscriptions from.</param>
     /// <returns>
     /// One model per such message; empty for anything that is not a subscriber, which is
     /// nearly everything.
     /// </returns>
-    internal static ImmutableArray<RegistrableTypeModel> DeriveEventMessages(INamedTypeSymbol symbol)
+    internal static ImmutableArray<RegistrableTypeModel> DeriveMessages(INamedTypeSymbol symbol)
     {
-        var messages = ContractReader.GetDerivedEventMessages(symbol);
+        var messages = ContractReader.GetDerivedMessages(symbol);
 
         if (messages.IsEmpty)
         {
@@ -147,14 +146,14 @@ internal static class RegistrableTypeReader
 
         foreach (var message in messages)
         {
-            models.Add(CreateDerivedEventMessageModel(message));
+            models.Add(CreateDerivedMessageModel(message));
         }
 
         return models.ToImmutable();
     }
 
     /// <summary>
-    /// Builds the model of a plain type a subscriber named as its event.
+    /// Builds a message model from the concrete type named by a main handler.
     /// </summary>
     /// <param name="symbol">The named type.</param>
     /// <returns>A model describing a message and nothing else.</returns>
@@ -165,21 +164,28 @@ internal static class RegistrableTypeReader
     /// type declared elsewhere: that field records where scanning found a model, and this one
     /// was not found but created, because this compilation declares a subscriber for it.
     /// </remarks>
-    private static RegistrableTypeModel CreateDerivedEventMessageModel(INamedTypeSymbol symbol)
+    private static RegistrableTypeModel CreateDerivedMessageModel(INamedTypeSymbol symbol)
     {
+        ParticipantAttributes.GetMarkers(symbol, out var isCommand, out var isQuery, out var isEvent);
+        var hasMarker = isCommand || isQuery || isEvent;
         var isAccessible = SymbolNaming.IsAccessibleFromGeneratedCode(symbol);
         var descriptors = ImmutableArray<DescriptorModel>.Empty;
         var isDispatchable = isAccessible && ContractReader.IsDispatchableMessage(symbol, descriptors);
         var isMessageShape = isAccessible && ContractReader.IsMessageShape(symbol, descriptors);
         var declaredHere = symbol.DeclaringSyntaxReferences.Length > 0;
+        var dispatchResults = isDispatchable ? ContractReader.GetDispatchResults(symbol) : ImmutableArray<DispatchResultModel>.Empty;
+        var hasIgnoredResultAdapter = false;
+        var resultAdapter = isDispatchable
+            ? ResultAdapterReader.GetResultAdapterModel(symbol, dispatchResults, isCommand, symbol.ContainingAssembly, out hasIgnoredResultAdapter)
+            : null;
 
         return new RegistrableTypeModel
         {
             TypeofExpression = SymbolNaming.BuildTypeofExpression(symbol),
             DisplayName = symbol.ToDisplayString(),
-            IsCommand = false,
-            IsQuery = false,
-            IsEvent = true,
+            IsCommand = isCommand,
+            IsQuery = isQuery,
+            IsEvent = isEvent || !hasMarker,
             IsAccessible = isAccessible,
             Location = !isAccessible && declaredHere ? LocationInfo.From(symbol) : null,
             Weight = ParticipantAttributes.GetWeight(symbol),
@@ -190,7 +196,7 @@ internal static class RegistrableTypeReader
             DiscoveryKeys = ImmutableArray<string>.Empty,
             IsDispatchableMessage = isDispatchable,
             IsMessageShape = isMessageShape,
-            DispatchResults = ImmutableArray<DispatchResultModel>.Empty,
+            DispatchResults = dispatchResults,
             IsDirectlyConstructible = false,
             ProviderConstructionExpression = null,
             ProviderConstructionUsesKeyedServices = false,
@@ -207,12 +213,12 @@ internal static class RegistrableTypeReader
             HasFromServicesConstructorParameter = false,
             InfoLocation = isDispatchable && declaredHere ? LocationInfo.From(symbol) : null,
             IsExcludedFromDiscovery = false,
-            ResultAdapter = null,
-            HasIgnoredResultAdapter = false,
+            ResultAdapter = resultAdapter,
+            HasIgnoredResultAdapter = hasIgnoredResultAdapter,
             // This type declares no marker itself; it is a message because a subscriber named
             // it as one.
-            ImplementsMessageMarker = false,
-            DerivedEventMessages = DeriveEventMessages(symbol),
+            ImplementsMessageMarker = hasMarker,
+            DerivedMessages = DeriveMessages(symbol),
             MetadataSortKey = SymbolNaming.BuildMetadataName(symbol),
         };
     }

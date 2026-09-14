@@ -15,4 +15,5 @@ namespace Stella.Ergosfare.E2E.Api.Contracts;
 [JsonSerializable(typeof(HealthResponse))]
 [JsonSerializable(typeof(CreatedTodoResponse))]
 [JsonSerializable(typeof(StatsResponse))]
+[JsonSerializable(typeof(string))]
 public sealed partial class ApiJsonContext : JsonSerializerContext;

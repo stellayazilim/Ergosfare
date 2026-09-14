@@ -41,7 +41,7 @@ public class ModuleRegistry(
     }
 
     /// <inheritdoc />
-    [Experimental(ExperimentalIds.ResultAdapterSurface)]
+    [Obsolete("Experimental API: subject to change or removal in any release.", false, DiagnosticId = ExperimentalIds.ResultAdapterSurface)]
     public IModuleRegistry UseDefaultResultAdapter(
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.Interfaces)]
         Type adapterType)

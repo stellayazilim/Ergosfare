@@ -56,7 +56,7 @@ internal sealed partial class PlanBuilder
                 continue;
             }
 
-            var messageKey = TypeExpressions.DefinitionKey(message.TypeofExpression);
+            var messageKey = message.TypeofExpression;
             Array.Clear(rows, 0, rows.Length);
 
             foreach (var candidate in Enumerate(types, excludedShadows))
@@ -68,7 +68,8 @@ internal sealed partial class PlanBuilder
 
                 foreach (var descriptor in candidate.Descriptors)
                 {
-                    var declaredKey = TypeExpressions.DefinitionKey(descriptor.MessageTypeExpression);
+                    var declaredKey = message.IsDispatchableMessage
+                        ? descriptor.MessageTypeExpression : TypeExpressions.DefinitionKey(descriptor.MessageTypeExpression);
                     var direct = declaredKey == messageKey;
 
                     if (!direct && !ContainsAssignableKey(message, declaredKey))
@@ -215,7 +216,7 @@ internal sealed partial class PlanBuilder
     {
         foreach (var assignableKey in message.AssignableKeys)
         {
-            if (TypeExpressions.DefinitionKey(assignableKey) == declaredKey)
+            if ((message.IsDispatchableMessage ? assignableKey : TypeExpressions.DefinitionKey(assignableKey)) == declaredKey)
             {
                 return true;
             }

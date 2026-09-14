@@ -1278,7 +1278,7 @@ public sealed partial class ErgosfareRegistrationGenerator
     {
         foreach (var type in models)
         {
-            var typeKey = TypeExpressions.DefinitionKey(type.TypeofExpression);
+            var typeKey = type.TypeofExpression;
 
             if (!modelsByKey.ContainsKey(typeKey))
             {
@@ -1291,7 +1291,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                 {
                     if (descriptor.Kind == DescriptorKind.MainHandler)
                     {
-                        handlerMessageKeys.Add(TypeExpressions.DefinitionKey(descriptor.MessageTypeExpression));
+                        handlerMessageKeys.Add(descriptor.MessageTypeExpression);
                     }
                 }
             }
@@ -1303,7 +1303,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
             foreach (var assignableKey in type.AssignableKeys)
             {
-                var key = TypeExpressions.DefinitionKey(assignableKey);
+                var key = assignableKey;
 
                 if (!subtypesByKey.TryGetValue(key, out var list))
                 {
@@ -1348,7 +1348,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                     continue;
                 }
 
-                var key = TypeExpressions.DefinitionKey(descriptor.MessageTypeExpression);
+                var key = descriptor.MessageTypeExpression;
 
                 if (!(claimed ??= new HashSet<string>(StringComparer.Ordinal)).Add(key))
                 {
@@ -1404,7 +1404,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                 continue;
             }
 
-            var siteKey = TypeExpressions.DefinitionKey(site.MessageTypeExpression);
+            var siteKey = site.MessageTypeExpression;
 
             if (IsCovered(siteKey, site.AssignableKeys, site.IsValueType, handlerMessageKeys))
             {
@@ -1420,7 +1420,7 @@ public sealed partial class ErgosfareRegistrationGenerator
             {
                 foreach (var subtype in subtypes)
                 {
-                    if (IsCovered(TypeExpressions.DefinitionKey(subtype.TypeofExpression), subtype.AssignableKeys,
+                    if (IsCovered(subtype.TypeofExpression, subtype.AssignableKeys,
                             subtype.IsValueType, handlerMessageKeys))
                     {
                         coveredSubtype = subtype;
@@ -1515,7 +1515,7 @@ public sealed partial class ErgosfareRegistrationGenerator
         {
             foreach (var subtype in subtypes)
             {
-                if (!TryCollectGroupCandidates(TypeExpressions.DefinitionKey(subtype.TypeofExpression),
+                if (!TryCollectGroupCandidates(subtype.TypeofExpression,
                         subtype.AssignableKeys, subtype.IsValueType, handlersByMessageKey, groupBlindKeys, candidates))
                 {
                     return;
@@ -1577,7 +1577,7 @@ public sealed partial class ErgosfareRegistrationGenerator
         {
             foreach (var key in assignableKeys)
             {
-                if (!TryAdd(TypeExpressions.DefinitionKey(key)))
+                if (!TryAdd(key))
                 {
                     return false;
                 }
@@ -1713,7 +1713,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                     continue;
                 }
 
-                var key = TypeExpressions.DefinitionKey(descriptor.MessageTypeExpression);
+                var key = descriptor.MessageTypeExpression;
 
                 if (!(claimed ??= new HashSet<string>(StringComparer.Ordinal)).Add(key))
                 {
@@ -1744,7 +1744,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                 continue;
             }
 
-            var messageKey = TypeExpressions.DefinitionKey(message.TypeofExpression);
+            var messageKey = message.TypeofExpression;
 
             if (claimsByKey.TryGetValue(messageKey, out var directClaimants) && directClaimants.Count > 1)
             {
@@ -1768,7 +1768,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
             foreach (var assignableKey in message.AssignableKeys)
             {
-                if (!claimsByKey.TryGetValue(TypeExpressions.DefinitionKey(assignableKey), out var claimants))
+                if (!claimsByKey.TryGetValue(assignableKey, out var claimants))
                 {
                     continue;
                 }
@@ -1849,7 +1849,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         foreach (var key in assignableKeys)
         {
-            if (handlerMessageKeys.Contains(TypeExpressions.DefinitionKey(key)))
+            if (handlerMessageKeys.Contains(key))
             {
                 return true;
             }
@@ -1886,12 +1886,12 @@ public sealed partial class ErgosfareRegistrationGenerator
         {
             foreach (var site in sites)
             {
-                var siteKey = TypeExpressions.DefinitionKey(site.MessageTypeExpression);
+                var siteKey = site.MessageTypeExpression;
                 reached.Add(siteKey);
 
                 foreach (var key in site.AssignableKeys)
                 {
-                    reached.Add(TypeExpressions.DefinitionKey(key));
+                    reached.Add(key);
                 }
 
                 if (!subtypesByKey.TryGetValue(siteKey, out var subtypes))
@@ -1901,11 +1901,11 @@ public sealed partial class ErgosfareRegistrationGenerator
 
                 foreach (var subtype in subtypes)
                 {
-                    reached.Add(TypeExpressions.DefinitionKey(subtype.TypeofExpression));
+                    reached.Add(subtype.TypeofExpression);
 
                     foreach (var key in subtype.AssignableKeys)
                     {
-                        reached.Add(TypeExpressions.DefinitionKey(key));
+                        reached.Add(key);
                     }
                 }
             }
@@ -1958,7 +1958,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
                 hasMainHandler = true;
 
-                if (reachedKeys.Contains(TypeExpressions.DefinitionKey(descriptor.MessageTypeExpression)))
+                if (reachedKeys.Contains(descriptor.MessageTypeExpression))
                 {
                     unreachedMessage = null;
                     break;

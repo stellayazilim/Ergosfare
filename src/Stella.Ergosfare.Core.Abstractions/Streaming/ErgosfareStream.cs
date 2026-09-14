@@ -10,7 +10,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Streaming;
 /// are: one type test, and the end of the dispatch. The typed half —
 /// <see cref="ErgosfareStream{TChunk}"/> — is what callers and handlers use.
 /// </remarks>
-[Experimental(ExperimentalIds.StreamingSurface)]
+[Obsolete("Experimental API: subject to change or removal in any release.", false, DiagnosticId = ExperimentalIds.StreamingSurface)]
 public abstract class ErgosfareStream : IMessage
 {
     /// <summary>

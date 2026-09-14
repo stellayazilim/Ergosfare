@@ -300,7 +300,7 @@ internal static class ReferenceScanner
             ResultAdapter = resultAdapter,
             HasIgnoredResultAdapter = referencedHasIgnore,
             ImplementsMessageMarker = true,
-            DerivedEventMessages = isAccessible ? RegistrableTypeReader.DeriveEventMessages(symbol) : ImmutableArray<RegistrableTypeModel>.Empty,
+            DerivedMessages = isAccessible ? RegistrableTypeReader.DeriveMessages(symbol) : ImmutableArray<RegistrableTypeModel>.Empty,
             MetadataSortKey = SymbolNaming.BuildMetadataName(symbol),
         };
     }

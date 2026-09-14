@@ -379,11 +379,11 @@ internal static class Monomorphizer
             HasMultiplePublicConstructors = false,
             HasFromServicesConstructorParameter = false,
             InfoLocation = null,
-            IsExcludedFromDiscovery = false,
+            IsExcludedFromDiscovery = ParticipantAttributes.IsExcludedFromDiscovery(openDefinition),
             ResultAdapter = null,
             HasIgnoredResultAdapter = false,
             ImplementsMessageMarker = true,
-            DerivedEventMessages = ImmutableArray<RegistrableTypeModel>.Empty,
+            DerivedMessages = RegistrableTypeReader.DeriveMessages(closed),
             MetadataSortKey = SymbolNaming.BuildMetadataName(closed),
         };
     }

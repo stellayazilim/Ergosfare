@@ -26,7 +26,7 @@ namespace Stella.Ergosfare.Plugins.Abstractions;
 /// run once per handler.
 /// </para>
 /// </remarks>
-[Experimental(ExperimentalSurface.Id)]
+[Obsolete("Experimental API: subject to change or removal in any release.", false, DiagnosticId = ExperimentalSurface.Id)]
 public enum Hook
 {
     /// <summary>

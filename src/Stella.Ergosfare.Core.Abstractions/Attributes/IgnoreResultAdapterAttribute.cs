@@ -16,6 +16,6 @@ namespace Stella.Ergosfare.Core.Abstractions.Attributes;
 /// one message, whether declared or inherited, is contradictory and fails the build with
 /// ERGO012; where both reach the runtime, the opt-out wins.
 /// </remarks>
-[Experimental(ExperimentalIds.ResultAdapterSurface)]
+[Obsolete("Experimental API: subject to change or removal in any release.", false, DiagnosticId = ExperimentalIds.ResultAdapterSurface)]
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface)]
 public sealed class IgnoreResultAdapterAttribute : Attribute;

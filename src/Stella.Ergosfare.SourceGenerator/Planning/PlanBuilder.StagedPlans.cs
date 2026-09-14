@@ -451,7 +451,7 @@ internal sealed partial class PlanBuilder
     {
         indirectHandlers = ImmutableArray<StagedHandlerModel>.Empty;
 
-        var messageKey = TypeExpressions.DefinitionKey(message.TypeofExpression);
+        var messageKey = message.TypeofExpression;
         List<(uint Weight, string SortKey, StagedHandlerModel Model)>? rows = null;
 
         foreach (var candidate in Enumerate(types, excludedShadows))
@@ -471,7 +471,7 @@ internal sealed partial class PlanBuilder
                     continue;
                 }
 
-                var declaredKey = TypeExpressions.DefinitionKey(descriptor.MessageTypeExpression);
+                var declaredKey = descriptor.MessageTypeExpression;
                 var direct = declaredKey == messageKey;
 
                 if (!direct && !ContainsAssignableKey(message, declaredKey))

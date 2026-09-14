@@ -90,7 +90,8 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                     ? ReferenceScanner.ScanReferencedAssemblies(pair.Left, ct)
                     : ImmutableArray<RegistrableTypeModel>.Empty;
 
-                return referenced.AddRange(Monomorphizer.MonomorphizeOpenParticipants(pair.Left, ct));
+                return referenced.AddRange(Monomorphizer.MonomorphizeOpenParticipants(pair.Left, ct))
+                    .AddRange(ClosedParticipantReader.Read(pair.Left, pair.Right, ct));
             });
 
         // Every mediator dispatch in this compilation, with the static type of its message

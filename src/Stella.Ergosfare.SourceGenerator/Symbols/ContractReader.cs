@@ -44,7 +44,7 @@ internal static class ContractReader
 
         for (var current = symbol.ContainingType; current is not null; current = current.ContainingType)
         {
-            if (current.Arity > 0)
+            if (current.Arity > 0 && !SymbolNaming.IsFullyClosed(current))
             {
                 return false;
             }
@@ -80,7 +80,7 @@ internal static class ContractReader
 
         for (var current = symbol; current is not null; current = current.ContainingType)
         {
-            if (current.Arity > 0)
+            if (current.Arity > 0 && !SymbolNaming.IsFullyClosed(current))
             {
                 return false;
             }
@@ -492,35 +492,36 @@ internal static class ContractReader
     }
 
     /// <summary>
-    /// Collects the event messages a type's subscriber contracts name, for the ones carrying
-    /// no module marker of their own.
+    /// Collects unmarked events and fully closed generic messages from main-handler contracts.
     /// </summary>
-    /// <param name="symbol">The subscriber to read.</param>
+    /// <param name="symbol">The participant to read.</param>
     /// <returns>The named messages, each once.</returns>
     /// <remarks>
-    /// An <c>IEventHandler&lt;T&gt;</c> signature is not evidence pointing at a message — it
-    /// is what makes one. A plain domain type means nothing here until a subscriber is
-    /// written for it, and its own declaration is never visited, having no base list to be
-    /// selected by, so this is where its model has to be born. A message already carrying
-    /// <c>IEvent</c> is skipped: it is registrable on its own terms, and naming it again
-    /// would only produce a duplicate to drop.
+    /// Unmarked events have no marker declaration to discover. Closed generic messages also
+    /// need a separate model: discovering Wrap&lt;T&gt; does not discover Wrap&lt;int&gt;.
+    /// Only the selected participant's derived messages enter plan construction.
     /// </remarks>
-    internal static ImmutableArray<INamedTypeSymbol> GetDerivedEventMessages(INamedTypeSymbol symbol)
+    internal static ImmutableArray<INamedTypeSymbol> GetDerivedMessages(INamedTypeSymbol symbol)
     {
         ImmutableArray<INamedTypeSymbol>.Builder? derived = null;
 
         foreach (var iface in symbol.AllInterfaces)
         {
-            if (iface is not { Arity: 1, Name: ContractNames.EventHandlerContract }
-                || !SymbolNaming.IsInNamespace(iface, ContractNames.EventMarkerNamespace)
-                || iface.TypeArguments[0] is not INamedTypeSymbol message)
+            var isEventHandler = iface is { Arity: 1, Name: ContractNames.EventHandlerContract }
+                && SymbolNaming.IsInNamespace(iface, ContractNames.EventMarkerNamespace);
+            var isMainHandler = iface.Arity is 1 or 2
+                && iface.Name is "IHandler" or "IAsyncHandler"
+                && SymbolNaming.IsInNamespace(iface, ContractNames.HandlerNamespace);
+            if ((!isEventHandler && !isMainHandler)
+                || iface.TypeArguments[0] is not INamedTypeSymbol message
+                || !SymbolNaming.IsFullyClosed(message))
             {
                 continue;
             }
 
             ParticipantAttributes.GetMarkers(message, out var isCommand, out var isQuery, out var isEvent);
 
-            if (isCommand || isQuery || isEvent)
+            if ((isCommand || isQuery || isEvent) ? !message.IsGenericType : !isEventHandler)
             {
                 continue;
             }

@@ -24,7 +24,7 @@ namespace Stella.Ergosfare.Commands.Abstractions.Streaming;
 /// result to work with.
 /// </para>
 /// </remarks>
-[Experimental(ExperimentalIds.StreamingSurface)]
+[Obsolete("Experimental API: subject to change or removal in any release.", false, DiagnosticId = ExperimentalIds.StreamingSurface)]
 public abstract class ErgosfareCommandStream<TChunk, TMeta, TResult> : ErgosfareStream<TChunk>, ICommand<TResult>
     where TMeta : notnull
 {

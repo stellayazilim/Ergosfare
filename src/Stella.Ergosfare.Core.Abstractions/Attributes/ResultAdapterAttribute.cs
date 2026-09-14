@@ -24,7 +24,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Attributes;
 /// is read by the generator rather than at run time.
 /// </para>
 /// </remarks>
-[Experimental(ExperimentalIds.ResultAdapterSurface)]
+[Obsolete("Experimental API: subject to change or removal in any release.", false, DiagnosticId = ExperimentalIds.ResultAdapterSurface)]
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface)]
 public sealed class ResultAdapterAttribute(Type adapterType) : Attribute
 {

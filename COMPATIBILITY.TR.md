@@ -10,7 +10,7 @@ belge, tam olarak neye güvenebileceğinizi — ve neye güvenemeyeceğinizi —
 >    kaldırılabilir.** Yalnızca bir bug sayesinde var olan davranış, sözleşmenin parçası
 >    değildir.
 > 2. **`[Obsolete]` işaretli API'ler minor bir sürümde kaldırılabilir** — en erken,
->    işaretlendikleri sürümden sonraki minor'da (bölüm 4).
+>    işaretlendikleri sürümden sonraki minor’da veya deprecated işaretlendikleri/kaldırıldıkları preview’ın kararlı minor sürümünde (bölüm 4).
 
 ## 1. Kapsam
 
@@ -24,7 +24,7 @@ modül kayıt API'leri.
 |--------|-----|------|
 | **Stable** | Modül paketlerinin (Commands, Queries, Events, Contracts) public API'leri ve belgelenmiş kayıt/dispatch yüzeyi | Bölüm 3–4 kapsamında |
 | **İç yüzey** | `Stella.Ergosfare.Core` / `Stella.Ergosfare.Core.Abstractions` implementasyon mekanizması — yalnızca birinci parti modüller assembly sınırları arasında tüketebilsin diye public | **Vaat yok.** Herhangi bir sürümde değişebilir; üçüncü parti eklenti kontratı değildir |
-| **Deneysel** | `[Experimental]` işaretli API'ler (`ERGOEXP` önekli tanı kimlikleri) | **Vaat yok.** Herhangi bir sürümde değişebilir veya kaldırılabilir; tanı bastırılmadan tüketmek derleme hatasıdır — geçiş her zaman bilinçlidir |
+| **Deneysel** | `ERGOEXP` tanıları taşıyan deneysel API’ler (`ERGOEXP` önekli tanı kimlikleri) | **Vaat yok.** Herhangi bir sürümde değişebilir veya kaldırılabilir; kullanımları varsayılan olarak uyarı üretir |
 
 ## 3. Sürümleme kuralları
 
@@ -34,7 +34,7 @@ modül kayıt API'leri.
    birinde kalmak tamamen desteklenen bir tercihtir.
 2. **Minor sürümler (`vX.Y.0`)** özellik ve iyileştirme ekler. Sağlıklı, obsolete olmayan
    stable API'leri kırmaz — ancak (a) **kusurlu** API'leri düzeltebilir/kaldırabilir ve
-   (b) daha önceki bir minor'da `[Obsolete]` işaretlenmiş API'leri kaldırabilir.
+   (b) önceki bir minor’da veya ilgili kararlı minor’ın preview’ında deprecated işaretlenen/kaldırılan API’leri kaldırabilir.
 3. **Patch sürümleri (`vX.Y.Z`)** yalnızca düzeltme içerir — kusurlu davranışı değiştiren
    düzeltmeler dahil. **Patch'ler asla API kaldırmaz.**
 4. **Ön sürümler (`vX.Y.Z-preview.N`)** hiçbir vaat taşımaz; ardışık iki preview arasında
@@ -50,23 +50,14 @@ yerine getiremeyen bir API, **herhangi bir sürümde, obsolete adımı olmadan, 
 düzeltilebilir veya kaldırılabilir. Doğruluk uyumluluğu döver; bug-for-bug uyumluluk asla
 korunmaz.
 
-**Sağlıklı ama yerini yenisine bırakan API'ler** deprecation yaşam döngüsünü izler:
+**Sağlıklı ama yerini yenisine bırakan API’ler.** Deprecation mesajı yeni API’yi veya geçiş yolunu belirtir. Preview’da deprecated işaretlenen veya kaldırılan bir API, ilgili kararlı minor sürümde doğrudan kaldırılabilir; önceki bir kararlı sürümde `[Obsolete]` işaretlenmiş olması gerekmez. Ayrı bir kararlı deprecation sürümü zorunlu değildir. Önceki kararlı minor’da deprecated işaretlenen API’ler de sonraki minor’da kaldırılabilir. Patch sürümleri sağlıklı API’leri kaldırmaz.
 
-1. API `[Obsolete]` işaretlenir; attribute mesajı her zaman yeni adresi söyler.
-2. Kendi minor hattı boyunca yerinde ve çalışır kalır — **patch'ler asla API kaldırmaz**.
-3. **Kaldırılabileceği en erken nokta bir sonraki minor sürümdür**; sonraki herhangi bir
-   minor veya major da kaldırabilir. Zamana dayalı bir pencere yoktur — obsolete bir API
-   daha uzun da yaşayabilir, ama yaşamayacakmış gibi plan yapın.
+Önceki kararlı sürümde uyarısız derlenmek, bir sonraki minor sürümle uyumluluk garantisi vermez. Güncellemeden önce preview geçiş notlarını inceleyin.
 
-Sözleşme derleyicidir: kusurlu-API istisnası dışında, **bugün uyarısız derlenen bir proje
-tüm patch güncellemelerini ve bir sonraki minor sürümü sorunsuz atlatır.**
+## 5. Deneysel (Experimental) API’ler
 
-## 5. Deneysel (Experimental) API'ler
-
-* `[Experimental]` işaretli API'ler (`ERGOEXP` önekli tanı kimlikleri, ör. `ERGOEXP001`)
-  bu politikanın **tamamen dışındadır** — stable bir sürümde yayınlansalar bile.
-* Obsolete adımı olmaksızın **herhangi bir** sürümde değiştirilebilir veya kaldırılabilir.
-* Deneysel bir API'yi kullanmak, tüketici ilgili tanı kimliğini açıkça bastırmadıkça
-  (ör. `#pragma warning disable ERGOEXP001` veya `<NoWarn>`) **derleme hatasıdır**.
-* Deneysel bir API, attribute'un stable bir sürümde kaldırılmasıyla mezun olur; o sürümden
-  itibaren bu politika kapsamında stable bir API'dir.
+* `ERGOEXP001`, `ERGOEXP002` veya `ERGOEXP003` tanıları taşıyan deneysel API’ler, kararlı sürümlerde de bu politikanın **tamamen dışındadır**.
+* Deprecation süresi olmadan herhangi bir sürümde değişebilir veya kaldırılabilirler.
+* `[Obsolete(..., false, DiagnosticId = "ERGOEXP...")]` ile varsayılan olarak **uyarı** üretirler. Mesaj kullanımdan kalkmış bir API’yi değil, deneysel bir yüzeyi belirtir. IDE yine de obsolete görünümü uygulayabilir.
+* Mevcut `#pragma warning disable ERGOEXP001` ve `<NoWarn>` bastırmaları geçerlidir. Uyarıları hataya yükselten projeler ilgili tanıyı kendileri bastırmalı veya seviyesini düşürmelidir.
+* Deneysel işaretin kararlı bir sürümde kaldırılmasıyla API kararlı sözleşmeye dahil olur.

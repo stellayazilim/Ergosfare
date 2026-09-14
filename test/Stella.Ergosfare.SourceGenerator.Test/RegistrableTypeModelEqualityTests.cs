@@ -21,12 +21,12 @@ namespace Stella.Ergosfare.SourceGenerator.Test;
 public class RegistrableTypeModelEqualityTests
 {
     /// <summary>
-    /// The baseline, with a nested model in <c>DerivedEventMessages</c> so that field is
+    /// The baseline, with a nested model in <c>DerivedMessages</c> so that field is
     /// populated like every other. Built from <see cref="Leaf"/> rather than from itself:
     /// the model nests its own type, so a self-call would not terminate.
     /// </summary>
     private static RegistrableTypeModel Populated()
-        => Leaf() with { DerivedEventMessages = [Leaf()] };
+        => Leaf() with { DerivedMessages = [Leaf()] };
 
     private static RegistrableTypeModel Leaf() => new()
     {
@@ -67,7 +67,7 @@ public class RegistrableTypeModelEqualityTests
         ResultAdapter = new ResultAdapterModel("global::TestApp.Adapter", "TestApp.Adapter", "string", "string", true, true, true),
         HasIgnoredResultAdapter = true,
         ImplementsMessageMarker = true,
-        DerivedEventMessages = ImmutableArray<RegistrableTypeModel>.Empty,
+        DerivedMessages = ImmutableArray<RegistrableTypeModel>.Empty,
     };
 
     [Fact]
@@ -118,7 +118,7 @@ public class RegistrableTypeModelEqualityTests
         // message's own edit visible through its parent.
         Assert.NotEqual(baseline, Populated() with
         {
-            DerivedEventMessages = [Leaf() with { TypeofExpression = "global::TestApp.Pong" }],
+            DerivedMessages = [Leaf() with { TypeofExpression = "global::TestApp.Pong" }],
         });
     }
 

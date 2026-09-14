@@ -339,7 +339,7 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     /// stays this struct, whose equality reads arrays element by element.
     /// </para>
     /// </remarks>
-    public required ImmutableArray<RegistrableTypeModel> DerivedEventMessages { get; init; }
+    public required ImmutableArray<RegistrableTypeModel> DerivedMessages { get; init; }
 
     /// <summary>
     /// Compares this model with another, member by member and element by element.
@@ -385,7 +385,7 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
             || DispatchResults.Length != other.DispatchResults.Length
             || AssignableKeys.Length != other.AssignableKeys.Length
             || ContractShapes.Length != other.ContractShapes.Length
-            || DerivedEventMessages.Length != other.DerivedEventMessages.Length)
+            || DerivedMessages.Length != other.DerivedMessages.Length)
         {
             return false;
         }
@@ -446,9 +446,9 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
             }
         }
 
-        for (var i = 0; i < DerivedEventMessages.Length; i++)
+        for (var i = 0; i < DerivedMessages.Length; i++)
         {
-            if (!DerivedEventMessages[i].Equals(other.DerivedEventMessages[i]))
+            if (!DerivedMessages[i].Equals(other.DerivedMessages[i]))
             {
                 return false;
             }

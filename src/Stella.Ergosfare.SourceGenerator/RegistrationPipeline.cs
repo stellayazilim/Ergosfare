@@ -181,7 +181,7 @@ internal static class RegistrationPipeline
         HashSet<string> monomorphizedDefinitions,
         DefaultResultAdapterSiteModel? defaultResultAdapter)
     {
-        foreach (var model in WithDerivedEventMessages(models))
+        foreach (var model in WithDerivedMessages(models))
         {
             if (!seen.Add(model.TypeofExpression))
             {
@@ -296,14 +296,14 @@ internal static class RegistrationPipeline
     /// or one subscriber seen through several partial declarations, are dropped by the
     /// caller's <c>seen</c> set.
     /// </remarks>
-    private static IEnumerable<RegistrableTypeModel> WithDerivedEventMessages(
+    private static IEnumerable<RegistrableTypeModel> WithDerivedMessages(
         ImmutableArray<RegistrableTypeModel> models)
     {
         foreach (var model in models)
         {
             yield return model;
 
-            foreach (var derived in model.DerivedEventMessages)
+            foreach (var derived in model.DerivedMessages)
             {
                 yield return derived;
             }

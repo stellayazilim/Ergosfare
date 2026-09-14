@@ -28,7 +28,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Streaming;
 /// left open, so the next write fails instead of blocking forever.
 /// </para>
 /// </remarks>
-[Experimental(ExperimentalIds.StreamingSurface)]
+[Obsolete("Experimental API: subject to change or removal in any release.", false, DiagnosticId = ExperimentalIds.StreamingSurface)]
 public abstract class ErgosfareStream<TChunk> : ErgosfareStream, IAsyncEnumerable<TChunk>
 {
     /// <summary>

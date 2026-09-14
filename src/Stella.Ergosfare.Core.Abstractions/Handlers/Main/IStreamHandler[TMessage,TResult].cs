@@ -1,4 +1,6 @@
 
+using System.ComponentModel;
+
 namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 
 
@@ -9,12 +11,18 @@ namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 /// <typeparam name="TMessage">The message type this handler accepts.</typeparam>
 /// <typeparam name="TResult">The type of each streamed item.</typeparam>
 /// <remarks>
+/// Infrastructure contract shared by the streaming modules. Application handlers should
+/// implement their module's streaming handler contract instead. This interface remains
+/// public so those public module contracts can inherit it across assembly boundaries.
+/// <para>
 /// The contract is <see cref="IHandler{TMessage, TResult}"/> closed over
 /// <see cref="IAsyncEnumerable{T}"/>; its <c>Handle</c> is implemented explicitly here and
 /// forwards to <see cref="StreamAsync"/>, so implementations only write the streaming
 /// method. Items are produced as the caller enumerates, after the dispatch call itself has
 /// returned.
+/// </para>
 /// </remarks>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public interface IStreamHandler<in TMessage, out TResult>
     :IHandler<TMessage, IAsyncEnumerable<TResult>>
         where TMessage : notnull

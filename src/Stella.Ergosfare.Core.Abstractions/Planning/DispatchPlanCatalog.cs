@@ -82,7 +82,7 @@ public sealed class DispatchPlanCatalog
         lock (_selected)
         {
             EnsureConfiguring();
-            _local[messageType.IsGenericType ? messageType.GetGenericTypeDefinition() : messageType] = composition;
+            _local[messageType] = composition;
         }
     }
 

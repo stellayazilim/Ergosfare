@@ -18,7 +18,7 @@ namespace Stella.Ergosfare.Commands.Abstractions.Streaming;
 /// four-gigabyte upload can be refused without a byte of it being read. The chunks belong to
 /// the handler alone.
 /// </remarks>
-[Experimental(ExperimentalIds.StreamingSurface)]
+[Obsolete("Experimental API: subject to change or removal in any release.", false, DiagnosticId = ExperimentalIds.StreamingSurface)]
 public abstract class ErgosfareCommandStream<TChunk, TMeta> : ErgosfareStream<TChunk>, ICommand
     where TMeta : notnull
 {

@@ -13,7 +13,7 @@ namespace Stella.Ergosfare.Plugins.Abstractions;
 /// <c>where TMessage : ICacheableQuery</c> reaches only the pipelines whose message
 /// satisfies it.
 /// </remarks>
-[Experimental(ExperimentalSurface.Id)]
+[Obsolete("Experimental API: subject to change or removal in any release.", false, DiagnosticId = ExperimentalSurface.Id)]
 [Flags]
 public enum Module
 {

@@ -865,7 +865,7 @@ public sealed partial class ErgosfareRegistrationGenerator
             .Append(GeneratorVersion.Value).AppendLine("\")]");
         // Where the consumer opts in: installing a plugin means using the experimental
         // surface, and this extension is the one line of it they write themselves.
-        sb.Append("[global::System.Diagnostics.CodeAnalysis.Experimental(\"")
+        sb.Append("[global::System.Obsolete(\"Experimental API: subject to change or removal in any release.\", false, DiagnosticId = \"")
             .Append(PluginSurfaceExperimentalId).AppendLine("\")]");
         sb.Append("public static class ").Append(model.Name).AppendLine("PluginModuleRegistryExtensions");
         sb.AppendLine("{");

@@ -23,19 +23,28 @@ internal static class SymbolNaming
         => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
     /// <summary>
-    /// Returns a type's fully qualified name with a generic reduced to its unbound
-    /// definition.
+    /// Returns a fully qualified name, reducing only open generic shapes to their definition.
     /// </summary>
     /// <param name="type">The type to write.</param>
     /// <returns>The fully qualified name, generic arguments dropped.</returns>
     /// <remarks>
-    /// This is how an interceptor's registration names its message type, so that one
-    /// registration covers every closing of a generic message.
+    /// Closed message arguments remain part of the identity for both handlers and interceptors.
     /// </remarks>
     internal static string NormalizedTypeExpression(ITypeSymbol type)
-        => type is INamedTypeSymbol { IsGenericType: true } named
+        => type is INamedTypeSymbol { IsGenericType: true } named && !IsFullyClosed(named)
             ? BuildTypeofExpression(named.OriginalDefinition)
             : VerbatimTypeExpression(type);
+
+    internal static bool IsFullyClosed(ITypeSymbol type)
+        => type switch
+        {
+            ITypeParameterSymbol => false,
+            IArrayTypeSymbol array => IsFullyClosed(array.ElementType),
+            INamedTypeSymbol named => !named.IsUnboundGenericType
+                && named.TypeArguments.All(IsFullyClosed)
+                && (named.ContainingType is null || IsFullyClosed(named.ContainingType)),
+            _ => type.TypeKind != TypeKind.Error,
+        };
 
     /// <summary>
     /// Reports whether generated code can name a type at all.
@@ -73,12 +82,15 @@ internal static class SymbolNaming
     /// <param name="symbol">The type to write.</param>
     /// <returns>The fully qualified name.</returns>
     /// <remarks>
-    /// A generic is written in its unbound form. Mixing bound and unbound levels is not
-    /// legal C#, and every type reaching here is a definition rather than a constructed
-    /// generic.
+    /// Closed types retain their arguments; open declarations use an unbound typeof form.
     /// </remarks>
     internal static string BuildTypeofExpression(INamedTypeSymbol symbol)
     {
+        if (symbol.IsGenericType && IsFullyClosed(symbol))
+        {
+            return VerbatimTypeExpression(symbol);
+        }
+
         var parts = new Stack<string>();
 
         for (var current = symbol; current is not null; current = current.ContainingType)

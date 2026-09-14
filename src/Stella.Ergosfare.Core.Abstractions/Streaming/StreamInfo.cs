@@ -21,7 +21,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Streaming;
 /// these, which is the honest shape: the two directions start, end and fail independently.
 /// </para>
 /// </remarks>
-[Experimental(ExperimentalIds.StreamingSurface)]
+[Obsolete("Experimental API: subject to change or removal in any release.", false, DiagnosticId = ExperimentalIds.StreamingSurface)]
 public readonly record struct StreamInfo(
     long Chunks,
     TimeSpan Duration,

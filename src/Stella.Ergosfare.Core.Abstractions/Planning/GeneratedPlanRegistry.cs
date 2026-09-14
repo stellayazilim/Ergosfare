@@ -292,18 +292,13 @@ public static class GeneratedPlanRegistry
     /// mocks are served. <c>null</c> when no ancestor has an entry either.
     /// </returns>
     /// <remarks>
-    /// A generic runtime type is looked up by its generic definition. Outcomes are cached
+    /// Closed generic entries take priority over generic-definition metadata. Outcomes are cached
     /// per runtime type, misses included, so an entry added after a type was first resolved
     /// is not picked up for that type — which holds because entries are only added as
     /// assemblies load.
     /// </remarks>
     public static PipelineDescriptor? FindPipelineDescriptor(Type messageType)
     {
-        if (messageType.IsGenericType)
-        {
-            messageType = messageType.GetGenericTypeDefinition();
-        }
-
         if (PipelineDescriptors.TryGetValue(messageType, out var exact))
         {
             return exact;
@@ -311,8 +306,13 @@ public static class GeneratedPlanRegistry
 
         return PipelineDescriptorLadder.GetOrAdd(messageType, static runtimeType =>
         {
+            if (runtimeType.IsGenericType
+                && PipelineDescriptors.TryGetValue(runtimeType.GetGenericTypeDefinition(), out var definition))
+                return definition;
+
             for (var current = runtimeType.BaseType; current is not null; current = current.BaseType)
             {
+                if (PipelineDescriptors.TryGetValue(current, out var closed)) return closed;
                 var key = current.IsGenericType ? current.GetGenericTypeDefinition() : current;
 
                 if (PipelineDescriptors.TryGetValue(key, out var entry))

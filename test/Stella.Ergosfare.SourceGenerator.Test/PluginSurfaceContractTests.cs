@@ -147,9 +147,10 @@ public class PluginSurfaceContractTests
     [Trait("Category", "Coverage")]
     public void EverySurfaceType_IsStampedWithThePublishedExperimentalId(Type surface)
     {
-        var experimental = surface.GetCustomAttribute<ExperimentalAttribute>();
+        var experimental = surface.GetCustomAttribute<ObsoleteAttribute>();
 
         Assert.NotNull(experimental);
+        Assert.False(experimental.IsError);
 
         // Plugins.Abstractions spells the id itself rather than referencing the core's
         // declaration — deliberately, so the surface references nothing. The cost of that

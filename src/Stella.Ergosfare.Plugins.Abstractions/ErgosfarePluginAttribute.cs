@@ -46,7 +46,7 @@ namespace Stella.Ergosfare.Plugins.Abstractions;
 /// The plugin's options type, or <c>null</c> when it takes none — in which case
 /// <c>Add&lt;Name&gt;</c> is parameterless.
 /// </param>
-[Experimental(ExperimentalSurface.Id)]
+[Obsolete("Experimental API: subject to change or removal in any release.", false, DiagnosticId = ExperimentalSurface.Id)]
 [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = false)]
 public sealed class ErgosfarePluginAttribute(string name, Type? optionsType = null) : Attribute
 {

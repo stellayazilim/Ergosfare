@@ -24,7 +24,7 @@ namespace Stella.Ergosfare.Plugins.Abstractions;
 /// narrows the service's rather than replacing it.
 /// </para>
 /// </remarks>
-[Experimental(ExperimentalSurface.Id)]
+[Obsolete("Experimental API: subject to change or removal in any release.", false, DiagnosticId = ExperimentalSurface.Id)]
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
 public sealed class PluginServiceFilterAttribute : Attribute
 {

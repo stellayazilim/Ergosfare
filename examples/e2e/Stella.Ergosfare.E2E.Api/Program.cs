@@ -38,5 +38,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseExceptionHandler();
+app.UseWebSockets();
+app.UseStaticFiles();
 app.MapEndpoints();
 app.Run();

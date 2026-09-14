@@ -74,7 +74,54 @@ It uses the same port 5099 as the commands above. No Node.js process is involved
 configuration launches the `.exe` directly instead of that profile, give it the application
 arguments `--urls http://localhost:5099` and use the API project as its working directory.
 
-### Execute the HTTP file
+### Streaming examples
+
+With the API running, open [http://localhost:5099/streams](http://localhost:5099/streams)
+or run the requests in [`http/streams.http`](http/streams.http) from Rider.
+
+- `WEBSOCKET /streams/input`: send text frames followed by the reserved `__END__` frame.
+  A single command dispatch consumes the input and returns the complete text once.
+- `WEBSOCKET /streams/duplex`: each text frame produces the accumulated text immediately.
+  `__END__` completes the input and closes the connection normally.
+- `GET /streams/events`: returns `text/event-stream`. Eleven `character` events spell
+  `Hello world`, with a 150 ms delay per character and a flush after every event. A `done`
+  event finishes the response; browser clients should close their `EventSource` on it to
+  prevent automatic reconnection.
+
+The browser page sends Unicode code points one at a time and supports cancellation.
+Rider supports both WebSocket requests (including `=== wait-for-server`) and SSE responses.
+SignalR is a separate protocol and is not used by these examples.
+
+Input uses Ergosfare's experimental stream contracts: `CollectText` derives from
+`ErgosfareCommandStream<string, string, string>`; `AccumulateText` combines
+`ErgosfareStream<string>` with `IStreamQuery<string>`. Both adopt the WebSocket's existing
+async sequence. Handlers enumerate the message itself, so single-consumer and stream-info
+behavior is exercised without a separate channel-pumping task. The input is limited to
+16 KiB per connection; binary frames are rejected.
+
+The examples exercise the current API, not the proposed stream revision. Input-to-single-result
+uses the ordinary command pipeline. In the current generated output-stream pipeline, pre runs
+once when enumeration starts, post runs after successful exhaustion and receives the enumerator,
+and exception handling surrounds stream creation/iteration. Per-item interception and guaranteed
+final-stage execution when a consumer stops early remain stream-contract design questions.
+The endpoint keeps its request scope alive while enumerating and propagates request cancellation.
+
+For automated transport checks against an already running API (Node.js 22 or later):
+
+```shell
+# Repository root
+node examples/e2e/test-streams.mjs
+
+# E2E solution directory
+node test-streams.mjs
+```
+
+An optional first argument changes the base URL, for example `http://localhost:5101`.
+The script checks complete/empty input, incremental duplex responses, Unicode, isolated clients,
+binary rejection, incremental SSE delivery, cancellation and the browser page. It does not start
+the API; launch it directly with the dotnet commands above.
+
+### Todo HTTP flow
 
 Open [`http/run-all.http`](http/run-all.http) and press **Play** next to
 `run ./todos.http`. That one action runs the complete flow in order, including creating

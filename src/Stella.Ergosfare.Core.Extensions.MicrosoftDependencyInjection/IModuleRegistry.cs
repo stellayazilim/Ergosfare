@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions;
 
 namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -43,7 +43,7 @@ public interface IModuleRegistry
     /// service in DI, and dispatch does not read it again.
     /// </para>
     /// </remarks>
-    [Experimental(ExperimentalIds.ResultAdapterSurface)]
+    [Obsolete("Experimental API: subject to change or removal in any release.", false, DiagnosticId = ExperimentalIds.ResultAdapterSurface)]
     IModuleRegistry UseDefaultResultAdapter(
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.Interfaces)]
         Type adapterType);

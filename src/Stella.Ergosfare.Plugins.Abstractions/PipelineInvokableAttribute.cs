@@ -63,7 +63,7 @@ namespace Stella.Ergosfare.Plugins.Abstractions;
 /// </code>
 /// </example>
 /// <param name="hook">The point in the pipeline to call the method at.</param>
-[Experimental(ExperimentalSurface.Id)]
+[Obsolete("Experimental API: subject to change or removal in any release.", false, DiagnosticId = ExperimentalSurface.Id)]
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
 public sealed class PipelineInvokableAttribute(Hook hook) : Attribute
 {

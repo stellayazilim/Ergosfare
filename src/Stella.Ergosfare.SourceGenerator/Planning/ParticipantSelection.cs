@@ -9,6 +9,9 @@ internal static class ParticipantSelection
     internal static ImmutableArray<RegistrableTypeModel> Select(
         ImmutableArray<RegistrableTypeModel> candidates, ImmutableArray<RegistrationSiteModel> requests)
     {
+        var expandedDefinitions = new HashSet<string>(candidates
+            .Where(candidate => candidate.MonomorphizedFrom is not null)
+            .Select(candidate => candidate.MonomorphizedFrom!), StringComparer.Ordinal);
         var selected = new HashSet<string>(StringComparer.Ordinal);
         foreach (var candidate in candidates)
         foreach (var request in requests)
@@ -29,11 +32,12 @@ internal static class ParticipantSelection
             if (selected.Contains(candidate.TypeofExpression))
                 foreach (var descriptor in candidate.Descriptors)
                     if (descriptor.Kind == DescriptorKind.MainHandler)
-                        served.Add(TypeExpressions.DefinitionKey(descriptor.MessageTypeExpression));
+                        served.Add(descriptor.MessageTypeExpression);
 
-        return candidates.Where(candidate => selected.Contains(candidate.TypeofExpression)
-            || candidate.IsMessageShape && (served.Contains(TypeExpressions.DefinitionKey(candidate.TypeofExpression))
-                || candidate.AssignableKeys.Any(key => served.Contains(TypeExpressions.DefinitionKey(key)))))
+        return candidates.Where(candidate => !expandedDefinitions.Contains(candidate.TypeofExpression)
+            && (selected.Contains(candidate.TypeofExpression)
+            || candidate.IsMessageShape && (served.Contains(candidate.TypeofExpression)
+                || candidate.AssignableKeys.Any(key => served.Contains(key)))))
             .ToImmutableArray();
     }
 

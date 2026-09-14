@@ -51,8 +51,7 @@ public static class ExperimentalIds
     /// this shape once the byte path is tuned. Those answers will move, and moving them will
     /// not be source-compatible.
     /// <para>
-    /// Marked experimental rather than obsolete because none of it has shipped: an error by
-    /// default is the honest default for a surface nobody depends on yet. Opt in for a project
+    /// Experimental APIs produce warnings by default. Suppress the warning for a project
     /// with <c>&lt;NoWarn&gt;$(NoWarn);ERGOEXP003&lt;/NoWarn&gt;</c>, or at one site with
     /// <c>#pragma warning disable ERGOEXP003</c>.
     /// </para>
