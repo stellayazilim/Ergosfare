@@ -36,7 +36,7 @@ Content-Type: application/json
 %}
 
 ### Read it back — the interceptor (which lives in a separate assembly) must have trimmed the title
-< require-todo.js
+< ../scripts/http/require-todo.js
 GET {{host}}/todos/{{todoId}}
 Accept: application/json
 
@@ -54,7 +54,7 @@ Accept: application/json
 %}
 
 ### Complete it (a result-less command)
-< require-todo.js
+< ../scripts/http/require-todo.js
 POST {{host}}/todos/{{todoId}}/complete
 
 > {%
@@ -64,7 +64,7 @@ POST {{host}}/todos/{{todoId}}/complete
 %}
 
 ### Read again — now completed
-< require-todo.js
+< ../scripts/http/require-todo.js
 GET {{host}}/todos/{{todoId}}
 Accept: application/json
 

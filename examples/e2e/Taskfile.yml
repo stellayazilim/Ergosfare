@@ -3,14 +3,26 @@ version: '3'
 tasks:
   default:
     cmds:
-      - task: e2e
+      - task: run
 
-  e2e:
+  run:
+    aliases: [e2e]
     desc: Start the Todo API on port 5099 with dotnet.
     cmds:
       - dotnet run --project ./Stella.Ergosfare.E2E.Api/Stella.Ergosfare.E2E.Api.csproj --launch-profile http
 
-  e2e:test:
+  build:
+    desc: Build the standalone E2E solution.
+    cmds:
+      - dotnet build ./Stella.Ergosfare.E2E.slnx
+
+  test:
+    aliases: [e2e:test]
     desc: Run the optional automated HTTP suite, including API startup and shutdown.
     cmds:
-      - node ./run.mjs
+      - node ./scripts/run.mjs
+
+  test:streams:
+    desc: Test streams against an already running API (optional URL after --).
+    cmds:
+      - node ./scripts/test-streams.mjs {{.CLI_ARGS}}

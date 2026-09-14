@@ -110,10 +110,10 @@ For automated transport checks against an already running API (Node.js 22 or lat
 
 ```shell
 # Repository root
-node examples/e2e/test-streams.mjs
+node examples/e2e/scripts/test-streams.mjs
 
 # E2E solution directory
-node test-streams.mjs
+node scripts/test-streams.mjs
 ```
 
 An optional first argument changes the base URL, for example `http://localhost:5101`.
@@ -152,9 +152,24 @@ From **either** solution directory, run:
 task e2e
 ```
 
-Each directory has a Taskfile with the correct relative project path. This task runs
+The root Taskfile includes the E2E Taskfile with `examples/e2e` as its working directory.
+This task runs
 `dotnet run --launch-profile http` directly and keeps the API running. Press Ctrl+C to
 stop it. Execute `http/run-all.http` from Rider while the API runs. Node.js is not needed.
+
+The E2E Taskfile also exposes the standalone solution build and stream checks:
+
+| Operation | Repository root | `examples/e2e` |
+|---|---|---|
+| Start API | `task e2e:run` | `task run` |
+| Build solution | `task e2e:build` | `task build` |
+| Automated Todo suite | `task e2e:test` | `task test` |
+| Stream checks against running API | `task e2e:test:streams` | `task test:streams` |
+
+For another running API, append its URL: `task e2e:test:streams -- http://localhost:5101`.
+The existing `task e2e` and `task e2e:test` commands remain available from both directories.
+Project helper scripts live in `scripts/`; HTTP Client pre-request scripts live in
+`scripts/http/`. HTTP request files remain in `http/`.
 
 ## Optional automated suite
 
@@ -165,13 +180,13 @@ A failed build, startup or HTTP assertion produces a nonzero exit code.
 From the **Ergosfare solution directory**:
 
 ```sh
-node ./examples/e2e/run.mjs
+node ./examples/e2e/scripts/run.mjs
 ```
 
 From the **E2E solution directory**:
 
 ```sh
-node ./run.mjs
+node ./scripts/run.mjs
 ```
 
 `task e2e:test` runs this optional automation from either solution directory when Go Task

@@ -1,3 +1,38 @@
+## v2.15.1-preview – '2026-09-14'
+
+### Closed generic message plans
+
+* Preserve closed generic message identities throughout discovery, selection, plan
+  generation and dispatch lookup. `WrappedProbe<int>` and `WrappedProbe<string>` are
+  separate inputs, including their grouped plans and referenced-assembly handlers.
+* Selecting a closed generic handler selects that construction; selecting an open generic
+  handler includes the compatible closed constructions visible to the compiler. Unknown
+  runtime constructions do not create plans.
+
+### Experimental warnings and compatibility
+
+* Experimental adapters, plugins and stream input contracts now produce warnings using
+  the existing `ERGOEXP001–003` IDs. Generated plugin facades follow the same policy.
+  Existing suppressions remain valid; warnings-as-errors settings can still fail a build.
+* Warning markers use `Obsolete(false)` with an experimental message and custom diagnostic
+  ID, so IDEs may display obsolete styling. This does not declare these APIs discontinued.
+* Hide the core `IStreamHandler` contract from IntelliSense suggestions while retaining
+  the public module contract and existing inheritance.
+* Clarify that APIs deprecated or removed in preview may be removed in the corresponding
+  stable minor release without a separate stable deprecation release.
+
+### E2E streaming examples and scripts
+
+* Add native Ergosfare stream input, cumulative input/output over WebSocket, and a flushed
+  character-by-character SSE greeting. Include a browser page, HTTP Client requests and
+  automated stream checks. These examples exercise existing stream behavior; they do not
+  introduce new interceptor lifecycle semantics.
+* Move E2E helper scripts into `examples/e2e/scripts/` and HTTP pre-request helpers into
+  its `http/` subdirectory. Update request includes and documented launch commands.
+* Include the E2E Taskfile from the root with the correct working directory. Expose run,
+  standalone solution build, Todo suite and stream-check tasks while preserving existing
+  `task e2e` and `task e2e:test` commands. Manual startup still invokes `dotnet` directly.
+
 ## v2.15.0-preview – '2026-09-14'
 
 ### Unify dispatch around executable generated plans

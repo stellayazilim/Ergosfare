@@ -1,8 +1,8 @@
 // e2e runner: boots the Todo Api on a fixed port, waits until it is ready, runs the
 // ijhttp .http suite against it, then tears the app down and propagates ijhttp's exit code.
 //
-// Dependency-free (Node stdlib only). Cross-platform. Invoked by `task e2e`, or directly:
-//   node examples/e2e/run.mjs
+// Dependency-free (Node stdlib only). Cross-platform. Invoked by `task e2e:test`, or directly:
+//   node examples/e2e/scripts/run.mjs
 //
 // ijhttp (the JetBrains HTTP Client CLI) is self-provisioned into examples/e2e/tools on
 // first run.
@@ -16,7 +16,7 @@ import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
 
-const here = dirname(fileURLToPath(import.meta.url));
+const here = dirname(dirname(fileURLToPath(import.meta.url)));
 const isWin = process.platform === 'win32';
 const HOST = 'http://localhost:5099';
 const API_PROJECT = join(here, 'Stella.Ergosfare.E2E.Api');

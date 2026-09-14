@@ -29,6 +29,11 @@
 
 version: '3'
 
+includes:
+  e2e:
+    taskfile: ./examples/e2e/Taskfile.yml
+    dir: ./examples/e2e
+
 vars:
   DOCS: docs
 
@@ -119,12 +124,7 @@ tasks:
   e2e:
     desc: Start the Todo API on port 5099 with dotnet (HTTP tests run from the editor).
     cmds:
-      - dotnet run --project ./examples/e2e/Stella.Ergosfare.E2E.Api/Stella.Ergosfare.E2E.Api.csproj --launch-profile http
-
-  e2e:test:
-    desc: Run the optional automated HTTP suite, including API startup and shutdown.
-    cmds:
-      - node examples/e2e/run.mjs
+      - task: e2e:run
 
   # ---------------------------------------------------------------- mcp
   #
