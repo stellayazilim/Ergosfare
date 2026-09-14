@@ -17,7 +17,7 @@ public class DispatchManifestEmissionTests
     [Fact]
     public void ConcreteCommandDispatch_IsRecordedWithItsStaticType()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
 
@@ -49,7 +49,7 @@ public class DispatchManifestEmissionTests
     [Fact]
     public void CastToTheMarker_IsLookedThrough()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
 
@@ -83,7 +83,7 @@ public class DispatchManifestEmissionTests
     [Fact]
     public void MarkerTypedDispatch_IsRecordedAsOpaque()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
 
@@ -114,7 +114,7 @@ public class DispatchManifestEmissionTests
     [Fact]
     public void QueryStreamAndEventDispatches_RecordTheirSurfaces()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System.Collections.Generic;
             using System.Threading.Tasks;
             using Stella.Ergosfare.Events.Abstractions;
@@ -169,41 +169,9 @@ public class DispatchManifestEmissionTests
     }
 
     [Fact]
-    public void CoreMediatorDispatch_RecordsTheMessageSurface()
-    {
-        var result = GeneratorTestHost.Run("""
-            using System.Threading.Tasks;
-            using Stella.Ergosfare.Commands.Abstractions;
-            using Stella.Ergosfare.Core.Abstractions;
-
-            namespace TestApp
-            {
-                public sealed record Ping : ICommand;
-
-                public sealed class PingHandler : ICommandHandler<Ping>
-                {
-                    public ValueTask HandleAsync(Ping message, ErgosfareContext context)
-                        => default;
-                }
-
-                public class Caller(IMessageMediator mediator)
-                {
-                    public ValueTask Fire(Ping ping) => mediator.DispatchAsync(ping);
-                }
-            }
-            """);
-
-        Assert.Empty(result.GeneratorDiagnostics);
-        Assert.Empty(result.CompilationErrors);
-        Assert.Contains(
-            DispatchSitePrefix + "\"TestApp.Ping\", " + KindPrefix + "Message, false)]",
-            result.GeneratedSource);
-    }
-
-    [Fact]
     public void RepeatedDispatchesOfTheSameType_AreRecordedOnce()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
 
@@ -238,7 +206,7 @@ public class DispatchManifestEmissionTests
     [Fact]
     public void GenericWrapperDispatch_FallsBackToTheConstraint()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
 
@@ -271,9 +239,9 @@ public class DispatchManifestEmissionTests
     }
 
     [Fact]
-    public void ManualRegistrations_AreRecordedInTheManifest()
+    public void ExplicitSelections_DoNotEmitManualRegistrationMetadata()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
@@ -300,14 +268,14 @@ public class DispatchManifestEmissionTests
 
         Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
-        Assert.Contains("ManualRegistrationAttribute(\"TestApp.ManualPingHandler\")", result.GeneratedSource);
+        Assert.DoesNotContain("ManualRegistrationAttribute", result.GeneratedSource);
         Assert.DoesNotContain("HasOpaqueRegistrations", result.GeneratedSource);
     }
 
     [Fact]
     public void OpaqueRegistrations_RaiseTheManifestFlag()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System;
             using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 
@@ -321,8 +289,12 @@ public class DispatchManifestEmissionTests
             }
             """);
 
-        Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
+
+        // The registration is now a defect in its own right (ERGO018) — and the manifest
+        // still records the opacity, because a consumer reading this assembly's manifest
+        // has to know its coverage evidence is incomplete either way.
+        Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGO018");
         Assert.Contains("DispatchManifestAttribute(1, HasOpaqueRegistrations = true)", result.GeneratedSource);
     }
 

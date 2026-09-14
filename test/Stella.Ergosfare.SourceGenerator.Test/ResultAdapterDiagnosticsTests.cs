@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis;
 namespace Stella.Ergosfare.SourceGenerator.Test;
 
 /// <summary>
-/// ERGOSG011: a <c>[ResultAdapter]</c> annotation that can never bind — the adapter fits
+/// ERGO011: a <c>[ResultAdapter]</c> annotation that can never bind — the adapter fits
 /// none of the message's runtime-probed result slots, or the runtime binding could not
 /// instantiate it — fails the build where the message is compiled. A fitting, instantiable
 /// annotation stays silent, including one inherited from a base message type.
@@ -15,6 +15,7 @@ public class ResultAdapterDiagnosticsTests
         using System.Threading.Tasks;
         using Stella.Ergosfare.Commands.Abstractions;
         using Stella.Ergosfare.Core.Abstractions;
+        using Stella.Ergosfare.Core.Abstractions.Results;
         using Stella.Ergosfare.Core.Abstractions.Attributes;
 
         namespace TestApp
@@ -36,14 +37,14 @@ public class ResultAdapterDiagnosticsTests
 
     private static void AssertSingle011(GeneratorTestHost.GeneratorRunResult result)
     {
-        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGOSG011");
+        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGO011");
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
     }
 
     [Fact]
     public void FittingAnnotation_StaysSilent()
     {
-        var result = GeneratorTestHost.Run(CarrierTypes + """
+        var result = GeneratorTestHost.RunWithAllCandidates(CarrierTypes + """
 
             [ResultAdapter(typeof(OutcomeAdapter))]
             public sealed record AnnotatedPing : ICommand<Outcome>;
@@ -57,13 +58,13 @@ public class ResultAdapterDiagnosticsTests
         """);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGOSG011");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO011");
     }
 
     [Fact]
     public void MismatchedSlot_FailsTheBuild()
     {
-        var result = GeneratorTestHost.Run(CarrierTypes + """
+        var result = GeneratorTestHost.RunWithAllCandidates(CarrierTypes + """
 
             // The message's declared result is string; the adapter serves Outcome only.
             [ResultAdapter(typeof(OutcomeAdapter))]
@@ -83,7 +84,7 @@ public class ResultAdapterDiagnosticsTests
     [Fact]
     public void AdapterWithoutPublicParameterlessConstructor_FailsTheBuild()
     {
-        var result = GeneratorTestHost.Run(CarrierTypes + """
+        var result = GeneratorTestHost.RunWithAllCandidates(CarrierTypes + """
 
             public sealed class DependentAdapter : IResultAdapter<Outcome>
             {
@@ -115,7 +116,7 @@ public class ResultAdapterDiagnosticsTests
     [Fact]
     public void AbstractAdapter_FailsTheBuild()
     {
-        var result = GeneratorTestHost.Run(CarrierTypes + """
+        var result = GeneratorTestHost.RunWithAllCandidates(CarrierTypes + """
 
             public abstract class AbstractAdapter : IResultAdapter<Outcome>
             {
@@ -143,7 +144,7 @@ public class ResultAdapterDiagnosticsTests
     [Fact]
     public void AnnotationOnAnEvent_FailsTheBuild()
     {
-        var result = GeneratorTestHost.Run(CarrierTypes.Replace(
+        var result = GeneratorTestHost.RunWithAllCandidates(CarrierTypes.Replace(
             "using Stella.Ergosfare.Commands.Abstractions;",
             "using Stella.Ergosfare.Events.Abstractions;") + """
 
@@ -165,7 +166,7 @@ public class ResultAdapterDiagnosticsTests
     [Fact]
     public void InheritedFittingAnnotation_BindsOnTheDerivedMessageAndStaysSilent()
     {
-        var result = GeneratorTestHost.Run(CarrierTypes + """
+        var result = GeneratorTestHost.RunWithAllCandidates(CarrierTypes + """
 
             [ResultAdapter(typeof(OutcomeAdapter))]
             public abstract record CarrierPingBase;
@@ -181,13 +182,13 @@ public class ResultAdapterDiagnosticsTests
         """);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGOSG011");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO011");
     }
 
     [Fact]
     public void InheritedMismatchedAnnotation_FailsOnTheDerivedMessage()
     {
-        var result = GeneratorTestHost.Run(CarrierTypes + """
+        var result = GeneratorTestHost.RunWithAllCandidates(CarrierTypes + """
 
             [ResultAdapter(typeof(OutcomeAdapter))]
             public abstract record MismatchedBase;
@@ -208,7 +209,7 @@ public class ResultAdapterDiagnosticsTests
     [Fact]
     public void BothAnnotations_OnTheSameMessage_FailTheBuild()
     {
-        var result = GeneratorTestHost.Run(CarrierTypes + """
+        var result = GeneratorTestHost.RunWithAllCandidates(CarrierTypes + """
 
             [ResultAdapter(typeof(OutcomeAdapter))]
             [IgnoreResultAdapter]
@@ -222,15 +223,15 @@ public class ResultAdapterDiagnosticsTests
         }
         """);
 
-        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGOSG012");
+        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGO012");
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGOSG011");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO011");
     }
 
     [Fact]
     public void InheritedAnnotationWithOwnOptOut_FailsTheBuild()
     {
-        var result = GeneratorTestHost.Run(CarrierTypes + """
+        var result = GeneratorTestHost.RunWithAllCandidates(CarrierTypes + """
 
             [ResultAdapter(typeof(OutcomeAdapter))]
             public abstract record AdaptedBase;
@@ -248,14 +249,14 @@ public class ResultAdapterDiagnosticsTests
         }
         """);
 
-        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGOSG012");
+        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGO012");
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
     }
 
     [Fact]
     public void OptOutAlone_StaysSilent()
     {
-        var result = GeneratorTestHost.Run(CarrierTypes + """
+        var result = GeneratorTestHost.RunWithAllCandidates(CarrierTypes + """
 
             [IgnoreResultAdapter]
             public sealed record QuietPing : ICommand<Outcome>;
@@ -269,7 +270,7 @@ public class ResultAdapterDiagnosticsTests
         """);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id is "ERGOSG011" or "ERGOSG012");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id is "ERGO011" or "ERGO012");
     }
 
     private const string DefaultAdapterBoot = """
@@ -277,6 +278,7 @@ public class ResultAdapterDiagnosticsTests
         using System.Threading.Tasks;
         using Stella.Ergosfare.Commands.Abstractions;
         using Stella.Ergosfare.Core.Abstractions;
+        using Stella.Ergosfare.Core.Abstractions.Results;
         using Stella.Ergosfare.Core.Abstractions.Attributes;
         using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
@@ -308,7 +310,7 @@ public class ResultAdapterDiagnosticsTests
     [Fact]
     public void UnservedUnannotatedMessage_FailsTheBuildBeforeAnyDispatch()
     {
-        var result = GeneratorTestHost.Run(DefaultAdapterBoot + """
+        var result = GeneratorTestHost.RunWithAllCandidates(DefaultAdapterBoot + """
 
             // The default cannot extract failures from User and nothing acknowledges
             // that: the design hole fails the build — no dispatch needed to reveal it.
@@ -324,14 +326,14 @@ public class ResultAdapterDiagnosticsTests
 
         Assert.Empty(result.CompilationErrors);
 
-        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGOSG013");
+        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGO013");
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
     }
 
     [Fact]
     public void IgnoreResultAdapter_DowngradesTheUnservedFindingToAWarning()
     {
-        var result = GeneratorTestHost.Run(DefaultAdapterBoot + """
+        var result = GeneratorTestHost.RunWithAllCandidates(DefaultAdapterBoot + """
 
             // Unadaptable result, acknowledged: the deliberate throwing pipeline stays
             // visible as a warning, never an error.
@@ -360,14 +362,14 @@ public class ResultAdapterDiagnosticsTests
         Assert.Empty(result.CompilationErrors);
 
         var diagnostic = Assert.Single(result.GeneratorDiagnostics);
-        Assert.Equal("ERGOSG014", diagnostic.Id);
+        Assert.Equal("ERGO014", diagnostic.Id);
         Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
     }
 
     [Fact]
     public void ServedAndNativeResults_NeverWarn()
     {
-        var result = GeneratorTestHost.Run(DefaultAdapterBoot + """
+        var result = GeneratorTestHost.RunWithAllCandidates(DefaultAdapterBoot + """
 
             // Compatible with the default adapter — nothing to say.
             public sealed record ServedCmd : ICommand<Outcome>;

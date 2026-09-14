@@ -4,28 +4,18 @@ namespace Stella.Ergosfare.Events.Abstractions;
 
 
 /// <summary>
-/// Represents a message or handler that is recognized by the event module.
+/// Marks a type as belonging to the event module — either an event that can be published,
+/// or a participant in an event pipeline.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Any message type that implements <see cref="IEvent"/> is automatically treated as an event
-/// by the messaging infrastructure.
+/// Events are published rather than sent: every registered handler receives one, and the
+/// publisher gets nothing back. Handlers and interceptors carry this interface too, which
+/// is how registration recognizes them as part of the module.
 /// </para>
 /// <para>
-/// Similarly, event handlers must implement or be decorated with <see cref="IEvent"/> 
-/// to be registered within the event module.
-/// </para>
-/// <para>
-/// The event module also supports simple POCO objects (plain old CLR objects),
-/// allowing them to be registered and used as events.
-/// </para>
-/// <para>
-/// Events are typically used in pub/sub scenarios, broadcasting information
-/// to multiple handlers without expecting a return value.
-/// </para>
-/// <para>
-/// Implementing <see cref="IEvent"/> indicates that a message or handler is 
-/// registrable and discoverable within the event module for event dispatching.
+/// A plain object can be an event without implementing anything: the handler contracts
+/// accept any non-null type, so the interface is not a requirement for the message itself.
 /// </para>
 /// </remarks>
 public interface IEvent: IMessage;

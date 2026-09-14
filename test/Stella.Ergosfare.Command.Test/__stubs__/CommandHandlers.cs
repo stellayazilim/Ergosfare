@@ -37,6 +37,32 @@ public class StubNonGenericCommandHandler: ICommandHandler<StubNonGenericCommand
 
 
 /// <summary>
+/// The ungrouped handler of <see cref="StubPlainCommand"/>. Tracks whether it was called.
+/// </summary>
+public class StubPlainCommandHandler : ICommandHandler<StubPlainCommand>
+{
+    /// <summary>
+    /// Indicates whether <see cref="HandleAsync"/> has been invoked.
+    /// </summary>
+    public static bool HasCalled;
+
+    /// <summary>
+    /// Handles the given <see cref="StubPlainCommand"/> asynchronously.
+    /// Sets <see cref="HasCalled"/> to true when invoked.
+    /// </summary>
+    /// <param name="message">The command message to handle.</param>
+    /// <param name="context">The execution context for the handler.</param>
+    /// <returns>A <see cref="ValueTask"/> representing the asynchronous operation.</returns>
+    public ValueTask HandleAsync(StubPlainCommand message, ErgosfareContext context)
+    {
+        HasCalled = true;
+        return ValueTask.CompletedTask;
+    }
+}
+
+
+
+/// <summary>
 /// A stub handler for <see cref="StubNonGenericCommandStringResult"/> used in tests.
 /// Tracks whether the handler was called and returns a <see cref="string"/> result.
 /// </summary>

@@ -2,24 +2,17 @@ using Stella.Ergosfare.Core.Abstractions.Handlers;
 
 namespace Stella.Ergosfare.Queries.Abstractions;
 
-
 /// <summary>
-/// Represents a type-safe final interceptor for queries, allowing custom logic
-/// to execute after all query handlers and other interceptors have completed.
+/// Runs once the pipeline of a <typeparamref name="TQuery"/> has settled, reading its
+/// result as a <typeparamref name="TResult"/>.
 /// </summary>
-/// <typeparam name="TQuery">The type of query being intercepted. Must implement
-/// <see cref="IQuery{TResult}"/>.</typeparam>
-/// <typeparam name="TResult">The result type returned by the query.</typeparam>
+/// <typeparam name="TQuery">The query type this interceptor accepts.</typeparam>
+/// <typeparam name="TResult">The result type the query declares.</typeparam>
 /// <remarks>
-/// <para>
-/// Implementing this interface allows final processing logic to run after the query
-/// has been handled by all handlers and interceptors in the mediation pipeline.
-/// </para>
-/// <para>
-/// This interface inherits from <see cref="IAsyncFinalInterceptor{TQuery, TResult}"/>,
-/// enabling asynchronous post-processing of query results.
-/// </para>
+/// It runs after the pre-, post- and exception stages and sees the query, the result and
+/// any failure, but cannot change the outcome. A pipeline stopped by <c>context.Abort()</c>
+/// runs no final interceptors.
 /// </remarks>
 // ReSharper disable once UnusedType.Global
-public interface IQueryFinalInterceptor<in TQuery, in TResult>: IQuery, IAsyncFinalInterceptor<TQuery, TResult> 
+public interface IQueryFinalInterceptor<in TQuery, in TResult>: IQuery, IAsyncFinalInterceptor<TQuery, TResult>
     where TQuery : IQuery<TResult>;

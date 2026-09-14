@@ -5,22 +5,29 @@ using System.ComponentModel;
 namespace System.Runtime.CompilerServices
 {
     /// <summary>
-    ///     Polyfill enabling <c>init</c> accessors (and therefore record types) on the
-    ///     netstandard2.0 target this generator is compiled against.
+    /// Lets the compiler accept <c>init</c> accessors, and with them record types, on the
+    /// netstandard2.0 target this generator is built for.
     /// </summary>
     internal static class IsExternalInit;
 
     /// <summary>
-    ///     Polyfill enabling <c>required</c> members on the netstandard2.0 target this
-    ///     generator is compiled against.
+    /// Lets the compiler accept <c>required</c> members on the netstandard2.0 target this
+    /// generator is built for.
     /// </summary>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Field | AttributeTargets.Property)]
     internal sealed class RequiredMemberAttribute : Attribute;
 
-    /// <inheritdoc cref="RequiredMemberAttribute"/>
+    /// <summary>
+    /// Records that a construct needs a compiler feature the target framework does not
+    /// declare; part of the same <c>required</c>-member support.
+    /// </summary>
+    /// <param name="featureName">The feature the construct needs.</param>
     [AttributeUsage(AttributeTargets.All, AllowMultiple = true, Inherited = false)]
     internal sealed class CompilerFeatureRequiredAttribute(string featureName) : Attribute
     {
+        /// <summary>
+        /// The feature the construct needs.
+        /// </summary>
         public string FeatureName { get; } = featureName;
     }
 }
@@ -28,8 +35,8 @@ namespace System.Runtime.CompilerServices
 namespace System.Diagnostics.CodeAnalysis
 {
     /// <summary>
-    ///     Polyfill for constructors that satisfy <c>required</c> members on the
-    ///     netstandard2.0 target this generator is compiled against.
+    /// Marks a constructor as setting every <c>required</c> member, on the netstandard2.0
+    /// target this generator is built for.
     /// </summary>
     [AttributeUsage(AttributeTargets.Constructor)]
     [EditorBrowsable(EditorBrowsableState.Never)]

@@ -1,18 +1,52 @@
+using Stella.Ergosfare.Core.Abstractions.Results;
 
 
 namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
-/// <summary>The typed closure of <see cref="StagedResultPlan"/>; subclassed by generated (or hand-written) plans.</summary>
-public abstract class StagedResultPlan<TMessage, TResult> : StagedResultPlan
+/// <summary>
+/// <see cref="StagedResultPlan"/> closed over its message and result types; generated
+/// plans derive from this, and hand-written ones may too.
+/// </summary>
+/// <typeparam name="TMessage">The message this plan serves.</typeparam>
+/// <typeparam name="TResult">The result this plan produces.</typeparam>
+public abstract class StagedResultPlan<TMessage, TResult> : StagedResultPlan, IPipelineExecutor<TResult>, ICompiledPlan
     where TMessage : IMessage
 {
-    /// <inheritdoc cref="StagedVoidPlan{TMessage}.Execute"/>
+    ValueTask<TResult> IPipelineExecutor<TResult>.Execute(object message, ErgosfareContext context,
+        IServiceProvider serviceProvider, IEnumerable<string>? groups)
+        => FilterGroups is not null && groups is IReadOnlyList<string> requested
+            ? ExecuteFiltered((TMessage)message, context, serviceProvider, requested)
+            : Execute((TMessage)message, context, serviceProvider);
+
+    /// <summary>
+    /// Runs the compiled pipeline for <paramref name="message"/> and returns its result.
+    /// </summary>
+    /// <param name="message">The message to dispatch.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <param name="serviceProvider">
+    /// The provider participants are resolved from — the dispatching scope's.
+    /// </param>
+    /// <returns>The result the pipeline produced.</returns>
+    /// <remarks>
+    /// Only called while the live pipeline still matches
+    /// <see cref="StagedResultPlan.Composition"/>.
+    /// </remarks>
     public abstract ValueTask<TResult> Execute(TMessage message, ErgosfareContext context, IServiceProvider serviceProvider);
 
-    /// <inheritdoc cref="StagedVoidPlan{TMessage}.ExecuteDirect"/>
-    public virtual ValueTask<TResult> ExecuteDirect(TMessage message, ErgosfareContext context, IServiceProvider serviceProvider)
+    /// <summary>
+    /// Runs the compiled pipeline for a dispatch whose groups are only known now, testing
+    /// each participant's groups before calling it.
+    /// </summary>
+    /// <param name="message">The message to dispatch.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <param name="serviceProvider">The provider participants are resolved from.</param>
+    /// <param name="groups">The groups the dispatch asked for.</param>
+    /// <returns>The result the pipeline produced.</returns>
+    /// <remarks>
+    /// Only called on a plan that reports <see cref="StagedResultPlan.FilterGroups"/>. The
+    /// default implementation runs the unfiltered body.
+    /// </remarks>
+    public virtual ValueTask<TResult> ExecuteFiltered(
+        TMessage message, ErgosfareContext context, IServiceProvider serviceProvider, IReadOnlyList<string> groups)
         => Execute(message, context, serviceProvider);
 
-    /// <inheritdoc />
-    public sealed override TReturn Accept<TReturn, TState>(IStagedResultPlanVisitor<TReturn, TState> visitor, TState state)
-        => visitor.Visit<TMessage, TResult>(state);
 }

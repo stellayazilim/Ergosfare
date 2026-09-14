@@ -3,26 +3,21 @@ using Stella.Ergosfare.Core.Abstractions.Exceptions;
 namespace Stella.Ergosfare.Core.Abstractions;
 
 /// <summary>
-/// The execution context for message handling and mediation: contextual information such as
-/// the cancellation token and per-dispatch items, plus control over pipeline execution
-/// (scoping and abort). Handlers and interceptors receive it as their last parameter.
+/// The execution context of one dispatch: the cancellation token, the items participants
+/// share with each other, and the means to open a nested scope or stop the pipeline. Every
+/// handler and interceptor receives it as its last parameter.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The type is sealed and taken concretely by every handler and interceptor contract, so member
-/// access is a direct call — there is no interface to dispatch through.
+/// A context is valid only for the dispatch it belongs to. Dispatches rent contexts from a
+/// pool and return them once the pipeline completes, so holding a reference past the
+/// handler's completion observes another dispatch's state. A context constructed directly
+/// is never pooled, which is how a caller that wants to keep the items dictionary builds
+/// one.
 /// </para>
 /// <para>
-/// Instances are pooled: a dispatch rents one from <see cref="ErgosfareContextPool"/> and returns
-/// it when the pipeline completes, so a context is only valid for the duration of its dispatch —
-/// user code must not hold a reference past the handler's completion. The items dictionary is
-/// created lazily on first write and kept (cleared) across reuses; the read paths never allocate
-/// it.
-/// </para>
-/// <para>
-/// A context constructed directly (rather than rented) is never pooled and costs exactly what an
-/// unpooled context did; this is how tests and callers that want to own the items dictionary
-/// build one.
+/// The items dictionary is allocated on first write. Every read path — <see cref="Has"/>,
+/// <see cref="Get{TType}"/>, <see cref="TryGet{TType}"/> — leaves it unallocated.
 /// </para>
 /// </remarks>
 public sealed class ErgosfareContext(
@@ -31,26 +26,22 @@ public sealed class ErgosfareContext(
     private IDictionary<object, object?>? _items = items;
 
     /// <summary>
-    /// Whether <see cref="_items"/> was created lazily by this context (owned) as opposed
-    /// to adopted from the caller (a settings object's dictionary). Owned dictionaries are
-    /// cleared and kept across pool reuses for their capacity; adopted ones are detached
-    /// untouched on <see cref="Clear"/> — the caller keeps whatever handlers wrote, and the
-    /// pool can never hand one dispatch's dictionary to the next.
+    /// Whether the items dictionary was allocated by this context rather than supplied by
+    /// the caller. An owned dictionary is cleared and kept for its capacity when the
+    /// context is recycled; a supplied one is detached untouched, so the caller keeps what
+    /// participants wrote into it and the next dispatch never sees it.
     /// </summary>
     private bool _ownsItems;
 
     /// <summary>
-    /// Gets the cancellation token associated with the execution context.
-    /// Handlers should periodically check this token and abort execution if cancellation is
-    /// requested, and propagate it to any work they start.
+    /// The cancellation token for this dispatch. Handlers should observe it and pass it to
+    /// any work they start.
     /// </summary>
     public CancellationToken CancellationToken { get; private set; } = cancellationToken;
 
     /// <summary>
-    /// Gets a key/value collection for sharing data within the scope of this execution.
-    /// Data is scoped to the current execution and is not shared across different mediation
-    /// operations. The backing dictionary is created lazily on first access so dispatches that
-    /// never touch shared items pay no allocation for it.
+    /// The items shared between the participants of this dispatch. The dictionary is
+    /// allocated on first access and belongs to this dispatch alone.
     /// </summary>
     public IDictionary<object, object?> Items
     {
@@ -66,7 +57,11 @@ public sealed class ErgosfareContext(
         }
     }
 
-    /// <summary>Re-initializes a pooled instance for a new dispatch.</summary>
+    /// <summary>
+    /// Prepares a recycled instance for a new dispatch.
+    /// </summary>
+    /// <param name="items">The caller's items dictionary, or <c>null</c> to allocate on demand.</param>
+    /// <param name="cancellationToken">The token for the new dispatch.</param>
     internal void Reset(IDictionary<object, object?>? items, CancellationToken cancellationToken)
     {
         if (items is not null)
@@ -79,9 +74,7 @@ public sealed class ErgosfareContext(
     }
 
     /// <summary>
-    /// Clears the per-dispatch state before the instance goes back to the pool. The
-    /// (possibly caller-supplied) items dictionary is emptied and kept, so a lazily
-    /// created one gets its capacity reused.
+    /// Drops this dispatch's state so the instance can be recycled.
     /// </summary>
     internal void Clear()
     {
@@ -89,15 +82,14 @@ public sealed class ErgosfareContext(
         {
             if (_ownsItems)
             {
-                // Lazily created here: clear and keep, so the capacity is reused.
+                // Allocated here, so it is emptied and kept — the next dispatch reuses its
+                // capacity.
                 _items.Clear();
             }
             else
             {
-                // Adopted from the caller: detach without touching its contents — the
-                // caller reads results from it, and clearing it here would silently wipe
-                // their settings object (and retaining it would leak it into the next
-                // dispatch that rents this context).
+                // Supplied by the caller, who reads results out of it: detach without
+                // touching the contents, which also keeps it out of the next dispatch.
                 _items = null;
             }
         }
@@ -105,14 +97,20 @@ public sealed class ErgosfareContext(
         CancellationToken = default;
     }
 
-    /// <summary>Returns this context to the pool. Called by the scope on dispose.</summary>
+    /// <summary>
+    /// Hands this context back for recycling. Called by the scope on dispose.
+    /// </summary>
     internal void ReturnToPool() => ErgosfareContextPool.Return(this);
 
     /// <summary>
-    /// Opens a child execution-context scope for a nested mediator call: the child starts
-    /// with clean items and inherits this context's cancellation token. Dispose the scope
-    /// when the nested call completes; the child must not be used afterwards.
+    /// Opens a child context for a nested dispatch. The child starts with no items and
+    /// inherits this context's cancellation token, keeping nested work on the same
+    /// cancellation chain.
     /// </summary>
+    /// <returns>
+    /// A scope holding the child context. Dispose it when the nested dispatch completes;
+    /// the child must not be used afterwards.
+    /// </returns>
     /// <example>
     /// <code>
     /// using var scope = context.CreateScope();
@@ -123,11 +121,11 @@ public sealed class ErgosfareContext(
         => new(ErgosfareContextPool.Rent(items: null, CancellationToken));
 
     /// <summary>
-    /// Stores an item in the execution context under the specified key.
-    /// If an item with the same key already exists, it will be overwritten.
+    /// Stores <paramref name="item"/> under <paramref name="key"/>, replacing whatever was
+    /// stored under that key.
     /// </summary>
-    /// <param name="key">The unique key to associate with the item.</param>
-    /// <param name="item">The object to store in the context.</param>
+    /// <param name="key">The key to store under.</param>
+    /// <param name="item">The value to store.</param>
     public void Set(string key, object item)
     {
         Items[key] = item;
@@ -135,11 +133,10 @@ public sealed class ErgosfareContext(
 
 
     /// <summary>
-    /// Checks whether an item with the specified key exists in the context.
-    /// Never allocates the backing dictionary: an empty context answers <c>false</c>.
+    /// Reports whether an item is stored under <paramref name="key"/>.
     /// </summary>
-    /// <param name="key">The key to check for existence.</param>
-    /// <returns><c>true</c> if an item with the given key exists; otherwise, <c>false</c>.</returns>
+    /// <param name="key">The key to look for.</param>
+    /// <returns><c>true</c> when an item is stored under that key.</returns>
     public bool Has(string key)
     {
         return _items?.ContainsKey(key) ?? false;
@@ -147,14 +144,16 @@ public sealed class ErgosfareContext(
 
 
     /// <summary>
-    /// Retrieves an item of the specified type from the context using the given key.
-    /// Never allocates the backing dictionary.
+    /// Returns the item stored under <paramref name="key"/>, cast to
+    /// <typeparamref name="TType"/>.
     /// </summary>
-    /// <typeparam name="TType">The type of the item to retrieve.</typeparam>
-    /// <param name="key">The key associated with the item.</param>
-    /// <returns>The item associated with the specified key.</returns>
-    /// <exception cref="KeyNotFoundException">Thrown if no item exists with the specified key.</exception>
-    /// <exception cref="InvalidCastException">Thrown if the stored item cannot be cast to <typeparamref name="TType"/>.</exception>
+    /// <typeparam name="TType">The type to cast the stored item to.</typeparam>
+    /// <param name="key">The key to read.</param>
+    /// <returns>The stored item.</returns>
+    /// <exception cref="KeyNotFoundException">Nothing is stored under <paramref name="key"/>.</exception>
+    /// <exception cref="InvalidCastException">
+    /// The stored item is not a <typeparamref name="TType"/>.
+    /// </exception>
     public TType Get<TType>(string key) where TType : notnull
     {
         if (_items is null || !_items.TryGetValue(key, out var item))
@@ -167,15 +166,20 @@ public sealed class ErgosfareContext(
 
 
     /// <summary>
-    /// Attempts to retrieve an item of the specified type from the context using the
-    /// given key. Never allocates the backing dictionary.
+    /// Reads the item stored under <paramref name="key"/> when there is one.
     /// </summary>
-    /// <typeparam name="TType">The type of the item expected.</typeparam>
-    /// <param name="key">The key associated with the item.</param>
+    /// <typeparam name="TType">The type to cast the stored item to.</typeparam>
+    /// <param name="key">The key to read.</param>
     /// <param name="item">
-    /// When this method returns, contains the retrieved item if found and of the correct type; otherwise, the default value for <typeparamref name="TType"/>.
+    /// The stored item when this method returns <c>true</c>; otherwise the default value of
+    /// <typeparamref name="TType"/>.
     /// </param>
-    /// <returns><c>true</c> if an item with the given key exists and is of the correct type; otherwise, <c>false</c>.</returns>
+    /// <returns><c>true</c> when an item is stored under that key.</returns>
+    /// <exception cref="InvalidCastException">
+    /// An item is stored under <paramref name="key"/> but is not a
+    /// <typeparamref name="TType"/>. A stored item of the wrong type is a failure, not a
+    /// miss — this method returns <c>false</c> only when the key is absent.
+    /// </exception>
     public bool TryGet<TType>(string key, out TType item)
     {
         if (_items is not null && _items.TryGetValue(key, out var el))
@@ -190,56 +194,48 @@ public sealed class ErgosfareContext(
 
 
     /// <summary>
-    /// Ends the current mediation: nothing after the calling participant runs, and the
-    /// caller is told, by <see cref="ExecutionAbortedException"/>.
+    /// Ends the dispatch: nothing after the calling participant runs, and the caller is
+    /// told by <see cref="ExecutionAbortedException"/>.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The dispatch was asked for by the call site, so the call site is who hears that it
-    /// did not happen — a pipeline whose participants can abort is one the caller wraps in
-    /// a <c>try</c>. The alternative, returning the result type's default, is
-    /// indistinguishable from a handler that legitimately produced nothing.
+    /// Stopping stops everything downstream — the rest of the current stage, the exception
+    /// stage, and the final stage alike. An abort is not a failure, so the exception
+    /// interceptors do not see it, and there is no result for the pipeline to produce,
+    /// which is why the signal carries none.
     /// </para>
     /// <para>
-    /// Stopping means stopping: nothing downstream runs. Not the rest of the current stage,
-    /// not the exception stage — an abort is not a failure and exception interceptors exist
-    /// to handle failures — and not the final stage either. There is no result to expect
-    /// from a pipeline that was cut, which is why the signal carries none.
-    /// </para>
-    /// <para>
-    /// Nothing catches this on the way out. The stages that do have exception handling —
-    /// the strategies and the emitted plans — filter it through untouched and skip their
-    /// own remaining work, so what the caller receives is the participant's own signal with
-    /// its stack intact.
+    /// Nothing swallows the signal on its way out: the strategies and generated plans let
+    /// it pass through their own exception handling untouched, so the caller receives the
+    /// participant's signal with its original stack. Callers that dispatch abortable
+    /// pipelines should expect it.
     /// </para>
     /// </remarks>
-    /// <exception cref="ExecutionAbortedException">Always — this is how the abort travels.</exception>
+    /// <exception cref="ExecutionAbortedException">Always; this is how the abort travels.</exception>
     public void Abort() => throw new ExecutionAbortedException();
 
     /// <summary>
-    /// Stops the pipeline, saying why. See <see cref="Abort()"/>.
+    /// Ends the dispatch, recording why. See <see cref="Abort()"/>.
     /// </summary>
     /// <param name="reason">
-    /// Why the pipeline is being stopped; arrives on
-    /// <see cref="ExecutionAbortedException.Reason"/>.
+    /// Why the dispatch is ending; arrives on <see cref="ExecutionAbortedException.Reason"/>.
     /// </param>
     /// <remarks><inheritdoc cref="Abort()" path="/remarks"/></remarks>
-    /// <exception cref="ExecutionAbortedException">Always — this is how the abort travels.</exception>
+    /// <exception cref="ExecutionAbortedException">Always; this is how the abort travels.</exception>
     public void Abort(string? reason) => throw new ExecutionAbortedException(reason);
 
     /// <summary>
-    /// Stops the pipeline, saying why and handing the caller something to act on. See
+    /// Ends the dispatch, recording why and handing the caller a value to act on. See
     /// <see cref="Abort()"/>.
     /// </summary>
     /// <param name="reason">
-    /// Why the pipeline is being stopped; arrives on
-    /// <see cref="ExecutionAbortedException.Reason"/>.
+    /// Why the dispatch is ending; arrives on <see cref="ExecutionAbortedException.Reason"/>.
     /// </param>
     /// <param name="value">
-    /// What the caller should act on; arrives on
+    /// The value for the caller to act on; arrives on
     /// <see cref="ExecutionAbortedException.Value"/>.
     /// </param>
     /// <remarks><inheritdoc cref="Abort()" path="/remarks"/></remarks>
-    /// <exception cref="ExecutionAbortedException">Always — this is how the abort travels.</exception>
+    /// <exception cref="ExecutionAbortedException">Always; this is how the abort travels.</exception>
     public void Abort(string? reason, object? value) => throw new ExecutionAbortedException(reason, value);
 }

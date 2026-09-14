@@ -10,9 +10,9 @@ for compile-time registration.
 
 ```csharp
 builder.Services.AddErgosfare(o => o
-    .AddCommandModule(c => c.RegisterGenerated())
-    .AddQueryModule(q => q.RegisterGenerated())
-    .AddEventModule(e => e.RegisterGenerated()));
+    .AddCommandModule(c => c.AddGenerated())
+    .AddQueryModule(q => q.AddGenerated())
+    .AddEventModule(e => e.AddGenerated()));
 
 public sealed record Greet(string Name) : ICommand<string>;
 

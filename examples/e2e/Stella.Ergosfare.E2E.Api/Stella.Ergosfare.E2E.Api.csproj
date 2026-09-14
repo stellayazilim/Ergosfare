@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
@@ -31,11 +31,16 @@
         <!-- The whole Ergosfare runtime + DI extensions, wired from local src (not NuGet)
              so e2e exercises the code on this branch. -->
         <ProjectReference Include="..\..\..\src\Stella.Ergosfare\Stella.Ergosfare.csproj" />
-        <!-- The source generator as an analyzer: it emits RegisterGenerated() into this
-             compilation, discovering handlers in the referenced UseCases assembly. -->
+        <!-- The source generator as an analyzer: it emits executable plans into this
+             compilation using the selections exported by UseCases.AddApplication(). -->
         <ProjectReference Include="..\..\..\src\Stella.Ergosfare.SourceGenerator\Stella.Ergosfare.SourceGenerator.csproj"
                           OutputItemType="Analyzer"
                           ReferenceOutputAssembly="false" />
+
+        <!-- The example plugin. Installing one is a single reference: this app's generator
+             reads its [PipelineInvokable] methods out of the assembly and bakes the calls
+             into this app's plans. -->
+        <ProjectReference Include="..\..\TimingPlugin\TimingPlugin.csproj" />
     </ItemGroup>
 
 </Project>

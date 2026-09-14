@@ -16,19 +16,19 @@ namespace Stella.Ergosfare.Queries.Test;
 public class QueryInterceptorDefaultImplementationTests
 {
     // These probes are invoked directly by the tests below, never dispatched — deliberately
-    // outside the compiled closure, which is what silences ERGOSG001 for the private types.
+    // outside the compiled closure, which is what silences ERGO001 for the private types.
     [ExcludeFromDiscovery]
     private record TestQuery : IQuery<string>;
 
     [ExcludeFromDiscovery]
-    private class TestPreInterceptor : IQueryPreInterceptor<TestQuery, TestQuery>
+    private class TestPreInterceptor : IQueryPreInterceptor<TestQuery>
     {
         public bool Called;
 
-        public ValueTask<TestQuery?> HandleAsync(TestQuery query, ErgosfareContext executionContext)
+        public ValueTask<TestQuery> HandleAsync(TestQuery query, ErgosfareContext executionContext)
         {
             Called = true;
-            return ValueTask.FromResult<TestQuery?>(query);
+            return ValueTask.FromResult(query);
         }
     }
 
@@ -40,7 +40,10 @@ public class QueryInterceptorDefaultImplementationTests
         public ValueTask<string> HandleAsync(TestQuery query, string result, ErgosfareContext executionContext)
         {
             Called = true;
-            return ValueTask.FromResult(result);
+
+            // The stage handled the failure, so it owes a result; the incoming slot is empty
+            // here because the handler threw before producing one.
+            return ValueTask.FromResult(result ?? string.Empty);
         }
     }
 
@@ -49,10 +52,13 @@ public class QueryInterceptorDefaultImplementationTests
     {
         public bool Called;
 
-        public ValueTask<string?> HandleAsync(TestQuery query, string? result, Exception exception, ErgosfareContext context)
+        public ValueTask<string> HandleAsync(TestQuery query, string? result, Exception exception, ErgosfareContext context)
         {
             Called = true;
-            return ValueTask.FromResult(result);
+
+            // Handling means answering: the slot is empty because the handler threw before
+            // it produced anything.
+            return ValueTask.FromResult(result ?? string.Empty);
         }
     }
 
@@ -96,6 +102,58 @@ public class QueryInterceptorDefaultImplementationTests
 
         Assert.True(interceptor.Called);
         Assert.Equal("original", result);
+    }
+
+    /// <summary>
+    /// A module-wide policy: every query, one exception flavour. Extending
+    /// <see cref="IQueryExceptionInterceptorFor{TException}"/> makes the type an
+    /// <see cref="IQuery"/> too, which is why it is kept out of discovery.
+    /// </summary>
+    [ExcludeFromDiscovery]
+    private sealed class TimeoutPolicy : IQueryExceptionInterceptorFor<TimeoutException>
+    {
+        public TimeoutException? Seen;
+
+        public ValueTask<object> HandleAsync(IQuery query, object? messageResult, TimeoutException exception,
+            ErgosfareContext context)
+        {
+            Seen = exception;
+            return ValueTask.FromResult(messageResult ?? "recovered");
+        }
+    }
+
+    /// <summary>A flavour of the accepted exception, to prove the filter matches derived types.</summary>
+    private sealed class RequestTimeoutException : TimeoutException;
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task FilteredModuleWideInterceptor_CastsTheExceptionToItsDeclaredFlavour()
+    {
+        var interceptor = new TimeoutPolicy();
+        var thrown = new RequestTimeoutException();
+
+        // The pipeline only ever calls the untyped member; the default body is what turns
+        // the Exception it was handed into the flavour the policy was written against.
+        var result = await ((IAsyncExceptionInterceptor<IQuery>) interceptor).HandleAsync(
+            new TestQuery(), null, thrown, Context);
+
+        Assert.Same(thrown, interceptor.Seen);
+        Assert.Equal("recovered", result);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public void FilteredModuleWideInterceptor_MatchesWithCatchSemantics()
+    {
+        var filter = (IExceptionInterceptorFilter) new TimeoutPolicy();
+
+        // The cast in the default body cannot fail because this is what runs first: the
+        // stage asks the filter before it invokes the interceptor.
+        Assert.True(filter.Matches(new TimeoutException()));
+        Assert.True(filter.Matches(new RequestTimeoutException()));
+        Assert.False(filter.Matches(new InvalidOperationException()));
     }
 
     /// <summary>

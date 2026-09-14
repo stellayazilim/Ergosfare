@@ -1,6 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Contract.Test.Sync.Generated;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Generated;
 
@@ -23,7 +22,7 @@ public sealed class GeneratedRegistrationSyncTests : SyncSemanticsContract
     protected override ServiceProvider CreateProvider()
         => new ServiceCollection()
             .AddErgosfare(options => options
-                .AddCommandModule(commands => commands.RegisterGenerated()))
+                .AddCommandModule(commands => commands.AddGenerated()))
             .BuildServiceProvider();
 
     /// <inheritdoc />

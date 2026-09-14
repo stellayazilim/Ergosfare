@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ergosfare · Stream examples</title>
+<style>
+body{font:16px/1.6 system-ui;max-width:850px;margin:40px auto;padding:0 20px;background:#f4f6fa;color:#182338}section{background:white;border:1px solid #dce2ec;border-radius:12px;padding:24px;margin:20px 0}h1,h2{line-height:1.2}h2{font-size:21px}textarea{box-sizing:border-box;width:100%;min-height:85px;padding:12px;font:inherit}button{padding:10px 16px;margin:12px 8px 0 0;border:0;border-radius:6px;background:#254db5;color:white;cursor:pointer}button:disabled{opacity:.5;cursor:default}pre{white-space:pre-wrap;overflow-wrap:anywhere;min-height:28px;background:#eef2f8;padding:12px}small{color:#53627a}
+</style>
+<h1>Ergosfare stream examples</h1>
+<p><a href="/streams/upload">Large file upload · multipart → Pipe → disk</a></p>
+<p>The browser sends one character every 100 ms. Each run uses a separate connection and dispatch.</p>
+<section id="input"><h2>Stream input → single result</h2><p>The handler combines the input and returns one response after the input completes.</p><textarea aria-label="Text to collect">Hello world 👋</textarea><button class="start">Send</button><button class="stop" disabled>Cancel</button><pre aria-live="polite"></pre><small></small></section>
+<section id="duplex"><h2>Stream input → stream output</h2><p>Each character produces a response containing the text received so far.</p><textarea aria-label="Text to accumulate">Hello world</textarea><button class="start">Send</button><button class="stop" disabled>Cancel</button><pre aria-live="polite"></pre><small></small></section>
+<section id="sse"><h2>Stream output · SSE</h2><p>The server sends “Hello world” one character every 150 ms. The stream completes after the last character.</p><button class="start">Listen</button><button class="stop" disabled>Cancel</button><pre aria-live="polite"></pre><small></small></section>
+<script>
+for (const mode of ['input','duplex']) {
+  const panel=document.getElementById(mode), start=panel.querySelector('.start'), stop=panel.querySelector('.stop'), output=panel.querySelector('pre'), status=panel.querySelector('small');
+  let socket;
+  start.onclick=()=>{
+    output.textContent=''; status.textContent='Connecting…'; start.disabled=true; stop.disabled=false;
+    socket=new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/streams/${mode}`);
+    const current=socket;
+    current.onopen=async()=>{
+      const letters=Array.from(panel.querySelector('textarea').value);
+      for(let i=0;i<letters.length;i++){
+        if(current.readyState!==WebSocket.OPEN)return;
+        current.send(letters[i]); status.textContent=`Sent: ${i+1}/${letters.length}`;
+        await new Promise(resolve=>setTimeout(resolve,100));
+      }
+      if(current.readyState===WebSocket.OPEN)current.send('__END__');
+    };
+    current.onmessage=event=>{output.textContent+=`${JSON.stringify(event.data)}\n`;};
+    current.onclose=event=>{start.disabled=false;stop.disabled=true;status.textContent=event.code===1000?'Completed':`Connection closed (${event.code})`;};
+    current.onerror=()=>{status.textContent='Connection error';};
+  };
+  stop.onclick=()=>socket?.close(1000,'Cancelled');
+}
+{
+  const panel=document.getElementById('sse'), start=panel.querySelector('.start'), stop=panel.querySelector('.stop'), output=panel.querySelector('pre'), status=panel.querySelector('small');
+  let events;
+  const finish=text=>{events?.close();start.disabled=false;stop.disabled=true;status.textContent=text;};
+  start.onclick=()=>{
+    output.textContent='';status.textContent='Listening…';start.disabled=true;stop.disabled=false;
+    events=new EventSource('/streams/events');
+    events.addEventListener('character',event=>{output.textContent+=JSON.parse(event.data);});
+    events.addEventListener('done',()=>finish('Completed'));
+    events.onerror=()=>finish('Connection lost');
+  };
+  stop.onclick=()=>finish('Cancelled');
+}
+</script>
+</html>

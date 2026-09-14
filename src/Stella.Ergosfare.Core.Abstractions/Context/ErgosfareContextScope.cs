@@ -2,43 +2,39 @@
 namespace Stella.Ergosfare.Core.Abstractions;
 
 /// <summary>
-/// A child execution-context scope for nested dispatches: the handler opens a scope,
-/// passes <see cref="Context"/> to the inner mediator call, and disposes the scope when
-/// done. The child starts with clean items (isolation by default) and inherits the
-/// parent's cancellation token, so nested work stays on the outer cancellation chain.
-/// Disposing returns the child to the pool — the context must not be used after the
-/// scope is disposed.
+/// The child context of a nested dispatch, together with the lifetime that ends it. Open
+/// one with <see cref="ErgosfareContext.CreateScope"/>, pass <see cref="Context"/> to the
+/// inner mediator call, and dispose the scope when that call completes.
 /// </summary>
 /// <remarks>
-/// The scope is a struct: <c>using var scope = ctx.CreateScope();</c> allocates nothing.
-/// An <c>Abort()</c> inside the child only aborts the inner pipeline; nothing ambient is
-/// overwritten, so there is no restore step — the parent context stays untouched in the
-/// caller's parameter.
+/// The child starts with no items, so nested work is isolated by default, and inherits the
+/// parent's cancellation token. Disposing recycles the child, which must not be used
+/// afterwards; the parent context is untouched throughout, including when the nested
+/// pipeline aborts. The scope is a struct, so opening one allocates nothing.
 /// </remarks>
 public readonly struct ErgosfareContextScope : IDisposable
 {
-    /// <summary>The child execution context to pass to nested mediator calls.</summary>
+    /// <summary>
+    /// The child context to pass to the nested dispatch.
+    /// </summary>
     public ErgosfareContext Context { get; }
 
     /// <summary>
-    /// Wraps a rented child context in a scope. Scopes come from
-    /// <see cref="ErgosfareContext.CreateScope"/>, which is the only thing that may pair a
-    /// pooled context with the dispose that returns it.
+    /// Pairs a rented child context with the dispose that recycles it.
     /// </summary>
+    /// <param name="context">The rented child context.</param>
     internal ErgosfareContextScope(ErgosfareContext context)
     {
         Context = context;
     }
 
     /// <summary>
-    /// Ends the scope, returning the child context to the pool. The context must not
-    /// be used afterwards.
+    /// Ends the scope and recycles the child context, which must not be used afterwards.
     /// </summary>
     /// <remarks>
-    /// Null-conditional for the one shape that has no context to return: a
-    /// <c>default(ErgosfareContextScope)</c> that never came from <c>CreateScope()</c>.
-    /// Disposing that stays the no-op it has always been rather than throwing out of a
-    /// <c>using</c> and masking whatever the block was really doing.
+    /// Disposing a <c>default(ErgosfareContextScope)</c> — one that never came from
+    /// <see cref="ErgosfareContext.CreateScope"/> and so holds no context — does nothing,
+    /// rather than throwing out of the <c>using</c> block.
     /// </remarks>
     public void Dispose() => Context?.ReturnToPool();
 }

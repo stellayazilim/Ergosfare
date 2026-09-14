@@ -1,6 +1,5 @@
-﻿using Stella.Ergosfare.Commands.Abstractions;
+using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Command.Test.__stubs__;
@@ -39,7 +38,7 @@ public class CommandMediatorExtensionsTests
 
         var mediator = services.GetRequiredService<ICommandMediator>();
 
-        await mediator.SendAsync(cmd, new[] { "group2" }, cancellationToken);
+        await mediator.SendAsync(cmd, ["group2"], cancellationToken);
 
         Assert.True(StubNonGenericCommandHandler.HasCalled);
         Assert.False(StubCommandPreInterceptor1.HasCalled);
@@ -51,7 +50,9 @@ public class CommandMediatorExtensionsTests
     /// and supports passing a <see cref="CancellationToken"/>.
     /// </summary>
     /// <remarks>
-    /// This test ensures that a command handler is invoked when using the cancellation token overload.
+    /// This test ensures that a command handler is invoked when using the cancellation
+    /// token overload. The ungrouped stub is the fixture: the group-attributed stub's
+    /// default-set pipeline has no compiled plan, so an ungrouped dispatch of it fails.
     /// </remarks>
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
@@ -59,14 +60,14 @@ public class CommandMediatorExtensionsTests
     public async Task CommandMediatorExtensionsShouldExecuteCommandWithCancellationToken()
     {
         var cancellationToken = CancellationToken.None;
-        var cmd = new StubNonGenericCommand();
+        var cmd = new StubPlainCommand();
 
         var services = new ServiceCollection()
             .AddErgosfare(options =>
             {
                 options.AddCommandModule(module =>
                 {
-                    module.Register<StubNonGenericCommandHandler>();
+                    module.Register<StubPlainCommandHandler>();
                 });
             }).BuildServiceProvider();
 
@@ -74,7 +75,7 @@ public class CommandMediatorExtensionsTests
 
         await mediator.SendAsync(cmd, cancellationToken);
 
-        Assert.True(StubNonGenericCommandHandler.HasCalled);
+        Assert.True(StubPlainCommandHandler.HasCalled);
     }
 
     /// <summary>
@@ -137,7 +138,7 @@ public class CommandMediatorExtensionsTests
 
         var mediator = services.GetRequiredService<ICommandMediator>();
 
-        var result = await mediator.SendAsync(cmd, new[] { "default" }, cancellationToken);
+        var result = await mediator.SendAsync(cmd, ["default"], cancellationToken);
 
         Assert.True(StubNonGenericCommandStringResultHandler.HasCalled);
         Assert.Equal(string.Empty, result);

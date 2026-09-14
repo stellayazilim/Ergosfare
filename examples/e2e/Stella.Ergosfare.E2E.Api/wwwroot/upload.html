@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ergosfare · File upload</title>
+<style>
+body{font:16px/1.6 system-ui;max-width:850px;margin:40px auto;padding:0 20px;background:#f4f6fa;color:#182338}main{background:white;border:1px solid #dce2ec;border-radius:12px;padding:28px}h1{line-height:1.2}button{padding:10px 16px;margin:16px 8px 0 0;border:0;border-radius:6px;background:#254db5;color:white;cursor:pointer}button:disabled{opacity:.5;cursor:default}progress{width:100%;margin-top:24px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#eef2f8;padding:16px}small{color:#53627a}input{display:block;margin-top:12px;max-width:100%}
+</style>
+<p><a href="/streams">← Stream examples</a></p>
+<main>
+<h1>Upload a file as a stream</h1>
+<p>The raw request body is piped into Ergosfare. A pre interceptor validates the file section and hands its first chunk and open parser to the handler, which continues writing to disk without buffering the entire file.</p>
+<form action="/streams/upload" method="post" enctype="multipart/form-data" id="upload">
+<label for="file">Choose a file <small>(up to 2 GiB per request, including multipart headers)</small></label>
+<input id="file" name="file" type="file" required>
+<button id="send" type="submit">Start upload</button><button id="cancel" type="button" disabled>Cancel</button>
+</form>
+<progress id="progress" max="100" value="0" aria-label="Upload progress"></progress>
+<p id="status" role="status">Choose a file to get started.</p>
+<pre id="result" hidden></pre>
+<small>Progress shows bytes sent by the browser. Once disk writes finish, the server returns the file size, chunk count, declared MIME type and SHA-256 digest. Files are stored under <code>examples/e2e/upload</code> with unique names; a companion JSON file preserves their metadata. MIME is reported by the client, not detected from the contents. Cancelled uploads have their partial files removed.</small>
+</main>
+<script src="/upload.js" defer></script>
+</html>

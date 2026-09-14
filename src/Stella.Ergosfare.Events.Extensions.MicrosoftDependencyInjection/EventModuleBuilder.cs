@@ -1,66 +1,112 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using System.Diagnostics.CodeAnalysis;
+using Stella.Ergosfare.Core.Abstractions.Planning;
 using Stella.Ergosfare.Events.Abstractions;
 
 namespace Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
 
-
 /// <summary>
-/// Provides a builder for selecting the event constructs this container runs from the
-/// compiled composition table.
+/// Selects which of the compiled event constructs this container runs.
 /// </summary>
-/// <remarks>
-/// Events and the subscribers serving them are registered individually or by
-/// <see cref="Type"/>; what each event's pipeline looks like is decided at compile time.
-/// </remarks>
 /// <param name="compositions">
-/// The container's composition catalog, told which constructs this registration selects.
+/// The catalog this builder records the container's selection in.
 /// </param>
-public class EventModuleBuilder(FrozenCompositionCatalog compositions)
+/// <exception cref="ArgumentNullException"><paramref name="compositions"/> is <c>null</c>.</exception>
+public class EventModuleBuilder(DispatchPlanCatalog compositions)
 {
-    private readonly FrozenCompositionCatalog _compositions = compositions ?? throw new ArgumentNullException(nameof(compositions));
+    private readonly DispatchPlanCatalog _compositions = compositions ?? throw new ArgumentNullException(nameof(compositions));
+
+    /// <summary>Applies the compile-time default selection for this module.</summary>
+    public EventModuleBuilder AddGenerated() => AddGenerated("");
+
+    /// <summary>Applies the compile-time selection for a constant discovery-key pattern.</summary>
+    /// <param name="discoveryKeyPattern">An exact key or trailing-star prefix.</param>
+    /// <returns>The same builder.</returns>
+    public EventModuleBuilder AddGenerated(string discoveryKeyPattern)
+    {
+        GeneratedPlanRegistry.ApplyGeneratedSelection(_compositions, 3, discoveryKeyPattern);
+        return this;
+    }
 
     /// <summary>
-    /// Registers an event construct.
+    /// Registers one event construct.
     /// </summary>
-    /// <typeparam name="TEvent">The type to register. Must be an event construct.</typeparam>
-    /// <returns>The current <see cref="EventModuleBuilder"/> instance for fluent chaining.</returns>
-    public EventModuleBuilder Register<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] TEvent>() where TEvent : IEvent
+    /// <typeparam name="TEvent">
+    /// The type to register: an event — which may be any non-null type — or one of the
+    /// handlers and interceptors that serve events.
+    /// </typeparam>
+    /// <returns>The same builder, so calls can be chained.</returns>
+    public EventModuleBuilder Register<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] TEvent>() where TEvent : notnull
     {
         Register(typeof(TEvent));
         return this;
     }
 
     /// <summary>
-    /// Registers an event construct — an event, or one of the subscribers and interceptors
-    /// serving events (their contracts carry the module marker too).
+    /// Registers one event construct.
     /// </summary>
-    /// <param name="eventType">The type to register.</param>
-    /// <returns>The current <see cref="EventModuleBuilder"/> instance for fluent chaining.</returns>
-    /// <exception cref="NotSupportedException" />
-    /// Thrown when the provided type is not an event construct.
+    /// <param name="eventType">
+    /// The type to register: an event, or one of the handlers and interceptors that serve
+    /// events.
+    /// </param>
+    /// <returns>The same builder, so calls can be chained.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="eventType"/> is <c>null</c>.</exception>
+    /// <exception cref="NotSupportedException">
+    /// The type is a pipeline participant but belongs to another module.
+    /// </exception>
+    /// <remarks>
+    /// An event itself needs no marker, so any type is accepted as one. A participant is
+    /// held to its module: a type implementing a pipeline contract must also carry
+    /// <see cref="IEvent"/> to be registered here.
+    /// </remarks>
     public EventModuleBuilder Register([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type eventType)
     {
-        if (!eventType.IsAssignableTo(typeof(IEvent)))
-            throw new NotSupportedException($"The given type '{eventType.Name}' is not an event and cannot be registered.");
+        ArgumentNullException.ThrowIfNull(eventType);
+
+        if (CarriesPipelineContracts(eventType) && !eventType.IsAssignableTo(typeof(IEvent)))
+        {
+            throw new NotSupportedException(
+                $"The given type '{eventType.Name}' carries pipeline contracts but is not an event construct, so it cannot be registered here. "
+                + "A message needs no marker; a participant belongs to its module.");
+        }
 
         _compositions.Select(eventType);
         return this;
     }
 
     /// <summary>
-    /// Registers a batch of pipeline participants — the bulk path source-generated
-    /// registration uses.
+    /// Reports whether a type implements any pipeline contract, which is what makes it a
+    /// participant rather than a message.
     /// </summary>
+    /// <param name="type">The type to inspect.</param>
+    /// <returns><c>true</c> when it implements a handler or interceptor contract.</returns>
+    private static bool CarriesPipelineContracts(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type type)
+    {
+        foreach (var contract in type.GetInterfaces())
+        {
+            if (contract.Namespace == CoreHandlerNamespace)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The namespace every pipeline contract lives in.
+    /// </summary>
+    private const string CoreHandlerNamespace = "Stella.Ergosfare.Core.Abstractions.Handlers";
+
+    /// <summary>
+    /// Registers many participants at once — the path generated registration uses.
+    /// </summary>
+    /// <param name="participantTypes">The handler and interceptor types to register.</param>
+    /// <returns>The same builder, so calls can be chained.</returns>
     /// <remarks>
-    /// No module assertion here: the generator has already partitioned its discoveries by
-    /// module, and not every participant contract carries the module marker (the modifying
-    /// interceptor shapes are declared purely over the core contracts).
-    /// <see cref="Register(Type)"/> keeps the assertion, since a hand-written registration
-    /// is where a wrong-module type actually surfaces.
+    /// Unlike <see cref="Register(Type)"/> this does not check the module: the generator has
+    /// already sorted its discoveries by module.
     /// </remarks>
-    /// <param name="participantTypes">The subscriber and interceptor types to register.</param>
-    /// <returns>The current <see cref="EventModuleBuilder"/> instance for fluent chaining.</returns>
     public EventModuleBuilder RegisterParticipants(IEnumerable<Type> participantTypes)
     {
         _compositions.Select(participantTypes);

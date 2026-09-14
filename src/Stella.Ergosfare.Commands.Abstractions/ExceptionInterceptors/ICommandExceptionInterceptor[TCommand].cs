@@ -4,22 +4,15 @@ namespace Stella.Ergosfare.Commands.Abstractions;
 
 
 /// <summary>
-/// Marker interface for asynchronous exception interceptors for commands.
-/// Inherits the result-agnostic <see cref="IAsyncExceptionInterceptor{TMessage}"/> and
-/// <see cref="ICommand"/> to allow registration within the command module.
-/// This interface does not modify the behavior or return type; interception logic
-/// is handled by <see cref="IAsyncExceptionInterceptor{TMessage}"/>.
+/// Handles failures raised while dispatching a <typeparamref name="TCommand"/>, without
+/// naming the result type.
 /// </summary>
-/// <typeparam name="TCommand">
-/// The type of command being intercepted. Must implement <see cref="ICommand"/>
-/// </typeparam>
+/// <typeparam name="TCommand">The command type this interceptor accepts.</typeparam>
 /// <remarks>
-/// The result-agnostic base is deliberate: a result-typed base (the previous
-/// <c>IAsyncExceptionInterceptor&lt;TCommand, object&gt;</c>) is invisible to the
-/// pipeline's pattern match whenever the pipeline result is a value type — void command
-/// pipelines carry a <see cref="System.Threading.Tasks.ValueTask"/> result internally, so
-/// the exception stage failed with <see cref="System.NotSupportedException"/> the moment
-/// it ran. For a strongly-typed result use
+/// Use this for commands that return nothing, and for work that applies whatever the result
+/// is. It must stay result-agnostic to serve a void command: those pipelines carry a
+/// <see cref="System.Threading.Tasks.ValueTask"/> in their result slot, which a
+/// result-typed contract would not match. For a typed result, implement
 /// <see cref="ICommandExceptionInterceptor{TCommand, TResult}"/>.
 /// </remarks>
 // ReSharper disable once UnusedType.Global

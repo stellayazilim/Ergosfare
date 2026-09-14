@@ -1,6 +1,6 @@
 using Stella.Ergosfare.Core.Abstractions.Attributes;
 
-namespace Stella.Ergosfare.Contract.Test.Sync.Generated;
+namespace Stella.Ergosfare.Contract.Test.Sync;
 
 // The synchronous-interceptor scenarios' types for the source-generated registration axis.
 // They are top-level, unkeyed and ungrouped on purpose — the generator disqualifies keyed,

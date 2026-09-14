@@ -3,28 +3,35 @@ namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 
 
 /// <summary>
-/// Asynchronous post-interceptor contract for messages of type <typeparamref name="TMessage"/>
-/// that is agnostic of the result type. Executes after the main handler has processed the message.
+/// Runs after the main handler of a <typeparamref name="TMessage"/> asynchronously,
+/// without naming the result type.
 /// </summary>
-/// <typeparam name="TMessage">The type of the message being handled.</typeparam>
+/// <typeparam name="TMessage">The message type this interceptor accepts.</typeparam>
 /// <remarks>
-/// This is a standalone asynchronous contract — it does not inherit the synchronous
-/// <see cref="IPostInterceptor{TMessage, TResult}"/>, and there is no object-typed default
-/// implementation: the pipeline invokes <see cref="HandleAsync"/> directly.
+/// Use this when the interceptor works for any result — logging or metrics, say. To read
+/// or replace a typed result, implement
+/// <see cref="IAsyncPostInterceptor{TMessage, TResult}"/> instead. These are separate
+/// contracts and an interceptor implements one of them.
 /// </remarks>
 public interface IAsyncPostInterceptor<in TMessage>
     : IPostInterceptor
     where TMessage : notnull
 {
     /// <summary>
-    /// Handles a message asynchronously after it has been processed by the main handler.
+    /// Processes the result of handling <paramref name="message"/>.
     /// </summary>
-    /// <param name="message">The message that was handled by the main handler.</param>
-    /// <param name="messageResult">The result produced so far by the pipeline.</param>
-    /// <param name="context">The current execution context.</param>
+    /// <param name="message">The message that was handled.</param>
+    /// <param name="messageResult">
+    /// The result as the previous stage left it. Void pipelines pass a completed task here,
+    /// which carries no meaning.
+    /// </param>
+    /// <param name="context">The execution context of this dispatch.</param>
     /// <returns>
-    /// A <see cref="ValueTask{Object}"/> whose result is the (possibly replaced) result that
-    /// continues through the pipeline.
+    /// The result the rest of the pipeline receives — either
+    /// <paramref name="messageResult"/> or a replacement, which must be of the pipeline's
+    /// result type. If it carries a failure the result type's adapter can read, the
+    /// remaining post-interceptors are skipped and the pipeline moves to its exception
+    /// stage.
     /// </returns>
     ValueTask<object> HandleAsync(TMessage message, object messageResult, ErgosfareContext context);
 }

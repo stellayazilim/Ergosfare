@@ -1,35 +1,31 @@
 namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 /// <summary>
-/// A compile-time staged pipeline plan for a void message: bespoke code that runs the
-/// message's entire interceptor-bearing pipeline — pre stages, handler, post stages, with
-/// exception and final semantics — as straight-line typed calls instead of the runtime
-/// strategy's generic machinery. See <see cref="DispatchRoots.MessageRoot"/> for the visitor re-entry
-/// pattern.
+/// A compiled plan that runs a void message's whole pipeline — pre-interceptors, handler,
+/// post-interceptors, and the exception and final behavior around them — as straight-line
+/// typed calls.
 /// </summary>
 /// <remarks>
-/// The plan is advisory: the hosting executor validates <see cref="Composition"/> against
-/// the container's selected frozen composition and falls back to the general strategy on
-/// a mismatch, so a stale plan only loses its speedup, never changes behavior.
-/// <see cref="StagedVoidPlan{TMessage}.Execute"/> must
-/// resolve every participant from the provider it is handed — that is exactly what the
-/// runtime handler references do outside memoized mode, which the executor's gate
-/// excludes.
+/// The plan is the executor. Its descriptor is checked against registration when the
+/// engine is initialized. Its one generated body constructs eligible parameterless
+/// participants and resolves injected participants from the caller's scope. A descriptor
+/// mismatch fails dispatch instead of constructing another execution path.
 /// </remarks>
-public abstract class StagedVoidPlan
+public abstract class StagedVoidPlan : ICompiledPlan
 {
-    /// <summary>The pipeline composition the plan was baked against.</summary>
-    public abstract StagedPlanComposition Composition { get; }
+    /// <summary>
+    /// The pipeline this plan was compiled against.
+    /// </summary>
+    public abstract StagedPlanKey Composition { get; }
 
     /// <summary>
-    /// Whether the plan carries a direct-construction variant of its pipeline
-    /// (<c>ExecuteDirect</c>): every participant constructed with <c>new</c> instead of a
-    /// container resolution. The hosting executor uses that variant only after verifying
-    /// at runtime that every participant's effective DI registration is the module's own
-    /// plain transient one — the single shape where container resolution and direct
-    /// construction are observably identical.
+    /// Every group this plan can filter for, or <c>null</c> when the plan was compiled for
+    /// one group set and needs no filtering.
     /// </summary>
-    public virtual bool SupportsDirectConstruction => false;
+    /// <remarks>
+    /// A filtering plan serves dispatches whose groups are only known at runtime: it holds
+    /// every participant and decides per call, so what the executor must check is the
+    /// pipeline over exactly these groups.
+    /// </remarks>
+    public virtual string[]? FilterGroups => null;
 
-    /// <summary>Invokes the visitor with this plan's message type as the generic argument.</summary>
-    public abstract TReturn Accept<TReturn, TState>(IStagedVoidPlanVisitor<TReturn, TState> visitor, TState state);
 }

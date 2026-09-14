@@ -1,0 +1,15 @@
+﻿[mcp_servers.ergosfare-docs]
+# Serves this repository's published documentation to Codex as an MCP catalog, so a
+# session can look a page up instead of guessing at the API. It is checked in because
+# the answer it gives has to be the same for everyone reviewing or writing docs here —
+# a per-machine copy is how two people end up citing different pages.
+#
+# The URL is the published site, not a local build: the catalog is meant to reflect what
+# readers actually see. Point it at a local Starlight dev server only while validating a
+# docs change that is not published yet.
+#
+# Note for contributors: Codex starts this automatically, and `npx -y` fetches and runs
+# @stellayazilim/mcp-starlight (our own package) on your machine. Delete this file or the
+# server block if you would rather opt out; nothing in the build depends on it.
+command = "npx"
+args = ["-y", "@stellayazilim/mcp-starlight", "https://stellayazilim.github.io/ergosfare.docs"]

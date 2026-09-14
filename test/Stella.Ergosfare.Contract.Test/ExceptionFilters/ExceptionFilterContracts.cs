@@ -170,11 +170,11 @@ public abstract class FilteredResultTaggedBase<TCommand>
     where TCommand : class, IFilteredResultCommand
 {
     /// <inheritdoc />
-    public ValueTask<string?> HandleAsync(
+    public ValueTask<string> HandleAsync(
         TCommand command, string? result, TaggedFaultException exception, ErgosfareContext context)
     {
         context.Mark("exception:tagged", ExceptionFilterVocabulary.Describe(exception));
-        return ValueTask.FromResult<string?>(ExceptionFilterVocabulary.TaggedRecovery);
+        return ValueTask.FromResult(ExceptionFilterVocabulary.TaggedRecovery);
     }
 }
 
@@ -184,11 +184,11 @@ public abstract class FilteredResultUntypedBase<TCommand> : ICommandExceptionInt
     where TCommand : class, IFilteredResultCommand
 {
     /// <inheritdoc />
-    public ValueTask<string?> HandleAsync(
+    public ValueTask<string> HandleAsync(
         TCommand command, string? result, Exception exception, ErgosfareContext context)
     {
         context.Mark("exception:untyped", ExceptionFilterVocabulary.Describe(exception));
-        return ValueTask.FromResult<string?>((result ?? string.Empty) + ExceptionFilterVocabulary.UntypedSuffix);
+        return ValueTask.FromResult((result ?? string.Empty) + ExceptionFilterVocabulary.UntypedSuffix);
     }
 }
 

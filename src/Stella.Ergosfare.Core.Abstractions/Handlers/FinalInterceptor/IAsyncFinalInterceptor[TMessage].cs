@@ -2,25 +2,30 @@
 namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 
 /// <summary>
-/// Asynchronous final-interceptor contract for messages of type <typeparamref name="TMessage"/>
-/// that is agnostic of the result type. Always executed at the end of the pipeline,
-/// regardless of success or failure — for cleanup, auditing, or logging.
+/// Runs asynchronously once a <typeparamref name="TMessage"/> pipeline has settled,
+/// without naming the result type.
 /// </summary>
-/// <typeparam name="TMessage">The type of message this interceptor handles.</typeparam>
+/// <typeparam name="TMessage">The message type this interceptor accepts.</typeparam>
 /// <remarks>
-/// This is a standalone asynchronous contract — it does not inherit the synchronous
-/// <see cref="IFinalInterceptor{TMessage, TResult}"/>, and there is no object-typed default
-/// implementation: the pipeline invokes <see cref="HandleAsync"/> directly.
+/// Use this when the work applies to any result. A final interceptor observes the outcome
+/// and cannot change it, and a pipeline stopped by <see cref="ErgosfareContext.Abort()"/>
+/// runs none. To read a typed result, implement
+/// <see cref="IAsyncFinalInterceptor{TMessage, TResult}"/> instead.
 /// </remarks>
 public interface IAsyncFinalInterceptor<in TMessage> : IFinalInterceptor
 {
     /// <summary>
-    /// Handles the end of the pipeline for the given message.
+    /// Observes how the pipeline for <paramref name="message"/> settled.
     /// </summary>
-    /// <param name="message">The message that was processed.</param>
-    /// <param name="result">The final result, if any.</param>
-    /// <param name="exception">The exception that terminated the pipeline, if any.</param>
-    /// <param name="context">The current execution context.</param>
-    /// <returns>A <see cref="ValueTask"/> representing the asynchronous operation.</returns>
+    /// <param name="message">The message that was dispatched.</param>
+    /// <param name="result">
+    /// The result, or <c>null</c> when the pipeline failed. Void pipelines pass a completed
+    /// task here, which carries no meaning.
+    /// </param>
+    /// <param name="exception">
+    /// The failure that ended the pipeline, or <c>null</c> when it succeeded.
+    /// </param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <returns>A task that completes when the interceptor is done.</returns>
     ValueTask HandleAsync(TMessage message, object? result, Exception? exception, ErgosfareContext context);
 }

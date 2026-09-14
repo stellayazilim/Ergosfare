@@ -7,9 +7,174 @@ using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Events.Abstractions;
 using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Generated;
 
 namespace Stella.Ergosfare.Contract.Test.Events;
+
+// Top-level and unkeyed so the generator bakes the broadcast plans; every event stays
+// scoped to this area and no interceptor targets a marker type.
+
+/// <summary>Event two handlers subscribe to.</summary>
+public sealed class OrderPlaced : IEvent;
+
+/// <inheritdoc />
+public sealed class OrderPlacedInvoiceHandler : IEventHandler<OrderPlaced>
+{
+    /// <inheritdoc />
+    public ValueTask HandleAsync(OrderPlaced @event, ErgosfareContext context)
+    {
+        context.Mark("invoice");
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <inheritdoc />
+public sealed class OrderPlacedWarehouseHandler : IEventHandler<OrderPlaced>
+{
+    /// <inheritdoc />
+    public ValueTask HandleAsync(OrderPlaced @event, ErgosfareContext context)
+    {
+        context.Mark("warehouse");
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>The generator sees this event, but nothing handles it anywhere.</summary>
+public sealed class NobodyListens : IEvent;
+
+/// <summary>Never discovered at all — a different situation from <see cref="NobodyListens"/>.</summary>
+[ExcludeFromDiscovery]
+public sealed class UnknownEvent : IEvent;
+
+/// <summary>Event with an ungrouped and a grouped handler.</summary>
+public sealed class StockChanged : IEvent;
+
+/// <inheritdoc />
+public sealed class StockChangedDefaultHandler : IEventHandler<StockChanged>
+{
+    /// <inheritdoc />
+    public ValueTask HandleAsync(StockChanged @event, ErgosfareContext context)
+    {
+        context.Mark("default");
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <inheritdoc />
+[Group(EventPublishTests.Reporting)]
+public sealed class StockChangedReportingHandler : IEventHandler<StockChanged>
+{
+    /// <inheritdoc />
+    public ValueTask HandleAsync(StockChanged @event, ErgosfareContext context)
+    {
+        context.Mark("reporting");
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>The exception a broadcast handler throws, distinguishable from framework ones.</summary>
+public sealed class BroadcastFailure() : Exception("broadcast handler failed");
+
+/// <summary>An event whose interceptor stages record the result slot they are handed.</summary>
+public sealed class Announced : IEvent
+{
+    /// <summary>Drives the handler into the failure path, so the exception stage is reached.</summary>
+    public bool Fail;
+}
+
+/// <inheritdoc />
+public sealed class AnnouncedHandler : IEventHandler<Announced>
+{
+    /// <inheritdoc />
+    public ValueTask HandleAsync(Announced @event, ErgosfareContext context)
+    {
+        context.Mark("handler");
+
+        if (@event.Fail)
+        {
+            throw new BroadcastFailure();
+        }
+
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>
+/// The core result-agnostic contracts, not the event facades: the facades hide the slot
+/// behind their own default implementations, and the slot is what these scenarios pin.
+/// The <see cref="IEvent"/> marker is what makes the module builder accept them.
+/// </summary>
+public sealed class AnnouncedPost : IEvent, IAsyncPostInterceptor<Announced>
+{
+    /// <inheritdoc />
+    public ValueTask<object> HandleAsync(Announced @event, object result, ErgosfareContext context)
+    {
+        context.Mark("post", EventPublishTests.Describe(result));
+        return ValueTask.FromResult(result);
+    }
+}
+
+/// <inheritdoc cref="AnnouncedPost"/>
+public sealed class AnnouncedException : IEvent, IAsyncExceptionInterceptor<Announced>
+{
+    /// <inheritdoc />
+    public ValueTask<object> HandleAsync(
+        Announced @event, object? result, Exception exception, ErgosfareContext context)
+    {
+        context.Mark("exception", EventPublishTests.Describe(result));
+        return ValueTask.FromResult(result!);
+    }
+}
+
+/// <inheritdoc cref="AnnouncedPost"/>
+public sealed class AnnouncedFinal : IEvent, IAsyncFinalInterceptor<Announced>
+{
+    /// <inheritdoc />
+    public ValueTask HandleAsync(
+        Announced @event, object? result, Exception? exception, ErgosfareContext context)
+    {
+        context.Mark("final", EventPublishTests.Describe(result));
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>An event whose post stage aborts after the handlers have run.</summary>
+public sealed class Recalled : IEvent;
+
+/// <inheritdoc />
+public sealed class RecalledHandler : IEventHandler<Recalled>
+{
+    /// <inheritdoc />
+    public ValueTask HandleAsync(Recalled @event, ErgosfareContext context)
+    {
+        context.Mark("handler");
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <inheritdoc cref="AnnouncedPost"/>
+public sealed class RecalledAbortingPost : IEvent, IAsyncPostInterceptor<Recalled>
+{
+    /// <inheritdoc />
+    public ValueTask<object> HandleAsync(Recalled @event, object result, ErgosfareContext context)
+    {
+        context.Mark("post:abort");
+        context.Abort();
+        return ValueTask.FromResult(result);
+    }
+}
+
+/// <inheritdoc cref="AnnouncedPost"/>
+public sealed class RecalledFinal : IEvent, IAsyncFinalInterceptor<Recalled>
+{
+    /// <inheritdoc />
+    public ValueTask HandleAsync(
+        Recalled @event, object? result, Exception? exception, ErgosfareContext context)
+    {
+        context.Mark("final",
+            $"{EventPublishTests.Describe(result)}|{(exception is null ? "none" : exception.GetType().Name)}");
+        return ValueTask.CompletedTask;
+    }
+}
 
 /// <summary>
 /// Publish semantics: fan-out to every matching handler, what an audience of nobody does,
@@ -17,67 +182,32 @@ namespace Stella.Ergosfare.Contract.Test.Events;
 /// </summary>
 public sealed class EventPublishTests
 {
-    private const string Key = "contract.events";
-    private const string Reporting = "reporting";
+    /// <summary>The group name this area filters on.</summary>
+    public const string Reporting = "ev-reporting";
 
-    [DiscoveryKey(Key)]
-    public sealed class OrderPlaced : IEvent;
-
-    [DiscoveryKey(Key)]
-    public sealed class OrderPlacedInvoiceHandler : IEventHandler<OrderPlaced>
+    /// <inheritdoc cref="Pipeline.PipelineVocabulary.Describe(object?)"/>
+    public static string Describe(object? result) => result switch
     {
-        public ValueTask HandleAsync(OrderPlaced @event, ErgosfareContext context)
-        {
-            context.Mark("invoice");
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    [DiscoveryKey(Key)]
-    public sealed class OrderPlacedWarehouseHandler : IEventHandler<OrderPlaced>
-    {
-        public ValueTask HandleAsync(OrderPlaced @event, ErgosfareContext context)
-        {
-            context.Mark("warehouse");
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    /// <summary>Registered as a message, but nothing handles it.</summary>
-    [DiscoveryKey(Key)]
-    public sealed class NobodyListens : IEvent;
-
-    /// <summary>Never registered at all — a different situation from <see cref="NobodyListens"/>.</summary>
-    [ExcludeFromDiscovery]
-    public sealed class UnknownEvent : IEvent;
-
-    [DiscoveryKey(Key)]
-    public sealed class StockChanged : IEvent;
-
-    [DiscoveryKey(Key)]
-    public sealed class StockChangedDefaultHandler : IEventHandler<StockChanged>
-    {
-        public ValueTask HandleAsync(StockChanged @event, ErgosfareContext context)
-        {
-            context.Mark("default");
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    [DiscoveryKey(Key)]
-    [Group(Reporting)]
-    public sealed class StockChangedReportingHandler : IEventHandler<StockChanged>
-    {
-        public ValueTask HandleAsync(StockChanged @event, ErgosfareContext context)
-        {
-            context.Mark("reporting");
-            return ValueTask.CompletedTask;
-        }
-    }
+        null => "null",
+        Unit unit => ReferenceEquals(unit, Unit.Value) ? nameof(Unit) : "unit:other",
+        _ => result.ToString() ?? result.GetType().Name,
+    };
 
     private static ServiceProvider CreateProvider()
         => new ServiceCollection()
-            .AddErgosfare(options => options.AddEventModule(events => events.RegisterGenerated(Key)))
+            .AddErgosfare(options => options
+                .AddEventModule(events => events
+                    .Register<OrderPlacedInvoiceHandler>()
+                    .Register<OrderPlacedWarehouseHandler>()
+                    .Register<StockChangedDefaultHandler>()
+                    .Register<StockChangedReportingHandler>()
+                    .Register<AnnouncedHandler>()
+                    .Register<AnnouncedPost>()
+                    .Register<AnnouncedException>()
+                    .Register<AnnouncedFinal>()
+                    .Register<RecalledHandler>()
+                    .Register<RecalledAbortingPost>()
+                    .Register<RecalledFinal>()))
             .BuildServiceProvider();
 
     [Fact]
@@ -94,41 +224,28 @@ public sealed class EventPublishTests
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task Publishing_a_registered_event_nobody_handles_is_a_no_op()
+    public async Task Publishing_an_event_nobody_handles_throws()
     {
         await using var provider = CreateProvider();
         var recorder = new PipelineRecorder();
 
-        await provider.GetRequiredService<IEventMediator>().PublishAsync(new NobodyListens(), recorder.Events());
+        // A publish reaching nobody is not an error at run time — with or without a plan,
+        // because there is nothing a plan could have run.
+        await Assert.ThrowsAsync<NoHandlerFoundException>(async () =>
+            await provider.GetRequiredService<IEventMediator>().PublishAsync(new NobodyListens(), recorder.Events()));
 
         recorder.AssertStages();
     }
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task Publishing_a_registered_event_nobody_handles_throws_when_the_caller_asks_it_to()
+    public async Task Publishing_an_unregistered_event_type_throws()
     {
         await using var provider = CreateProvider();
         var mediator = provider.GetRequiredService<IEventMediator>();
-        var settings = new EventMediationSettings { ThrowIfNoHandlerFound = true };
 
         await Assert.ThrowsAsync<NoHandlerFoundException>(
-            async () => await mediator.PublishAsync(new NobodyListens(), settings));
-    }
-
-    [Fact]
-    [Trait("Category", "Contract")]
-    public async Task Publishing_an_unregistered_event_type_is_a_no_op_like_a_registered_one()
-    {
-        await using var provider = CreateProvider();
-        var recorder = new PipelineRecorder();
-
-        // UnknownEvent is not in the registry at all, NobodyListens is registered with no
-        // handlers. Both reach nobody, and both are silent unless the caller asks — the
-        // flag used to govern only the second.
-        await provider.GetRequiredService<IEventMediator>().PublishAsync(new UnknownEvent(), recorder.Events());
-
-        recorder.AssertStages();
+            async () => await mediator.PublishAsync(new UnknownEvent()));
     }
 
     [Fact]
@@ -149,109 +266,11 @@ public sealed class EventPublishTests
     {
         await using var provider = CreateProvider();
         var recorder = new PipelineRecorder();
-        var settings = recorder.Events();
-        settings.Filters.Groups = [Reporting];
-
-        await provider.GetRequiredService<IEventMediator>().PublishAsync(new StockChanged(), settings);
+        await provider.GetRequiredService<IEventMediator>().PublishAsync(
+            new StockChanged(), recorder.Events(), [Reporting]);
 
         recorder.AssertStages("reporting");
     }
-
-    [Fact]
-    [Trait("Category", "Contract")]
-    public async Task Publishing_an_unregistered_event_type_throws_when_the_caller_asks_it_to()
-    {
-        await using var provider = CreateProvider();
-        var mediator = provider.GetRequiredService<IEventMediator>();
-        var settings = new EventMediationSettings { ThrowIfNoHandlerFound = true };
-
-        // The other half of the flag's new reach: what the unregistered case used to do
-        // unconditionally, it now does on request — the same as the registered-but-unhandled
-        // case two scenarios up. Appended rather than placed beside its sibling: a member
-        // inserted above renumbers the state machines below it and churns the lane map.
-        await Assert.ThrowsAsync<NoHandlerFoundException>(
-            async () => await mediator.PublishAsync(new UnknownEvent(), settings));
-    }
-
-    // -----------------------------------------------------------------------
-    // what a publish puts in its result slot
-    //
-    // Appended for the same reason as the scenario above.
-    // -----------------------------------------------------------------------
-
-    /// <summary>The exception a broadcast handler throws, distinguishable from framework ones.</summary>
-    public sealed class BroadcastFailure() : Exception("broadcast handler failed");
-
-    /// <summary>An event whose interceptor stages record the result slot they are handed.</summary>
-    [DiscoveryKey(Key)]
-    public sealed class Announced : IEvent
-    {
-        /// <summary>Drives the handler into the failure path, so the exception stage is reached.</summary>
-        public bool Fail;
-    }
-
-    [DiscoveryKey(Key)]
-    public sealed class AnnouncedHandler : IEventHandler<Announced>
-    {
-        public ValueTask HandleAsync(Announced @event, ErgosfareContext context)
-        {
-            context.Mark("handler");
-
-            if (@event.Fail)
-            {
-                throw new BroadcastFailure();
-            }
-
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    /// <summary>
-    /// The core result-agnostic contracts, not the event facades: the facades hide the slot
-    /// behind their own default implementations, and the slot is what these scenarios pin.
-    /// The <see cref="IEvent"/> marker is what makes the module builder accept them.
-    /// </summary>
-    [DiscoveryKey(Key)]
-    public sealed class AnnouncedPost : IEvent, IAsyncPostInterceptor<Announced>
-    {
-        public ValueTask<object> HandleAsync(Announced @event, object result, ErgosfareContext context)
-        {
-            context.Mark("post", Describe(result));
-            return ValueTask.FromResult(result);
-        }
-    }
-
-    /// <inheritdoc cref="AnnouncedPost"/>
-    [DiscoveryKey(Key)]
-    public sealed class AnnouncedException : IEvent, IAsyncExceptionInterceptor<Announced>
-    {
-        public ValueTask<object> HandleAsync(
-            Announced @event, object? result, Exception exception, ErgosfareContext context)
-        {
-            context.Mark("exception", Describe(result));
-            return ValueTask.FromResult(result!);
-        }
-    }
-
-    /// <inheritdoc cref="AnnouncedPost"/>
-    [DiscoveryKey(Key)]
-    public sealed class AnnouncedFinal : IEvent, IAsyncFinalInterceptor<Announced>
-    {
-        public ValueTask HandleAsync(
-            Announced @event, object? result, Exception? exception, ErgosfareContext context)
-        {
-            context.Mark("final", Describe(result));
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    /// <inheritdoc cref="Pipeline.PipelineVocabulary.Describe(object?)"/>
-    private static string Describe(object? result) => result switch
-    {
-        null => "null",
-        Unit unit => ReferenceEquals(unit, Unit.Value) ? nameof(Unit) : "unit:other",
-        _ => result.ToString() ?? result.GetType().Name,
-    };
 
     [Fact]
     [Trait("Category", "Contract")]
@@ -271,7 +290,7 @@ public sealed class EventPublishTests
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_failed_publishs_exception_and_final_stages_are_handed_the_shared_unit_instance()
+    public async Task A_failed_publishs_exception_and_final_stages_see_the_empty_result_slot()
     {
         await using var provider = CreateProvider();
         var recorder = new PipelineRecorder();
@@ -279,51 +298,15 @@ public sealed class EventPublishTests
         await provider.GetRequiredService<IEventMediator>()
             .PublishAsync(new Announced { Fail = true }, recorder.Events());
 
+        // Changed by the plan lane, pinned as observed: the compiled broadcast plan fills
+        // the slot only after each handler completes, so a handler that throws leaves the
+        // exception and final stages the empty slot — null — where the retired runtime
+        // fan-out handed them Unit.Value up front. A publish now behaves like a void
+        // command: the slot is empty until the handler has run. See the suite README's
+        // suspicious-behaviors entry on the runtime-lane removal.
         recorder.AssertStages("handler", "exception", "final");
-        Assert.Equal(nameof(Unit), recorder.DetailOf("exception"));
-        Assert.Equal(nameof(Unit), recorder.DetailOf("final"));
-    }
-
-    // -----------------------------------------------------------------------
-    // aborting a publish
-    // -----------------------------------------------------------------------
-
-    /// <summary>An event whose post stage aborts after the handlers have run.</summary>
-    [DiscoveryKey(Key)]
-    public sealed class Recalled : IEvent;
-
-    [DiscoveryKey(Key)]
-    public sealed class RecalledHandler : IEventHandler<Recalled>
-    {
-        public ValueTask HandleAsync(Recalled @event, ErgosfareContext context)
-        {
-            context.Mark("handler");
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    /// <inheritdoc cref="AnnouncedPost"/>
-    [DiscoveryKey(Key)]
-    public sealed class RecalledAbortingPost : IEvent, IAsyncPostInterceptor<Recalled>
-    {
-        public ValueTask<object> HandleAsync(Recalled @event, object result, ErgosfareContext context)
-        {
-            context.Mark("post:abort");
-            context.Abort();
-            return ValueTask.FromResult(result);
-        }
-    }
-
-    /// <inheritdoc cref="AnnouncedPost"/>
-    [DiscoveryKey(Key)]
-    public sealed class RecalledFinal : IEvent, IAsyncFinalInterceptor<Recalled>
-    {
-        public ValueTask HandleAsync(
-            Recalled @event, object? result, Exception? exception, ErgosfareContext context)
-        {
-            context.Mark("final", $"{Describe(result)}|{(exception is null ? "none" : exception.GetType().Name)}");
-            return ValueTask.CompletedTask;
-        }
+        Assert.Equal("null", recorder.DetailOf("exception"));
+        Assert.Equal("null", recorder.DetailOf("final"));
     }
 
     [Fact]

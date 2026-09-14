@@ -3,20 +3,15 @@
 namespace Stella.Ergosfare.Queries.Abstractions;
 
 /// <summary>
-/// Represents a type-safe asynchronous handler for a query of type <typeparamref name="TQuery"/>,
-/// producing a result of type <typeparamref name="TResult"/>.
+/// Handles queries of type <typeparamref name="TQuery"/> and returns the
+/// <typeparamref name="TResult"/> they declare.
 /// </summary>
-/// <typeparam name="TQuery">The type of query being handled. Must implement <see cref="IQuery{TResult}"/>.</typeparam>
-/// <typeparam name="TResult">The type of result returned by the query.</typeparam>
+/// <typeparam name="TQuery">The query type this handler accepts.</typeparam>
+/// <typeparam name="TResult">The result type the query declares.</typeparam>
 /// <remarks>
-/// <para>
-/// Implementing this interface allows a handler to process a query asynchronously
-/// within the query mediation pipeline and return a strongly-typed result.
-/// </para>
-/// <para>
-/// Handlers implementing this interface are automatically recognized and invoked
-/// by the query mediator when the corresponding query type is dispatched.
-/// </para>
+/// A query is served by exactly one handler, so registering two for the same query type
+/// fails the dispatch. Registration finds this handler through the contract itself — there
+/// is nothing to wire up by hand.
 /// </remarks>
-public interface IQueryHandler<in TQuery,TResult>: IQuery, IAsyncHandler<TQuery, TResult> 
+public interface IQueryHandler<in TQuery,TResult>: IQuery, IAsyncHandler<TQuery, TResult>
     where TQuery : IQuery<TResult>;

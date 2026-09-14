@@ -3,27 +3,28 @@ namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 
 
 /// <summary>
-/// The erased probe an exception interceptor carries when it accepts only some exceptions.
-/// The exception stage asks every interceptor that implements it whether the thrown
-/// exception is one it accepts, runs only those that answer yes, and rethrows the original
-/// exception unwrapped when none does.
+/// Narrows an exception interceptor to the failures it accepts.
 /// </summary>
 /// <remarks>
-/// An interceptor that does not implement this contract accepts every exception — the
-/// untyped facades keep their unfiltered behavior with no opt-in.
 /// <para>
-/// The probe is deliberately separate from the dispatch contracts
-/// (<see cref="IExceptionInterceptor{TMessage, TResult}"/> and the asynchronous pair):
-/// filtering is orthogonal to which typed member the stage invokes, so a filtered
-/// interceptor is dispatched through exactly the same arm as an unfiltered one.
+/// The exception stage asks each interceptor that implements this contract whether it
+/// accepts the failure, and skips the ones that say no — a skipped interceptor does not
+/// count as having handled anything, so a failure every interceptor rejects stays
+/// unhandled and settles as if no interceptor were registered at all.
+/// </para>
+/// <para>
+/// An interceptor that does not implement this contract accepts every failure. Prefer the
+/// typed <see cref="IExceptionInterceptorFilter{TException}"/>, which implements
+/// <see cref="Matches"/> for you; implement this one directly only for a test the exception
+/// type alone cannot express.
 /// </para>
 /// </remarks>
 public interface IExceptionInterceptorFilter
 {
     /// <summary>
-    /// Determines whether this interceptor accepts the thrown exception.
+    /// Reports whether this interceptor accepts <paramref name="exception"/>.
     /// </summary>
-    /// <param name="exception">The exception the pipeline threw.</param>
-    /// <returns><c>true</c> when the interceptor should run for this exception; otherwise <c>false</c>.</returns>
+    /// <param name="exception">The failure the pipeline raised.</param>
+    /// <returns><c>true</c> to run this interceptor for the failure.</returns>
     bool Matches(Exception exception);
 }

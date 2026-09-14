@@ -3,23 +3,22 @@
 namespace Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 
 /// <summary>
-/// Provides extension methods for the <see cref="ModuleRegistry"/> type to simplify module registration.
+/// Adds the command module to a registry.
 /// </summary>
 public static class ModuleRegistryExtensions
 {
     /// <summary>
-    ///     Adds a command module to the module registry using the provided builder action.
+    /// Adds the command module, registering the commands
+    /// <paramref name="builderAction"/> selects.
     /// </summary>
-    /// <param name="moduleRegistry">The module registry to which the command module will be added.</param>
-    /// <param name="builderAction">An action that configures the command module using a <see cref="CommandModuleBuilder" />.</param>
-    /// <returns>The <paramref name="moduleRegistry" /> with the command module added.</returns>
+    /// <param name="moduleRegistry">The registry being configured.</param>
+    /// <param name="builderAction">Selects which command constructs this container runs.</param>
+    /// <returns>The same registry, so calls can be chained.</returns>
     public static IModuleRegistry AddCommandModule(this IModuleRegistry moduleRegistry,
         Action<CommandModuleBuilder> builderAction)
     {
-        // Create a new CommandModule instance using the builder action and register it with the module registry.
         moduleRegistry.Register(new CommandModule(builderAction));
 
-        // Return the module registry with the newly added command module.
         return moduleRegistry;
     }
 }

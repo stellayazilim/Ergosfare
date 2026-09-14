@@ -2,23 +2,22 @@
 namespace Stella.Ergosfare.Core.Abstractions.Attributes;
 
 /// <summary>
-/// Excludes a message from covariantly matched interceptors: interceptors registered
-/// against a base type or interface of the message (e.g. an <c>IEvent</c>-wide
-/// pre-interceptor) no longer apply to it. Interceptors registered against the message
-/// type itself always run — they were written for this message deliberately.
+/// Detaches a message from interceptors it only matches covariantly — those registered
+/// against one of its base types or interfaces.
 /// </summary>
 /// <remarks>
-/// Without arguments every covariantly matched interceptor is excluded; with group names
-/// only the covariant interceptors carrying one of those <see cref="GroupAttribute"/>
-/// groups are. Main handlers are never affected — the attribute shapes the interceptor
-/// pipeline, not dispatch itself.
+/// Interceptors registered against the message type itself always run; they were written
+/// for this message. With no arguments every covariantly matched interceptor is detached;
+/// with group names only those declaring one of the named <see cref="GroupAttribute"/>
+/// groups are. Main handlers are never affected — this shapes the interceptor stages, not
+/// handler selection.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface, Inherited = false)]
 public sealed class ExcludeFromPipelineAttribute(params string[] groups) : Attribute
 {
     /// <summary>
-    /// The interceptor groups excluded from covariant matching; empty to exclude every
-    /// covariantly matched interceptor.
+    /// The interceptor groups to detach; empty detaches every covariantly matched
+    /// interceptor.
     /// </summary>
     public string[] Groups => groups;
 }

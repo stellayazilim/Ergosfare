@@ -6,9 +6,58 @@ using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Generated;
 
 namespace Stella.Ergosfare.Contract.Test.Groups;
+
+// Top-level and unkeyed so the generator bakes the plans — the default-set plan and the
+// group-filtered ones alike; every type stays scoped to this area.
+
+/// <summary>Command with an ungrouped handler and a grouped pre-interceptor.</summary>
+public sealed class MixedAudience : ICommand;
+
+/// <inheritdoc />
+public sealed class MixedAudienceHandler : ICommandHandler<MixedAudience>
+{
+    /// <inheritdoc />
+    public ValueTask HandleAsync(MixedAudience command, ErgosfareContext context)
+    {
+        context.Mark("handler");
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>Only a filtered dispatch may see this pre-interceptor.</summary>
+[Group(GroupFilteringTests.Reporting)]
+public sealed class MixedAudienceReportingPre : ICommandPreInterceptor<MixedAudience>
+{
+    /// <inheritdoc />
+    public ValueTask<MixedAudience> HandleAsync(MixedAudience command, ErgosfareContext context)
+    {
+        context.Mark("pre:reporting");
+        return ValueTask.FromResult(command);
+    }
+}
+
+/// <summary>A command whose only handler is grouped.</summary>
+[Group(GroupFilteringTests.Reporting)]
+public sealed class ReportingOnly : ICommand
+{
+    /// <summary>Set by the handler — the only observation the settings-less overloads leave.</summary>
+    public bool Handled;
+}
+
+/// <inheritdoc />
+[Group(GroupFilteringTests.Reporting)]
+public sealed class ReportingOnlyHandler : ICommandHandler<ReportingOnly>
+{
+    /// <inheritdoc />
+    public ValueTask HandleAsync(ReportingOnly command, ErgosfareContext context)
+    {
+        command.Handled = true;
+        context.Mark("handler:reporting");
+        return ValueTask.CompletedTask;
+    }
+}
 
 /// <summary>
 /// Group filtering is exclusive in both directions: a default dispatch sees only
@@ -17,73 +66,52 @@ namespace Stella.Ergosfare.Contract.Test.Groups;
 /// </summary>
 public sealed class GroupFilteringTests
 {
-    private const string Key = "contract.groups";
-    private const string Reporting = "reporting";
+    /// <summary>The group name this area filters on.</summary>
+    public const string Reporting = "reporting";
 
     /// <summary>The canonical filter form, interned and reused as the API intends.</summary>
     private static readonly GroupSet ReportingSet = GroupSet.Of(Reporting);
 
-    [DiscoveryKey(Key)]
-    public sealed class Mixed : ICommand;
-
-    [DiscoveryKey(Key)]
-    public sealed class MixedHandler : ICommandHandler<Mixed>
+    [Fact]
+    public async Task A_spread_collection_expression_materializes_a_single_use_source_once()
     {
-        public ValueTask HandleAsync(Mixed command, ErgosfareContext context)
+        await using var provider = CreateProvider();
+        var mediator = provider.GetRequiredService<ICommandMediator>();
+        var command = new ReportingOnly();
+        var reads = 0;
+
+        await mediator.SendAsync(command, [.. ReadOnce()], CancellationToken.None);
+
+        Assert.True(command.Handled);
+        Assert.Equal(1, reads);
+
+        IEnumerable<string> ReadOnce()
         {
-            context.Mark("handler");
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    /// <summary>Only a filtered dispatch may see this pre-interceptor.</summary>
-    [DiscoveryKey(Key)]
-    [Group(Reporting)]
-    public sealed class MixedReportingPre : ICommandPreInterceptor<Mixed>
-    {
-        public ValueTask<Mixed> HandleAsync(Mixed command, ErgosfareContext context)
-        {
-            context.Mark("pre:reporting");
-            return ValueTask.FromResult(command);
-        }
-    }
-
-    /// <summary>A command whose only handler is grouped.</summary>
-    [DiscoveryKey(Key)]
-    [Group(Reporting)]
-    public sealed class ReportingOnly : ICommand
-    {
-        /// <summary>Set by the handler — the only observation the settings-less overloads leave.</summary>
-        public bool Handled;
-    }
-
-    [DiscoveryKey(Key)]
-    [Group(Reporting)]
-    public sealed class ReportingOnlyHandler : ICommandHandler<ReportingOnly>
-    {
-        public ValueTask HandleAsync(ReportingOnly command, ErgosfareContext context)
-        {
-            command.Handled = true;
-            context.Mark("handler:reporting");
-            return ValueTask.CompletedTask;
+            if (++reads != 1)
+                throw new InvalidOperationException("The group source cannot be enumerated twice.");
+            yield return Reporting;
         }
     }
 
     private static ServiceProvider CreateProvider()
         => new ServiceCollection()
-            .AddErgosfare(options => options.AddCommandModule(commands => commands.RegisterGenerated(Key)))
+            .AddErgosfare(options => options
+                .AddCommandModule(commands => commands
+                    .Register<MixedAudienceHandler>()
+                    .Register<MixedAudienceReportingPre>()
+                    .Register<ReportingOnlyHandler>()))
             .BuildServiceProvider();
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_default_dispatch_skips_grouped_participants()
+    public async Task The_default_plan_runs_only_the_ungrouped_participants()
     {
         await using var provider = CreateProvider();
         var recorder = new PipelineRecorder();
+        var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        await provider.GetRequiredService<ICommandMediator>().SendAsync(new Mixed(), recorder.Commands());
-
-        recorder.AssertStages("handler");
+        await mediator.SendAsync(new MixedAudience(), recorder.Commands());
+        Assert.Equal(["handler"], recorder.Stages);
     }
 
     [Fact]
@@ -107,10 +135,7 @@ public sealed class GroupFilteringTests
     {
         await using var provider = CreateProvider();
         var recorder = new PipelineRecorder();
-        var settings = recorder.Commands();
-        settings.Filters.Groups = [Reporting];
-
-        await provider.GetRequiredService<ICommandMediator>().SendAsync(new ReportingOnly(), settings);
+        await provider.GetRequiredService<ICommandMediator>().SendAsync(new ReportingOnly(), recorder.Commands(), [Reporting]);
 
         recorder.AssertStages("handler:reporting");
     }
@@ -121,28 +146,23 @@ public sealed class GroupFilteringTests
     {
         await using var provider = CreateProvider();
         var mediator = provider.GetRequiredService<ICommandMediator>();
-        var settings = new CommandMediationSettings { Filters = { Groups = new[] { Reporting } } };
-
         await Assert.ThrowsAsync<NoHandlerFoundException>(
-            async () => await mediator.SendAsync(new Mixed(), settings));
+            async () => await mediator.SendAsync(
+                new MixedAudience(), [Reporting], CancellationToken.None));
     }
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_plain_group_sequence_and_a_canonical_GroupSet_select_the_same_participants()
+    public async Task A_collection_expression_and_a_reused_GroupSet_select_the_same_participants()
     {
         await using var provider = CreateProvider();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
         var viaSequence = new PipelineRecorder();
-        var sequenceSettings = viaSequence.Commands();
-        sequenceSettings.Filters.Groups = new[] { Reporting };
-        await mediator.SendAsync(new ReportingOnly(), sequenceSettings);
+        await mediator.SendAsync(new ReportingOnly(), viaSequence.Commands(), [Reporting]);
 
         var viaGroupSet = new PipelineRecorder();
-        var groupSetSettings = viaGroupSet.Commands();
-        groupSetSettings.Filters.Groups = ReportingSet;
-        await mediator.SendAsync(new ReportingOnly(), groupSetSettings);
+        await mediator.SendAsync(new ReportingOnly(), viaGroupSet.Commands(), ReportingSet);
 
         Assert.Equal(viaSequence.Stages, viaGroupSet.Stages);
         viaGroupSet.AssertStages("handler:reporting");
@@ -174,12 +194,12 @@ public sealed class GroupFilteringTests
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task The_string_array_extension_selects_the_grouped_pipeline_too()
+    public async Task The_collection_expression_selects_the_grouped_pipeline_too()
     {
         await using var provider = CreateProvider();
         var command = new ReportingOnly();
 
-        await provider.GetRequiredService<ICommandMediator>().SendAsync(command, new[] { Reporting });
+        await provider.GetRequiredService<ICommandMediator>().SendAsync(command, [Reporting]);
 
         Assert.True(command.Handled);
     }

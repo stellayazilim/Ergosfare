@@ -5,13 +5,8 @@ using Stella.Ergosfare.Core.Abstractions.Handlers;
 
 namespace Stella.Ergosfare.Command.Test.__stubs__;
 
-/// <summary>
-/// A cross-cutting pre-interceptor declared over the core <see cref="IMessage"/> contract;
-/// the <see cref="ICommand"/> marker is carried directly on the class, opting it into the
-/// command module's discovery the same way the module contracts do. Gated behind a
-/// discovery key so bulk registration in unrelated tests never picks it up.
-/// </summary>
-[DiscoveryKey("crosscut.probe")]
+/// <summary>A selected cross-cutting interceptor, isolated to this fixture's group.</summary>
+[ExcludeFromDiscovery, Group("cross-cutting-probe")]
 public class StubCrossCuttingMessagePreInterceptor : IAsyncPreInterceptor<IMessage>, ICommand
 {
     /// <summary>

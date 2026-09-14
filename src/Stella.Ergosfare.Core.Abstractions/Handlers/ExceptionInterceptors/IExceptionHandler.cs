@@ -3,11 +3,12 @@ namespace Stella.Ergosfare.Core.Abstractions.Handlers;
 
 
 /// <summary>
-/// Non-generic marker root for exception interceptors. Carries no members — the pipeline
-/// invokes exception interceptors exclusively through their typed contracts
-/// (<see cref="IExceptionInterceptor{TMessage, TResult}"/> /
-/// <see cref="IAsyncExceptionInterceptor{TMessage}"/> /
-/// <see cref="IAsyncExceptionInterceptor{TMessage, TResult}"/>);
-/// this root exists for storage typing and registration.
+/// Marks a type as an exception interceptor, for registration and storage.
 /// </summary>
+/// <remarks>
+/// The interface declares no members. Exception interceptors are invoked through the typed
+/// member of <see cref="IExceptionInterceptor{TMessage, TResult}"/>,
+/// <see cref="IAsyncExceptionInterceptor{TMessage}"/> or
+/// <see cref="IAsyncExceptionInterceptor{TMessage, TResult}"/>.
+/// </remarks>
 public interface IExceptionInterceptor;

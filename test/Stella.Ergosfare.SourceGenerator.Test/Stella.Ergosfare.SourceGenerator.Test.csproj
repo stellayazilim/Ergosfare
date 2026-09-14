@@ -32,6 +32,7 @@
       <ProjectReference Include="..\..\src\Stella.Ergosfare.Commands.Abstractions\Stella.Ergosfare.Commands.Abstractions.csproj" />
       <ProjectReference Include="..\..\src\Stella.Ergosfare.Queries.Abstractions\Stella.Ergosfare.Queries.Abstractions.csproj" />
       <ProjectReference Include="..\..\src\Stella.Ergosfare.Events.Abstractions\Stella.Ergosfare.Events.Abstractions.csproj" />
+      <ProjectReference Include="..\..\src\Stella.Ergosfare.Plugins.Abstractions\Stella.Ergosfare.Plugins.Abstractions.csproj" />
       <ProjectReference Include="..\..\src\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.csproj" />
       <ProjectReference Include="..\..\src\Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj" />
       <ProjectReference Include="..\..\src\Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.csproj" />

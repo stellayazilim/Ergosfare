@@ -1,0 +1,109 @@
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
+
+using Stella.Ergosfare.Core;
+using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
+using Stella.Ergosfare.Events.Abstractions;
+using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Stella.Ergosfare.Events.Test;
+
+/// <summary>
+/// Contains unit tests for <see cref="EventMediator"/>'s compiled broadcast plans,
+/// validating handler execution and exception handling behavior.
+/// </summary>
+public class BroadcastPipelineTests
+{
+    /// <summary>
+    /// A dispatch engine over a bare provider — the directly-constructed counterpart of
+    /// what <c>AddErgosfare</c> registers.
+    /// </summary>
+    private static MessageDispatchEngine Engine(IServiceProvider services)
+    {
+        return new MessageDispatchEngine(new global::Stella.Ergosfare.Core.Abstractions.Planning.DispatchPlanCatalog());
+    }
+
+    /// <summary>
+    /// A publish with no pipeline at all returns. There is nothing for the caller to ask
+    /// about any more: a publish no subscriber in the compilation serves fails the build,
+    /// and what is left at run time is a selection the container made.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task ShouldRejectMissingPipeline()
+    {
+        // A container that composed nothing: the event has no pipeline at all.
+        var services = new ServiceCollection().BuildServiceProvider();
+        var mediator = new EventMediator(Engine(services), services);
+
+        await Assert.ThrowsAsync<NoHandlerFoundException>(
+            async () => await mediator.PublishAsync(new StubNonGenericEvent()));
+    }
+    
+    /// <summary>
+    /// Tests that <see cref="EventMediator.PublishAsync(IEvent, IEnumerable{string}, CancellationToken)"/> does not throw an exception
+    /// when <c>ThrowIfNoHandlerFound</c> is false and no handler is found.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task ShouldThrowWhenNoHandlerFound()
+    {
+        var services = new ServiceCollection().BuildServiceProvider();
+        var mediator = new EventMediator(Engine(services), services);
+        Exception? exception = null;
+        try
+        {
+            await mediator.PublishAsync(new StubNonGenericEvent(), Stella.Ergosfare.Core.Abstractions.GroupSet.Empty, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            exception = ex;
+        }
+        Assert.IsType<NoHandlerFoundException>(exception);
+         
+    }
+
+    /// <summary>
+    /// Tests that <see cref="EventMediator.PublishAsync(IEvent, IEnumerable{string}, CancellationToken)"/> correctly runs registered handlers.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task ShouldRunHandlers()
+    {
+        var services = new ServiceCollection()
+            .AddErgosfare(builder =>
+            {
+                builder.AddEventModule(x => { x.Register<StubNonGenericEventHandler1>(); });
+            })
+            .BuildServiceProvider();
+        var mediator = services.GetRequiredService<IPublisher>();
+        await mediator.PublishAsync(new StubNonGenericEvent());
+    }
+
+    /// <summary>
+    /// Tests that exceptions are correctly intercepted when a handler throws during <see cref="EventMediator.PublishAsync(IEvent, IEnumerable{string}, CancellationToken)"/>.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task ShouldThrowWhileRunningHandlers()
+    {
+        var services = new ServiceCollection()
+            .AddErgosfare(builder =>
+            {
+                builder.AddEventModule(x =>
+                {
+                    x.Register<StubNonGenericEventHandlerThrows>();
+                    x.Register<StubNonGenericEventExceptionInterceptor>();
+                });
+            })
+            .BuildServiceProvider();
+        var mediator = services.GetRequiredService<IPublisher>();
+        await mediator.PublishAsync(new StubNonGenericEventThrows());
+        Assert.True(StubNonGenericEventHandlerThrows.IsRuned);
+        Assert.True(StubNonGenericEventExceptionInterceptor.IsRuned);
+    }
+}

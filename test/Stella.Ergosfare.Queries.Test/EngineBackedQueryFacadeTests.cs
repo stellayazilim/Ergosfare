@@ -1,6 +1,8 @@
-﻿using Stella.Ergosfare.Core;
-using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Strategies;
+// Stream messaging is under revision and its entry points carry the notice; these are
+// deliberate call sites of the surface as it stands today.
+#pragma warning disable CS0618
+
+using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Queries.Abstractions;
 using Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
@@ -11,16 +13,15 @@ namespace Stella.Ergosfare.Queries.Test;
 
 /// <summary>
 /// Covers the engine-backed facade shape for queries: DI resolves a single-object facade
-/// bound to the process-wide <see cref="MessageDispatchEngine"/>, both public constructors
-/// query identically, and the streaming path — which stays on the mediator's
-/// <c>Mediate(options)</c> machinery — resolves the scope's mediator on demand.
+/// bound to the container's <see cref="MessageDispatchEngine"/>. Queries and streams
+/// execute through the public mediator surface.
 /// </summary>
 public class EngineBackedQueryFacadeTests
 {
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task DiResolvedFacade_IsTheEngineBackedShape_AndQueries()
+    public async Task DiResolvedFacade_IsThePublicFacade_AndQueries()
     {
         var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddQueryModule(q => q.Register<StubNonGenericStringResultQueryHandler>()))
@@ -29,8 +30,7 @@ public class EngineBackedQueryFacadeTests
 
         var mediator = provider.GetRequiredService<IQueryMediator>();
 
-        Assert.IsAssignableFrom<QueryMediator>(mediator);
-        Assert.NotEqual(typeof(QueryMediator), mediator.GetType());
+        Assert.IsType<QueryMediator>(mediator);
         Assert.Equal(string.Empty, await mediator.QueryAsync(new StubNonGenericStringResultQuery()));
     }
 
@@ -73,5 +73,46 @@ public class EngineBackedQueryFacadeTests
         {
             Assert.Equal(string.Empty, await mediator.QueryAsync(new StubNonGenericStringResultQuery()));
         }
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task TypedQuery_ThroughTheInterface_AnswersLikeTheUntypedOne()
+    {
+        var provider = new ServiceCollection()
+            .AddErgosfare(x => x.AddQueryModule(q => q.Register<StubNonGenericStringResultQueryHandler>()))
+            .BuildServiceProvider();
+        await using var _ = provider;
+
+        var mediator = provider.GetRequiredService<IQueryMediator>();
+
+        var typed = await mediator
+            .QueryAsync<StubNonGenericStringResultQuery, string>(new StubNonGenericStringResultQuery());
+        var untyped = await mediator.QueryAsync(new StubNonGenericStringResultQuery());
+
+        Assert.Equal(untyped, typed);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public void TypedQuery_IsImplementedByTheFacade_NotInheritedFromTheDefault()
+    {
+        // The typed members are default interface methods forwarding to the untyped calls,
+        // so an implementation that does not override them still compiles and still returns
+        // the right answer — it just never reaches the typed engine path. That failure is
+        // invisible: no diagnostic, no wrong result, only the speedup quietly gone. This
+        // pins the override so a signature drifting apart from the contract fails here
+        // instead of downgrading in silence.
+        var declared = typeof(QueryMediator)
+            .GetMethods()
+            .Where(m => m.Name == nameof(IQueryMediator.QueryAsync) && m.GetGenericArguments().Length == 2)
+            .ToArray();
+
+        // One per shape: GroupSet, context, cancellation token. The
+        // streaming members stay untyped on purpose — their shape is under revision.
+        Assert.Equal(3, declared.Length);
+        Assert.All(declared, m => Assert.Equal(typeof(QueryMediator), m.DeclaringType));
     }
 }

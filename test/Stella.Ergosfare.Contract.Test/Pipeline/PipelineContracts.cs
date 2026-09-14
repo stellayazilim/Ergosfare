@@ -252,12 +252,12 @@ public abstract class PayloadResultExceptionBase<TCommand> : ICommandExceptionIn
     where TCommand : class, IPayloadResultCommand
 {
     /// <inheritdoc />
-    public ValueTask<string?> HandleAsync(TCommand command, string? result, Exception exception, ErgosfareContext context)
+    public ValueTask<string> HandleAsync(TCommand command, string? result, Exception exception, ErgosfareContext context)
     {
         context.Mark("exception",
             $"{command.Payload}|{PipelineVocabulary.Describe(result)}|{PipelineVocabulary.Describe(exception)}");
 
-        return ValueTask.FromResult<string?>(PipelineVocabulary.StringFallback);
+        return ValueTask.FromResult(PipelineVocabulary.StringFallback);
     }
 }
 

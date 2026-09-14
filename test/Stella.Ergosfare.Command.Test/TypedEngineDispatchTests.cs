@@ -2,10 +2,55 @@ using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Command.Test;
+
+public sealed class TypedProbeCommand : ICommand { }
+
+public sealed class TypedProbeCommandHandler : ICommandHandler<TypedProbeCommand>
+{
+    public ValueTask HandleAsync(TypedProbeCommand command, ErgosfareContext context)
+    {
+        context.Set("typedProbe", true);
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class TypedUnregisteredCommand : ICommand { }
+
+public sealed class IdentityProbeCommand : ICommand { }
+
+public sealed class IdentityProbeCommandHandler : ICommandHandler<IdentityProbeCommand>
+{
+    private readonly Guid _id = Guid.NewGuid();
+
+    public ValueTask HandleAsync(IdentityProbeCommand command, ErgosfareContext context)
+    {
+        context.Set("handlerId", _id);
+        return ValueTask.CompletedTask;
+    }
+}
+
+public sealed class TypedResultProbeCommand : ICommand<string> { }
+
+public sealed class TypedResultProbeCommandHandler : ICommandHandler<TypedResultProbeCommand, string>
+{
+    public ValueTask<string> HandleAsync(TypedResultProbeCommand command, ErgosfareContext context)
+        => ValueTask.FromResult("typed");
+}
+
+public sealed class ResultIdentityProbeCommand : ICommand<Guid> { }
+
+public sealed class ResultIdentityProbeCommandHandler : ICommandHandler<ResultIdentityProbeCommand, Guid>
+{
+    private readonly Guid _id = Guid.NewGuid();
+
+    public ValueTask<Guid> HandleAsync(ResultIdentityProbeCommand command, ErgosfareContext context)
+        => ValueTask.FromResult(_id);
+}
 
 /// <summary>
 /// Covers the typed void dispatch overload on <see cref="MessageDispatchEngine"/>: the
@@ -15,39 +60,25 @@ namespace Stella.Ergosfare.Command.Test;
 /// </summary>
 public class TypedEngineDispatchTests
 {
-    public sealed class TypedProbeCommand : ICommand { }
+    /// <summary>
+    /// A generic message whose int instantiation is supplied by the selected handler contract.
+    /// </summary>
+    public sealed class WrappedProbe<T> : ICommand<string> { }
 
-    // ERGOSG007 (suppressed in the csproj): delivered through the engine's typed dispatch
-    // overloads below, which the closed-world dispatch-site analysis cannot see.
-    public sealed class TypedProbeCommandHandler : ICommandHandler<TypedProbeCommand>
+    public sealed class WrappedProbeHandler : ICommandHandler<WrappedProbe<int>, string>
     {
-        public ValueTask HandleAsync(TypedProbeCommand command, ErgosfareContext context)
-        {
-            context.Set("typedProbe", true);
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    public sealed class UnregisteredCommand : ICommand { }
-
-    public sealed class IdentityProbeCommand : ICommand { }
-
-    // ERGOSG007 (suppressed in the csproj): delivered through the engine's typed dispatch
-    // overloads below.
-    public sealed class IdentityProbeCommandHandler : ICommandHandler<IdentityProbeCommand>
-    {
-        private readonly Guid _id = Guid.NewGuid();
-
-        public ValueTask HandleAsync(IdentityProbeCommand command, ErgosfareContext context)
-        {
-            context.Set("handlerId", _id);
-            return ValueTask.CompletedTask;
-        }
+        public ValueTask<string> HandleAsync(WrappedProbe<int> command, ErgosfareContext context)
+            => ValueTask.FromResult("wrapped");
     }
 
     private static ServiceProvider BuildProvider()
         => new ServiceCollection()
-            .AddErgosfare(x => x.AddCommandModule(c => c.Register<TypedProbeCommandHandler>()))
+            .AddErgosfare(x => x.AddCommandModule(c =>
+            {
+                c.Register<TypedProbeCommandHandler>();
+                c.Register<TypedResultProbeCommandHandler>();
+                c.Register<WrappedProbeHandler>();
+            }))
             .BuildServiceProvider();
 
     [Fact]
@@ -62,11 +93,11 @@ public class TypedEngineDispatchTests
         // both must run the full pipeline.
         for (var i = 0; i < 2; i++)
         {
-            var items = new Dictionary<object, object?>();
+            var items = new ErgosfareContext();
 
-            await engine.DispatchVoidAsync(new TypedProbeCommand(), provider, items);
+            await engine.DispatchVoidAsync(new TypedProbeCommand(), items, provider);
 
-            Assert.Equal(true, items["typedProbe"]);
+            Assert.Equal(true, items.Items["typedProbe"]);
         }
     }
 
@@ -81,58 +112,40 @@ public class TypedEngineDispatchTests
         // TMessage closes over ICommand here, so the holder guard must reject the slot
         // and resolve the executor by the runtime type — the concrete pipeline still runs.
         ICommand baseTyped = new TypedProbeCommand();
-        var items = new Dictionary<object, object?>();
+        var items = new ErgosfareContext();
 
-        await engine.DispatchVoidAsync(baseTyped, provider, items);
+        await engine.DispatchVoidAsync(baseTyped, items, provider);
 
-        Assert.Equal(true, items["typedProbe"]);
+        Assert.Equal(true, items.Items["typedProbe"]);
     }
 
     [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
     public async Task TypedDispatch_DoesNotServeAnotherContainersExecutor()
     {
-        // The message registry is process-wide, so a second container can dispatch the
-        // same message type. What must not leak between containers is the executor: it
-        // carries the container's dependencies factory — and with it the container's
-        // lifetime semantics, made observable here via ForceMemoizedHandlers.
-        await using var transientContainer = new ServiceCollection()
+        // Generated plans are shared, but each container selects its own registrations.
+        await using var registered = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c => c.Register<IdentityProbeCommandHandler>()))
             .BuildServiceProvider();
-        var transientEngine = transientContainer.GetRequiredService<MessageDispatchEngine>();
-
-        // Populate the static-generic slot from the transient container: every dispatch
-        // resolves a fresh handler instance.
-        var first = await DispatchAndReadId(transientEngine, transientContainer);
-        var second = await DispatchAndReadId(transientEngine, transientContainer);
+        var engine = registered.GetRequiredService<MessageDispatchEngine>();
+        var first = await DispatchAndReadId(engine, registered);
+        var second = await DispatchAndReadId(engine, registered);
         Assert.NotEqual(first, second);
 
-        await using var memoizedContainer = new ServiceCollection()
-            .AddErgosfare(x =>
-            {
-                x.ForceMemoizedHandlers();
-                x.AddCommandModule(c => c.Register<IdentityProbeCommandHandler>());
-            })
+        await using var empty = new ServiceCollection()
+            .AddErgosfare(x => x.AddCommandModule(c => { }))
             .BuildServiceProvider();
-        var memoizedEngine = memoizedContainer.GetRequiredService<MessageDispatchEngine>();
+        var rejected = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
+            await DispatchAndReadId(empty.GetRequiredService<MessageDispatchEngine>(), empty));
+        Assert.Equal(UnplannedDispatchReason.CompositionDiverged, rejected.Reason);
 
-        // Served through its own executor the memoized container reuses one handler
-        // instance; the transient container's cached executor would hand out fresh ones.
-        var memoizedFirst = await DispatchAndReadId(memoizedEngine, memoizedContainer);
-        var memoizedSecond = await DispatchAndReadId(memoizedEngine, memoizedContainer);
-        Assert.Equal(memoizedFirst, memoizedSecond);
-
-        // And after the slot moved on, the original container still dispatches through
-        // its own transient-resolving executor.
-        var third = await DispatchAndReadId(transientEngine, transientContainer);
-        Assert.NotEqual(memoizedFirst, third);
+        var third = await DispatchAndReadId(engine, registered);
+        Assert.NotEqual(first, third);
 
         static async Task<Guid> DispatchAndReadId(MessageDispatchEngine engine, IServiceProvider provider)
         {
-            var items = new Dictionary<object, object?>();
-            await engine.DispatchVoidAsync(new IdentityProbeCommand(), provider, items);
-            return Assert.IsType<Guid>(items["handlerId"]);
+            var context = new ErgosfareContext();
+            await engine.DispatchVoidAsync(new IdentityProbeCommand(), context, provider);
+            return Assert.IsType<Guid>(context.Items["handlerId"]);
         }
     }
 
@@ -149,12 +162,97 @@ public class TypedEngineDispatchTests
         // exception an unhandled message produces. The contract under test is exception
         // parity: the typed overload fails exactly like the erased one.
         var erased = await Record.ExceptionAsync(async () =>
-            await engine.DispatchAsync(new UnregisteredCommand(), provider));
+            await engine.DispatchAsync(new TypedUnregisteredCommand(), provider));
         var typed = await Record.ExceptionAsync(async () =>
-            await engine.DispatchVoidAsync(new UnregisteredCommand(), provider));
+            await engine.DispatchVoidAsync(new TypedUnregisteredCommand(), provider));
 
         Assert.NotNull(erased);
         Assert.NotNull(typed);
         Assert.IsType(erased.GetType(), typed);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task TypedResultDispatch_RunsThePipeline_AndRepeatsThroughTheHolder()
+    {
+        await using var provider = BuildProvider();
+        var engine = provider.GetRequiredService<MessageDispatchEngine>();
+
+        // First call populates the (message, result) slot, second is served from it.
+        for (var i = 0; i < 2; i++)
+        {
+            var items = new ErgosfareContext();
+
+            var result = await engine.DispatchAsync<TypedResultProbeCommand, string>(
+                new TypedResultProbeCommand(), items, provider);
+
+            Assert.Equal("typed", result);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task TypedResultDispatch_BaseTypedGenericCall_ResolvesByRuntimeType()
+    {
+        await using var provider = BuildProvider();
+        var engine = provider.GetRequiredService<MessageDispatchEngine>();
+
+        // TMessage closes over ICommand<string>, so the runtime-type guard must reject the
+        // slot and resolve by the concrete type — naming a base type stays legal.
+        ICommand<string> baseTyped = new TypedResultProbeCommand();
+        var items = new ErgosfareContext();
+
+        var result = await engine.DispatchAsync<ICommand<string>, string>(baseTyped, items, provider);
+
+        Assert.Equal("typed", result);
+    }
+
+    [Fact]
+    public async Task TypedResultDispatch_DoesNotServeAnotherContainersExecutor()
+    {
+        // Generated plans are shared, but each container selects its own registrations.
+        await using var registered = new ServiceCollection()
+            .AddErgosfare(x => x.AddCommandModule(c => c.Register<ResultIdentityProbeCommandHandler>()))
+            .BuildServiceProvider();
+        var engine = registered.GetRequiredService<MessageDispatchEngine>();
+        var first = await DispatchAndReadId(engine, registered);
+        var second = await DispatchAndReadId(engine, registered);
+        Assert.NotEqual(first, second);
+
+        await using var empty = new ServiceCollection()
+            .AddErgosfare(x => x.AddCommandModule(c => { }))
+            .BuildServiceProvider();
+        var rejected = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
+            await DispatchAndReadId(empty.GetRequiredService<MessageDispatchEngine>(), empty));
+        Assert.Equal(UnplannedDispatchReason.CompositionDiverged, rejected.Reason);
+
+        var third = await DispatchAndReadId(engine, registered);
+        Assert.NotEqual(first, third);
+
+        static async Task<Guid> DispatchAndReadId(MessageDispatchEngine engine, IServiceProvider provider)
+        {
+            var context = new ErgosfareContext();
+            return await engine.DispatchAsync<ResultIdentityProbeCommand, Guid>(new ResultIdentityProbeCommand(), context, provider);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("Category", "Coverage")]
+    public async Task AClosedGenericMessage_ExecutesThroughBothLanes()
+    {
+        await using var provider = BuildProvider();
+        var engine = provider.GetRequiredService<MessageDispatchEngine>();
+
+        var typed = await engine.DispatchAsync<WrappedProbe<int>, string>(
+            new WrappedProbe<int>(), new ErgosfareContext(), provider);
+        Assert.Equal("wrapped", typed);
+
+        await using var fresh = BuildProvider();
+        var erased = await fresh.GetRequiredService<MessageDispatchEngine>()
+            .DispatchAsync<string>(new WrappedProbe<int>(), fresh);
+        Assert.Equal("wrapped", erased);
     }
 }

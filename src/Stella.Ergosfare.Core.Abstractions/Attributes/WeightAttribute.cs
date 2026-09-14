@@ -2,13 +2,18 @@
 namespace Stella.Ergosfare.Core.Abstractions.Attributes;
 
 /// <summary>
-/// Specifies a weight for a class, typically used to influence the execution order or priority of handlers or modules.
+/// Sets the invocation order of a participant within its pipeline stage.
 /// </summary>
+/// <remarks>
+/// Participants in a stage run by descending weight, and participants of equal weight run
+/// in ordinal order of their full type name, so ordering is stable across runs. A
+/// participant without this attribute has weight zero.
+/// </remarks>
 [AttributeUsage(AttributeTargets.Class, Inherited = false)]
 public class WeightAttribute(uint weight): Attribute
 {
     /// <summary>
-    /// Gets the weight assigned to the class.
+    /// The weight declared for this participant; higher runs earlier.
     /// </summary>
     public uint Weight => weight;
 }

@@ -1,0 +1,5 @@
+# Only the shared MCP declaration belongs to the repository. Everything else Codex puts
+# here is per-machine state — session history, auth, caches — and must never be committed.
+*
+!.gitignore
+!config.toml

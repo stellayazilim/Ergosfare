@@ -2,11 +2,36 @@ using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Generated;
 
 namespace Stella.Ergosfare.Contract.Test.Lifetime;
+
+// Top-level and unkeyed so the generator bakes the plan; scoped to this area.
+
+/// <summary>Registered scoped, so its identity names the scope it came from.</summary>
+public sealed class ScopedDependency
+{
+    /// <summary>Unique per constructed instance.</summary>
+    public Guid Id { get; } = Guid.NewGuid();
+}
+
+/// <summary>Command whose handler needs a scoped dependency.</summary>
+public sealed class NeedsScope : ICommand
+{
+    /// <summary>The dependency identity the handler was given.</summary>
+    public Guid SeenId;
+}
+
+/// <inheritdoc />
+public sealed class NeedsScopeHandler(ScopedDependency dependency) : ICommandHandler<NeedsScope>
+{
+    /// <inheritdoc />
+    public ValueTask HandleAsync(NeedsScope command, ErgosfareContext context)
+    {
+        command.SeenId = dependency.Id;
+        return ValueTask.CompletedTask;
+    }
+}
 
 /// <summary>
 /// Which DI scope a handler's dependencies come from: the scope that resolved the
@@ -14,36 +39,11 @@ namespace Stella.Ergosfare.Contract.Test.Lifetime;
 /// </summary>
 public sealed class ScopeResolutionTests
 {
-    private const string Key = "contract.scope";
-
-    /// <summary>Registered scoped, so its identity names the scope it came from.</summary>
-    public sealed class ScopedDependency
-    {
-        /// <summary>Unique per constructed instance.</summary>
-        public Guid Id { get; } = Guid.NewGuid();
-    }
-
-    [DiscoveryKey(Key)]
-    public sealed class NeedsScope : ICommand
-    {
-        /// <summary>The dependency identity the handler was given.</summary>
-        public Guid SeenId;
-    }
-
-    [DiscoveryKey(Key)]
-    public sealed class NeedsScopeHandler(ScopedDependency dependency) : ICommandHandler<NeedsScope>
-    {
-        public ValueTask HandleAsync(NeedsScope command, ErgosfareContext context)
-        {
-            command.SeenId = dependency.Id;
-            return ValueTask.CompletedTask;
-        }
-    }
-
     private static ServiceProvider CreateProvider()
         => new ServiceCollection()
             .AddScoped<ScopedDependency>()
-            .AddErgosfare(options => options.AddCommandModule(commands => commands.RegisterGenerated(Key)))
+            .AddErgosfare(options => options
+                .AddCommandModule(commands => commands.Register<NeedsScopeHandler>()))
             .BuildServiceProvider();
 
     private static async Task<Guid> DispatchIn(IServiceScope scope)

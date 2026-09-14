@@ -1,18 +1,18 @@
 namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 
 /// <summary>
-/// The result-producing counterpart of <see cref="StagedVoidPlan"/>: a compile-time
-/// staged pipeline plan for a message with a result contract. The same advisory contract
-/// applies — see <see cref="StagedVoidPlan"/>.
+/// A compiled plan that runs a result-producing message's whole pipeline as straight-line
+/// typed calls; the result-producing counterpart of <see cref="StagedVoidPlan"/>, with the
+/// same rules about when it is trusted.
 /// </summary>
-public abstract class StagedResultPlan
+public abstract class StagedResultPlan : ICompiledPlan
 {
-    /// <summary>The pipeline composition the plan was baked against.</summary>
-    public abstract StagedPlanComposition Composition { get; }
+    /// <summary>
+    /// The pipeline this plan was compiled against.
+    /// </summary>
+    public abstract StagedPlanKey Composition { get; }
 
-    /// <inheritdoc cref="StagedVoidPlan.SupportsDirectConstruction"/>
-    public virtual bool SupportsDirectConstruction => false;
+    /// <inheritdoc cref="StagedVoidPlan.FilterGroups"/>
+    public virtual string[]? FilterGroups => null;
 
-    /// <summary>Invokes the visitor with this plan's message and result types as the generic arguments.</summary>
-    public abstract TReturn Accept<TReturn, TState>(IStagedResultPlanVisitor<TReturn, TState> visitor, TState state);
 }

@@ -94,6 +94,9 @@ public sealed class PipelineRecorder
     /// no settings — so a participant can mark unconditionally.
     /// </summary>
     public static PipelineRecorder From(ErgosfareContext context)
+        // TryGet annotates its out parameter non-null, but it casts whatever was stored and
+        // yields default! on a miss — a null recorder reaches here despite the annotation.
+        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
         => context.TryGet<PipelineRecorder>(ItemsKey, out var recorder) && recorder is not null
             ? recorder
             : Silent;

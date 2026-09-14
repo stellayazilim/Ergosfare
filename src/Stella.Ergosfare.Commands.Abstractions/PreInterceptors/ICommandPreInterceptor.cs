@@ -4,14 +4,13 @@ namespace Stella.Ergosfare.Commands.Abstractions;
 
 
 /// <summary>
-/// Represents a pre-interceptor for commands that is invoked before the command
-/// enters the pipeline. Can be used to modify the command or perform preparatory actions.
+/// Runs before the handler of any command, whatever its type.
 /// </summary>
 /// <remarks>
-/// This is a non-generic, non-type-safe version of a pre-interceptor. It works with any
-/// command implementing <see cref="ICommand"/>. For type-safe interception, consider
-/// using <see cref="ICommandPreInterceptor{TCommand}"/> or 
-/// <see cref="ICommandPreInterceptor{TCommand, TModifiedCommand}"/>.
+/// Because it accepts every command, this contract sees them as <see cref="ICommand"/> and
+/// returns <see cref="object"/>. To work with one command type without casting — and to
+/// return that type rather than <see cref="object"/> — implement
+/// <see cref="ICommandPreInterceptor{TCommand}"/>.
 /// </remarks>
 // ReSharper disable once UnusedType.Global
 public interface ICommandPreInterceptor: ICommand, IAsyncPreInterceptor<ICommand>;

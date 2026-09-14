@@ -3,23 +3,22 @@ using Stella.Ergosfare.Core.Abstractions.Handlers;
 
 namespace Stella.Ergosfare.Events.Abstractions;
 
-
 /// <summary>
-/// An exception interceptor for a specific event type that runs only for exceptions of type
-/// <typeparamref name="TException"/>. The exception arrives already typed — no <c>is</c>
-/// check in the interceptor body.
+/// Handles failures of type <typeparamref name="TException"/> raised while publishing a
+/// <typeparamref name="TEvent"/>.
 /// </summary>
-/// <typeparam name="TEvent">The type of event being intercepted. Must implement <see cref="IEvent"/>.</typeparam>
+/// <typeparam name="TEvent">
+/// The event type this interceptor accepts. Any non-null type will do — an event need not
+/// implement <see cref="IEvent"/>.
+/// </typeparam>
 /// <typeparam name="TException">
-/// The exception type this interceptor accepts, matched with <c>catch</c> semantics:
-/// derived exception types match too.
+/// The failure type this interceptor accepts. Matching follows <c>catch</c> semantics, so
+/// derived types match too.
 /// </typeparam>
 /// <remarks>
-/// A publish produces no result, so — unlike
-/// <see cref="IEventExceptionInterceptor{TEvent}"/>, which still carries a vestigial
-/// <see cref="ValueTask"/> parameter — the handled member takes only the event, the
-/// exception and the context. When no interceptor accepts the thrown exception, it leaves
-/// the pipeline unwrapped with its original stack.
+/// The failure arrives already typed, so no type test is needed in the body. A failure this
+/// interceptor rejects is left for another to accept, and one nothing accepts reaches the
+/// publisher unchanged.
 /// </remarks>
 // ReSharper disable once UnusedType.Global
 public interface IEventExceptionInterceptorFor<in TEvent, TException> :
@@ -27,22 +26,29 @@ public interface IEventExceptionInterceptorFor<in TEvent, TException> :
     where TEvent : notnull
     where TException : Exception
 {
-    /// <inheritdoc />
+    /// <summary>
+    /// Forwards the core contract to the typed method below.
+    /// </summary>
+    /// <param name="event">The event whose publish failed.</param>
+    /// <param name="result">Ignored; a publish has no result.</param>
+    /// <param name="exception">The failure being handled.</param>
+    /// <param name="context">The execution context of this publish.</param>
+    /// <returns>The value a resultless pipeline carries.</returns>
     async ValueTask<object?> IAsyncExceptionInterceptor<TEvent, Unit>.HandleAsync(
         TEvent @event, Unit? result, Exception exception, ErgosfareContext context)
     {
-        // The cast cannot fail: the exception stage runs this interceptor only after its
-        // filter accepted the exception.
+        // The cast is safe: the stage only runs this interceptor once its filter accepted
+        // the failure.
         await HandleAsync(@event, (TException)exception, context);
         return Unit.Value;
     }
 
     /// <summary>
-    /// Handles an exception thrown while the event was being published.
+    /// Handles <paramref name="exception"/>.
     /// </summary>
-    /// <param name="event">The event being processed when the exception occurred.</param>
-    /// <param name="exception">The exception thrown during pipeline execution.</param>
-    /// <param name="context">The execution context for the current mediation pipeline.</param>
-    /// <returns>A <see cref="ValueTask"/> representing the asynchronous exception handling operation.</returns>
+    /// <param name="event">The event whose publish failed.</param>
+    /// <param name="exception">The failure being handled, already typed.</param>
+    /// <param name="context">The execution context of this publish.</param>
+    /// <returns>A task that completes when the interceptor is done.</returns>
     ValueTask HandleAsync(TEvent @event, TException exception, ErgosfareContext context);
 }

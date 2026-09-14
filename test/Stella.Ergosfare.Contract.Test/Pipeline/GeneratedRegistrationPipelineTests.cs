@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Contract.Test.Pipeline.Generated;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Generated;
 using Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
@@ -10,14 +9,14 @@ namespace Stella.Ergosfare.Contract.Test.Pipeline;
 
 /// <summary>
 /// The pipeline contract under source-generated registration — the primary axis. The
-/// generator discovers these types at compile time and <c>RegisterGenerated()</c> installs
+/// generator discovers these types at compile time and <c>AddGenerated()</c> installs
 /// pre-computed descriptors, dispatch roots and the compile-time pipeline plans.
 /// </summary>
 /// <remarks>
-/// The pattern-less overload is deliberate and is reserved for this axis: plan eligibility
-/// requires default-discovery types, so a keyed selection would quietly fall back to the
-/// reflective executors. It is safe because every other construct in the assembly is keyed
-/// or excluded from discovery.
+/// The pattern-less overload registers every default-discovery construct in the assembly —
+/// including the migrated areas' unkeyed types. That is safe because every unkeyed message
+/// stays scoped to its own area and no interceptor targets a shared or marker type, so the
+/// extra pipelines are registered and never dispatched here.
 /// </remarks>
 public sealed class GeneratedRegistrationPipelineTests : PipelineSemanticsContract
 {
@@ -25,8 +24,8 @@ public sealed class GeneratedRegistrationPipelineTests : PipelineSemanticsContra
     protected override ServiceProvider CreateProvider()
         => new ServiceCollection()
             .AddErgosfare(options => options
-                .AddCommandModule(commands => commands.RegisterGenerated())
-                .AddQueryModule(queries => queries.RegisterGenerated()))
+                .AddCommandModule(commands => commands.AddGenerated())
+                .AddQueryModule(queries => queries.AddGenerated()))
             .BuildServiceProvider();
 
     /// <inheritdoc />

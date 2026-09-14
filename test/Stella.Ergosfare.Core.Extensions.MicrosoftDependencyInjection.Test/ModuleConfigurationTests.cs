@@ -1,6 +1,5 @@
-﻿using System.Reflection;
-using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
-using Stella.Ergosfare.Core.Abstractions;
+
+using Stella.Ergosfare.Core.Abstractions.Planning;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection.Test;
@@ -23,7 +22,7 @@ public class ModuleConfigurationTests
         var serviceProvier = new ServiceCollection()
             .AddTransient<MessageHandler>();
         
-        var moduleConfiguration = new ModuleConfiguration(serviceProvier, new FrozenCompositionCatalog());
+        var moduleConfiguration = new ModuleConfiguration(serviceProvier, new DispatchPlanCatalog());
         
         // act
         serviceProvier.BuildServiceProvider();

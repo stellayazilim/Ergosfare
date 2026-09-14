@@ -1,29 +1,51 @@
+using Stella.Ergosfare.Core.Abstractions.Results;
 
 namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 
-/// <summary>The typed closure of <see cref="StagedVoidPlan"/>; subclassed by generated (or hand-written) plans.</summary>
-public abstract class StagedVoidPlan<TMessage> : StagedVoidPlan
+/// <summary>
+/// <see cref="StagedVoidPlan"/> closed over its message type; generated plans derive from
+/// this, and hand-written ones may too.
+/// </summary>
+/// <typeparam name="TMessage">The message this plan serves.</typeparam>
+public abstract class StagedVoidPlan<TMessage> : StagedVoidPlan, IPipelineExecutor, ICompiledPlan
     where TMessage : IMessage
 {
+    ValueTask IPipelineExecutor.Execute(object message, ErgosfareContext context,
+        IServiceProvider serviceProvider, IEnumerable<string>? groups)
+        => FilterGroups is not null && groups is IReadOnlyList<string> requested
+            ? ExecuteFiltered((TMessage)message, context, serviceProvider, requested)
+            : Execute((TMessage)message, context, serviceProvider);
+
     /// <summary>
-    /// Runs the baked pipeline for the message. Only invoked while the live pipeline
-    /// matches <see cref="StagedVoidPlan.Composition"/>; participants resolve from
-    /// <paramref name="serviceProvider"/> — the dispatching scope's provider.
+    /// Runs the compiled pipeline for <paramref name="message"/>.
     /// </summary>
+    /// <param name="message">The message to dispatch.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <param name="serviceProvider">
+    /// The provider participants are resolved from — the dispatching scope's.
+    /// </param>
+    /// <returns>A task that completes when the pipeline has run.</returns>
+    /// <remarks>
+    /// Only called while the live pipeline still matches
+    /// <see cref="StagedVoidPlan.Composition"/>.
+    /// </remarks>
     public abstract ValueTask Execute(TMessage message, ErgosfareContext context, IServiceProvider serviceProvider);
 
     /// <summary>
-    /// The direct-construction variant of <see cref="Execute"/>: participants are
-    /// constructed with <c>new</c> (dependencies still resolve from
-    /// <paramref name="serviceProvider"/>). Only invoked while
-    /// <see cref="StagedVoidPlan.SupportsDirectConstruction"/> is <c>true</c> AND the
-    /// hosting executor verified every participant's plain transient registration; the
-    /// default forwards to <see cref="Execute"/>.
+    /// Runs the compiled pipeline for a dispatch whose groups are only known now, testing
+    /// each participant's groups before calling it.
     /// </summary>
-    public virtual ValueTask ExecuteDirect(TMessage message, ErgosfareContext context, IServiceProvider serviceProvider)
+    /// <param name="message">The message to dispatch.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <param name="serviceProvider">The provider participants are resolved from.</param>
+    /// <param name="groups">The groups the dispatch asked for.</param>
+    /// <returns>A task that completes when the pipeline has run.</returns>
+    /// <remarks>
+    /// Only called on a plan that reports <see cref="StagedVoidPlan.FilterGroups"/>. The
+    /// default implementation runs the unfiltered body.
+    /// </remarks>
+    public virtual ValueTask ExecuteFiltered(
+        TMessage message, ErgosfareContext context, IServiceProvider serviceProvider, IReadOnlyList<string> groups)
         => Execute(message, context, serviceProvider);
 
-    /// <inheritdoc />
-    public sealed override TReturn Accept<TReturn, TState>(IStagedVoidPlanVisitor<TReturn, TState> visitor, TState state)
-        => visitor.Visit<TMessage>(state);
 }

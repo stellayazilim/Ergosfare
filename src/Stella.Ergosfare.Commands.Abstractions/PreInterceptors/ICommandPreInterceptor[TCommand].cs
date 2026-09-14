@@ -4,30 +4,37 @@ using Stella.Ergosfare.Core.Abstractions.Handlers;
 namespace Stella.Ergosfare.Commands.Abstractions;
 
 /// <summary>
-/// Defines a type-safe pre-interceptor for a command. It runs before the handler and returns
-/// the command that continues through the pipeline — the original instance, or a rewritten one.
+/// Runs before the handler of a <typeparamref name="TCommand"/> and decides which command
+/// the rest of the pipeline sees.
 /// </summary>
-/// <typeparam name="TCommand">The type of command to intercept.</typeparam>
+/// <typeparam name="TCommand">The command type this interceptor accepts.</typeparam>
 /// <remarks>
-/// A pre-interceptor carries no result, so — unlike the post/exception interceptors, whose
-/// second type parameter is the result — the single-parameter form returns the command type
-/// directly rather than <see cref="object"/>. Use the non-generic
-/// <see cref="ICommandPreInterceptor"/> to intercept any command (returning <see cref="object"/>),
-/// or <see cref="ICommandPreInterceptor{TCommand, TModifiedCommand}"/> to return a different,
-/// derived command type. <typeparamref name="TCommand"/> is invariant because it is returned.
+/// A pre-interceptor produces no result, so this form returns the command type itself
+/// rather than <see cref="object"/> — which is why <typeparamref name="TCommand"/> is
+/// invariant here. Returning a derived command is allowed and needs nothing extra: it is
+/// still a <typeparamref name="TCommand"/>. Use <see cref="ICommandPreInterceptor"/> to
+/// accept any command instead.
 /// </remarks>
 public interface ICommandPreInterceptor<TCommand> : ICommand, IAsyncPreInterceptor<TCommand>
     where TCommand : ICommand
 {
-    /// <inheritdoc cref="IAsyncPreInterceptor{TMessage}.HandleAsync(TMessage,ErgosfareContext)"/>
+    /// <summary>
+    /// Forwards the core contract to the typed method below.
+    /// </summary>
+    /// <param name="command">The command as the previous stage left it.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <returns>The command the typed method returned.</returns>
     async ValueTask<object> IAsyncPreInterceptor<TCommand>.HandleAsync(TCommand command, ErgosfareContext context)
         => await HandleAsync(command, context);
 
     /// <summary>
-    /// Handles the command before its handler runs and returns the command that continues
-    /// through the pipeline (the original, or a rewritten instance).
+    /// Processes <paramref name="command"/> before its handler runs.
     /// </summary>
-    /// <param name="command">The command to intercept.</param>
-    /// <param name="context">The current execution context.</param>
+    /// <param name="command">The command as the previous stage left it.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <returns>
+    /// The command the rest of the pipeline receives — either the one passed in or a
+    /// replacement.
+    /// </returns>
     new ValueTask<TCommand> HandleAsync(TCommand command, ErgosfareContext context);
 }

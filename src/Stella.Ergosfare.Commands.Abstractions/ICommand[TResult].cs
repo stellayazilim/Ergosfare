@@ -1,12 +1,12 @@
 namespace Stella.Ergosfare.Commands.Abstractions;
 
 /// <summary>
-///     Represents a command that produces a result of type <typeparamref name="TResult" /> when handled.
+/// Marks a type as a command whose handler returns a <typeparamref name="TResult"/>.
 /// </summary>
-/// <typeparam name="TResult">The type of result that will be returned when the command is processed.</typeparam>
+/// <typeparam name="TResult">The type the handler returns.</typeparam>
 /// <remarks>
-///     This interface extends the base <see cref="ICommand" /> interface to support commands that need to return
-///     data to the caller. While regular commands are used for state-changing operations without returning data,
-///     commands with results allow for obtaining computed values or status information from the handler.
+/// Use this where the caller needs something back from the operation — a generated
+/// identifier, a computed value, an outcome to act on. A command that only changes state
+/// implements <see cref="ICommand"/> instead.
 /// </remarks>
 public interface ICommand<TResult> : ICommand;

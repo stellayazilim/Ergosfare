@@ -6,36 +6,35 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Events.Test;
 
+// The fixtures live at the top level so the source generator compiles the derived event's
+// broadcast plan; owned by TypedPublishHolderTests alone.
+
+public class HolderBaseEvent : IEvent { }
+
+public sealed class HolderDerivedEvent : HolderBaseEvent { }
+
+public sealed class HolderDerivedEventHandler : IEventHandler<HolderDerivedEvent>
+{
+    public ValueTask HandleAsync(HolderDerivedEvent @event, ErgosfareContext context)
+    {
+        context.Set("derivedRan", true);
+        return ValueTask.CompletedTask;
+    }
+}
+
 /// <summary>
-/// Covers the static-generic invoker holder behind the typed publish overload: it must be
-/// the same instance the runtime-type cache serves (one plan cache per event type), and a
-/// generic call made through a base-typed variable must keep dispatching by the event's
-/// runtime type.
+/// Covers the static-generic slot behind the typed publish overload: it must serve the same
+/// pipeline the runtime-type lookup does (one composition cache per message type), it must not
+/// leak between containers, and a generic call made through a base-typed variable must keep
+/// dispatching by the event's runtime type.
 /// </summary>
 public class TypedPublishHolderTests
 {
-    public class BaseEvent : IEvent { }
-
-    public sealed class DerivedEvent : BaseEvent { }
-
-    public sealed class DerivedEventHandler : IEventHandler<DerivedEvent>
-    {
-        public ValueTask HandleAsync(DerivedEvent @event, ErgosfareContext context)
-        {
-            context.Set("derivedRan", true);
-            return ValueTask.CompletedTask;
-        }
-    }
-
     [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
-    public void Holder_ServesTheSameInstance_AsTheRuntimeTypeCache()
+    public void TheBroadcastPlan_IsTheExecutor()
     {
-        var fromHolder = EventBroadcastInvokerCache.Holder<DerivedEvent>.Instance;
-        var fromCache = EventBroadcastInvokerCache.Get(typeof(DerivedEvent));
-
-        Assert.Same(fromCache, fromHolder);
+        var plan = global::Stella.Ergosfare.Core.Abstractions.Planning.GeneratedPlanRegistry.FindBroadcastPlan(typeof(HolderDerivedEvent));
+        Assert.IsAssignableFrom<IPipelineExecutor>(plan);
     }
 
     [Fact]
@@ -44,16 +43,16 @@ public class TypedPublishHolderTests
     public async Task Publish_ThroughABaseTypedVariable_DispatchesByRuntimeType()
     {
         var provider = new ServiceCollection()
-            .AddErgosfare(x => x.AddEventModule(e => e.Register<DerivedEventHandler>()))
+            .AddErgosfare(x => x.AddEventModule(e => e.Register<HolderDerivedEventHandler>()))
             .BuildServiceProvider();
         await using var _ = provider;
 
         var mediator = provider.GetRequiredService<IEventMediator>();
 
-        // The variable's static type closes the generic overload over BaseEvent; the
-        // holder guard must reject it and resolve the DerivedEvent pipeline instead.
-        BaseEvent @event = new DerivedEvent();
-        var settings = new EventMediationSettings();
+        // The variable's static type closes the generic overload over HolderBaseEvent; the
+        // holder guard must reject it and resolve the HolderDerivedEvent pipeline instead.
+        HolderBaseEvent @event = new HolderDerivedEvent();
+        var settings = new ErgosfareContext();
 
         await mediator.PublishAsync(@event, settings);
 
@@ -66,15 +65,15 @@ public class TypedPublishHolderTests
     public async Task Publish_ThroughTheConcreteType_TakesTheHolderAndDispatches()
     {
         var provider = new ServiceCollection()
-            .AddErgosfare(x => x.AddEventModule(e => e.Register<DerivedEventHandler>()))
+            .AddErgosfare(x => x.AddEventModule(e => e.Register<HolderDerivedEventHandler>()))
             .BuildServiceProvider();
         await using var _ = provider;
 
         var mediator = provider.GetRequiredService<IEventMediator>();
 
-        var settings = new EventMediationSettings();
+        var settings = new ErgosfareContext();
 
-        await mediator.PublishAsync(new DerivedEvent(), settings);
+        await mediator.PublishAsync(new HolderDerivedEvent(), settings);
 
         Assert.Equal(true, settings.Items["derivedRan"]);
     }

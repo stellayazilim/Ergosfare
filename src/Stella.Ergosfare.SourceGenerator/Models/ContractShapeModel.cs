@@ -1,28 +1,36 @@
 namespace Stella.Ergosfare.SourceGenerator.Models;
 
 /// <summary>
-///     One raw interceptor contract a type implements — the undeduped counterpart of
-///     <see cref="DescriptorModel"/>, keeping the async/sync and result-typed/agnostic
-///     facts the staged-plan emission needs to reproduce the invocation strategies'
-///     pattern-match arm selection at compile time.
+/// One interceptor contract exactly as a type implements it, before contracts are reduced
+/// to registrations.
 /// </summary>
-/// <param name="Kind">The interceptor stage the contract belongs to; never <see cref="DescriptorKind.MainHandler"/>.</param>
-/// <param name="IsAsync">Whether the contract is the asynchronous flavor.</param>
-/// <param name="IsResultTyped">Whether the contract carries a typed result parameter (arity-2 for post/exception/final).</param>
-/// <param name="MessageTypeExpression">The contract's registered message type, normalized like descriptor message types.</param>
-/// <param name="ResultTypeExpression">The declared result type for result-typed contracts, <c>null</c> otherwise.</param>
+/// <param name="Kind">
+/// The stage the contract belongs to; never <see cref="DescriptorKind.MainHandler"/>.
+/// </param>
+/// <param name="IsAsync">Whether this is the asynchronous form of the contract.</param>
+/// <param name="IsResultTyped">Whether the contract names the result type.</param>
+/// <param name="MessageTypeExpression">
+/// The message type the contract is registered against, normalized the same way a
+/// registration's is.
+/// </param>
+/// <param name="ResultTypeExpression">
+/// The declared result type when the contract names one; otherwise <c>null</c>.
+/// </param>
 /// <param name="ExceptionFilterExpression">
-///     The exception type the declaring interceptor accepts, read off its
-///     <c>IExceptionInterceptorFilter&lt;TException&gt;</c>; <c>null</c> when it accepts
-///     every exception. Only ever set on <see cref="DescriptorKind.ExceptionInterceptor"/>
-///     shapes.
+/// The failure type the interceptor accepts, read from its filter contract, or <c>null</c>
+/// when it accepts every failure. Only ever set on an exception-stage shape.
 /// </param>
 /// <param name="HasUndecidableExceptionFilter">
-///     Whether the declaring interceptor filters in a way the generator cannot reproduce —
-///     a hand-written non-generic filter, or several generic ones, where the exception type
-///     is not a single compile-time constant. Such a plan is disqualified so the dispatch
-///     falls back to the runtime stage, which asks the instance itself.
+/// Whether the interceptor filters in a way that cannot be reproduced at compile time — a
+/// hand-written filter, or several typed ones, so the accepted type is not a single
+/// constant. Such an interceptor disqualifies the plan, and the dispatch falls back to the
+/// general stage, which asks the instance itself.
 /// </param>
+/// <remarks>
+/// This is the undeduplicated counterpart of <see cref="DescriptorModel"/>: it keeps the
+/// asynchronous/synchronous and typed/untyped facts that staged emission needs in order to
+/// choose the same contract the runtime strategy would.
+/// </remarks>
 internal readonly record struct ContractShapeModel(
     DescriptorKind Kind,
     bool IsAsync,

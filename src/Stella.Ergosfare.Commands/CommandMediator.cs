@@ -5,48 +5,33 @@ using Stella.Ergosfare.Core.Abstractions;
 namespace Stella.Ergosfare.Commands;
 
 /// <summary>
-/// Mediates command messages through the pipeline executor closed over the command's
-/// runtime type: handlers are always invoked through their typed members, and the dispatch
-/// path carries no object-typed bridge, options object, or erased strategy.
+/// The command mediator an application resolves: it holds the scope it was resolved from and
+/// hands every send to the container's dispatch engine.
 /// </summary>
+/// <remarks>
+/// The engine is shared across the process and this facade is the only object built per
+/// resolution.
+/// </remarks>
 public class CommandMediator : ICommandMediator
 {
     /// <summary>
-    /// The mediator backing the original construction shape; null when the facade is
-    /// engine-backed.
+    /// The container's dispatch engine, shared by every scope.
     /// </summary>
-    private readonly IMessageMediator? _messageMediator;
+    private readonly MessageDispatchEngine _engine;
 
     /// <summary>
-    /// The singleton dispatch engine; null when the facade wraps an
-    /// <see cref="IMessageMediator"/>.
+    /// The provider of the scope this facade was resolved from; participants resolve
+    /// against it.
     /// </summary>
-    private readonly MessageDispatchEngine? _engine;
+    private readonly IServiceProvider _serviceProvider;
 
     /// <summary>
-    /// The scope provider handlers resolve against on the engine path.
+    /// Initializes the facade over a container's engine and the scope it serves.
     /// </summary>
-    private readonly IServiceProvider? _serviceProvider;
-
-    /// <summary>
-    /// Wraps an existing <see cref="IMessageMediator"/> — the original construction shape,
-    /// kept for direct construction and foreign mediator implementations.
-    /// </summary>
-    [Obsolete("Removed in preview. Resolve the module mediator from dependency injection instead of constructing it directly.", false)]
-    public CommandMediator(IMessageMediator messageMediator)
-    {
-        _messageMediator = messageMediator;
-    }
-
-    /// <summary>
-    /// Engine-backed construction: dispatches go straight to the process-wide engine with
-    /// <paramref name="serviceProvider"/> as the handler-resolution scope, making the
-    /// facade the only object built per resolution.
-    /// </summary>
-    /// <param name="engine">The singleton dispatch engine.</param>
+    /// <param name="engine">The container's dispatch engine.</param>
     /// <param name="serviceProvider">The provider of the scope this facade serves.</param>
-    [Obsolete("Removed in preview. Resolve the module mediator from dependency injection instead of constructing it directly.", false)]
-    public CommandMediator(MessageDispatchEngine engine, IServiceProvider serviceProvider)
+    /// <exception cref="ArgumentNullException">Either argument is <c>null</c>.</exception>
+    internal CommandMediator(MessageDispatchEngine engine, IServiceProvider serviceProvider)
     {
         ArgumentNullException.ThrowIfNull(engine);
         ArgumentNullException.ThrowIfNull(serviceProvider);
@@ -55,125 +40,93 @@ public class CommandMediator : ICommandMediator
         _serviceProvider = serviceProvider;
     }
 
-    /// <summary>
-    /// Sends a void command through the executor pipeline.
-    /// </summary>
-    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
-    public ValueTask SendAsync(ICommand commandConstruct, CommandMediationSettings? commandMediationSettings = null,
+    /// <inheritdoc />
+    public ValueTask SendAsync(ICommand commandConstruct, GroupSet groups,
         CancellationToken cancellationToken = default)
-    {
-        return _engine is not null
-            ? _engine.DispatchAsync(
-                commandConstruct,
-                _serviceProvider!,
-                commandMediationSettings?.Items,
-                cancellationToken,
-                commandMediationSettings?.Filters.Groups)
-            : _messageMediator!.DispatchAsync(
-                commandConstruct,
-                commandMediationSettings?.Items,
-                cancellationToken,
-                commandMediationSettings?.Filters.Groups);
-    }
+        => _engine.DispatchAsync(commandConstruct, _serviceProvider, cancellationToken, groups ?? throw new ArgumentNullException(nameof(groups)));
 
-    /// <summary>
-    /// Sends a typed command through the executor pipeline and returns its result.
-    /// </summary>
-    /// <typeparam name="TResult">The expected result type of the command.</typeparam>
-    /// <param name="commandConstruct">The command to send.</param>
-    /// <param name="commandMediationSettings">Optional settings for command mediation, such as filtering or additional items.</param>
-    /// <param name="cancellationToken">Cancellation token for aborting the operation.</param>
-    /// <returns>A <see cref="ValueTask{TResult}"/> representing the asynchronous operation and containing the command result.</returns>
-    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
-    public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct,
-        CommandMediationSettings? commandMediationSettings = null,
-        CancellationToken cancellationToken = default)
-    {
-        return _engine is not null
-            ? _engine.DispatchAsync<TResult>(
-                commandConstruct,
-                _serviceProvider!,
-                commandMediationSettings?.Items,
-                cancellationToken,
-                commandMediationSettings?.Filters.Groups)
-            : _messageMediator!.DispatchAsync<TResult>(
-                commandConstruct,
-                commandMediationSettings?.Items,
-                cancellationToken,
-                commandMediationSettings?.Filters.Groups);
-    }
-
-    /// <summary>
-    /// Sends a void command under a canonical group filter — no settings object, and with
-    /// a reused <see cref="GroupSet"/> the grouped executor lookup matches on a single
-    /// reference check. An empty set routes to the group-less fast lane.
-    /// </summary>
-    public ValueTask SendAsync(ICommand commandConstruct, GroupSet groups, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(groups);
-
-        IEnumerable<string>? effectiveGroups = groups.Count == 0 ? null : groups;
-
-        return _engine is not null
-            ? _engine.DispatchAsync(commandConstruct, _serviceProvider!, null, cancellationToken, effectiveGroups)
-            : _messageMediator!.DispatchAsync(commandConstruct, null, cancellationToken, effectiveGroups);
-    }
-
-    /// <summary>
-    /// Result-producing counterpart of
-    /// <see cref="SendAsync(ICommand, GroupSet, CancellationToken)"/>.
-    /// </summary>
+    /// <inheritdoc />
     public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct, GroupSet groups,
         CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(groups);
+        => _engine.DispatchAsync<TResult>(commandConstruct, _serviceProvider, cancellationToken, groups ?? throw new ArgumentNullException(nameof(groups)));
 
-        IEnumerable<string>? effectiveGroups = groups.Count == 0 ? null : groups;
+    /// <inheritdoc />
+    public ValueTask SendAsync(ICommand commandConstruct, ErgosfareContext context, GroupSet? groups = null)
+        => _engine.DispatchAsync(commandConstruct, context, _serviceProvider, groups);
 
-        return _engine is not null
-            ? _engine.DispatchAsync<TResult>(commandConstruct, _serviceProvider!, null, cancellationToken, effectiveGroups)
-            : _messageMediator!.DispatchAsync<TResult>(commandConstruct, null, cancellationToken, effectiveGroups);
-    }
-
-    /// <summary>
-    /// Sends a void command under an externally owned execution context — the
-    /// nested-dispatch path: a handler opens a scope on its own context and passes the
-    /// child here. The caller owns the context's lifetime; cancellation flows from the
-    /// context.
-    /// </summary>
-    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
-    public ValueTask SendAsync(ICommand commandConstruct, ErgosfareContext context,
-        CommandMediationSettings? commandMediationSettings = null)
-    {
-        return _engine is not null
-            ? _engine.DispatchAsync(
-                commandConstruct,
-                context,
-                _serviceProvider!,
-                commandMediationSettings?.Filters.Groups)
-            : _messageMediator!.DispatchAsync(
-                commandConstruct,
-                context,
-                commandMediationSettings?.Filters.Groups);
-    }
-
-    /// <summary>
-    /// Result-producing counterpart of
-    /// <see cref="SendAsync(ICommand, ErgosfareContext, CommandMediationSettings?)"/>.
-    /// </summary>
-    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
+    /// <inheritdoc />
     public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct, ErgosfareContext context,
-        CommandMediationSettings? commandMediationSettings = null)
-    {
-        return _engine is not null
-            ? _engine.DispatchAsync<TResult>(
-                commandConstruct,
-                context,
-                _serviceProvider!,
-                commandMediationSettings?.Filters.Groups)
-            : _messageMediator!.DispatchAsync<TResult>(
-                commandConstruct,
-                context,
-                commandMediationSettings?.Filters.Groups);
-    }
+        GroupSet? groups = null)
+        => _engine.DispatchAsync<TResult>(commandConstruct, context, _serviceProvider, groups);
+
+    /// <summary>
+    /// Sends <paramref name="commandConstruct"/> through its default pipeline.
+    /// </summary>
+    /// <param name="commandConstruct">The command to send.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <remarks>
+    /// The conveniences are declared on this class as well as on the interface. A call made
+    /// through the concrete type does not find a default interface method, so declaring them
+    /// only on the interface would leave those calls without an overload to bind to.
+    /// </remarks>
+    public ValueTask SendAsync(ICommand commandConstruct, CancellationToken cancellationToken = default)
+        => SendAsync(commandConstruct, GroupSet.Empty, cancellationToken);
+
+    /// <summary>
+    /// Sends <paramref name="commandConstruct"/> through its default pipeline and returns
+    /// its result.
+    /// </summary>
+    /// <typeparam name="TResult">The result type the command declares.</typeparam>
+    /// <param name="commandConstruct">The command to send.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>The result the handler produced.</returns>
+    public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct,
+        CancellationToken cancellationToken = default)
+        => SendAsync(commandConstruct, GroupSet.Empty, cancellationToken);
+
+    /// <summary>
+    /// Sends <paramref name="commandConstruct"/> naming both its own type and its result, so
+    /// the pipeline is found through a static generic field rather than a lookup on the
+    /// command's runtime type.
+    /// </summary>
+    /// <typeparam name="TCommand">The command's own type.</typeparam>
+    /// <typeparam name="TResult">The result type the command declares.</typeparam>
+    /// <param name="commandConstruct">The command to send.</param>
+    /// <param name="groups">The groups to run; an empty set runs the default group.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>The result the handler produced.</returns>
+    public ValueTask<TResult> SendAsync<TCommand, TResult>(TCommand commandConstruct, GroupSet groups,
+        CancellationToken cancellationToken = default)
+        where TCommand : ICommand<TResult>
+        => _engine.DispatchAsync<TCommand, TResult>(commandConstruct, _serviceProvider, cancellationToken, groups ?? throw new ArgumentNullException(nameof(groups)));
+
+    /// <summary>
+    /// Sends <paramref name="commandConstruct"/> under a caller-owned context, naming both
+    /// types.
+    /// </summary>
+    /// <typeparam name="TCommand">The command's own type.</typeparam>
+    /// <typeparam name="TResult">The result type the command declares.</typeparam>
+    /// <param name="commandConstruct">The command to send.</param>
+    /// <param name="context">The context to run under; the caller owns its lifetime.</param>
+    /// <param name="groups">The groups to run; an empty set runs the default group.</param>
+    /// <returns>The result the handler produced.</returns>
+    public ValueTask<TResult> SendAsync<TCommand, TResult>(TCommand commandConstruct, ErgosfareContext context,
+        GroupSet? groups = null)
+        where TCommand : ICommand<TResult>
+        => _engine.DispatchAsync<TCommand, TResult>(commandConstruct, context, _serviceProvider, groups);
+
+    /// <summary>
+    /// Sends <paramref name="commandConstruct"/> through its default pipeline, naming both
+    /// types.
+    /// </summary>
+    /// <typeparam name="TCommand">The command's own type.</typeparam>
+    /// <typeparam name="TResult">The result type the command declares.</typeparam>
+    /// <param name="commandConstruct">The command to send.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>The result the handler produced.</returns>
+    public ValueTask<TResult> SendAsync<TCommand, TResult>(TCommand commandConstruct,
+        CancellationToken cancellationToken = default)
+        where TCommand : ICommand<TResult>
+        => SendAsync<TCommand, TResult>(commandConstruct, GroupSet.Empty, cancellationToken);
+
 }

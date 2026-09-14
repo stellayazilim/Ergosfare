@@ -9,14 +9,14 @@ namespace Stella.Ergosfare.Contract.Test.Sync;
 /// <summary>
 /// What the synchronous interceptor contracts do inside a pipeline: which stage each
 /// flavor serves, what it is handed, and how it orders against its asynchronous twins.
-/// Both registration axes inherit these scenarios verbatim, so a divergence between the
-/// emitted synchronous calls and the reflective synchronous arms shows up as one subclass
-/// failing.
+/// The emitted synchronous interceptor calls are the only lane these contracts run on now;
+/// the contract stays abstract so a future second lane closes it over its own types.
 /// </summary>
 /// <remarks>
 /// The main handlers here are asynchronous: a synchronous main handler disqualifies its
 /// message from every compile-time plan, so it could never exercise the emitted calls.
-/// <see cref="SyncMainHandlerContract"/> covers the synchronous main-handler contracts.
+/// <see cref="UnplannedSyncMainHandlerTests"/> pins the synchronous main-handler
+/// contracts, dead since the runtime lane's removal.
 /// </remarks>
 public abstract class SyncSemanticsContract
 {
@@ -250,12 +250,16 @@ public abstract class SyncSemanticsContract
         var recorder = NewRecorder();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        // The deliberate break of the Unit migration: an interceptor still written against
-        // the completed-task key registers fine and then matches no arm. The dispatch says
-        // so instead of silently skipping the stage.
-        await Assert.ThrowsAsync<NotSupportedException>(
+        // The deliberate break of the Unit migration, one lane further out now: an
+        // interceptor still written against the completed-task key registers fine, but the
+        // generator cannot model the stage it would occupy, so the whole message has no
+        // compiled plan and the dispatch fails before any stage runs. The loudness
+        // survived the engine rewrite; only the messenger changed — it used to be the
+        // stage's own NotSupportedException.
+        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(
             async () => await mediator.SendAsync(NewStaleKeyCommand(), recorder.Commands()));
 
+        Assert.Equal(UnplannedDispatchReason.NoCompiledPlan, thrown.Reason);
         Assert.DoesNotContain("post:stale", recorder.Stages);
     }
 }

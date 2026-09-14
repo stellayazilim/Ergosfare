@@ -6,31 +6,33 @@ namespace Stella.Ergosfare.Queries;
 
 
 /// <summary>
-/// The default implementation of <see cref="IQueryMediator"/>.
-/// Handles both standard queries and streaming queries using the internal message mediation pipeline,
-/// supporting pre/post/final interceptors and result adapters.
+/// The query mediator an application resolves: it holds the scope it was resolved from and
+/// hands every query and stream to the container's dispatch engine.
 /// </summary>
+/// <remarks>
+/// The engine is shared across the process and this facade is the only object built per
+/// resolution.
+/// </remarks>
 public class QueryMediator : IQueryMediator
 {
     /// <summary>
-    /// The singleton dispatch engine every query runs against.
+    /// The container's dispatch engine, shared by every scope.
     /// </summary>
     private readonly MessageDispatchEngine _engine;
 
     /// <summary>
-    /// The scope provider handlers resolve against.
+    /// The provider of the scope this facade was resolved from; participants resolve
+    /// against it.
     /// </summary>
     private readonly IServiceProvider _serviceProvider;
 
     /// <summary>
-    /// Queries go straight to the process-wide engine with
-    /// <paramref name="serviceProvider"/> as the handler-resolution scope, making the
-    /// facade the only object built per resolution.
+    /// Initializes the facade over a container's engine and the scope it serves.
     /// </summary>
-    /// <param name="engine">The singleton dispatch engine.</param>
+    /// <param name="engine">The container's dispatch engine.</param>
     /// <param name="serviceProvider">The provider of the scope this facade serves.</param>
-    [Obsolete("Removed in preview. Resolve the module mediator from dependency injection instead of constructing it directly.", false)]
-    public QueryMediator(
+    /// <exception cref="ArgumentNullException">Either argument is <c>null</c>.</exception>
+    internal QueryMediator(
         MessageDispatchEngine engine,
         IServiceProvider serviceProvider)
     {
@@ -41,96 +43,98 @@ public class QueryMediator : IQueryMediator
         _serviceProvider = serviceProvider;
     }
 
-    /// <summary>
-    /// Executes a query and returns a single result of type <typeparamref name="TResult"/>.
-    /// The query is processed through the mediation pipeline, including pre/post/final interceptors.
-    /// </summary>
-    /// <typeparam name="TResult">The expected result type of the query.</typeparam>
-    /// <param name="query">The query message to process.</param>
-    /// <param name="queryMediationSettings">
-    /// Optional settings to influence pipeline execution, such as filters and custom items.
-    /// </param>
-    /// <param name="cancellationToken">A cancellation token for async execution.</param>
-    /// <returns>A <see cref="ValueTask{TResult}"/> representing the asynchronous execution of the query.</returns>
-    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
-    public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, QueryMediationSettings? queryMediationSettings = null,
-        CancellationToken cancellationToken = default)
-    {
-        return _engine.DispatchAsync<TResult>(
-            query,
-            _serviceProvider,
-            queryMediationSettings?.Items,
-            cancellationToken,
-            queryMediationSettings?.Filters.Groups);
-    }
-
-
-    /// <summary>
-    /// Executes a streaming query and returns an asynchronous enumerable of results.
-    /// The query is processed through the streaming pipeline, supporting interceptors and result adapters.
-    /// </summary>
-    /// <typeparam name="TResult">The type of elements produced by the stream query.</typeparam>
-    /// <param name="query">The streaming query to execute.</param>
-    /// <param name="queryMediationSettings">
-    /// Optional settings to influence pipeline execution, such as filters and custom items.
-    /// </param>
-    /// <param name="cancellationToken">A cancellation token for async streaming.</param>
-    /// <returns>An <see cref="IAsyncEnumerable{TResult}"/> representing the results of the streaming query.</returns>
-    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
-    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, QueryMediationSettings? queryMediationSettings = null,
-        CancellationToken cancellationToken = default)
-    {
-        // Streams run against the invoker-cached pipeline plan — no per-call mediator
-        // resolution and no composition lookup.
-        return QueryStreamInvokerCache.Get<TResult>(query.GetType()).Stream(
-            query, queryMediationSettings, cancellationToken, _engine, _serviceProvider);
-    }
-
-    /// <summary>
-    /// Executes a query under a canonical group filter — no settings object, and with a
-    /// reused <see cref="GroupSet"/> the grouped executor lookup matches on a single
-    /// reference check. An empty set routes to the group-less fast lane.
-    /// </summary>
+    /// <inheritdoc />
     public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, GroupSet groups,
         CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(groups);
+        => _engine.DispatchAsync<TResult>(query, _serviceProvider, cancellationToken, groups ?? throw new ArgumentNullException(nameof(groups)));
 
-        IEnumerable<string>? effectiveGroups = groups.Count == 0 ? null : groups;
+    /// <inheritdoc />
+    public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, ErgosfareContext context,
+        GroupSet? groups = null)
+        => _engine.DispatchAsync<TResult>(query, context, _serviceProvider, groups);
 
-        return _engine.DispatchAsync<TResult>(query, _serviceProvider, null, cancellationToken, effectiveGroups);
-    }
-
-    /// <summary>
-    /// Streaming counterpart of
-    /// <see cref="QueryAsync{TResult}(IQuery{TResult}, GroupSet, CancellationToken)"/>:
-    /// the group filter flows into the invoker's plan slot directly, with no settings
-    /// object on the way.
-    /// </summary>
+    /// <inheritdoc />
+    [Obsolete(StreamRevision.Notice)]
     public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, GroupSet groups,
         CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(groups);
+        // The engine keeps this container's streaming pipelines, so nothing is resolved or
+        // looked up per call.
+        => _engine.StreamAsync<TResult>(query, _serviceProvider, cancellationToken, groups ?? throw new ArgumentNullException(nameof(groups)));
 
-        IEnumerable<string>? effectiveGroups = groups.Count == 0 ? null : groups;
-
-        return QueryStreamInvokerCache.Get<TResult>(query.GetType()).Stream(
-            query, null, cancellationToken, _engine, _serviceProvider, effectiveGroups);
-    }
+    /// <inheritdoc />
+    [Obsolete(StreamRevision.Notice)]
+    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, ErgosfareContext context,
+        GroupSet? groups = null)
+        => _engine.StreamAsync<TResult>(query, context, _serviceProvider, groups);
 
     /// <summary>
-    /// Executes a query under an externally owned execution context — the nested-dispatch
-    /// path: a handler opens a scope on its own context and passes the child here. The
-    /// caller owns the context's lifetime; cancellation flows from the context.
+    /// Executes <paramref name="query"/> through its default pipeline.
     /// </summary>
-    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
-    public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, ErgosfareContext context,
-        QueryMediationSettings? queryMediationSettings = null)
-    {
-        return _engine.DispatchAsync<TResult>(
-            query,
-            context,
-            _serviceProvider,
-            queryMediationSettings?.Filters.Groups);
-    }
+    /// <typeparam name="TResult">The result type the query declares.</typeparam>
+    /// <param name="query">The query to execute.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>The result the handler produced.</returns>
+    /// <remarks>
+    /// The conveniences are declared on this class as well as on the interface. A call made
+    /// through the concrete type does not find a default interface method, so declaring them
+    /// only on the interface would leave those calls without an overload to bind to.
+    /// </remarks>
+    public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, CancellationToken cancellationToken = default)
+        => QueryAsync(query, GroupSet.Empty, cancellationToken);
+
+
+    /// <summary>
+    /// Streams the results of <paramref name="query"/> through its default pipeline.
+    /// </summary>
+    /// <typeparam name="TResult">The type of each streamed item.</typeparam>
+    /// <param name="query">The query to stream.</param>
+    /// <param name="cancellationToken">Token for the enumeration.</param>
+    /// <returns>The streamed results.</returns>
+    [Obsolete(StreamRevision.Notice)]
+    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query,
+        CancellationToken cancellationToken = default)
+        => StreamAsync(query, GroupSet.Empty, cancellationToken);
+
+    /// <summary>
+    /// Executes <paramref name="query"/> naming both its own type and its result, so the
+    /// pipeline is found through a static generic field rather than a lookup on the query's
+    /// runtime type.
+    /// </summary>
+    /// <typeparam name="TQuery">The query's own type.</typeparam>
+    /// <typeparam name="TResult">The result type the query declares.</typeparam>
+    /// <param name="query">The query to execute.</param>
+    /// <param name="groups">The groups to run; an empty set runs the default group.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>The result the handler produced.</returns>
+    public ValueTask<TResult> QueryAsync<TQuery, TResult>(TQuery query, GroupSet groups,
+        CancellationToken cancellationToken = default)
+        where TQuery : IQuery<TResult>
+        => _engine.DispatchAsync<TQuery, TResult>(query, _serviceProvider, cancellationToken, groups ?? throw new ArgumentNullException(nameof(groups)));
+
+    /// <summary>
+    /// Executes <paramref name="query"/> under a caller-owned context, naming both types.
+    /// </summary>
+    /// <typeparam name="TQuery">The query's own type.</typeparam>
+    /// <typeparam name="TResult">The result type the query declares.</typeparam>
+    /// <param name="query">The query to execute.</param>
+    /// <param name="context">The context to run under; the caller owns its lifetime.</param>
+    /// <param name="groups">The groups to run; an empty set runs the default group.</param>
+    /// <returns>The result the handler produced.</returns>
+    public ValueTask<TResult> QueryAsync<TQuery, TResult>(TQuery query, ErgosfareContext context,
+        GroupSet? groups = null)
+        where TQuery : IQuery<TResult>
+        => _engine.DispatchAsync<TQuery, TResult>(query, context, _serviceProvider, groups);
+
+    /// <summary>
+    /// Executes <paramref name="query"/> through its default pipeline, naming both types.
+    /// </summary>
+    /// <typeparam name="TQuery">The query's own type.</typeparam>
+    /// <typeparam name="TResult">The result type the query declares.</typeparam>
+    /// <param name="query">The query to execute.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>The result the handler produced.</returns>
+    public ValueTask<TResult> QueryAsync<TQuery, TResult>(TQuery query, CancellationToken cancellationToken = default)
+        where TQuery : IQuery<TResult>
+        => QueryAsync<TQuery, TResult>(query, GroupSet.Empty, cancellationToken);
+
 }

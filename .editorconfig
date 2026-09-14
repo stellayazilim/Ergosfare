@@ -1,0 +1,4 @@
+# Shared Rider/ReSharper inspection preferences.
+# Keep explicit generic arguments when they improve contract readability.
+[*.cs]
+resharper_redundant_type_arguments_of_method_highlighting = do_not_show

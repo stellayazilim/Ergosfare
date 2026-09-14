@@ -1,6 +1,9 @@
-﻿using Stella.Ergosfare.Core;
+// Stream messaging is under revision and its entry points carry the notice; these are
+// deliberate call sites of the surface as it stands today.
+#pragma warning disable CS0618
+
+using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Strategies;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Queries.Test.__stubs__;
@@ -28,7 +31,9 @@ public class QueryMediatorTests
             )).BuildServiceProvider();
         var mediator = new QueryMediator(
             services.GetRequiredService<MessageDispatchEngine>(), services);
-        var result = mediator.QueryAsync(new StubNonGenericStringResultQuery(), queryMediationSettings: null);
+        // ReSharper disable once RedundantArgumentDefaultValue
+        // ReSharper disable once RedundantArgumentDefaultValue
+        var result = mediator.QueryAsync(new StubNonGenericStringResultQuery(), new ErgosfareContext());
         Assert.Equal(string.Empty, await result);
     }
     
@@ -48,7 +53,7 @@ public class QueryMediatorTests
         var expected = new []  {"Foo", "Bar", "Baz"};
         var result = new List<string>();
         // act
-        await foreach (var item in mediator.StreamAsync(new StubNonGenericStreamStringResultQuery(), queryMediationSettings: null))
+        await foreach (var item in mediator.StreamAsync(new StubNonGenericStreamStringResultQuery(), Stella.Ergosfare.Core.Abstractions.GroupSet.Empty, CancellationToken.None))
         {
             result.Add(item);
         }

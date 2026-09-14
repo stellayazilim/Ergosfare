@@ -1,114 +1,47 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Stella.Ergosfare.SourceGenerator.Models;
+using Stella.Ergosfare.SourceGenerator.Planning;
+using Stella.Ergosfare.SourceGenerator.Symbols;
 
 namespace Stella.Ergosfare.SourceGenerator;
 
 /// <summary>
-///     Dispatch-site side of the generator: discovers mediator dispatch invocations in the
-///     current compilation, aggregates the dispatch manifests of referenced assemblies, and
-///     judges whole-closure dispatch reachability in composition-root compilations —
-///     provably dead dispatches (ERGOSG005/006), unreachable handlers (ERGOSG007), the
-///     opt-in handler trim (ERGOSG008) and the strict-mode opacity aid (ERGOSG009).
+/// The dispatch-site half of the generator.
 /// </summary>
+/// <remarks>
+/// It finds the mediator dispatches in this compilation, gathers the manifests referenced
+/// assemblies recorded, and — in a composition root, where the closure is complete — judges
+/// what can reach what: dead dispatches as ERGO005 and ERGO006, a dispatch its own group set
+/// empties as ERGO024, unreachable handlers as ERGO007, the opt-in trim as ERGO008, and
+/// opaque sites as ERGO009.
+/// </remarks>
 public sealed partial class ErgosfareRegistrationGenerator
 {
-    private const string CoreAbstractionsNamespace = "Stella.Ergosfare.Core.Abstractions";
     private const string CommandMediatorInterfaceName = "ICommandMediator";
     private const string QueryMediatorInterfaceName = "IQueryMediator";
     private const string EventMediatorInterfaceName = "IEventMediator";
-    private const string MessageMediatorInterfaceName = "IMessageMediator";
 
-    private const string DispatchSitesNamespace = "Stella.Ergosfare.Core.Abstractions.DispatchSites";
-    private const string DispatchSiteAttributeMetadataName = DispatchSitesNamespace + ".DispatchSiteAttribute";
 
     private const string CompositionRootBuildProperty = "build_property.ErgosfareCompositionRoot";
     private const string TrimUnusedHandlersBuildProperty = "build_property.ErgosfareTrimUnusedHandlers";
 
     /// <summary>
-    ///     Composition-root override, the trim opt-in, and the two compilation facts the
-    ///     reachability judgment gates on.
+    /// Reports whether a node could be a dispatch, on its syntax alone.
     /// </summary>
-    internal readonly record struct JudgmentInputs(
-        bool? CompositionRootOverride,
-        bool TrimUnusedHandlers,
-        bool ScanReferences,
-        bool IsExecutableOutput);
-
-    /// <summary>
-    ///     The referenced assemblies' aggregated dispatch manifests: dispatch sites,
-    ///     manual-registration evidence, and two soundness flags.
-    ///     <see cref="HasUnknownSiteAssemblies"/> guards the unreachable-handler judgment:
-    ///     any Ergosfare-referencing assembly in the closure without a manifest marker
-    ///     (built without the generator, or with one predating manifests) may contain
-    ///     dispatch sites this scan cannot see, so ERGOSG007 and the trim stay silent
-    ///     while it is set. <see cref="HasOpaqueRegistrations"/> guards the dead-dispatch
-    ///     judgment: a registration whose type is statically unknowable means coverage
-    ///     evidence is incomplete by construction, so ERGOSG005/006 stay silent.
-    /// </summary>
-    internal readonly struct DispatchManifestScanResult(
-        ImmutableArray<DispatchSiteModel> sites,
-        ImmutableArray<RegistrationSiteModel> registrationSites,
-        bool hasUnknownSiteAssemblies,
-        bool hasOpaqueRegistrations) : IEquatable<DispatchManifestScanResult>
-    {
-        public static readonly DispatchManifestScanResult Empty = new(
-            ImmutableArray<DispatchSiteModel>.Empty, ImmutableArray<RegistrationSiteModel>.Empty, false, false);
-
-        public ImmutableArray<DispatchSiteModel> Sites { get; } = sites;
-
-        public ImmutableArray<RegistrationSiteModel> RegistrationSites { get; } = registrationSites;
-
-        public bool HasUnknownSiteAssemblies { get; } = hasUnknownSiteAssemblies;
-
-        public bool HasOpaqueRegistrations { get; } = hasOpaqueRegistrations;
-
-        public bool Equals(DispatchManifestScanResult other)
-        {
-            if (HasUnknownSiteAssemblies != other.HasUnknownSiteAssemblies
-                || HasOpaqueRegistrations != other.HasOpaqueRegistrations
-                || Sites.Length != other.Sites.Length
-                || RegistrationSites.Length != other.RegistrationSites.Length)
-            {
-                return false;
-            }
-
-            for (var i = 0; i < Sites.Length; i++)
-            {
-                if (!Sites[i].Equals(other.Sites[i]))
-                {
-                    return false;
-                }
-            }
-
-            for (var i = 0; i < RegistrationSites.Length; i++)
-            {
-                if (!RegistrationSites[i].Equals(other.RegistrationSites[i]))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        public override bool Equals(object? obj) => obj is DispatchManifestScanResult other && Equals(other);
-
-        public override int GetHashCode()
-            => (Sites.Length * 397)
-               ^ (RegistrationSites.Length * 31)
-               ^ (HasUnknownSiteAssemblies ? 1 : 0)
-               ^ (HasOpaqueRegistrations ? 2 : 0);
-    }
-
-    /// <summary>
-    ///     Cheap syntax pre-filter for dispatch invocations: an invocation with arguments
-    ///     whose invoked simple name is one of the mediator dispatch method names.
-    /// </summary>
+    /// <param name="node">The node to test.</param>
+    /// <returns>
+    /// <c>true</c> for an invocation with arguments whose name is one of the mediator's
+    /// dispatch methods.
+    /// </returns>
+    /// <remarks>
+    /// The cheap first pass; whether it really binds to a mediator is settled later, against
+    /// the semantic model.
+    /// </remarks>
     private static bool IsDispatchInvocationCandidate(SyntaxNode node)
     {
         if (node is not InvocationExpressionSyntax { ArgumentList.Arguments.Count: > 0 } invocation)
@@ -128,11 +61,16 @@ public sealed partial class ErgosfareRegistrationGenerator
     }
 
     /// <summary>
-    ///     Cheap syntax pre-filter for registration invocations: an invocation whose
-    ///     invoked simple name is one of the registration method names. RegisterGenerated
-    ///     and RegisterAll are deliberately absent — they are the bulk collection of what
-    ///     discovery already counts as evidence.
+    /// Reports whether a node could be a registration, on its syntax alone.
     /// </summary>
+    /// <param name="node">The node to test.</param>
+    /// <returns>
+    /// <c>true</c> for an invocation whose name is one of the registration methods.
+    /// </returns>
+    /// <remarks>
+    /// <c>AddGenerated</c> and <c>RegisterAll</c> are left out on purpose: they collect
+    /// in bulk what discovery already counts as evidence.
+    /// </remarks>
     private static bool IsRegistrationInvocationCandidate(SyntaxNode node)
     {
         if (node is not InvocationExpressionSyntax invocation)
@@ -148,23 +86,36 @@ public sealed partial class ErgosfareRegistrationGenerator
             _ => null,
         };
 
-        return name is "Register" or "RegisterParticipants" or "RegisterFromAssembly" or "RegisterDescriptors";
+        return name is "Register" or "RegisterParticipants" or "AddGenerated" or "RegisterAll";
     }
 
     /// <summary>
-    ///     Projects a candidate invocation to its registration-site model, or <c>null</c>
-    ///     when the invocation does not bind to an Ergosfare registration surface (or is
-    ///     the module-container <c>Register(IModule)</c>, whose real registrations are the
-    ///     builder calls inside it). Manual registration is the same collection path as
-    ///     <c>RegisterGenerated()</c>, so a statically known type argument contributes its
-    ///     main-handler contracts as coverage evidence; anything unknowable is opaque and
-    ///     suspends the dead-dispatch judgment.
+    /// Reads one candidate invocation as a registration.
     /// </summary>
+    /// <param name="ctx">The invocation to read.</param>
+    /// <param name="ct">Cancels the read.</param>
+    /// <returns>
+    /// The site's model, or <c>null</c> when the invocation binds to no Ergosfare
+    /// registration surface, or is the module-container <c>Register(IModule)</c> whose real
+    /// registrations are the builder calls inside it.
+    /// </returns>
+    /// <remarks>
+    /// A hand-written registration reaches the container the same way <c>AddGenerated</c>
+    /// does, so a type it names outright contributes its main-handler contracts as coverage
+    /// evidence. A type it cannot name comes back opaque, which suspends the dead-dispatch
+    /// judgment.
+    /// </remarks>
     private static RegistrationSiteModel? TransformRegistrationSite(GeneratorSyntaxContext ctx, CancellationToken ct)
-    {
-        var invocation = (InvocationExpressionSyntax)ctx.Node;
+        => ReadRegistrationSite((InvocationExpressionSyntax)ctx.Node, ctx.SemanticModel, ct) is { } site ? site with { DeclaringMethod = EnclosingMethod(ctx.Node, ctx.SemanticModel, ct) } : null;
 
-        if (ctx.SemanticModel.GetSymbolInfo(invocation, ct).Symbol is not IMethodSymbol method
+    private static RegistrationSiteModel? ReadRegistrationSite(InvocationExpressionSyntax invocation, SemanticModel semanticModel, CancellationToken ct)
+    {
+
+        if (TryReadBulkSelection(semanticModel, invocation, ct) is { } bulk) return bulk;
+        if (ReadUnboundExplicitSelection(semanticModel, invocation, ct) is { TypeKind: not TypeKind.Error } explicitType)
+            return EvidenceRegistration(explicitType);
+
+        if (semanticModel.GetSymbolInfo(invocation, ct).Symbol is not IMethodSymbol method
             || method.ContainingType is not { } containing
             || !IsErgosfareRegistrationSurface(containing))
         {
@@ -173,49 +124,42 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         switch (method.Name)
         {
-            case "RegisterFromAssembly":
-                // Removed from the current surface, but the generator also runs against
-                // older packages where the reflective scan still exists — its catch is
-                // unknowable here either way.
-                return OpaqueRegistration();
-
             case "RegisterParticipants":
-                // A batch of types assembled at run time is a value, not a set of type
-                // arguments; nothing here can say which types it carries.
-                return OpaqueRegistration();
-
-            case "RegisterDescriptors":
-                // Gone from the current surface, kept for older packages. Descriptor
-                // batches are values, not types; unknowable either way.
-                return OpaqueRegistration();
+                // A batch assembled at run time is a value, not a list of type arguments, and
+                // nothing here can say which types it carries.
+                return UnknownTypeRegistration(invocation);
 
             case "Register" when method is { IsGenericMethod: true, TypeArguments.Length: 1 }:
+                // A type argument that is itself a type parameter, as in Register<T>() inside
+                // a generic method, names a different type per instantiation — and this
+                // compilation cannot list them.
                 return method.TypeArguments[0] is INamedTypeSymbol genericArgument
                     ? EvidenceRegistration(genericArgument)
-                    : OpaqueRegistration();
+                    : UnknownTypeRegistration(invocation);
 
             case "Register" when method.Parameters.Length >= 1:
             {
                 var parameterType = method.Parameters[0].Type;
 
                 if (parameterType is INamedTypeSymbol { Name: "Type" } typeParameter
-                    && IsInNamespace(typeParameter, "System"))
+                    && SymbolNaming.IsInNamespace(typeParameter, "System"))
                 {
-                    // Register(typeof(X)) is provable; any other Type-valued argument
-                    // is a runtime decision.
+                    // Register(typeof(X)) names its type outright; any other Type-valued
+                    // argument is decided at run time.
                     if (FindMessageArgument(invocation, method) is { } argument
                         && UnwrapConversions(argument.Expression) is TypeOfExpressionSyntax typeOf
-                        && ctx.SemanticModel.GetTypeInfo(typeOf.Type, ct).Type is INamedTypeSymbol literal
+                        && semanticModel.GetTypeInfo(typeOf.Type, ct).Type is INamedTypeSymbol literal
                         && literal is not IErrorTypeSymbol)
                     {
                         return EvidenceRegistration(literal);
                     }
 
-                    return OpaqueRegistration();
+                    return UnknownTypeRegistration(invocation);
                 }
 
-                // Register(IModule) and friends: a container, not a type registration —
-                // the builder calls inside the module are the real, visible sites.
+                // Register(IModule) and its siblings take a container rather than a type; the
+                // builder calls inside the module are the registrations, and they are visible
+                // on their own.
                 return null;
             }
 
@@ -223,38 +167,23 @@ public sealed partial class ErgosfareRegistrationGenerator
                 return null;
         }
 
-        static RegistrationSiteModel OpaqueRegistration() => new()
+        static RegistrationSiteModel UnknownTypeRegistration(SyntaxNode call) => new()
         {
             TypeMetadataName = null,
             MainHandlerMessageKeys = ImmutableArray<string>.Empty,
             IsOpaque = true,
+            UnknownTypeLocation = LocationInfo.From(call),
         };
     }
 
-    /// <summary>
-    ///     Builds the evidence model of a provably registered type: its main-handler
-    ///     message expressions. Generic registrations stay opaque — the runtime builds
-    ///     their descriptors reflectively, which the compile-time model cannot mirror
-    ///     (<see cref="BuildDescriptors"/> deliberately returns nothing for them).
-    /// </summary>
+    /// <summary>Records an explicit compile-time type selection.</summary>
+    /// <param name="registered">The selected participant or message type.</param>
+    /// <returns>A selection request consumed before planning.</returns>
     private static RegistrationSiteModel EvidenceRegistration(INamedTypeSymbol registered)
     {
-        for (var current = registered; current is not null; current = current.ContainingType)
-        {
-            if (current.Arity > 0)
-            {
-                return new RegistrationSiteModel
-                {
-                    TypeMetadataName = null,
-                    MainHandlerMessageKeys = ImmutableArray<string>.Empty,
-                    IsOpaque = true,
-                };
-            }
-        }
-
         ImmutableArray<string>.Builder? keys = null;
 
-        foreach (var descriptor in BuildDescriptors(registered))
+        foreach (var descriptor in ContractReader.BuildDescriptors(registered))
         {
             if (descriptor.Kind == DescriptorKind.MainHandler)
             {
@@ -264,30 +193,43 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         return new RegistrationSiteModel
         {
-            TypeMetadataName = BuildMetadataName(registered.OriginalDefinition),
+            TypeExpression = registered.IsGenericType && !Monomorphizer.IsUnboundOrDefinition(registered)
+                ? SymbolNaming.VerbatimTypeExpression(registered)
+                : SymbolNaming.BuildTypeofExpression(registered),
+            TypeMetadataName = SymbolNaming.BuildMetadataName(registered.OriginalDefinition),
             MainHandlerMessageKeys = keys?.ToImmutable() ?? ImmutableArray<string>.Empty,
             IsOpaque = false,
+            UnknownTypeLocation = null,
         };
     }
 
     /// <summary>
-    ///     Whether the type is one of Ergosfare's registration surfaces: the module
-    ///     builders (and their DI-extension siblings) or the registry abstraction itself.
+    /// Reports whether a type is one of Ergosfare's registration surfaces.
     /// </summary>
+    /// <param name="type">The type to test.</param>
+    /// <returns>
+    /// <c>true</c> for the module builders, their dependency-injection siblings, and the
+    /// registry itself.
+    /// </returns>
     private static bool IsErgosfareRegistrationSurface(INamedTypeSymbol type)
-        => IsInNamespace(type, "Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection")
-           || IsInNamespace(type, "Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection")
-           || IsInNamespace(type, "Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection")
-           || IsInNamespace(type, "Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection")
-           || IsInNamespace(type, "Stella.Ergosfare.Core.Abstractions.Registry");
+        => SymbolNaming.IsInNamespace(type, "Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection")
+           || SymbolNaming.IsInNamespace(type, "Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection")
+           || SymbolNaming.IsInNamespace(type, "Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection")
+           || SymbolNaming.IsInNamespace(type, "Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection");
 
     /// <summary>
-    ///     Projects a candidate invocation to its dispatch-site model, or <c>null</c> when
-    ///     the invocation does not bind to a mediator dispatch method. The message
-    ///     argument's casts and conversions are looked through so the recorded static type
-    ///     is the expression's natural one — <c>SendAsync((ICommand)x)</c> records
-    ///     <c>x</c>'s declared type, not the cast target.
+    /// Reads one candidate invocation as a dispatch.
     /// </summary>
+    /// <param name="ctx">The invocation to read.</param>
+    /// <param name="ct">Cancels the read.</param>
+    /// <returns>
+    /// The site's model, or <c>null</c> when the invocation binds to no mediator dispatch.
+    /// </returns>
+    /// <remarks>
+    /// Casts and conversions around the message argument are looked through, so the recorded
+    /// type is the expression's own: <c>SendAsync((ICommand)x)</c> records what <c>x</c> is
+    /// declared as, not what it was cast to.
+    /// </remarks>
     private static DispatchSiteModel? TransformDispatchSite(GeneratorSyntaxContext ctx, CancellationToken ct)
     {
         var invocation = (InvocationExpressionSyntax)ctx.Node;
@@ -310,16 +252,360 @@ public sealed partial class ErgosfareRegistrationGenerator
         var expression = UnwrapConversions(argument.Expression);
         var typeInfo = ctx.SemanticModel.GetTypeInfo(expression, ct);
 
-        return BuildSiteModel(typeInfo.Type ?? typeInfo.ConvertedType, kind,
+        var site = BuildSiteModel(typeInfo.Type ?? typeInfo.ConvertedType, kind,
             LocationInfo.From(invocation), referencedAssemblyName: null);
+
+        if (site is null)
+        {
+            return null;
+        }
+
+        ReadGroupFilter(ctx, invocation, method, ct, out var groups, out var unprovable);
+
+        return site.Value with { Groups = groups, HasUnprovableGroups = unprovable };
     }
 
     /// <summary>
-    ///     Maps a bound method to its dispatch surface: the mediator interfaces' dispatch
-    ///     methods, matched on the interface itself or — for calls through a concrete
-    ///     mediator implementation — on any mediator interface the containing type
-    ///     implements.
+    /// Reads the group set a dispatch names.
     /// </summary>
+    /// <param name="ctx">The syntax context the invocation belongs to.</param>
+    /// <param name="invocation">The dispatch to read.</param>
+    /// <param name="method">The method it binds to.</param>
+    /// <param name="ct">Cancels the read.</param>
+    /// <param name="groups">The named groups, normalized; empty when the call names none.</param>
+    /// <param name="unprovable">Set when the set could not be read.</param>
+    /// <remarks>
+    /// Every element has to be a literal the compiler can fold. Naming no set at all is the
+    /// empty set, which means the default group — a group set like any other. One indirection
+    /// is followed: a reference to a field or local whose initializer is itself readable, the
+    /// documented idiom being a <c>static readonly GroupSet</c> defined once and reused.
+    /// </remarks>
+    private static void ReadGroupFilter(
+        GeneratorSyntaxContext ctx,
+        InvocationExpressionSyntax invocation,
+        IMethodSymbol method,
+        CancellationToken ct,
+        out ImmutableArray<string> groups,
+        out bool unprovable)
+    {
+        groups = ImmutableArray<string>.Empty;
+        unprovable = false;
+
+        if (FindGroupArgument(invocation, method) is not { } argument)
+        {
+            return;
+        }
+
+        var names = new List<string>();
+
+        if (TryReadGroupNames(ctx, UnwrapConversions(argument.Expression), ct, names, depth: 0))
+        {
+            groups = GroupNames.Normalize(names);
+            return;
+        }
+
+        unprovable = true;
+    }
+
+    /// <summary>
+    /// Finds the argument bound to a dispatch method's group parameter.
+    /// </summary>
+    /// <param name="invocation">The dispatch to read.</param>
+    /// <param name="method">The method it binds to.</param>
+    /// <returns>
+    /// The argument, or <c>null</c> when the method takes no group parameter or the call
+    /// omits it.
+    /// </returns>
+    /// <remarks>
+    /// Named arguments are honored, so the parameter is found wherever the call put it.
+    /// </remarks>
+    private static ArgumentSyntax? FindGroupArgument(InvocationExpressionSyntax invocation, IMethodSymbol method)
+    {
+        var groupParameterIndex = -1;
+
+        for (var i = 0; i < method.Parameters.Length; i++)
+        {
+            if (IsGroupParameter(method.Parameters[i]))
+            {
+                groupParameterIndex = i;
+                break;
+            }
+        }
+
+        if (groupParameterIndex < 0)
+        {
+            return null;
+        }
+
+        var groupParameterName = method.Parameters[groupParameterIndex].Name;
+        var arguments = invocation.ArgumentList.Arguments;
+
+        for (var i = 0; i < arguments.Count; i++)
+        {
+            var argument = arguments[i];
+
+            if (argument.NameColon is { } nameColon)
+            {
+                if (string.Equals(nameColon.Name.Identifier.ValueText, groupParameterName, StringComparison.Ordinal))
+                {
+                    return argument;
+                }
+            }
+            else if (i == groupParameterIndex)
+            {
+                return argument;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Reports whether a parameter is a dispatch's group parameter.
+    /// </summary>
+    /// <param name="parameter">The parameter to test.</param>
+    /// <returns><c>true</c> when it carries the group set.</returns>
+    private static bool IsGroupParameter(IParameterSymbol parameter)
+    {
+        if (parameter.Name is "groups")
+        {
+            return true;
+        }
+
+        return parameter.Type is INamedTypeSymbol { Name: "GroupSet" } groupSet
+               && SymbolNaming.IsInNamespace(groupSet, ContractNames.CoreAbstractionsNamespace);
+    }
+
+    /// <summary>
+    /// Collects the literal names behind a group expression.
+    /// </summary>
+    /// <param name="ctx">The syntax context the expression belongs to.</param>
+    /// <param name="expression">The expression to read.</param>
+    /// <param name="ct">Cancels the read.</param>
+    /// <param name="names">The list names are added to.</param>
+    /// <param name="depth">How many named references have been followed so far.</param>
+    /// <returns><c>false</c> the moment something cannot be read.</returns>
+    private static bool TryReadGroupNames(
+        GeneratorSyntaxContext ctx,
+        ExpressionSyntax expression,
+        CancellationToken ct,
+        List<string> names,
+        int depth)
+    {
+        // One hop through a named reference and no further: a chain of aliases is not an
+        // idiom worth chasing, and the limit is what keeps this finite.
+        if (depth > 1)
+        {
+            return false;
+        }
+
+        // A string converts to a one-name GroupSet; preserve "" as a name as well.
+        if (ctx.SemanticModel.GetConstantValue(expression, ct) is { HasValue: true, Value: string group })
+        {
+            names.Add(group);
+            return true;
+        }
+
+        switch (expression)
+        {
+            // null or default: no set named, so the default group.
+            case LiteralExpressionSyntax literal when literal.IsKind(SyntaxKind.NullLiteralExpression):
+            case LiteralExpressionSyntax when expression.IsKind(SyntaxKind.DefaultLiteralExpression):
+                return true;
+
+            // GroupSet.Of("a", "b"), the spelling the documentation recommends.
+            case InvocationExpressionSyntax call:
+            {
+                if (ctx.SemanticModel.GetSymbolInfo(call, ct).Symbol is not IMethodSymbol
+                    {
+                        Name: "Of", ContainingType: { Name: "GroupSet" } owner,
+                    }
+                    || !SymbolNaming.IsInNamespace(owner, ContractNames.CoreAbstractionsNamespace))
+                {
+                    return false;
+                }
+
+                foreach (var argument in call.ArgumentList.Arguments)
+                {
+                    if (!TryReadStringLiteral(ctx, argument.Expression, ct, names))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            // new[] { "a" } / new string[] { "a" }
+            case ArrayCreationExpressionSyntax { Initializer: { } arrayInitializer }:
+                return TryReadStringLiterals(ctx, arrayInitializer.Expressions, ct, names);
+
+            case ImplicitArrayCreationExpressionSyntax implicitArray:
+                return TryReadStringLiterals(ctx, implicitArray.Initializer.Expressions, ct, names);
+
+            // ["a", "b"] — the collection expression.
+            case CollectionExpressionSyntax collection:
+            {
+                foreach (var element in collection.Elements)
+                {
+                    if (element is not ExpressionElementSyntax { Expression: { } elementExpression }
+                        || !TryReadStringLiteral(ctx, elementExpression, ct, names))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            // GroupSet.Empty, or a reference to a field or local holding a readable set.
+            case IdentifierNameSyntax:
+            case MemberAccessExpressionSyntax:
+            {
+                var symbol = ctx.SemanticModel.GetSymbolInfo(expression, ct).Symbol;
+
+                if (symbol is IFieldSymbol { Name: "Empty", ContainingType: { Name: "GroupSet" } emptyOwner }
+                    && SymbolNaming.IsInNamespace(emptyOwner, ContractNames.CoreAbstractionsNamespace))
+                {
+                    return true;
+                }
+
+                return symbol is IFieldSymbol or ILocalSymbol
+                       && TryReadInitializer(ctx, symbol, ct, names, depth);
+            }
+
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Follows a field or local back to its initializer and reads that instead.
+    /// </summary>
+    /// <param name="ctx">The syntax context the reference belongs to.</param>
+    /// <param name="symbol">The field or local to follow.</param>
+    /// <param name="ct">Cancels the read.</param>
+    /// <param name="names">The list names are added to.</param>
+    /// <param name="depth">How many named references have been followed so far.</param>
+    /// <returns><c>true</c> when the initializer could be read.</returns>
+    /// <remarks>
+    /// Only a single unambiguous declaration counts, and only one this compilation can see: a
+    /// set assembled elsewhere stays unreadable.
+    /// </remarks>
+    private static bool TryReadInitializer(
+        GeneratorSyntaxContext ctx,
+        ISymbol symbol,
+        CancellationToken ct,
+        List<string> names,
+        int depth)
+    {
+        if (symbol is IFieldSymbol { IsReadOnly: false, IsConst: false })
+        {
+            // A writable field can be holding anything by the time the dispatch runs.
+            return false;
+        }
+
+        var references = symbol.DeclaringSyntaxReferences;
+
+        if (references.Length != 1)
+        {
+            return false;
+        }
+
+        var initializer = references[0].GetSyntax(ct) switch
+        {
+            VariableDeclaratorSyntax { Initializer.Value: { } value } => value,
+            PropertyDeclarationSyntax { Initializer.Value: { } value } => value,
+            _ => null,
+        };
+
+        if (initializer is null)
+        {
+            return false;
+        }
+
+        // The initializer needs its own semantic model: a field declared in another file
+        // belongs to a different syntax tree, which the dispatch's model cannot answer for.
+        var initializerContext = initializer.SyntaxTree == ctx.SemanticModel.SyntaxTree
+            ? ctx
+            : default;
+
+        // GeneratorSyntaxContext is a struct, so the default above really does carry a null
+        // SemanticModel, whatever its annotation claims. Without this check, the next line
+        // dereferences that null.
+        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
+        if (initializerContext.SemanticModel is null)
+        {
+            return false;
+        }
+
+        return TryReadGroupNames(initializerContext, UnwrapConversions(initializer), ct, names, depth + 1);
+    }
+
+    /// <summary>
+    /// Reads a list of expressions as group names.
+    /// </summary>
+    /// <param name="ctx">The syntax context the expressions belong to.</param>
+    /// <param name="expressions">The expressions to read.</param>
+    /// <param name="ct">Cancels the read.</param>
+    /// <param name="names">The list names are added to.</param>
+    /// <returns><c>false</c> the moment one of them cannot be read.</returns>
+    private static bool TryReadStringLiterals(
+        GeneratorSyntaxContext ctx,
+        SeparatedSyntaxList<ExpressionSyntax> expressions,
+        CancellationToken ct,
+        List<string> names)
+    {
+        foreach (var expression in expressions)
+        {
+            if (!TryReadStringLiteral(ctx, expression, ct, names))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Reads one expression as a group name.
+    /// </summary>
+    /// <param name="ctx">The syntax context the expression belongs to.</param>
+    /// <param name="expression">The expression to read.</param>
+    /// <param name="ct">Cancels the read.</param>
+    /// <param name="names">The list the name is added to.</param>
+    /// <returns><c>true</c> when the compiler folds it to a string constant.</returns>
+    /// <remarks>
+    /// Which covers a literal, a <c>const</c> field and constant concatenation alike.
+    /// </remarks>
+    private static bool TryReadStringLiteral(
+        GeneratorSyntaxContext ctx,
+        ExpressionSyntax expression,
+        CancellationToken ct,
+        List<string> names)
+    {
+        var constant = ctx.SemanticModel.GetConstantValue(expression, ct);
+
+        if (constant is { HasValue: true, Value: string name })
+        {
+            names.Add(name);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Decides which dispatch surface a bound method belongs to.
+    /// </summary>
+    /// <param name="method">The method the call binds to.</param>
+    /// <returns>
+    /// The kind of dispatch, or <c>null</c> when the method is not one.
+    /// </returns>
+    /// <remarks>
+    /// Matched on the mediator interface itself, or — for a call through a concrete mediator
+    /// — on any mediator interface the containing type implements.
+    /// </remarks>
     private static DispatchSiteKind? ClassifyDispatchMethod(IMethodSymbol method)
     {
         if (method.ContainingType is not { } containing)
@@ -343,26 +629,36 @@ public sealed partial class ErgosfareRegistrationGenerator
         return null;
     }
 
+    /// <summary>
+    /// Matches one interface and method name against the dispatch surfaces.
+    /// </summary>
+    /// <param name="type">The interface to match.</param>
+    /// <param name="methodName">The called method's name.</param>
+    /// <returns>The kind of dispatch, or <c>null</c> when the pair is not one.</returns>
     private static DispatchSiteKind? ClassifyByMediatorInterface(INamedTypeSymbol type, string methodName)
         => methodName switch
         {
-            "SendAsync" when type.Name == CommandMediatorInterfaceName && IsInNamespace(type, CommandMarkerNamespace)
+            "SendAsync" when type.Name == CommandMediatorInterfaceName && SymbolNaming.IsInNamespace(type, ContractNames.CommandMarkerNamespace)
                 => DispatchSiteKind.Command,
-            "QueryAsync" when type.Name == QueryMediatorInterfaceName && IsInNamespace(type, QueryMarkerNamespace)
+            "QueryAsync" when type.Name == QueryMediatorInterfaceName && SymbolNaming.IsInNamespace(type, ContractNames.QueryMarkerNamespace)
                 => DispatchSiteKind.Query,
-            "StreamAsync" when type.Name == QueryMediatorInterfaceName && IsInNamespace(type, QueryMarkerNamespace)
+            "StreamAsync" when type.Name == QueryMediatorInterfaceName && SymbolNaming.IsInNamespace(type, ContractNames.QueryMarkerNamespace)
                 => DispatchSiteKind.Stream,
-            "PublishAsync" when type.Name == EventMediatorInterfaceName && IsInNamespace(type, EventMarkerNamespace)
+            "PublishAsync" when type.Name == EventMediatorInterfaceName && SymbolNaming.IsInNamespace(type, ContractNames.EventMarkerNamespace)
                 => DispatchSiteKind.Event,
-            "DispatchAsync" or "Mediate" when type.Name == MessageMediatorInterfaceName && IsInNamespace(type, CoreAbstractionsNamespace)
-                => DispatchSiteKind.Message,
             _ => null,
         };
 
     /// <summary>
-    ///     The argument bound to the method's first parameter — the message on every
-    ///     dispatch surface — honoring named arguments.
+    /// Finds the argument bound to a method's first parameter, which every dispatch surface
+    /// takes the message in.
     /// </summary>
+    /// <param name="invocation">The call to read.</param>
+    /// <param name="method">The method it binds to.</param>
+    /// <returns>The argument, or <c>null</c> when the call passes none.</returns>
+    /// <remarks>
+    /// Named arguments are honored, so the parameter is found wherever the call put it.
+    /// </remarks>
     private static ArgumentSyntax? FindMessageArgument(InvocationExpressionSyntax invocation, IMethodSymbol method)
     {
         if (method.Parameters.IsEmpty)
@@ -394,9 +690,11 @@ public sealed partial class ErgosfareRegistrationGenerator
     }
 
     /// <summary>
-    ///     Strips casts, <c>as</c> conversions, parentheses and null-forgiveness so the
-    ///     recorded static type is the message expression's natural one.
+    /// Strips casts, <c>as</c> conversions, parentheses and null-forgiveness from an
+    /// expression.
     /// </summary>
+    /// <param name="expression">The expression to strip.</param>
+    /// <returns>The expression underneath, so its own type is what gets recorded.</returns>
     private static ExpressionSyntax UnwrapConversions(ExpressionSyntax expression)
     {
         while (true)
@@ -422,13 +720,25 @@ public sealed partial class ErgosfareRegistrationGenerator
     }
 
     /// <summary>
-    ///     Builds the site model for a static message type. Type parameters resolve to
-    ///     their first named constraint; expressions with no usable static type (untyped
-    ///     nulls, unconstrained type parameters) fall back to the surface's marker
-    ///     interface — the site then conservatively reaches every message of that kind.
-    ///     Core-mediator sites whose static type carries no Ergosfare marker produce no
-    ///     model at all: plain-message dispatch lives outside the generator's closed world.
+    /// Builds the site model for one static message type.
     /// </summary>
+    /// <param name="type">The message expression's static type.</param>
+    /// <param name="kind">The dispatch surface the call went through.</param>
+    /// <param name="location">Where to report findings about this site.</param>
+    /// <param name="referencedAssemblyName">
+    /// The assembly whose manifest recorded the site, or <c>null</c> for one in this
+    /// compilation.
+    /// </param>
+    /// <returns>
+    /// The model, or <c>null</c> when the site is outside the closed world.
+    /// </returns>
+    /// <remarks>
+    /// A type parameter resolves to its first named constraint. An expression with no usable
+    /// static type — an untyped null, an unconstrained type parameter — falls back to the
+    /// surface's marker interface, and the site then reaches every message of that kind. A
+    /// core-mediator site whose static type carries no Ergosfare marker gets no model at all:
+    /// dispatching a plain message is outside what any of this can speak to.
+    /// </remarks>
     private static DispatchSiteModel? BuildSiteModel(
         ITypeSymbol? type,
         DispatchSiteKind kind,
@@ -453,38 +763,56 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         var isOpaque = IsOpaqueStaticType(named);
 
-        if (kind == DispatchSiteKind.Message && !isOpaque)
-        {
-            GetMarkers(named, out var isCommand, out var isQuery, out var isEvent);
-
-            if (!isCommand && !isQuery && !isEvent)
-            {
-                // A marker-less type through the core mediator is a plain message; the
-                // closed-world judgment has nothing sound to say about it.
-                return null;
-            }
-        }
-
         return new DispatchSiteModel
         {
-            MessageTypeExpression = NormalizedTypeExpression(named),
-            MessageTypeMetadataName = BuildMetadataName(named.OriginalDefinition),
+            MessageTypeExpression = SymbolNaming.NormalizedTypeExpression(named),
+            MessageTypeMetadataName = SymbolNaming.BuildMetadataName(named.OriginalDefinition),
             DisplayName = named.ToDisplayString(),
             Kind = kind,
             IsOpaque = isOpaque,
             IsValueType = named.IsValueType,
+            IsStreamMessage = CarriesChunkChannel(named),
             IsGenericMessage = named.IsGenericType,
-            AssignableKeys = GetAssignableKeys(named),
+            AssignableKeys = ParticipantAttributes.GetAssignableKeys(named),
+            Groups = ImmutableArray<string>.Empty,
+            HasUnprovableGroups = false,
             Location = location,
             ReferencedAssemblyName = referencedAssemblyName,
         };
     }
 
     /// <summary>
-    ///     The first named constraint of a type parameter (class constraints first), or
-    ///     <c>null</c> when the parameter is unconstrained — the closest static evidence a
-    ///     generic dispatch wrapper leaves behind.
+    /// Reports whether a message carries a chunk channel.
     /// </summary>
+    /// <param name="message">The static message type.</param>
+    /// <returns><c>true</c> when its base chain reaches the streaming base.</returns>
+    /// <remarks>
+    /// The base is what declares a message streaming — nothing about the dispatch surface
+    /// does — so this walk is the whole classification.
+    /// </remarks>
+    private static bool CarriesChunkChannel(INamedTypeSymbol message)
+    {
+        for (var current = message; current is not null; current = current.BaseType)
+        {
+            if (current.Arity == 1
+                && current.Name == "ErgosfareStream"
+                && SymbolNaming.IsInNamespace(current, ContractNames.StreamingNamespace))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Finds a type parameter's first named constraint, preferring a class over an interface.
+    /// </summary>
+    /// <param name="parameter">The type parameter to read.</param>
+    /// <returns>The constraint, or <c>null</c> when the parameter has none.</returns>
+    /// <remarks>
+    /// The closest thing to a static type a generic dispatch wrapper leaves behind.
+    /// </remarks>
     private static INamedTypeSymbol? FirstNamedConstraint(ITypeParameterSymbol parameter)
     {
         INamedTypeSymbol? firstInterface = null;
@@ -508,10 +836,13 @@ public sealed partial class ErgosfareRegistrationGenerator
     }
 
     /// <summary>
-    ///     Whether the static type proves nothing about the concrete message: <c>object</c>,
-    ///     <c>IMessage</c>, or one of the module marker interfaces (any arity — the
-    ///     result-generic markers name a result, never a concrete message).
+    /// Reports whether a static type says nothing about which concrete message is dispatched.
     /// </summary>
+    /// <param name="type">The static type to test.</param>
+    /// <returns>
+    /// <c>true</c> for <c>object</c>, <c>IMessage</c> and the module markers, at any arity —
+    /// a result-generic marker names a result, never a concrete message.
+    /// </returns>
     private static bool IsOpaqueStaticType(INamedTypeSymbol type)
     {
         if (type.SpecialType == SpecialType.System_Object)
@@ -524,16 +855,26 @@ public sealed partial class ErgosfareRegistrationGenerator
             return false;
         }
 
-        return (type.Name == "IMessage" && IsInNamespace(type, CoreAbstractionsNamespace))
-               || (type.Name == CommandMarkerName && IsInNamespace(type, CommandMarkerNamespace))
-               || (type.Name is QueryMarkerName or "IStreamQuery" && IsInNamespace(type, QueryMarkerNamespace))
-               || (type.Name == EventMarkerName && IsInNamespace(type, EventMarkerNamespace));
+        return (type.Name == "IMessage" && SymbolNaming.IsInNamespace(type, ContractNames.CoreAbstractionsNamespace))
+               || (type.Name == ContractNames.CommandMarker && SymbolNaming.IsInNamespace(type, ContractNames.CommandMarkerNamespace))
+               || (type.Name is ContractNames.QueryMarker or "IStreamQuery" && SymbolNaming.IsInNamespace(type, ContractNames.QueryMarkerNamespace))
+               || (type.Name == ContractNames.EventMarker && SymbolNaming.IsInNamespace(type, ContractNames.EventMarkerNamespace));
     }
 
     /// <summary>
-    ///     The opaque marker-interface site of a dispatch surface — recorded when no more
-    ///     specific static type is recoverable, so reachability still sees the site.
+    /// Builds the opaque marker-interface site of a dispatch surface.
     /// </summary>
+    /// <param name="kind">The dispatch surface the call went through.</param>
+    /// <param name="location">Where to report findings about this site.</param>
+    /// <param name="referencedAssemblyName">
+    /// The assembly whose manifest recorded the site, or <c>null</c> for one in this
+    /// compilation.
+    /// </param>
+    /// <returns>A site reaching every message of that surface's kind.</returns>
+    /// <remarks>
+    /// Recorded when no more specific static type can be recovered, so reachability still
+    /// sees that the dispatch is there.
+    /// </remarks>
     private static DispatchSiteModel BuildMarkerFallbackSite(
         DispatchSiteKind kind,
         LocationInfo? location,
@@ -542,21 +883,21 @@ public sealed partial class ErgosfareRegistrationGenerator
         var (expression, metadataName, displayName) = kind switch
         {
             DispatchSiteKind.Command => (
-                "global::" + CommandMarkerNamespace + "." + CommandMarkerName,
-                CommandMarkerNamespace + "." + CommandMarkerName,
-                CommandMarkerNamespace + "." + CommandMarkerName),
+                "global::" + ContractNames.CommandMarkerNamespace + "." + ContractNames.CommandMarker,
+                ContractNames.CommandMarkerNamespace + "." + ContractNames.CommandMarker,
+                ContractNames.CommandMarkerNamespace + "." + ContractNames.CommandMarker),
             DispatchSiteKind.Query or DispatchSiteKind.Stream => (
-                "global::" + QueryMarkerNamespace + "." + QueryMarkerName,
-                QueryMarkerNamespace + "." + QueryMarkerName,
-                QueryMarkerNamespace + "." + QueryMarkerName),
+                "global::" + ContractNames.QueryMarkerNamespace + "." + ContractNames.QueryMarker,
+                ContractNames.QueryMarkerNamespace + "." + ContractNames.QueryMarker,
+                ContractNames.QueryMarkerNamespace + "." + ContractNames.QueryMarker),
             DispatchSiteKind.Event => (
-                "global::" + EventMarkerNamespace + "." + EventMarkerName,
-                EventMarkerNamespace + "." + EventMarkerName,
-                EventMarkerNamespace + "." + EventMarkerName),
+                "global::" + ContractNames.EventMarkerNamespace + "." + ContractNames.EventMarker,
+                ContractNames.EventMarkerNamespace + "." + ContractNames.EventMarker,
+                ContractNames.EventMarkerNamespace + "." + ContractNames.EventMarker),
             _ => (
-                "global::" + CoreAbstractionsNamespace + ".IMessage",
-                CoreAbstractionsNamespace + ".IMessage",
-                CoreAbstractionsNamespace + ".IMessage"),
+                "global::" + ContractNames.CoreAbstractionsNamespace + ".IMessage",
+                ContractNames.CoreAbstractionsNamespace + ".IMessage",
+                ContractNames.CoreAbstractionsNamespace + ".IMessage"),
         };
 
         return new DispatchSiteModel
@@ -567,57 +908,32 @@ public sealed partial class ErgosfareRegistrationGenerator
             Kind = kind,
             IsOpaque = true,
             IsValueType = false,
+            IsStreamMessage = false,
             IsGenericMessage = false,
             AssignableKeys = ImmutableArray<string>.Empty,
+            Groups = ImmutableArray<string>.Empty,
+            HasUnprovableGroups = false,
             Location = location,
             ReferencedAssemblyName = referencedAssemblyName,
         };
     }
 
-    /// <summary>
-    ///     The CLR metadata name of a type definition (<c>Ns.Type`1</c>, nested via
-    ///     <c>+</c>) — the manifest attribute's payload, resolvable back to a symbol by
-    ///     <c>GetTypeByMetadataName</c> in an aggregating compilation.
-    /// </summary>
-    private static string BuildMetadataName(INamedTypeSymbol symbol)
-    {
-        var parts = new Stack<string>();
-
-        for (var current = symbol; current is not null; current = current.ContainingType)
-        {
-            parts.Push(current.MetadataName);
-        }
-
-        var sb = new StringBuilder();
-
-        if (symbol.ContainingNamespace is { IsGlobalNamespace: false } ns)
-        {
-            sb.Append(ns.ToDisplayString()).Append('.');
-        }
-
-        var first = true;
-
-        foreach (var part in parts)
-        {
-            if (!first)
-            {
-                sb.Append('+');
-            }
-
-            sb.Append(part);
-            first = false;
-        }
-
-        return sb.ToString();
-    }
 
     /// <summary>
-    ///     Aggregates the dispatch manifests of the referenced assemblies, rehydrating each
-    ///     recorded site's static type back to a symbol so assignability is re-derived here
-    ///     rather than trusted from strings. Assemblies skipped by the reserved-prefix rule
-    ///     are Ergosfare's own; every other Ergosfare-referencing assembly without a
-    ///     manifest marker flips <see cref="DispatchManifestScanResult.HasUnknownSiteAssemblies"/>.
+    /// Gathers the dispatch manifests the referenced assemblies recorded.
     /// </summary>
+    /// <param name="compilation">The compilation whose references are read.</param>
+    /// <param name="ct">Cancels the scan.</param>
+    /// <returns>
+    /// The recorded sites and registrations, and whether the picture they give is complete.
+    /// </returns>
+    /// <remarks>
+    /// Each recorded static type is resolved back to a symbol, so assignability is worked out
+    /// here rather than taken on trust from a string. An Ergosfare-referencing assembly
+    /// carrying no manifest marker sets
+    /// <see cref="DispatchManifestScanResult.HasUnknownSiteAssemblies"/>; the ones skipped by
+    /// the reserved-prefix rule are Ergosfare's own and do not.
+    /// </remarks>
     private static DispatchManifestScanResult ScanReferencedManifests(Compilation compilation, CancellationToken ct)
     {
         ImmutableArray<DispatchSiteModel>.Builder? sites = null;
@@ -629,24 +945,23 @@ public sealed partial class ErgosfareRegistrationGenerator
         {
             ct.ThrowIfCancellationRequested();
 
-            if (!ReferencesErgosfare(assembly))
+            if (!ReferenceScanner.ReferencesErgosfare(assembly))
             {
                 continue;
             }
 
-            if (IsErgosfareAssemblyName(assembly.Name) && !HasForceScanReferencesOptIn(assembly))
+            if (ReferenceScanner.IsErgosfareAssemblyName(assembly.Name) && !ReferenceScanner.HasForceScanReferencesOptIn(assembly))
             {
                 continue;
             }
 
             var hasManifestMarker = false;
-            List<(string MetadataName, DispatchSiteKind Kind, bool Opaque)>? siteEntries = null;
-            List<string>? registrationEntries = null;
+            List<(string MetadataName, DispatchSiteKind Kind, bool Opaque, ImmutableArray<string> Groups)>? siteEntries = null;
 
             foreach (var attribute in assembly.GetAttributes())
             {
                 if (attribute.AttributeClass is not { } attributeClass
-                    || !IsInNamespace(attributeClass, DispatchSitesNamespace))
+                    || !SymbolNaming.IsInNamespace(attributeClass, ContractMetadataNames.DispatchSitesNamespace))
                 {
                     continue;
                 }
@@ -666,12 +981,6 @@ public sealed partial class ErgosfareRegistrationGenerator
 
                         continue;
 
-                    case "ManualRegistrationAttribute"
-                        when attribute.ConstructorArguments.Length == 1
-                             && attribute.ConstructorArguments[0].Value is string registeredName:
-                        (registrationEntries ??= []).Add(registeredName);
-                        continue;
-
                     case "DispatchSiteAttribute"
                         when attribute.ConstructorArguments.Length == 3
                              && attribute.ConstructorArguments[0].Value is string metadataName
@@ -684,9 +993,10 @@ public sealed partial class ErgosfareRegistrationGenerator
                             _ => (DispatchSiteKind?)null,
                         };
 
-                        if (kind is not null && kind.Value <= DispatchSiteKind.Message)
+                        if (kind is not null && kind.Value <= DispatchSiteKind.Event)
                         {
-                            (siteEntries ??= []).Add((metadataName, kind.Value, opaque));
+                            (siteEntries ??= []).Add(
+                                (metadataName, kind.Value, opaque, ReadManifestGroups(attribute)));
                         }
 
                         continue;
@@ -702,51 +1012,32 @@ public sealed partial class ErgosfareRegistrationGenerator
 
             if (siteEntries is not null)
             {
-                foreach (var (metadataName, kind, opaque) in siteEntries)
+                foreach (var (metadataName, kind, opaque, groups) in siteEntries)
                 {
                     var symbol = assembly.GetTypeByMetadataName(metadataName)
                                  ?? compilation.GetTypeByMetadataName(metadataName);
 
                     if (symbol is null)
                     {
-                        // A site whose static type this compilation cannot resolve is a
-                        // site the judgment cannot see — same soundness posture as a
-                        // missing manifest.
+                        // A site whose static type this compilation cannot resolve is a site
+                        // the judgment cannot see, which is the same position a missing
+                        // manifest leaves it in.
                         hasUnknownSiteAssemblies = true;
                         continue;
                     }
 
                     if (BuildSiteModel(symbol, kind, location: null, assembly.Name) is { } value)
                     {
-                        // Opacity travels with the manifest: the recorder saw the original
-                        // expression, the rehydrated symbol alone cannot reconstruct it.
+                        // Opacity and the group set travel in the manifest: the generator that
+                        // recorded them saw the original expression, and the resolved symbol
+                        // alone cannot reconstruct either.
                         (sites ??= ImmutableArray.CreateBuilder<DispatchSiteModel>())
-                            .Add(value.IsOpaque == opaque ? value : value with { IsOpaque = opaque });
+                            .Add(value with { IsOpaque = opaque, Groups = groups });
                     }
                 }
             }
 
-            if (registrationEntries is not null)
-            {
-                foreach (var metadataName in registrationEntries)
-                {
-                    var symbol = assembly.GetTypeByMetadataName(metadataName)
-                                 ?? compilation.GetTypeByMetadataName(metadataName);
 
-                    if (symbol is null)
-                    {
-                        // Unresolvable evidence is missing evidence: the safe reading is
-                        // an opaque registration, which suspends the dead-dispatch
-                        // judgment rather than mis-firing it.
-                        hasOpaqueRegistrations = true;
-                        continue;
-                    }
-
-                    var model = EvidenceRegistration(symbol);
-                    hasOpaqueRegistrations |= model.IsOpaque;
-                    (registrations ??= ImmutableArray.CreateBuilder<RegistrationSiteModel>()).Add(model);
-                }
-            }
         }
 
         return new DispatchManifestScanResult(
@@ -756,11 +1047,71 @@ public sealed partial class ErgosfareRegistrationGenerator
             hasOpaqueRegistrations);
     }
 
+    /// <summary>
+    /// Reads the group set a manifest site recorded.
+    /// </summary>
+    /// <param name="attribute">The recorded site.</param>
+    /// <returns>The named groups, normalized; empty when it recorded none.</returns>
+    /// <remarks>
+    /// Absent or empty means the site named no set — or named one the recording generator
+    /// could not read, which it writes down the same way. Neither keys a plan here.
+    /// </remarks>
+    private static ImmutableArray<string> ReadManifestGroups(AttributeData attribute)
+    {
+        foreach (var named in attribute.NamedArguments)
+        {
+            if (named.Key != "Groups" || named.Value.Kind != TypedConstantKind.Array)
+            {
+                continue;
+            }
+
+            var values = named.Value.Values;
+
+            if (values.IsDefaultOrEmpty)
+            {
+                return ImmutableArray<string>.Empty;
+            }
+
+            var names = new List<string>(values.Length);
+
+            foreach (var value in values)
+            {
+                if (value.Value is not string name)
+                {
+                    return ImmutableArray<string>.Empty;
+                }
+
+                names.Add(name);
+            }
+
+            return GroupNames.Normalize(names);
+        }
+
+        return ImmutableArray<string>.Empty;
+    }
+
+    /// <summary>
+    /// Reports whether a compilation produces an executable.
+    /// </summary>
+    /// <param name="outputKind">The compilation's output kind.</param>
+    /// <returns><c>true</c> for an application of any kind.</returns>
+    /// <remarks>
+    /// The default answer to whether this compilation is a composition root, and so whether
+    /// its closure is complete enough to judge.
+    /// </remarks>
     private static bool IsExecutableOutputKind(OutputKind outputKind)
         => outputKind is OutputKind.ConsoleApplication
             or OutputKind.WindowsApplication
             or OutputKind.WindowsRuntimeApplication;
 
+    /// <summary>
+    /// Reads the <c>ErgosfareCompositionRoot</c> property.
+    /// </summary>
+    /// <param name="provider">The build properties to read.</param>
+    /// <returns>
+    /// What the project says, or <c>null</c> when it says nothing — the output kind then
+    /// decides.
+    /// </returns>
     private static bool? ReadCompositionRootOverride(AnalyzerConfigOptionsProvider provider)
     {
         if (!provider.GlobalOptions.TryGetValue(CompositionRootBuildProperty, out var value))
@@ -776,18 +1127,32 @@ public sealed partial class ErgosfareRegistrationGenerator
         return string.Equals(value, "false", StringComparison.OrdinalIgnoreCase) ? false : null;
     }
 
+    /// <summary>
+    /// Reads the <c>ErgosfareTrimUnusedHandlers</c> property.
+    /// </summary>
+    /// <param name="provider">The build properties to read.</param>
+    /// <returns><c>true</c> when the project opted into the trim.</returns>
     private static bool ReadTrimUnusedHandlers(AnalyzerConfigOptionsProvider provider)
         => provider.GlobalOptions.TryGetValue(TrimUnusedHandlersBuildProperty, out var value)
            && string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    ///     Reports the dispatch-reachability diagnostics and applies the opt-in handler
-    ///     trim, returning the (possibly reduced) model list emission proceeds with.
-    ///     ERGOSG009 is local and always evaluated; every closure-wide verdict requires a
-    ///     composition root with reference scanning on, and the unreachable-handler side
-    ///     additionally requires every closure assembly's manifest to be present.
+    /// Reports the reachability diagnostics and applies the opt-in handler trim.
     /// </summary>
-    private static List<RegistrableTypeModel> ApplyDispatchJudgment(
+    /// <param name="context">The context diagnostics are reported to.</param>
+    /// <param name="types">The discovered types.</param>
+    /// <param name="excludedShadows">The types hidden from discovery.</param>
+    /// <param name="sourceSites">The dispatches in this compilation.</param>
+    /// <param name="registrationSites">The registration calls in this compilation.</param>
+    /// <param name="manifestScan">What the referenced assemblies' manifests recorded.</param>
+    /// <param name="inputs">The settings the judgment reads.</param>
+    /// <returns>The type list emission proceeds with, reduced if anything was trimmed.</returns>
+    /// <remarks>
+    /// ERGO009 is local and always reported. Every verdict about the whole closure needs a
+    /// composition root with reference scanning on, and the unreachable-handler side needs
+    /// every assembly in that closure to carry a manifest as well.
+    /// </remarks>
+    internal static List<RegistrableTypeModel> ApplyDispatchJudgment(
         SourceProductionContext context,
         List<RegistrableTypeModel> types,
         List<RegistrableTypeModel> excludedShadows,
@@ -796,13 +1161,24 @@ public sealed partial class ErgosfareRegistrationGenerator
         DispatchManifestScanResult manifestScan,
         JudgmentInputs inputs)
     {
-        // Strict-mode opacity aid: purely local, no composition knowledge involved.
+        // Purely local: nothing about the composition is needed to see that a site's static
+        // type says nothing.
         foreach (var site in sourceSites)
         {
             if (site.IsOpaque && site.Location is { } location)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
                     GeneratorDiagnostics.OpaqueDispatchSite, location.ToLocation(), site.DisplayName));
+            }
+
+            // Also local, and settled by the message's own type: a chunk channel has one
+            // reader, so broadcasting it cannot mean what the call says it means.
+            if (site is { IsStreamMessage: true, Kind: DispatchSiteKind.Event })
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    GeneratorDiagnostics.PublishedStreamMessage,
+                    site.Location?.ToLocation(),
+                    site.DisplayName));
             }
         }
 
@@ -813,60 +1189,45 @@ public sealed partial class ErgosfareRegistrationGenerator
             return types;
         }
 
-        // Coverage evidence: every collection path that feeds the registry. Discovery is
-        // the bulk path (RegisterGenerated); provable manual Register calls are the
-        // per-type path — same registry, same trust. An opaque registration anywhere in
-        // the closure means the evidence is incomplete by construction.
-        var hasOpaqueRegistrations = manifestScan.HasOpaqueRegistrations;
+        // Only fully selected models contribute coverage. Referenced registrations
+        // and unreadable registration calls cannot supply alternative evidence.
+        var hasOpaqueRegistrations = false;
         var handlerMessageKeys = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var registration in registrationSites)
-        {
-            hasOpaqueRegistrations |= registration.IsOpaque;
-
-            foreach (var key in registration.MainHandlerMessageKeys)
-            {
-                handlerMessageKeys.Add(DefinitionKey(key));
-            }
-        }
-
-        foreach (var registration in manifestScan.RegistrationSites)
-        {
-            foreach (var key in registration.MainHandlerMessageKeys)
-            {
-                handlerMessageKeys.Add(DefinitionKey(key));
-            }
-        }
-
-        // Indexes over the composition — excluded shadows included: they are possible
-        // runtime instances (their coverage simply has to come from manual-registration
-        // evidence). All comparisons run on definition-normalized keys, so
-        // constructed-generic descriptors and sites match their definitions
-        // conservatively.
         var modelsByKey = new Dictionary<string, RegistrableTypeModel>(StringComparer.Ordinal);
         var subtypesByKey = new Dictionary<string, List<RegistrableTypeModel>>(StringComparer.Ordinal);
 
         IndexCompositionTypes(types, handlerMessageKeys, modelsByKey, subtypesByKey, collectHandlerEvidence: true);
         IndexCompositionTypes(excludedShadows, handlerMessageKeys, modelsByKey, subtypesByKey, collectHandlerEvidence: false);
 
-        // Per-site verdicts: dead dispatch (error) and uncovered-static dispatch
-        // (warning) — but only while every registration in the closure is provable.
+        // The group-aware half of the same evidence, for ERGO024: which handlers cover a
+        // message, and which of them carry [Group]. A message whose coverage comes from
+        // somewhere that says nothing about groups is recorded as unjudgeable rather than
+        // guessed at.
+        var groupBlindKeys = new HashSet<string>(StringComparer.Ordinal);
+        var handlersByMessageKey = IndexMainHandlersByMessage(types, groupBlindKeys);
+
+        // The per-site verdicts, ERGO005 and ERGO006 — reached only while every registration
+        // in the closure is one this compilation could read.
         if (!hasOpaqueRegistrations)
         {
-            JudgeSites(context, sourceSites, handlerMessageKeys, modelsByKey, subtypesByKey);
-            JudgeSites(context, manifestScan.Sites, handlerMessageKeys, modelsByKey, subtypesByKey);
+            JudgeSites(context, sourceSites, handlerMessageKeys, modelsByKey, subtypesByKey,
+                handlersByMessageKey, groupBlindKeys);
+            JudgeSites(context, manifestScan.Sites, handlerMessageKeys, modelsByKey, subtypesByKey,
+                handlersByMessageKey, groupBlindKeys);
         }
 
-        // Per-message verdicts: a same-level main-handler contest is broken for every
-        // container in the process — provable ones fail the build with the same
-        // evidence model. Registration opacity matters only to the covariant arm (an
-        // unseen registration could add the direct winner); extra handlers can never
-        // resolve a direct-level contest, so that arm needs no suspension.
+        // The per-message verdict: two main handlers on one level break every container in
+        // the process, so a provable contest fails the build. An unreadable registration
+        // matters only to the covariant arm, where it could be adding the direct handler that
+        // would settle things; nothing extra can settle a contest between two direct
+        // handlers, so that arm is never suspended.
         JudgeContestedMainHandlers(context, types, handlerMessageKeys, hasOpaqueRegistrations);
 
-        // The unreachable-handler side needs the whole closure's sites; any manifest-less
-        // Ergosfare-referencing assembly makes that set incomplete. (Opaque registrations
-        // do not matter here: registrations create no dispatch sites.)
+        // The unreachable-handler side needs every dispatch in the closure, and one
+        // Ergosfare-referencing assembly without a manifest is enough to make that set
+        // incomplete. An unreadable registration does not matter here: registering something
+        // creates no dispatch.
         if (manifestScan.HasUnknownSiteAssemblies)
         {
             return types;
@@ -895,10 +1256,19 @@ public sealed partial class ErgosfareRegistrationGenerator
     }
 
     /// <summary>
-    ///     Feeds one model list into the judgment's composition indexes; handler-message
-    ///     evidence is collected only for discovered types — an excluded shadow's handler
-    ///     role counts as evidence solely through a provable manual registration.
+    /// Feeds one model list into the judgment's indexes.
     /// </summary>
+    /// <param name="models">The models to index.</param>
+    /// <param name="handlerMessageKeys">The set covered messages are added to.</param>
+    /// <param name="modelsByKey">The map from message key to model.</param>
+    /// <param name="subtypesByKey">The map from a type's key to the messages assignable to it.</param>
+    /// <param name="collectHandlerEvidence">
+    /// Whether these models' handler contracts count as coverage evidence.
+    /// </param>
+    /// <remarks>
+    /// Only a discovered type's handler role counts on its own; a hidden type's counts solely
+    /// through a hand-written registration naming it.
+    /// </remarks>
     private static void IndexCompositionTypes(
         List<RegistrableTypeModel> models,
         HashSet<string> handlerMessageKeys,
@@ -908,7 +1278,7 @@ public sealed partial class ErgosfareRegistrationGenerator
     {
         foreach (var type in models)
         {
-            var typeKey = DefinitionKey(type.TypeofExpression);
+            var typeKey = type.TypeofExpression;
 
             if (!modelsByKey.ContainsKey(typeKey))
             {
@@ -921,7 +1291,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                 {
                     if (descriptor.Kind == DescriptorKind.MainHandler)
                     {
-                        handlerMessageKeys.Add(DefinitionKey(descriptor.MessageTypeExpression));
+                        handlerMessageKeys.Add(descriptor.MessageTypeExpression);
                     }
                 }
             }
@@ -933,7 +1303,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
             foreach (var assignableKey in type.AssignableKeys)
             {
-                var key = DefinitionKey(assignableKey);
+                var key = assignableKey;
 
                 if (!subtypesByKey.TryGetValue(key, out var list))
                 {
@@ -945,26 +1315,102 @@ public sealed partial class ErgosfareRegistrationGenerator
         }
     }
 
+    /// <summary>
+    /// Indexes the discovered main handlers by the message they claim.
+    /// </summary>
+    /// <param name="types">The discovered types.</param>
+    /// <param name="groupBlindKeys">
+    /// The keys ERGO024 must not judge; a keyed handler's messages are added here.
+    /// </param>
+    /// <returns>The handlers claiming each message key.</returns>
+    /// <remarks>
+    /// Handlers rather than a covered/not-covered bit, because whether a dispatch selects one
+    /// is decided against the groups each handler declares. A keyed handler takes part only
+    /// when the container asks for its key, which nothing here can prove either way, so its
+    /// messages join the unjudgeable set instead of the index.
+    /// </remarks>
+    private static Dictionary<string, List<RegistrableTypeModel>> IndexMainHandlersByMessage(
+        List<RegistrableTypeModel> types,
+        HashSet<string> groupBlindKeys)
+    {
+        var byKey = new Dictionary<string, List<RegistrableTypeModel>>(StringComparer.Ordinal);
+
+        foreach (var type in types)
+        {
+            // One entry per handler type per message: claiming it through several contracts
+            // still makes one claimant.
+            HashSet<string>? claimed = null;
+
+            foreach (var descriptor in type.Descriptors)
+            {
+                if (descriptor.Kind != DescriptorKind.MainHandler)
+                {
+                    continue;
+                }
+
+                var key = descriptor.MessageTypeExpression;
+
+                if (!(claimed ??= new HashSet<string>(StringComparer.Ordinal)).Add(key))
+                {
+                    continue;
+                }
+
+                if (!byKey.TryGetValue(key, out var handlers))
+                {
+                    byKey.Add(key, handlers = []);
+                }
+
+                handlers.Add(type);
+            }
+        }
+
+        return byKey;
+    }
+
+    /// <summary>
+    /// Judges each dispatch against the closure's coverage.
+    /// </summary>
+    /// <param name="context">The context diagnostics are reported to.</param>
+    /// <param name="sites">The dispatches to judge.</param>
+    /// <param name="handlerMessageKeys">The messages some handler covers.</param>
+    /// <param name="modelsByKey">The map from message key to model.</param>
+    /// <param name="subtypesByKey">The map from a type's key to the messages assignable to it.</param>
+    /// <param name="handlersByMessageKey">The handlers claiming each message key.</param>
+    /// <param name="groupBlindKeys">The messages whose coverage says nothing about groups.</param>
+    /// <remarks>
+    /// A dispatch nothing can serve is ERGO005; one where only a subtype is served is
+    /// ERGO006; one that is served, but not under the group set it names, is ERGO024.
+    /// </remarks>
     private static void JudgeSites(
         SourceProductionContext context,
         ImmutableArray<DispatchSiteModel> sites,
         HashSet<string> handlerMessageKeys,
         Dictionary<string, RegistrableTypeModel> modelsByKey,
-        Dictionary<string, List<RegistrableTypeModel>> subtypesByKey)
+        Dictionary<string, List<RegistrableTypeModel>> subtypesByKey,
+        Dictionary<string, List<RegistrableTypeModel>> handlersByMessageKey,
+        HashSet<string> groupBlindKeys)
     {
         foreach (var site in sites)
         {
-            // Publishing to zero subscribers is a legal no-op, and generic descriptor
-            // matching is definition-fuzzy — neither shape can carry a sound verdict.
-            if (site.Kind == DispatchSiteKind.Event || site.IsGenericMessage)
+            // A generic message matches descriptors by definition only, which is too coarse to
+            // carry a verdict either way.
+            //
+            // A publish is judged like any other dispatch. What a publish reaching nobody does
+            // at run time is a separate question from whether any subscriber can ever match
+            // it, and in a closed world a publish nothing subscribes to is dead — writing the
+            // event and forgetting the subscriber being the ordinary way to get there.
+            if (site.IsGenericMessage)
             {
                 continue;
             }
 
-            var siteKey = DefinitionKey(site.MessageTypeExpression);
+            var siteKey = site.MessageTypeExpression;
 
             if (IsCovered(siteKey, site.AssignableKeys, site.IsValueType, handlerMessageKeys))
             {
+                // Covered, so ERGO005 and ERGO006 have nothing to say — but coverage is not
+                // selection, and the group filter may still empty this pipeline.
+                JudgeGroupFilter(context, site, siteKey, subtypesByKey, handlersByMessageKey, groupBlindKeys);
                 continue;
             }
 
@@ -974,7 +1420,7 @@ public sealed partial class ErgosfareRegistrationGenerator
             {
                 foreach (var subtype in subtypes)
                 {
-                    if (IsCovered(DefinitionKey(subtype.TypeofExpression), subtype.AssignableKeys,
+                    if (IsCovered(subtype.TypeofExpression, subtype.AssignableKeys,
                             subtype.IsValueType, handlerMessageKeys))
                     {
                         coveredSubtype = subtype;
@@ -995,13 +1441,16 @@ public sealed partial class ErgosfareRegistrationGenerator
                     GeneratorDiagnostics.DeadDispatch,
                     site.Location?.ToLocation(),
                     site.DisplayName,
+                    // A publish reaching nobody returns; every other lane throws. The verdict
+                    // is the same either way, the consequence is not, and the message says
+                    // which one the caller gets.
+                    "the call is guaranteed to throw NoHandlerFoundException at runtime",
                     originSuffix));
             }
             else if (modelsByKey.TryGetValue(siteKey, out var selfModel) && selfModel.IsDispatchableMessage)
             {
-                // The static type itself is a concrete dispatchable message with no
-                // coverage while a subtype is covered — an instance of exactly the static
-                // type still dies.
+                // The static type is itself a concrete message with no coverage while a
+                // subtype has some, so an instance of exactly that type still fails.
                 context.ReportDiagnostic(Diagnostic.Create(
                     GeneratorDiagnostics.UncoveredStaticDispatch,
                     site.Location?.ToLocation(),
@@ -1013,31 +1462,244 @@ public sealed partial class ErgosfareRegistrationGenerator
     }
 
     /// <summary>
-    ///     The ERGOSG010 judgment: for every dispatchable command/query/stream message in
-    ///     the composition, counts the provable main-handler claims per priority level
-    ///     and fails the build on a same-level contest — several direct claimants, or
-    ///     several covariant ones with provably no direct winner. Only default-discovery,
-    ///     ungrouped, non-excluded handlers count (anything keyed, grouped or manual is a
-    ///     container choice the compiler cannot prove co-registered — those abstain, so
-    ///     deliberately contested keyed suites keep compiling). The covariant arm demands
-    ///     absence of a direct handler, which an opaque registration could silently
-    ///     provide — that arm suspends with the closure's registration opacity, exactly
-    ///     like the dead-dispatch judgment.
+    /// Reports ERGO024 for a dispatch whose group set selects none of the handlers covering
+    /// its message.
     /// </summary>
+    /// <param name="context">The context diagnostics are reported to.</param>
+    /// <param name="site">The dispatch to judge.</param>
+    /// <param name="siteKey">The site's normalized message key.</param>
+    /// <param name="subtypesByKey">The map from a type's key to the messages assignable to it.</param>
+    /// <param name="handlersByMessageKey">The handlers claiming each message key.</param>
+    /// <param name="groupBlindKeys">The messages whose coverage says nothing about groups.</param>
+    /// <remarks>
+    /// Reached only for a message the closure covers, so the finding is never that nothing
+    /// serves the message — that is ERGO005 — but that the filter this call names empties a
+    /// pipeline which exists. Every handler any runtime instance of the static type could
+    /// reach is considered, the message's own and every closure subtype's, and one that takes
+    /// part settles it.
+    /// </remarks>
+    private static void JudgeGroupFilter(
+        SourceProductionContext context,
+        DispatchSiteModel site,
+        string siteKey,
+        Dictionary<string, List<RegistrableTypeModel>> subtypesByKey,
+        Dictionary<string, List<RegistrableTypeModel>> handlersByMessageKey,
+        HashSet<string> groupBlindKeys)
+    {
+        // A set assembled at run time names nothing to judge, and an opaque static type names
+        // no concrete message whose handlers could be looked up.
+        if (site.HasUnprovableGroups || site.IsOpaque)
+        {
+            return;
+        }
+
+        // A manifest records an unreadable set as no set, so an empty one read back from a
+        // referenced assembly cannot be told apart from a dispatch that named none. Only a
+        // recorded set with names in it proves what the call asked for.
+        if (site.ReferencedAssemblyName is not null && site.Groups.IsEmpty)
+        {
+            return;
+        }
+
+        var candidates = new List<RegistrableTypeModel>();
+
+        if (!TryCollectGroupCandidates(siteKey, site.AssignableKeys, site.IsValueType,
+                handlersByMessageKey, groupBlindKeys, candidates))
+        {
+            return;
+        }
+
+        // Every message a runtime instance of this static type could turn out to be, not the
+        // static type alone: a subtype whose handler is in the set keeps the dispatch alive.
+        if (subtypesByKey.TryGetValue(siteKey, out var subtypes))
+        {
+            foreach (var subtype in subtypes)
+            {
+                if (!TryCollectGroupCandidates(subtype.TypeofExpression,
+                        subtype.AssignableKeys, subtype.IsValueType, handlersByMessageKey, groupBlindKeys, candidates))
+                {
+                    return;
+                }
+            }
+        }
+
+        // Coverage came from evidence this index does not hold. Nothing to name, so nothing to
+        // claim.
+        if (candidates.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var candidate in candidates)
+        {
+            // The same test the runtime makes, shared with the plans so a verdict here and a
+            // plan there can never disagree about who is in a set.
+            if (PlanGroupFilter.Participates(candidate, site.Groups))
+            {
+                return;
+            }
+        }
+
+        ReportUnselectableGroupSet(context, site, candidates);
+    }
+
+    /// <summary>
+    /// Collects the handlers one message's coverage chain holds.
+    /// </summary>
+    /// <param name="typeKey">The message's normalized key.</param>
+    /// <param name="assignableKeys">The keys of the types it is assignable to.</param>
+    /// <param name="isValueType">Whether the message is a value type.</param>
+    /// <param name="handlersByMessageKey">The handlers claiming each message key.</param>
+    /// <param name="groupBlindKeys">The messages whose coverage says nothing about groups.</param>
+    /// <param name="into">The list handlers are added to.</param>
+    /// <returns><c>false</c> when the chain reaches a message no group verdict may cover.</returns>
+    /// <remarks>
+    /// The chain is the message itself plus the types it is assignable to, mirroring
+    /// <see cref="IsCovered"/> — a handler registered against a base type serves the message
+    /// covariantly, and its groups decide the same way the direct handler's do.
+    /// </remarks>
+    private static bool TryCollectGroupCandidates(
+        string typeKey,
+        ImmutableArray<string> assignableKeys,
+        bool isValueType,
+        Dictionary<string, List<RegistrableTypeModel>> handlersByMessageKey,
+        HashSet<string> groupBlindKeys,
+        List<RegistrableTypeModel> into)
+    {
+        if (!TryAdd(typeKey))
+        {
+            return false;
+        }
+
+        // Contract variance never applies to a value type, so its assignable keys stay out
+        // here as they do in IsCovered.
+        if (!isValueType)
+        {
+            foreach (var key in assignableKeys)
+            {
+                if (!TryAdd(key))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+
+        bool TryAdd(string key)
+        {
+            if (groupBlindKeys.Contains(key))
+            {
+                return false;
+            }
+
+            if (!handlersByMessageKey.TryGetValue(key, out var handlers))
+            {
+                return true;
+            }
+
+            foreach (var handler in handlers)
+            {
+                // One handler can be reached twice — directly and through a base type it also
+                // handles — and would then be named twice in the message.
+                var duplicate = false;
+
+                foreach (var collected in into)
+                {
+                    if (string.Equals(collected.TypeofExpression, handler.TypeofExpression, StringComparison.Ordinal))
+                    {
+                        duplicate = true;
+                        break;
+                    }
+                }
+
+                if (!duplicate)
+                {
+                    into.Add(handler);
+                }
+            }
+
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Reports one dispatch whose group set selects nobody.
+    /// </summary>
+    /// <param name="context">The context diagnostics are reported to.</param>
+    /// <param name="site">The dispatch being reported.</param>
+    /// <param name="candidates">The handlers covering the message, none of them in the set.</param>
+    /// <remarks>
+    /// The handlers are named with the groups they carry, because what the author has to
+    /// change is one of those two lists — the set at the call or the <c>[Group]</c> on a
+    /// handler — and neither is visible from the other file.
+    /// </remarks>
+    private static void ReportUnselectableGroupSet(
+        SourceProductionContext context,
+        DispatchSiteModel site,
+        List<RegistrableTypeModel> candidates)
+    {
+        var handlers = new StringBuilder();
+
+        foreach (var candidate in candidates)
+        {
+            handlers.Append(handlers.Length == 0 ? string.Empty : ", ")
+                .Append('\'').Append(candidate.DisplayName).Append("' in [")
+                // A handler declaring no groups is in the default group and nowhere else,
+                // which is worth spelling out: it is the reason a literal set misses it.
+                .Append(candidate.GroupNames.IsEmpty
+                    ? GroupNames.Default
+                    : string.Join(", ", candidate.GroupNames))
+                .Append(']');
+        }
+
+        context.ReportDiagnostic(Diagnostic.Create(
+            GeneratorDiagnostics.NoHandlerInGroupSet,
+            site.Location?.ToLocation(),
+            site.DisplayName,
+            site.Groups.IsEmpty
+                ? "no group set, which means the default group"
+                : "group set [" + string.Join(", ", site.Groups) + "]",
+            handlers.ToString(),
+            // Every dispatch lane requires at least one selected main handler.
+            "the call is guaranteed to throw NoHandlerFoundException at runtime",
+            site.ReferencedAssemblyName is { } assemblyName
+                ? $" (dispatch site recorded in referenced assembly '{assemblyName}')"
+                : string.Empty));
+    }
+
+    /// <summary>
+    /// Reports ERGO010 for a message two main handlers claim on the same level.
+    /// </summary>
+    /// <param name="context">The context diagnostics are reported to.</param>
+    /// <param name="types">The discovered types.</param>
+    /// <param name="handlerMessageKeys">The messages some handler covers.</param>
+    /// <param name="hasOpaqueRegistrations">
+    /// Whether any registration in the closure could not be read.
+    /// </param>
+    /// <remarks>
+    /// A contest is several direct claimants, or several covariant ones with no direct
+    /// handler to beat them. Only handlers the bulk path registers unconditionally count —
+    /// ungrouped, unkeyed and not hidden — because anything else is a container's choice that
+    /// nothing here can prove two of are ever live together, which is what lets a deliberately
+    /// contested keyed suite keep compiling. The covariant arm needs the direct level to be
+    /// empty, which an unreadable registration could quietly fill, so that arm is suspended
+    /// with the rest of the closure-wide judgment.
+    /// </remarks>
     private static void JudgeContestedMainHandlers(
         SourceProductionContext context,
         List<RegistrableTypeModel> types,
         HashSet<string> handlerMessageKeys,
         bool hasOpaqueRegistrations)
     {
-        // Provable claims per declared message key: handler types the bulk path
-        // registers unconditionally. One entry per handler type per key — a handler
-        // claiming a message through several contracts is still one claimant.
+        // The claims per message, from handlers the bulk path registers unconditionally. One
+        // entry per handler type per message: claiming it through several contracts still
+        // makes one claimant.
         Dictionary<string, List<RegistrableTypeModel>>? claimsByKey = null;
 
         foreach (var type in types)
         {
-            if (!type.DiscoveryKeys.IsEmpty || type.GroupsExpression is not null)
+            if (type.GroupsExpression is not null)
             {
                 continue;
             }
@@ -1051,7 +1713,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                     continue;
                 }
 
-                var key = DefinitionKey(descriptor.MessageTypeExpression);
+                var key = descriptor.MessageTypeExpression;
 
                 if (!(claimed ??= new HashSet<string>(StringComparer.Ordinal)).Add(key))
                 {
@@ -1076,13 +1738,13 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         foreach (var message in types)
         {
-            // Events broadcast — every handler runs, there is no contest to judge.
+            // An event broadcasts: every handler runs, so there is no contest to judge.
             if (!message.IsDispatchableMessage || (message.IsEvent && !message.IsCommand && !message.IsQuery))
             {
                 continue;
             }
 
-            var messageKey = DefinitionKey(message.TypeofExpression);
+            var messageKey = message.TypeofExpression;
 
             if (claimsByKey.TryGetValue(messageKey, out var directClaimants) && directClaimants.Count > 1)
             {
@@ -1090,10 +1752,10 @@ public sealed partial class ErgosfareRegistrationGenerator
                 continue;
             }
 
-            // The covariant arm: only when the direct level is provably empty — no
-            // provable direct claim of any kind (bulk or literal Register), and no
-            // opaque registration that could hide one. Contract variance never applies
-            // to value types, so their assignable keys stay out, mirroring IsCovered.
+            // The covariant arm, reached only when the direct level is empty for certain: no
+            // direct claim from either registration path, and no unreadable registration that
+            // could be hiding one. Contract variance never applies to a value type, so its
+            // assignable keys stay out here as they do in IsCovered.
             if (directClaimants is { Count: 1 }
                 || hasOpaqueRegistrations
                 || message.IsValueType
@@ -1106,7 +1768,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
             foreach (var assignableKey in message.AssignableKeys)
             {
-                if (!claimsByKey.TryGetValue(DefinitionKey(assignableKey), out var claimants))
+                if (!claimsByKey.TryGetValue(assignableKey, out var claimants))
                 {
                     continue;
                 }
@@ -1127,6 +1789,13 @@ public sealed partial class ErgosfareRegistrationGenerator
         }
     }
 
+    /// <summary>
+    /// Reports one contest.
+    /// </summary>
+    /// <param name="context">The context diagnostics are reported to.</param>
+    /// <param name="message">The contested message.</param>
+    /// <param name="claimants">The handlers claiming it.</param>
+    /// <param name="level">The priority level they claim it on.</param>
     private static void ReportContest(
         SourceProductionContext context,
         RegistrableTypeModel message,
@@ -1150,11 +1819,18 @@ public sealed partial class ErgosfareRegistrationGenerator
     }
 
     /// <summary>
-    ///     Whether a message type is covered by at least one main-handler registration —
-    ///     directly, or through an assignable base/interface registration (the runtime's
-    ///     covariant resolution). Contract variance never applies to value types, so their
-    ///     assignable keys stay out of the check.
+    /// Reports whether some main handler covers a message.
     /// </summary>
+    /// <param name="typeKey">The message's normalized key.</param>
+    /// <param name="assignableKeys">The keys of the types it is assignable to.</param>
+    /// <param name="isValueType">Whether the message is a value type.</param>
+    /// <param name="handlerMessageKeys">The messages some handler covers.</param>
+    /// <returns><c>true</c> when a handler can serve it.</returns>
+    /// <remarks>
+    /// Directly, or through a registration against a base type or interface, the way the
+    /// runtime resolves covariantly. Contract variance never applies to a value type, so its
+    /// assignable keys stay out of the test.
+    /// </remarks>
     private static bool IsCovered(
         string typeKey,
         ImmutableArray<string> assignableKeys,
@@ -1173,7 +1849,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         foreach (var key in assignableKeys)
         {
-            if (handlerMessageKeys.Contains(DefinitionKey(key)))
+            if (handlerMessageKeys.Contains(key))
             {
                 return true;
             }
@@ -1183,10 +1859,17 @@ public sealed partial class ErgosfareRegistrationGenerator
     }
 
     /// <summary>
-    ///     Every message key a dispatch site can deliver to: each site's static type, its
-    ///     supertypes (a covariant handler registration there is reachable), and the same
-    ///     closure for every dispatchable subtype a runtime instance could actually be.
+    /// Collects every message a dispatch in the closure can deliver to.
     /// </summary>
+    /// <param name="sourceSites">The dispatches in this compilation.</param>
+    /// <param name="manifestSites">The dispatches referenced assemblies recorded.</param>
+    /// <param name="subtypesByKey">The map from a type's key to the messages assignable to it.</param>
+    /// <returns>The reachable message keys.</returns>
+    /// <remarks>
+    /// Each site's own static type, the types it is assignable to — a handler registered
+    /// there is reached covariantly — and the same again for every dispatchable subtype a
+    /// runtime instance could turn out to be.
+    /// </remarks>
     private static HashSet<string> CollectReachedKeys(
         ImmutableArray<DispatchSiteModel> sourceSites,
         ImmutableArray<DispatchSiteModel> manifestSites,
@@ -1203,12 +1886,12 @@ public sealed partial class ErgosfareRegistrationGenerator
         {
             foreach (var site in sites)
             {
-                var siteKey = DefinitionKey(site.MessageTypeExpression);
+                var siteKey = site.MessageTypeExpression;
                 reached.Add(siteKey);
 
                 foreach (var key in site.AssignableKeys)
                 {
-                    reached.Add(DefinitionKey(key));
+                    reached.Add(key);
                 }
 
                 if (!subtypesByKey.TryGetValue(siteKey, out var subtypes))
@@ -1218,11 +1901,11 @@ public sealed partial class ErgosfareRegistrationGenerator
 
                 foreach (var subtype in subtypes)
                 {
-                    reached.Add(DefinitionKey(subtype.TypeofExpression));
+                    reached.Add(subtype.TypeofExpression);
 
                     foreach (var key in subtype.AssignableKeys)
                     {
-                        reached.Add(DefinitionKey(key));
+                        reached.Add(key);
                     }
                 }
             }
@@ -1230,12 +1913,22 @@ public sealed partial class ErgosfareRegistrationGenerator
     }
 
     /// <summary>
-    ///     Reports ERGOSG007 for handlers no dispatch site can reach — or, when the trim is
-    ///     on, reports ERGOSG008 instead for the handlers it excludes and returns their
-    ///     type expressions. Keyed-discovery types are exempt (their participation is
-    ///     deliberately conditional), and only pure main-handler types are trimmable: a
-    ///     type that also carries interceptor contracts stays registered for those.
+    /// Reports the handlers no dispatch in the closure can reach.
     /// </summary>
+    /// <param name="context">The context diagnostics are reported to.</param>
+    /// <param name="types">The discovered types.</param>
+    /// <param name="reachedKeys">The messages some dispatch can deliver.</param>
+    /// <param name="trimUnusedHandlers">Whether the project opted into the trim.</param>
+    /// <returns>
+    /// The type expressions to leave out of the registration, or <c>null</c> when nothing is
+    /// trimmed.
+    /// </returns>
+    /// <remarks>
+    /// ERGO007 by default; with the trim on, ERGO008 for each handler it excludes instead. A
+    /// keyed type is exempt, its taking part being conditional by design, and only a pure
+    /// main-handler type can be trimmed — one that also carries interceptor contracts stays
+    /// registered for those.
+    /// </remarks>
     private static HashSet<string>? ReportUnreachableHandlers(
         SourceProductionContext context,
         List<RegistrableTypeModel> types,
@@ -1246,7 +1939,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         foreach (var type in types)
         {
-            if (!type.IsAccessible || !type.DiscoveryKeys.IsEmpty)
+            if (!type.IsAccessible)
             {
                 continue;
             }
@@ -1265,7 +1958,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
                 hasMainHandler = true;
 
-                if (reachedKeys.Contains(DefinitionKey(descriptor.MessageTypeExpression)))
+                if (reachedKeys.Contains(descriptor.MessageTypeExpression))
                 {
                     unreachedMessage = null;
                     break;
@@ -1298,71 +1991,11 @@ public sealed partial class ErgosfareRegistrationGenerator
                     GeneratorDiagnostics.UnreachableHandler,
                     type.ReferencedAssemblyName is null ? type.InfoLocation?.ToLocation() : null,
                     type.DisplayName,
-                    StripGlobalPrefix(unreachedMessage),
+                    TypeExpressions.StripGlobalPrefix(unreachedMessage),
                     originSuffix));
             }
         }
 
         return trimmedExpressions;
-    }
-
-    private static string StripGlobalPrefix(string typeExpression)
-        => typeExpression.StartsWith("global::", StringComparison.Ordinal)
-            ? typeExpression.Substring("global::".Length)
-            : typeExpression;
-
-    /// <summary>
-    ///     Reduces every generic argument list in a type expression to its unbound form
-    ///     (<c>Foo&lt;int&gt;</c> → <c>Foo&lt;&gt;</c>, <c>Bar&lt;int, string&gt;</c> →
-    ///     <c>Bar&lt;,&gt;</c>), so constructed and definition spellings compare equal.
-    ///     Non-generic expressions pass through unchanged.
-    /// </summary>
-    private static string DefinitionKey(string typeExpression)
-    {
-        if (typeExpression.IndexOf('<') < 0)
-        {
-            return typeExpression;
-        }
-
-        var sb = new StringBuilder(typeExpression.Length);
-        var depth = 0;
-        var topLevelCommas = 0;
-
-        foreach (var c in typeExpression)
-        {
-            switch (c)
-            {
-                case '<':
-                    if (depth == 0)
-                    {
-                        sb.Append('<');
-                        topLevelCommas = 0;
-                    }
-
-                    depth++;
-                    break;
-                case '>':
-                    depth--;
-
-                    if (depth == 0)
-                    {
-                        sb.Append(',', topLevelCommas).Append('>');
-                    }
-
-                    break;
-                case ',' when depth == 1:
-                    topLevelCommas++;
-                    break;
-                default:
-                    if (depth == 0)
-                    {
-                        sb.Append(c);
-                    }
-
-                    break;
-            }
-        }
-
-        return sb.ToString();
     }
 }

@@ -4,13 +4,14 @@ namespace Stella.Ergosfare.Commands.Abstractions;
 
 
 /// <summary>
-/// Represents a handler for commands that produce a strongly-typed result.
+/// Handles commands of type <typeparamref name="TCommand"/> and returns the
+/// <typeparamref name="TResult"/> they declare.
 /// </summary>
-/// <typeparam name="TCommand">The type of command this handler processes. Must implement <see cref="ICommand{TResult}"/>.</typeparam>
-/// <typeparam name="TResult">The type of result produced by the command.</typeparam>
+/// <typeparam name="TCommand">The command type this handler accepts.</typeparam>
+/// <typeparam name="TResult">The result type the command declares.</typeparam>
 /// <remarks>
-/// Use this interface when you want type-safe handling of commands with a specific result type.
-/// The handler processes the command asynchronously and returns the strongly-typed result.
+/// The result type comes from the command itself, so the caller and the handler cannot
+/// disagree about it. A command is sent to exactly one handler.
 /// </remarks>
-public interface ICommandHandler<in TCommand, TResult>: ICommand, IAsyncHandler<TCommand, TResult> 
+public interface ICommandHandler<in TCommand, TResult>: ICommand, IAsyncHandler<TCommand, TResult>
     where TCommand : ICommand<TResult>;

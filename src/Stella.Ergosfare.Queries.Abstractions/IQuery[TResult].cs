@@ -1,17 +1,12 @@
 ﻿namespace Stella.Ergosfare.Queries.Abstractions;
 
 /// <summary>
-/// Represents a type-safe query message that produces a result of type <typeparamref name="TResult"/>.
+/// Marks a type as a query whose handler returns a <typeparamref name="TResult"/>.
 /// </summary>
-/// <typeparam name="TResult">The type of result returned by the query.</typeparam>
+/// <typeparam name="TResult">The type the handler returns.</typeparam>
 /// <remarks>
-/// <para>
-/// This interface extends <see cref="IQuery"/> and is intended for queries that return
-/// a specific result type when handled by a query handler.
-/// </para>
-/// <para>
-/// Implementing <see cref="IQuery{TResult}"/> allows the query to be registered within
-/// the query module and processed by type-safe query handlers and interceptors.
-/// </para>
+/// Declaring the result type on the query means the caller and the handler cannot disagree
+/// about it. For a query that yields many results, implement
+/// <see cref="IStreamQuery{TResult}"/> instead.
 /// </remarks>
 public interface IQuery<TResult>: IQuery;

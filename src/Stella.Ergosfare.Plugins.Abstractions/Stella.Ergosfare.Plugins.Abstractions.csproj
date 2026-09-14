@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <PackageId>Stella.Ergosfare.Plugins.Abstractions</PackageId>
+        <IsPackable>true</IsPackable>
+    </PropertyGroup>
+
+</Project>

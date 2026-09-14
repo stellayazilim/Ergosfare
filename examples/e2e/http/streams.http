@@ -1,0 +1,68 @@
+@host = http://localhost:5099
+@socket = ws://localhost:5099
+
+### SSE: each character arrives separately, then a done event closes the finite stream.
+GET {{host}}/streams/events
+Accept: text/event-stream
+
+> {%
+    client.test("SSE response", () => client.assert(response.status === 200));
+    response.body.onEachLine(line => client.log(JSON.stringify(line)));
+%}
+
+### Input stream: H + e + l + l + o -> one Hello response after __END__.
+WEBSOCKET {{socket}}/streams/input
+Content-Type: text/plain
+
+H
+===
+e
+===
+l
+===
+l
+===
+o
+===
+__END__
+
+> {%
+    const messages = [];
+    response.body.onEachMessage(message => {
+        messages.push(message);
+        client.log(message);
+    }, () => {
+        client.test("one complete result", () => {
+            client.assert(messages.length === 1);
+            client.assert(messages[0] === "Hello");
+        });
+    });
+%}
+
+### Duplex: wait for each accumulated response before sending the next character.
+WEBSOCKET {{socket}}/streams/duplex
+Content-Type: text/plain
+
+H
+=== wait-for-server
+e
+=== wait-for-server
+l
+=== wait-for-server
+l
+=== wait-for-server
+o
+=== wait-for-server
+__END__
+
+> {%
+    const messages = [];
+    response.body.onEachMessage(message => {
+        messages.push(message);
+        client.log(message);
+    }, () => {
+        client.test("incremental accumulated results", () => {
+            client.assert(JSON.stringify(messages) === JSON.stringify(["H", "He", "Hel", "Hell", "Hello"]));
+        });
+    });
+%}

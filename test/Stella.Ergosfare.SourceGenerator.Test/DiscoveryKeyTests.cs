@@ -1,5 +1,5 @@
-﻿using System.Reflection;
-using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using System.Reflection;
+using Stella.Ergosfare.Core.Abstractions.Planning;
 
 namespace Stella.Ergosfare.SourceGenerator.Test;
 
@@ -27,7 +27,7 @@ public class DiscoveryKeyTests
 
             // Make sure the real abstractions assembly is loaded so the emitted assembly's
             // references bind to it by name.
-            _ = typeof(FrozenCompositionCatalog);
+            _ = typeof(DispatchPlanCatalog);
 
             using var stream = new MemoryStream();
             var emitResult = result.OutputCompilation.Emit(stream);
@@ -44,16 +44,16 @@ public class DiscoveryKeyTests
         /// </summary>
         public IReadOnlyList<string> Run(string? pattern = null)
         {
-            var catalog = new FrozenCompositionCatalog();
+            var catalog = new DispatchPlanCatalog();
 
             if (pattern is null)
             {
-                _registrations.GetMethod("RegisterAll", [typeof(FrozenCompositionCatalog)])!
+                _registrations.GetMethod("RegisterAll", [typeof(DispatchPlanCatalog)])!
                     .Invoke(null, [catalog]);
             }
             else
             {
-                _registrations.GetMethod("RegisterAll", [typeof(FrozenCompositionCatalog), typeof(string)])!
+                _registrations.GetMethod("RegisterAll", [typeof(DispatchPlanCatalog), typeof(string)])!
                     .Invoke(null, [catalog, pattern]);
             }
 
@@ -64,7 +64,7 @@ public class DiscoveryKeyTests
     [Fact]
     public void KeyedTypes_AreGatedOutOfDefaultDiscovery_AndSelectedByKey()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
 
@@ -90,7 +90,7 @@ public class DiscoveryKeyTests
     [Fact]
     public void PrefixGlob_SelectsKeysByPrefix()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
 
@@ -117,7 +117,7 @@ public class DiscoveryKeyTests
     [Fact]
     public void EmptyStringKeyAlongsideOthers_KeepsTypeInDefaultDiscovery()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
 
@@ -138,7 +138,7 @@ public class DiscoveryKeyTests
     [Fact]
     public void KeyedHandler_DescriptorsRegisterOnlyWhenSelected()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
             using System.Threading.Tasks;
@@ -168,7 +168,7 @@ public class DiscoveryKeyTests
     [Fact]
     public void ExcludedType_ProducesNoRegistrationAndNoDiagnostics()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
 
@@ -183,7 +183,15 @@ public class DiscoveryKeyTests
             referenceModuleBuilders: false);
 
         Assert.Empty(result.GeneratorDiagnostics);
-        Assert.DoesNotContain("ManuallyWired", result.GeneratedSource);
+
+        // No registration — which is what the exclusion promises, and what this asserts.
+        // It does get a dispatch root: rooting only lets a dispatch close its generic
+        // without MakeGenericType and selects nothing into any container, so a hidden type
+        // being dispatchable at all is reason enough. Asserting the name appeared nowhere
+        // was a stronger claim than the exclusion makes.
+        Assert.DoesNotContain("participants.Add(typeof(global::TestApp.ManuallyWired)", result.GeneratedSource);
+        Assert.DoesNotContain("Register(typeof(global::TestApp.ManuallyWired)", result.GeneratedSource);
+        Assert.DoesNotContain("AddMessage<global::TestApp.ManuallyWired>();", result.GeneratedSource);
 
         var harness = new DiscoveryHarness(result);
         Assert.Equal(["PlainCommand"], harness.Run("*"));
@@ -192,7 +200,7 @@ public class DiscoveryKeyTests
     [Fact]
     public void AssemblyLevelDiscoveryKey_GatesTheLibrarysUntaggedTypes()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
 
             namespace TestApp
@@ -231,7 +239,7 @@ public class DiscoveryKeyTests
     [Fact]
     public void ExcludedLibraryAssembly_IsNotScannedAtAll()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
 
             namespace TestApp
@@ -256,7 +264,7 @@ public class DiscoveryKeyTests
                     """),
             ]);
 
-        // No registrations from the excluded assembly — and no ERGOSG002 for its
+        // No registrations from the excluded assembly — and no ERGO002 for its
         // internals either: the exclusion is deliberate.
         Assert.Empty(result.GeneratorDiagnostics);
         Assert.DoesNotContain("LibCommand", result.GeneratedSource);

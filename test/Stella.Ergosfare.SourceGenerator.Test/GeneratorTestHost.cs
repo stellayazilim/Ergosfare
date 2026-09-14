@@ -47,7 +47,7 @@ internal static class GeneratorTestHost
         ImmutableArray<Diagnostic> GeneratorDiagnostics)
     {
         /// <summary>The single generated source file's text (fails the test if none/multiple).</summary>
-        public string GeneratedSource => Assert.Single(DriverResult.GeneratedTrees).ToString();
+        public string GeneratedSource => Assert.Single(DriverResult.GeneratedTrees.Where(t => t.FilePath.EndsWith("ErgosfareRegistrations.g.cs", StringComparison.Ordinal))).ToString();
 
         /// <summary>Compilation errors of the augmented (user + generated) compilation.</summary>
         public IEnumerable<Diagnostic> CompilationErrors =>
@@ -70,7 +70,10 @@ internal static class GeneratorTestHost
         bool? scanReferences = null,
         IReadOnlyDictionary<string, string>? buildProperties = null,
         OutputKind outputKind = OutputKind.DynamicallyLinkedLibrary,
-        IReadOnlyDictionary<string, ReportDiagnostic>? diagnosticOptions = null)
+        IReadOnlyDictionary<string, ReportDiagnostic>? diagnosticOptions = null,
+        bool fixtureSelection = false,
+        bool generateLibrarySelections = false,
+        bool sourceLibraryReferences = false)
     {
         var references = referenceModuleBuilders ? AllReferences.Value : ReferencesWithoutModuleBuilders.Value;
 
@@ -78,13 +81,14 @@ internal static class GeneratorTestHost
         {
             references = references.AddRange(libraries.Select(library =>
                 // ReSharper disable once AccessToModifiedClosure
-                CompileLibrary(library.AssemblyName, library.Source, references)));
+                CompileLibrary(library.AssemblyName, library.Source, references, generateLibrarySelections, sourceLibraryReferences)));
         }
 
-        // Test sources are deliberate consumers of the experimental result-adapter
-        // surface; the opt-in suppression every real consumer would carry is baked in.
+        // Test sources are deliberate consumers of the experimental result-adapter and
+        // plugin surfaces; the opt-in suppression every real consumer would carry is baked in.
         var effectiveDiagnosticOptions = ImmutableDictionary<string, ReportDiagnostic>.Empty
-            .Add("ERGOEXP001", ReportDiagnostic.Suppress);
+            .Add("ERGOEXP001", ReportDiagnostic.Suppress)
+            .Add("ERGOEXP002", ReportDiagnostic.Suppress);
 
         if (diagnosticOptions is not null)
         {
@@ -97,9 +101,17 @@ internal static class GeneratorTestHost
         var compilationOptions = new CSharpCompilationOptions(outputKind)
             .WithSpecificDiagnosticOptions(effectiveDiagnosticOptions);
 
+        var trees = new List<SyntaxTree> { CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Latest)) };
+        if (fixtureSelection)
+            trees.Add(CSharpSyntaxTree.ParseText("""
+                internal static class EmissionFixtureSelection {
+                    internal static void Select(Stella.Ergosfare.Core.Abstractions.Planning.DispatchPlanCatalog catalog)
+                        => Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations.RegisterAll(catalog, "*");
+                }
+                """, new CSharpParseOptions(LanguageVersion.Latest)));
         var compilation = CSharpCompilation.Create(
             "Ergosfare.SourceGeneratorTestApp",
-            [CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Latest))],
+            trees,
             references,
             compilationOptions);
 
@@ -113,19 +125,48 @@ internal static class GeneratorTestHost
         return new GeneratorRunResult(outputCompilation, driver.GetRunResult(), diagnostics);
     }
 
+    /// <summary>
+    /// Legacy emission fixtures explicitly select all automatic candidates. Selection
+    /// contract tests use Run directly, where absence of declarations means no selection.
+    /// </summary>
+    public static GeneratorRunResult RunWithAllCandidates(
+        string source,
+        bool referenceModuleBuilders = true,
+        IReadOnlyList<(string AssemblyName, string Source)>? libraries = null,
+        bool? scanReferences = null,
+        IReadOnlyDictionary<string, string>? buildProperties = null,
+        OutputKind outputKind = OutputKind.DynamicallyLinkedLibrary,
+        IReadOnlyDictionary<string, ReportDiagnostic>? diagnosticOptions = null)
+        => Run(source, referenceModuleBuilders, libraries, scanReferences, buildProperties,
+            outputKind, diagnosticOptions, fixtureSelection: true);
+
     /// <summary>Compiles a library to an in-memory metadata reference.</summary>
     private static MetadataReference CompileLibrary(
         string assemblyName,
         string source,
-        ImmutableArray<MetadataReference> references)
+        ImmutableArray<MetadataReference> references,
+        bool generateSelections, bool sourceReference)
     {
-        var compilation = CSharpCompilation.Create(
+        Compilation compilation = CSharpCompilation.Create(
             assemblyName,
             [CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Latest))],
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
                 .WithSpecificDiagnosticOptions(ImmutableDictionary<string, ReportDiagnostic>.Empty
-                    .Add("ERGOEXP001", ReportDiagnostic.Suppress)));
+                    .Add("ERGOEXP001", ReportDiagnostic.Suppress)
+                    .Add("ERGOEXP002", ReportDiagnostic.Suppress)));
+
+        if (sourceReference) return compilation.ToMetadataReference();
+
+        if (generateSelections)
+        {
+            GeneratorDriver driver = CSharpGeneratorDriver.Create(
+                generators: [new ErgosfareRegistrationGenerator().AsSourceGenerator()],
+                optionsProvider: new TestAnalyzerConfigOptionsProvider(null,
+                    new Dictionary<string, string> { ["ErgosfareGeneratePlans"] = "false" }));
+            driver.RunGeneratorsAndUpdateCompilation(compilation, out compilation, out var diagnostics);
+            Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        }
 
         using var stream = new MemoryStream();
         var emitResult = compilation.Emit(stream);

@@ -4,43 +4,33 @@ using Stella.Ergosfare.Core.Abstractions.Handlers;
 namespace Stella.Ergosfare.Events.Abstractions;
 
 /// <summary>
-/// Represents a non-generic pre-interceptor for events, allowing custom logic
-/// to execute before any event handlers are invoked.
+/// Runs before the handlers of any event that implements <see cref="IEvent"/>.
 /// </summary>
 /// <remarks>
-/// <para>
-/// This interface is a non-generic version of <see cref="IEventPreInterceptor{TEvent}"/>,
-/// applying to all events implementing <see cref="IEvent"/>.
-/// </para>
-/// <para>
-/// It inherits from <see cref="IAsyncPreInterceptor{TMessage}"/>, enabling asynchronous
-/// pre-processing of events before they are dispatched to their handlers.
-/// </para>
-/// <para>
-/// Event handlers and messages that implement <see cref="IEvent"/> will recognize
-/// this interceptor automatically in the event mediation pipeline.
-/// </para>
+/// This form observes the event without being able to replace it — the event that reaches
+/// the handlers is the one that arrived. To replace it, implement
+/// <see cref="IEventPreInterceptor{TEvent}"/>.
 /// </remarks>
 // ReSharper disable once UnusedType.Global
 public interface IEventPreInterceptor : IEvent, IAsyncPreInterceptor<IEvent>
 {
-    /// <inheritdoc cref="IAsyncPreInterceptor{TEvent}.HandleAsync"/>
-    /// <remarks>
-    /// A pre-interceptor's return value is the (possibly replaced) message the rest of
-    /// the pipeline continues with — this void-flavored convenience contract passes the
-    /// event through unchanged.
-    /// </remarks>
+    /// <summary>
+    /// Forwards the core contract to the method below and passes the event on unchanged.
+    /// </summary>
+    /// <param name="event">The event as the previous stage left it.</param>
+    /// <param name="executionContext">The execution context of this publish.</param>
+    /// <returns>The event that arrived.</returns>
     async ValueTask<object> IAsyncPreInterceptor<IEvent>.HandleAsync(IEvent @event, ErgosfareContext executionContext)
     {
         await HandleAsync(@event, executionContext);
         return @event;
     }
-    
+
     /// <summary>
-    /// Handles the event asynchronously before the main handlers are invoked.
+    /// Processes <paramref name="event"/> before its handlers run.
     /// </summary>
-    /// <param name="event">The event to be processed.</param>
-    /// <param name="executionContext">The execution context for the current mediation pipeline.</param>
-    /// <returns>A <see cref="ValueTask"/> representing the asynchronous pre-processing operation.</returns>
+    /// <param name="event">The event about to be delivered.</param>
+    /// <param name="executionContext">The execution context of this publish.</param>
+    /// <returns>A task that completes when the interceptor is done.</returns>
     new ValueTask HandleAsync(IEvent @event, ErgosfareContext executionContext);
 }

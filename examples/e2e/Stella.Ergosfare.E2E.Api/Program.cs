@@ -1,13 +1,8 @@
-using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.E2E.Api;
 using Stella.Ergosfare.E2E.Api.Contracts;
 using Stella.Ergosfare.E2E.Api.Endpoints;
 using Stella.Ergosfare.E2E.Infrastructure;
 using Stella.Ergosfare.E2E.UseCases;
-using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Generated;
-using Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
 using Stella.MinimalApi.Extensions;
 
 // The slim builder: the AOT-friendly host, without the hosting features this app does not
@@ -16,12 +11,11 @@ var builder = WebApplication.CreateSlimBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("Todo") ?? "Data Source=e2e-todos.db";
 
-// Source-generated registration. RegisterGenerated() is emitted into this compilation by the
-// analyzer; it discovers the handlers and the interceptor over in the UseCases assembly.
-builder.Services.AddErgosfare(o => o
-    .AddCommandModule(c => c.RegisterGenerated())
-    .AddQueryModule(q => q.RegisterGenerated())
-    .AddEventModule(e => e.RegisterGenerated()));
+// UseCases owns the registration API. This composition root's generator consumes its
+// selection manifest and combines it with endpoint dispatches to emit executable plans.
+builder.Services.AddApplication();
+builder.Services.AddSingleton(new Stella.Ergosfare.E2E.UseCases.Streaming.UploadStorage(
+    Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "upload"))));
 
 builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddSingleton<TodoStats>();
@@ -46,5 +40,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseExceptionHandler();
+app.UseWebSockets();
+app.UseStaticFiles();
 app.MapEndpoints();
 app.Run();

@@ -1,51 +1,44 @@
-
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 
 namespace Stella.Ergosfare.Events.Abstractions;
 
-
 /// <summary>
-/// Represents a non-generic post-interceptor for events, allowing custom logic
-/// to execute after any event handlers have been invoked.
+/// Runs after every handler of an event that implements <see cref="IEvent"/> has been
+/// delivered to.
 /// </summary>
 /// <remarks>
-/// <para>
-/// This interface is a non-generic version of <see cref="IEventPostInterceptor{TEvent}"/>,
-/// applying to all events implementing <see cref="IEvent"/>.
-/// </para>
-/// <para>
-/// It inherits from <see cref="IAsyncPostInterceptor{TMessage}"/>, enabling asynchronous
-/// post-processing of events after they are dispatched to their handlers.
-/// </para>
-/// <para>
-/// Event handlers and messages that implement <see cref="IEvent"/> will recognize
-/// this interceptor automatically in the event mediation pipeline.
-/// </para>
+/// A publish produces no result, so there is nothing here to read or replace — this stage
+/// exists to act on the fact that delivery finished.
 /// </remarks>
 // ReSharper disable once UnusedType.Global
 public interface IEventPostInterceptor : IEvent, IAsyncPostInterceptor<IEvent>
 {
-    
-    /// <inheritdoc cref="IEventPostInterceptor{TEvent}.HandleAsync(TEvent, object, ErgosfareContext)"/>
+    /// <summary>
+    /// Forwards the core contract to the method below.
+    /// </summary>
+    /// <param name="event">The event that was delivered.</param>
+    /// <param name="result">Ignored; a publish has no result.</param>
+    /// <param name="context">The execution context of this publish.</param>
+    /// <returns>The value a resultless pipeline carries.</returns>
     async ValueTask<object> IAsyncPostInterceptor<IEvent>.HandleAsync(IEvent @event, object result, ErgosfareContext context)
     {
-        // The ValueTask argument is what binds this call to the typed member below: an
-        // object-typed one resolves back to the inherited interface member — this very
-        // implementation — and recurses infinitely.
+        // The ValueTask argument is what binds this to the typed member below. An
+        // object-typed argument would resolve back to the inherited interface member — this
+        // very implementation — and recurse forever.
         await HandleAsync(@event, ValueTask.CompletedTask, context);
         return Unit.Value;
     }
 
     /// <summary>
-    /// Handles the event asynchronously after the main handlers have executed.
+    /// Runs once the event has been delivered to every handler.
     /// </summary>
-    /// <param name="event">The event being processed.</param>
+    /// <param name="event">The event that was delivered.</param>
     /// <param name="result">
-    /// The result returned by the main handlers, or <c>null</c> if the event does not produce a result.
+    /// A completed task, standing in for a result a publish does not have. It carries no
+    /// information.
     /// </param>
-    /// <param name="executionContext">The execution context for the current mediation pipeline.</param>
-    /// <returns>A <see cref="ValueTask"/> representing the asynchronous post-processing operation.</returns>
+    /// <param name="executionContext">The execution context of this publish.</param>
+    /// <returns>A task that completes when the interceptor is done.</returns>
     ValueTask HandleAsync(IEvent @event, ValueTask result, ErgosfareContext executionContext);
-
 }

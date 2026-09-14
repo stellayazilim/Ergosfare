@@ -1,106 +1,140 @@
-
+using Stella.Ergosfare.Core.Abstractions;
 
 namespace Stella.Ergosfare.Commands.Abstractions;
+
 /// <summary>
-///     Represents the mediator interface for sending commands within the application.
+/// Sends commands to their handlers.
 /// </summary>
 /// <remarks>
-///     The command mediator is responsible for routing commands to their appropriate handlers
-///     and orchestrating the command handling pipeline. It ensures that commands are processed
-///     by exactly one handler and provides methods for sending commands both with and without
-///     expected results.
-///     In the CQRS pattern, commands represent intentions to change the system state. The command
-///     mediator helps maintain separation between the command issuers and the command handlers.
+/// Everything a dispatch needs is passed as an argument. Only the four overloads that take
+/// <c>IEnumerable&lt;string&gt;</c> groups or an <see cref="ErgosfareContext"/> are abstract;
+/// the rest are conveniences implemented in terms of those, so an implementation writes four
+/// methods and inherits the others.
 /// </remarks>
 public interface ICommandMediator
 {
     /// <summary>
-    ///     Asynchronously sends a command for mediation.
+    /// Sends <paramref name="command"/> to its handler and completes when the pipeline has
+    /// run.
     /// </summary>
-    /// <param name="command">The command to be sent.</param>
-    /// <param name="commandMediationSettings">
-    ///     Optional settings for command mediation that control aspects such as handler
-    ///     filtering.
+    /// <param name="command">The command to send.</param>
+    /// <param name="groups">
+    /// The groups to run; an empty set runs the default group. Reusing a
+    /// <see cref="GroupSet"/> lets the cached pipeline be matched by reference.
     /// </param>
-    /// <param name="cancellationToken">Cancellation token for the operation that can be used to cancel the command processing.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    /// <remarks>
-    ///     This method is used for commands that do not produce a result. The command is routed to its
-    ///     appropriate handler based on its type, and the command handling pipeline is executed, including
-    ///     pre-handlers, the main handler, post-handlers, and error handlers if exceptions occur.
-    /// </remarks>
-    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
-    ValueTask SendAsync(ICommand command, CommandMediationSettings? commandMediationSettings = null, CancellationToken cancellationToken = default);
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    ValueTask SendAsync(ICommand command, GroupSet groups, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Sends a void command under an externally owned execution context — the
-    /// nested-dispatch path: a handler opens a scope on its own context
-    /// (<c>using var scope = context.CreateScope();</c>) and passes <c>scope.Context</c>
-    /// here. The caller owns the context's lifetime; cancellation flows from the context.
+    /// Sends <paramref name="command"/> and returns the result its handler produced.
     /// </summary>
+    /// <typeparam name="TResult">The result type the command declares.</typeparam>
     /// <param name="command">The command to send.</param>
-    /// <param name="context">The externally owned execution context to dispatch under.</param>
-    /// <param name="commandMediationSettings">Optional mediation settings (groups etc.).</param>
-    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
-    ValueTask SendAsync(ICommand command, Core.Abstractions.ErgosfareContext context,
-        CommandMediationSettings? commandMediationSettings = null);
-
-    /// <summary>
-    /// Result-producing counterpart of
-    /// <see cref="SendAsync(ICommand, Core.Abstractions.ErgosfareContext, CommandMediationSettings?)"/>.
-    /// </summary>
-    /// <typeparam name="TResult">The expected result type of the command.</typeparam>
-    /// <param name="command">The command to send.</param>
-    /// <param name="context">The externally owned execution context to dispatch under.</param>
-    /// <param name="commandMediationSettings">Optional mediation settings (groups etc.).</param>
-    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
-    ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, Core.Abstractions.ErgosfareContext context,
-        CommandMediationSettings? commandMediationSettings = null);
-
-    /// <summary>
-    ///     Asynchronously sends a command for mediation and returns a result.
-    /// </summary>
-    /// <typeparam name="TResult">The type of the result returned by the command.</typeparam>
-    /// <param name="command">The command to be sent.</param>
-    /// <param name="commandMediationSettings">
-    ///     Optional settings for command mediation that control aspects such as handler
-    ///     filtering.
+    /// <param name="groups">
+    /// The groups to run; an empty set runs the default group.
     /// </param>
-    /// <param name="cancellationToken">Cancellation token for the operation that can be used to cancel the command processing.</param>
-    /// <returns>A task representing the asynchronous operation with a result of type <typeparamref name="TResult" />.</returns>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>The result the handler produced.</returns>
+    ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, GroupSet groups,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sends <paramref name="command"/> under an execution context supplied by the caller —
+    /// the shape a nested send uses.
+    /// </summary>
+    /// <param name="command">The command to send.</param>
+    /// <param name="context">
+    /// The context to run under, typically a child opened with
+    /// <c>using var scope = context.CreateScope();</c> and passed as <c>scope.Context</c>.
+    /// The caller owns its lifetime, and cancellation comes from it.
+    /// </param>
+    /// <param name="groups">The groups to run; an empty set runs the default group.</param>
+    ValueTask SendAsync(ICommand command, ErgosfareContext context, GroupSet? groups = null);
+
+    /// <summary>
+    /// Sends <paramref name="command"/> under a caller-owned execution context and returns
+    /// its result.
+    /// </summary>
+    /// <typeparam name="TResult">The result type the command declares.</typeparam>
+    /// <param name="command">The command to send.</param>
+    /// <param name="context">The context to run under; the caller owns its lifetime.</param>
+    /// <param name="groups">The groups to run; an empty set runs the default group.</param>
+    /// <returns>The result the handler produced.</returns>
+    ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, ErgosfareContext context,
+        GroupSet? groups = null);
+
+    /// <summary>
+    /// Sends <paramref name="command"/> through its default pipeline.
+    /// </summary>
+    /// <param name="command">The command to send.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    ValueTask SendAsync(ICommand command, CancellationToken cancellationToken = default)
+        => SendAsync(command, GroupSet.Empty, cancellationToken);
+
+    /// <summary>
+    /// Sends <paramref name="command"/> through its default pipeline and returns its result.
+    /// </summary>
+    /// <typeparam name="TResult">The result type the command declares.</typeparam>
+    /// <param name="command">The command to send.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>The result the handler produced.</returns>
+    ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, CancellationToken cancellationToken = default)
+        => SendAsync(command, GroupSet.Empty, cancellationToken);
+
+    /// <summary>
+    /// Sends <paramref name="command"/> naming its own type alongside its result, so the
+    /// pipeline is reached through a pair of compile-time constants instead of the command's
+    /// type being read back at run time.
+    /// </summary>
+    /// <typeparam name="TCommand">The command's own type.</typeparam>
+    /// <typeparam name="TResult">The result type the command declares.</typeparam>
+    /// <param name="command">The command to send.</param>
+    /// <param name="groups">The groups to run; an empty set runs the default group.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>The result the handler produced.</returns>
     /// <remarks>
-    ///     This method is used for commands that produce a result of type <typeparamref name="TResult" />.
-    ///     The command is routed to its appropriate handler based on its type, and the command handling pipeline
-    ///     is executed, including pre-handlers, the main handler, post-handlers, and error handlers if exceptions occur.
-    ///     The result produced by the handler is returned to the caller.
+    /// <para>
+    /// Both type arguments have to be named: <typeparamref name="TResult"/> must be a type
+    /// parameter for the return type, and C# will not infer type arguments through a
+    /// constraint. That is why these overloads are additions rather than replacements —
+    /// <c>SendAsync&lt;TResult&gt;(ICommand&lt;TResult&gt;)</c> stays the short form, and a
+    /// command read off a queue genuinely does not know its type until run time.
+    /// </para>
+    /// <para>
+    /// The default implementation simply forwards to the untyped call, so an existing
+    /// implementation keeps working; the benefit comes from overriding it, as
+    /// <c>CommandMediator</c> does.
+    /// </para>
     /// </remarks>
-    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
-    ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command,
-                                                   CommandMediationSettings? commandMediationSettings = null,
-                                                   CancellationToken cancellationToken = default);
-
-    /// <summary>
-    ///     Sends a void command under a canonical group filter. With a reused
-    ///     <see cref="Core.Abstractions.GroupSet"/> (define filters once, statically) the
-    ///     grouped dispatch caches match on a single reference check and the call
-    ///     allocates no settings object. The default implementation routes through the
-    ///     settings overload, so foreign mediator implementations keep working unchanged.
-    /// </summary>
-    /// <param name="command">The command to send.</param>
-    /// <param name="groups">The canonical group filter; <see cref="Core.Abstractions.GroupSet.Empty"/> dispatches the default pipeline.</param>
-    /// <param name="cancellationToken">Cancellation token for the operation.</param>
-    ValueTask SendAsync(ICommand command, Core.Abstractions.GroupSet groups, CancellationToken cancellationToken = default)
-        => SendAsync(command, new CommandMediationSettings { Filters = { Groups = groups } }, cancellationToken);
-
-    /// <summary>
-    ///     Result-producing counterpart of
-    ///     <see cref="SendAsync(ICommand, Core.Abstractions.GroupSet, CancellationToken)"/>.
-    /// </summary>
-    /// <typeparam name="TResult">The expected result type of the command.</typeparam>
-    /// <param name="command">The command to send.</param>
-    /// <param name="groups">The canonical group filter.</param>
-    /// <param name="cancellationToken">Cancellation token for the operation.</param>
-    ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, Core.Abstractions.GroupSet groups,
+    ValueTask<TResult> SendAsync<TCommand, TResult>(TCommand command, GroupSet groups,
         CancellationToken cancellationToken = default)
-        => SendAsync(command, new CommandMediationSettings { Filters = { Groups = groups } }, cancellationToken);
+        where TCommand : ICommand<TResult>
+        => SendAsync<TResult>(command, groups, cancellationToken);
+
+    /// <summary>
+    /// Sends <paramref name="command"/> under a caller-owned context, naming both types.
+    /// </summary>
+    /// <typeparam name="TCommand">The command's own type.</typeparam>
+    /// <typeparam name="TResult">The result type the command declares.</typeparam>
+    /// <param name="command">The command to send.</param>
+    /// <param name="context">The context to run under; the caller owns its lifetime.</param>
+    /// <param name="groups">The groups to run; an empty set runs the default group.</param>
+    /// <returns>The result the handler produced.</returns>
+    ValueTask<TResult> SendAsync<TCommand, TResult>(TCommand command, ErgosfareContext context,
+        GroupSet? groups = null)
+        where TCommand : ICommand<TResult>
+        => SendAsync<TResult>(command, context, groups);
+
+    /// <summary>
+    /// Sends <paramref name="command"/> through its default pipeline, naming both types.
+    /// </summary>
+    /// <typeparam name="TCommand">The command's own type.</typeparam>
+    /// <typeparam name="TResult">The result type the command declares.</typeparam>
+    /// <param name="command">The command to send.</param>
+    /// <param name="cancellationToken">Token exposed on the execution context.</param>
+    /// <returns>The result the handler produced.</returns>
+    ValueTask<TResult> SendAsync<TCommand, TResult>(TCommand command, CancellationToken cancellationToken = default)
+        where TCommand : ICommand<TResult>
+        => SendAsync<TCommand, TResult>(command, GroupSet.Empty, cancellationToken);
+
 }

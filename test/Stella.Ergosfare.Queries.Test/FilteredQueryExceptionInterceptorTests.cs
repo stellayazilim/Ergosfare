@@ -13,7 +13,7 @@ namespace Stella.Ergosfare.Queries.Test;
 public class FilteredQueryExceptionInterceptorTests
 {
     // These probes are invoked directly by the tests below, never dispatched — deliberately
-    // outside the compiled closure, which is what silences ERGOSG001 for the private types.
+    // outside the compiled closure, which is what silences ERGO001 for the private types.
     [ExcludeFromDiscovery]
     private sealed record TestQuery : IQuery<string>;
 
@@ -28,11 +28,11 @@ public class FilteredQueryExceptionInterceptorTests
 
         public TestFault? Received;
 
-        public ValueTask<string?> HandleAsync(
+        public ValueTask<string> HandleAsync(
             TestQuery query, string? result, TestFault exception, ErgosfareContext context)
         {
             Received = exception;
-            return ValueTask.FromResult<string?>(Recovery);
+            return ValueTask.FromResult(Recovery);
         }
     }
 
@@ -45,7 +45,7 @@ public class FilteredQueryExceptionInterceptorTests
             TestQuery query, object? messageResult, TestFault exception, ErgosfareContext context)
         {
             Received = exception;
-            return ValueTask.FromResult<object>(messageResult ?? Unit.Value);
+            return ValueTask.FromResult(messageResult ?? Unit.Value);
         }
     }
 

@@ -3,12 +3,12 @@
 Event module DI wiring for [Ergosfare](https://github.com/stellayazilim/Ergosfare):
 `AddEventModule(...)` and the `EventModuleBuilder` with explicit registration
 (`Register<T>()`) and
-source-generated registration (`RegisterGenerated()` /
-`RegisterGenerated("discovery.key.*")`).
+source-generated registration (`AddGenerated()` /
+`AddGenerated("discovery.key.*")`).
 
 ```csharp
 builder.Services.AddErgosfare(o => o
-    .AddEventModule(e => e.RegisterGenerated()));
+    .AddEventModule(e => e.AddGenerated()));
 ```
 
 Applications usually get this transitively through the

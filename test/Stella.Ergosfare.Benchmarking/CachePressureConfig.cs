@@ -32,7 +32,7 @@ public sealed class CachePressureConfig : ManualConfig
     {
         // Affinity is a bitmask over logical processors; bit 0 is core 0.
         AddJob(Job.Default
-            .WithAffinity((nint)1)
+            .WithAffinity(1)
             .WithId("SingleCore"));
 
         if (CanCollectHardwareCounters())

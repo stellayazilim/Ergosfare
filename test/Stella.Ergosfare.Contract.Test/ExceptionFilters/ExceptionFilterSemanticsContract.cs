@@ -11,11 +11,9 @@ namespace Stella.Ergosfare.Contract.Test.ExceptionFilters;
 /// instead of being swallowed by participants that declined it.
 /// </summary>
 /// <remarks>
-/// Both registration axes inherit these scenarios verbatim: the generated axis filters
-/// through a compile-time <c>is</c> guard baked into the emitted staged-plan body, the
-/// runtime axis through the filter probe the invocation strategy asks each resolved
-/// instance. Those are two separate implementations of one rule, and a divergence shows up
-/// as one subclass failing.
+/// The filter is a compile-time <c>is</c> guard baked into the emitted staged-plan body —
+/// the only lane left since the runtime one's removal. The contract stays abstract so a
+/// future second lane closes it over its own types instead of copying the scenarios.
 /// </remarks>
 public abstract class ExceptionFilterSemanticsContract
 {

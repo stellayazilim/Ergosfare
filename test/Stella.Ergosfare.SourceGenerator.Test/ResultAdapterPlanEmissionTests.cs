@@ -1,3 +1,5 @@
+using Microsoft.CodeAnalysis;
+
 namespace Stella.Ergosfare.SourceGenerator.Test;
 
 /// <summary>
@@ -13,11 +15,12 @@ public class ResultAdapterPlanEmissionTests
     [Fact]
     public void NativeCarrierSlot_EmitsTheValueChannelAndMaterializes()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System;
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
+            using Stella.Ergosfare.Core.Abstractions.Results;
 
             namespace TestApp
             {
@@ -55,7 +58,7 @@ public class ResultAdapterPlanEmissionTests
 
         // The plan exists, bakes the built-in adapter's identity, and probes without any
         // adapter instance — the carrier is compiler knowledge.
-        Assert.Contains("AddStagedPlan<global::TestApp.CarrierPing, global::Stella.Ergosfare.Core.Abstractions.Result<string>>", result.GeneratedSource);
+        Assert.Contains("AddStagedPlan<global::TestApp.CarrierPing, global::Stella.Ergosfare.Core.Abstractions.Results.Result<string>>", result.GeneratedSource);
         Assert.Contains("typeof(global::Stella.Ergosfare.Core.Abstractions.Results.ResultExceptionAdapter<string>)", result.GeneratedSource);
         Assert.Contains("if (result.Exception is { } carriedException)", result.GeneratedSource);
         Assert.Contains("postCarrier0.Exception is { } postException0", result.GeneratedSource);
@@ -64,7 +67,7 @@ public class ResultAdapterPlanEmissionTests
         // A real throw materializes into a failed carrier; nothing ever rethrows, so the
         // unhandled-failure slot is not emitted at all. The filtered participant keeps
         // its compile-time filter, now testing the channel-agnostic exception local.
-        Assert.Contains("result = global::Stella.Ergosfare.Core.Abstractions.Result<string>.Fail(e);", result.GeneratedSource);
+        Assert.Contains("result = global::Stella.Ergosfare.Core.Abstractions.Results.Result<string>.Fail(e);", result.GeneratedSource);
         Assert.Contains("if (exception is global::System.ArgumentException)", result.GeneratedSource);
         Assert.DoesNotContain("unhandledException", result.GeneratedSource);
         Assert.DoesNotContain("ResultAdapter.TryGetException", result.GeneratedSource);
@@ -73,11 +76,12 @@ public class ResultAdapterPlanEmissionTests
     [Fact]
     public void AnnotatedForeignSlot_BakesTheAdapterAndKeepsTheUnhandledRethrow()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System;
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
+            using Stella.Ergosfare.Core.Abstractions.Results;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
 
             namespace TestApp
@@ -130,11 +134,12 @@ public class ResultAdapterPlanEmissionTests
     [Fact]
     public void MaterializingForeignSlot_MaterializesThroughTheAdapter()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System;
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
+            using Stella.Ergosfare.Core.Abstractions.Results;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
 
             namespace TestApp
@@ -183,11 +188,12 @@ public class ResultAdapterPlanEmissionTests
     [Fact]
     public void UnadaptedSlot_KeepsTheClassicEmissionWithNoProbe()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System;
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
+            using Stella.Ergosfare.Core.Abstractions.Results;
 
             namespace TestApp
             {
@@ -212,18 +218,24 @@ public class ResultAdapterPlanEmissionTests
 
         Assert.Contains("AddStagedPlan<global::TestApp.PlainPing, string>", result.GeneratedSource);
         Assert.DoesNotContain("carriedException", result.GeneratedSource);
-        Assert.DoesNotContain("ResultAdapter", result.GeneratedSource);
         Assert.DoesNotContain("unhandledException", result.GeneratedSource);
+
+        // Nothing binds the slot, so the adapter table holds no entry for it — only the
+        // seal, which every generated registration writes.
+        Assert.DoesNotContain("AddResultAdapter<", result.GeneratedSource);
+        Assert.DoesNotContain("AddDefaultResultAdapter<", result.GeneratedSource);
+        Assert.DoesNotContain("ResultAdapter.TryGetException", result.GeneratedSource);
     }
 
     [Fact]
     public void UnitFittingAnnotation_DisqualifiesTheVoidPlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System;
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
+            using Stella.Ergosfare.Core.Abstractions.Results;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
 
             namespace TestApp
@@ -265,11 +277,12 @@ public class ResultAdapterPlanEmissionTests
     [Fact]
     public void OptedOutNativeCarrierSlot_KeepsTheClassicEmission()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System;
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
+            using Stella.Ergosfare.Core.Abstractions.Results;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
 
             namespace TestApp
@@ -296,7 +309,7 @@ public class ResultAdapterPlanEmissionTests
 
         // The opt-out suppresses the native tier: the plan is still emitted, carries no
         // baked adapter, and probes nothing — the classic shape, byte for byte.
-        Assert.Contains("AddStagedPlan<global::TestApp.OptedOutPing, global::Stella.Ergosfare.Core.Abstractions.Result<string>>", result.GeneratedSource);
+        Assert.Contains("AddStagedPlan<global::TestApp.OptedOutPing, global::Stella.Ergosfare.Core.Abstractions.Results.Result<string>>", result.GeneratedSource);
         Assert.DoesNotContain("carriedException", result.GeneratedSource);
         Assert.DoesNotContain(".Fail(e);", result.GeneratedSource);
         Assert.DoesNotContain("typeof(global::Stella.Ergosfare.Core.Abstractions.Results.ResultExceptionAdapter", result.GeneratedSource);
@@ -307,6 +320,7 @@ public class ResultAdapterPlanEmissionTests
         using System.Threading.Tasks;
         using Stella.Ergosfare.Commands.Abstractions;
         using Stella.Ergosfare.Core.Abstractions;
+        using Stella.Ergosfare.Core.Abstractions.Results;
         using Stella.Ergosfare.Core.Abstractions.Attributes;
         using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
@@ -339,7 +353,7 @@ public class ResultAdapterPlanEmissionTests
     [Fact]
     public void DiscoveredOpenGenericDefault_IsClosedOverTheSlotAndBaked()
     {
-        var result = GeneratorTestHost.Run(DefaultAdapterBoot + """
+        var result = GeneratorTestHost.RunWithAllCandidates(DefaultAdapterBoot + """
 
             public sealed record BoxPing : ICommand<Box<int>>;
 
@@ -371,7 +385,7 @@ public class ResultAdapterPlanEmissionTests
     [Fact]
     public void AnnotationNativeAndOptOut_AllWinOverTheDiscoveredDefault()
     {
-        var result = GeneratorTestHost.Run(DefaultAdapterBoot + """
+        var result = GeneratorTestHost.RunWithAllCandidates(DefaultAdapterBoot + """
 
             // Native slot: the built-in adapter is baked, not the default.
             public sealed record NativePing : ICommand<Result<string>>;
@@ -405,7 +419,7 @@ public class ResultAdapterPlanEmissionTests
             }
 
             // A slot the default cannot unify with: no adapter, classic emission — and
-            // the visible ERGOSG013 acknowledgment request.
+            // the visible ERGO013 acknowledgment request.
             public sealed record UnservedPing : ICommand<string>;
 
             public sealed class UnservedPingHandler : ICommandHandler<UnservedPing, string>
@@ -428,7 +442,7 @@ public class ResultAdapterPlanEmissionTests
         // design-hole error. The native slot and the opted-out (default-served) slot
         // stay silent.
         var diagnostic = Assert.Single(result.GeneratorDiagnostics);
-        Assert.Equal("ERGOSG013", diagnostic.Id);
+        Assert.Equal("ERGO013", diagnostic.Id);
 
         // Native slot bakes the built-in adapter; the ignored and unserved slots bake
         // nothing.
@@ -438,9 +452,70 @@ public class ResultAdapterPlanEmissionTests
     }
 
     [Fact]
-    public void OpaqueOrDisagreeingDefaultCallsites_BakeNothing()
+    public void AdapterSelections_AreEmbeddedInPlansWithoutRuntimeTables()
     {
-        var result = GeneratorTestHost.Run(DefaultAdapterBoot.Replace(
+        var result = GeneratorTestHost.RunWithAllCandidates(DefaultAdapterBoot + """
+
+            // The fallback serves this one.
+            public sealed record BoxTablePing : ICommand<Box<int>>;
+
+            public sealed class BoxTablePingHandler : ICommandHandler<BoxTablePing, Box<int>>
+            {
+                public ValueTask<Box<int>> HandleAsync(BoxTablePing message, ErgosfareContext context)
+                    => new(new Box<int>());
+            }
+
+            // An annotation names its own, for its own slot.
+            public sealed class Outcome
+            {
+                public Exception? Error { get; set; }
+            }
+
+            public sealed class OutcomeAdapter : IResultAdapter<Outcome>
+            {
+                public bool TryGetException(in Outcome result, out Exception? exception)
+                {
+                    exception = result.Error;
+                    return exception is not null;
+                }
+            }
+
+            [ResultAdapter(typeof(OutcomeAdapter))]
+            public sealed record AnnotatedTablePing : ICommand<Outcome>;
+
+            public sealed class AnnotatedTablePingHandler : ICommandHandler<AnnotatedTablePing, Outcome>
+            {
+                public ValueTask<Outcome> HandleAsync(AnnotatedTablePing message, ErgosfareContext context)
+                    => new(new Outcome());
+            }
+
+            // And this one wants no tier at all.
+            [IgnoreResultAdapter]
+            public sealed record OptedOutTablePing : ICommand<Box<string>>;
+
+            public sealed class OptedOutTablePingHandler : ICommandHandler<OptedOutTablePing, Box<string>>
+            {
+                public ValueTask<Box<string>> HandleAsync(OptedOutTablePing message, ErgosfareContext context)
+                    => new(new Box<string>());
+            }
+        }
+        """);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.CompilationErrors);
+
+        Assert.DoesNotContain("AddResultAdapter<", result.GeneratedSource);
+        Assert.DoesNotContain("AddIgnoredResultAdapter<", result.GeneratedSource);
+        Assert.DoesNotContain("AddDefaultResultAdapter<", result.GeneratedSource);
+        Assert.DoesNotContain("SealResultAdapters", result.GeneratedSource);
+        Assert.Contains("new global::TestApp.OutcomeAdapter()", result.GeneratedSource);
+        Assert.Contains("new global::TestApp.BoxAdapter<int>()", result.GeneratedSource);
+    }
+
+    [Fact]
+    public void OpaqueDefaultCallsite_FailsTheBuild()
+    {
+        var result = GeneratorTestHost.RunWithAllCandidates(DefaultAdapterBoot.Replace(
             "=> registry.UseDefaultResultAdapter(typeof(BoxAdapter<>));",
             """
             {
@@ -465,14 +540,61 @@ public class ResultAdapterPlanEmissionTests
         }
         """);
 
-        Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
 
-        // The callsite's argument is a variable — invisible to the mirror. The plan is
-        // emitted without an adapter; at runtime the identity gate keeps it off the slot
-        // and the strategy serves the default.
-        Assert.Contains("AddStagedPlan<global::TestApp.OpaqueBoxPing, global::TestApp.Box<int>>", result.GeneratedSource);
+        // The argument is a variable, so which result types the fallback serves cannot be
+        // read here — and nothing reads it anywhere else. The call is the error.
+        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGO019");
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+
+        // Nothing is bound for the slot: no plan adapter, and no table entry.
         Assert.DoesNotContain("typeof(global::TestApp.BoxAdapter<int>)", result.GeneratedSource);
-        Assert.DoesNotContain("ResultAdapter.TryGetException", result.GeneratedSource);
+        Assert.DoesNotContain("AddDefaultResultAdapter<", result.GeneratedSource);
+    }
+
+    [Fact]
+    public void DisagreeingDefaultCallsites_FailTheBuild()
+    {
+        var result = GeneratorTestHost.RunWithAllCandidates(DefaultAdapterBoot.Replace(
+            "=> registry.UseDefaultResultAdapter(typeof(BoxAdapter<>));",
+            """
+            {
+                registry.UseDefaultResultAdapter(typeof(BoxAdapter<>));
+                registry.UseDefaultResultAdapter(typeof(OtherAdapter));
+            }
+            """) + """
+
+            public sealed class Other
+            {
+                public Exception? Error { get; set; }
+            }
+
+            public sealed class OtherAdapter : IResultAdapter<Other>
+            {
+                public bool TryGetException(in Other result, out Exception? exception)
+                {
+                    exception = result.Error;
+                    return exception is not null;
+                }
+            }
+
+            public sealed record TwoDefaultsPing : ICommand<Box<int>>;
+
+            public sealed class TwoDefaultsPingHandler : ICommandHandler<TwoDefaultsPing, Box<int>>
+            {
+                public ValueTask<Box<int>> HandleAsync(TwoDefaultsPing message, ErgosfareContext context)
+                    => new(new Box<int>());
+            }
+        }
+        """);
+
+        Assert.Empty(result.CompilationErrors);
+
+        // Two answers to one question. The second call is where it is reported, and the
+        // message names both adapters so either site can be the one that moves.
+        var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => d.Id == "ERGO020");
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Contains("OtherAdapter", diagnostic.GetMessage());
+        Assert.Contains("BoxAdapter", diagnostic.GetMessage());
     }
 }

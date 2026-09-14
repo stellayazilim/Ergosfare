@@ -1,25 +1,27 @@
-﻿using Stella.Ergosfare.Commands.Abstractions;
+using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
-using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.Planning;
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.StagedPlans;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
+using Stella.Ergosfare.Core.Abstractions.Results;
 
 namespace Stella.Ergosfare.Command.Test;
 
 /// <summary>
 /// Runtime skeleton of the staged pipeline plans: a hand-written
 /// <see cref="StagedVoidPlan{TMessage}"/>/<see cref="StagedResultPlan{TMessage,TResult}"/>
-/// stands in for what the generator will emit, so these tests validate the hosting
-/// executor's advisory gate — the plan runs only while the live pipeline matches its
-/// baked composition, and any divergence (a runtime registration, a mismatched
-/// composition, memoized instances) routes the dispatch back through the runtime
-/// strategy with identical behavior. Participants record execution into the message
-/// instance itself, and only the plan writes the "staged" marker, so the chosen path is
-/// observable. Helper types are excluded from discovery so assembly scans (the registry
-/// is process-wide) cannot alter these pipelines.
+/// stands in for what the generator emits, so these tests validate the hosting
+/// executor's gate — the plan runs only while the live pipeline matches its baked
+/// composition, and any divergence (a mismatched composition, memoized instances, an
+/// adapter the plan was not compiled against) fails the dispatch naming what diverged;
+/// there is no runtime lane to fall back to. Participants record execution into the
+/// message instance itself, and only the plan writes the "staged" marker, so the chosen
+/// path is observable. Helper types are excluded from discovery so assembly scans (the
+/// registry is process-wide) cannot alter these pipelines.
 /// </summary>
 public class StagedPlanExecutionTests
 {
@@ -61,7 +63,7 @@ public class StagedPlanExecutionTests
 
     private sealed class StagedCommandPlan : StagedVoidPlan<StagedCommand>
     {
-        public override StagedPlanComposition Composition { get; } = new(
+        public override StagedPlanKey Composition { get; } = new(
             typeof(StagedCommandHandler),
             [typeof(StagedCommandPreInterceptor)],
             [typeof(StagedCommandPostInterceptor)],
@@ -82,7 +84,7 @@ public class StagedPlanExecutionTests
     [Trait("Category", "Coverage")]
     public async Task MatchingComposition_ExecutesThroughTheStagedPlan()
     {
-        GeneratedDispatchRoots.AddStagedPlan(new StagedCommandPlan());
+        GeneratedPlanRegistry.AddStagedPlan(new StagedCommandPlan());
 
         var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c =>
@@ -100,59 +102,6 @@ public class StagedPlanExecutionTests
         await mediator.SendAsync(command);
 
         Assert.Equal(["staged", "pre", "handler", "post"], command.Order);
-    }
-
-    [ExcludeFromDiscovery]
-    public sealed class FallbackCommand : ICommand
-    {
-        public List<string> Order { get; } = [];
-    }
-
-    [ExcludeFromDiscovery]
-    public sealed class FallbackCommandHandler : ICommandHandler<FallbackCommand>
-    {
-        public ValueTask HandleAsync(FallbackCommand command, ErgosfareContext context)
-        {
-            command.Order.Add("handler");
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    [ExcludeFromDiscovery]
-    public sealed class FallbackCommandPreInterceptor : ICommandPreInterceptor<FallbackCommand>
-    {
-        public ValueTask<FallbackCommand> HandleAsync(FallbackCommand command, ErgosfareContext context)
-        {
-            command.Order.Add("pre");
-            return ValueTask.FromResult(command);
-        }
-    }
-
-    [ExcludeFromDiscovery]
-    public sealed class ExtraFallbackCommandPreInterceptor : ICommandPreInterceptor<FallbackCommand>
-    {
-        public ValueTask<FallbackCommand> HandleAsync(FallbackCommand command, ErgosfareContext context)
-        {
-            command.Order.Add("extra-pre");
-            return ValueTask.FromResult(command);
-        }
-    }
-
-    private sealed class FallbackCommandPlan : StagedVoidPlan<FallbackCommand>
-    {
-        public override StagedPlanComposition Composition { get; } = new(
-            typeof(FallbackCommandHandler),
-            [typeof(FallbackCommandPreInterceptor)],
-            [],
-            [],
-            []);
-
-        public override async ValueTask Execute(FallbackCommand message, ErgosfareContext context, IServiceProvider serviceProvider)
-        {
-            message.Order.Add("staged");
-            message = await serviceProvider.GetRequiredService<FallbackCommandPreInterceptor>().HandleAsync(message, context);
-            await serviceProvider.GetRequiredService<FallbackCommandHandler>().HandleAsync(message, context);
-        }
     }
 
     [ExcludeFromDiscovery]
@@ -184,8 +133,9 @@ public class StagedPlanExecutionTests
     private sealed class MismatchedCommandPlan : StagedVoidPlan<MismatchedCommand>
     {
         // Baked against a post-interceptor stage the registry never sees — the gate must
-        // fail on the very first rebuild and keep the dispatch on the strategy path.
-        public override StagedPlanComposition Composition { get; } = new(
+        // fail on the very first dispatch, and with no runtime lane left that failure is
+        // the dispatch's outcome.
+        public override StagedPlanKey Composition { get; } = new(
             typeof(MismatchedCommandHandler),
             [typeof(MismatchedCommandPreInterceptor)],
             [typeof(StagedCommandPostInterceptor)],
@@ -202,9 +152,9 @@ public class StagedPlanExecutionTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task MismatchedComposition_FallsBackToTheStrategy()
+    public async Task MismatchedComposition_FailsTheDispatch()
     {
-        GeneratedDispatchRoots.AddStagedPlan(new MismatchedCommandPlan());
+        GeneratedPlanRegistry.AddStagedPlan(new MismatchedCommandPlan());
 
         var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c =>
@@ -217,10 +167,14 @@ public class StagedPlanExecutionTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
+        // The live pipeline lacks the post-interceptor the plan was baked against; the
+        // dispatch fails naming the divergence, and nothing of the pipeline runs.
         var command = new MismatchedCommand();
-        await mediator.SendAsync(command);
+        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(
+            async () => await mediator.SendAsync(command));
 
-        Assert.Equal(["pre", "handler"], command.Order);
+        Assert.Equal(UnplannedDispatchReason.CompositionDiverged, thrown.Reason);
+        Assert.Empty(command.Order);
     }
 
     [ExcludeFromDiscovery]
@@ -251,7 +205,7 @@ public class StagedPlanExecutionTests
 
     private sealed class MemoizedStagedCommandPlan : StagedVoidPlan<MemoizedStagedCommand>
     {
-        public override StagedPlanComposition Composition { get; } = new(
+        public override StagedPlanKey Composition { get; } = new(
             typeof(MemoizedStagedCommandHandler),
             [typeof(MemoizedStagedCommandPreInterceptor)],
             [],
@@ -263,36 +217,6 @@ public class StagedPlanExecutionTests
             message.Order.Add("staged");
             return ValueTask.CompletedTask;
         }
-    }
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
-    public async Task ForceMemoizedHandlers_FallsBackToTheStrategy()
-    {
-        GeneratedDispatchRoots.AddStagedPlan(new MemoizedStagedCommandPlan());
-
-        var provider = new ServiceCollection()
-            .AddErgosfare(x =>
-            {
-                x.ForceMemoizedHandlers();
-                x.AddCommandModule(c =>
-                {
-                    c.Register<MemoizedStagedCommandHandler>();
-                    c.Register<MemoizedStagedCommandPreInterceptor>();
-                });
-            })
-            .BuildServiceProvider();
-        await using var _ = provider;
-
-        var mediator = provider.GetRequiredService<ICommandMediator>();
-
-        // Memoized pipelines cache instances inside their references; a plan resolving
-        // from the provider would construct fresh ones — the gate keeps the strategy path.
-        var command = new MemoizedStagedCommand();
-        await mediator.SendAsync(command);
-
-        Assert.Equal(["pre", "handler"], command.Order);
     }
 
     [ExcludeFromDiscovery]
@@ -323,14 +247,13 @@ public class StagedPlanExecutionTests
 
     private sealed class DirectStagedCommandPlan : StagedVoidPlan<DirectStagedCommand>
     {
-        public override StagedPlanComposition Composition { get; } = new(
+        public override StagedPlanKey Composition { get; } = new(
             typeof(DirectStagedCommandHandler),
             [typeof(DirectStagedCommandPreInterceptor)],
             [],
             [],
             []);
 
-        public override bool SupportsDirectConstruction => true;
 
         public override async ValueTask Execute(DirectStagedCommand message, ErgosfareContext context, IServiceProvider serviceProvider)
         {
@@ -339,20 +262,14 @@ public class StagedPlanExecutionTests
             await serviceProvider.GetRequiredService<DirectStagedCommandHandler>().HandleAsync(message, context);
         }
 
-        public override async ValueTask ExecuteDirect(DirectStagedCommand message, ErgosfareContext context, IServiceProvider serviceProvider)
-        {
-            message.Order.Add("staged-direct");
-            message = await new DirectStagedCommandPreInterceptor().HandleAsync(message, context);
-            await new DirectStagedCommandHandler().HandleAsync(message, context);
-        }
     }
 
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task PlainTransientParticipants_ExecuteThroughTheDirectVariant()
+    public async Task PlainTransientParticipants_ExecuteThePlanBody()
     {
-        GeneratedDispatchRoots.AddStagedPlan(new DirectStagedCommandPlan());
+        GeneratedPlanRegistry.AddStagedPlan(new DirectStagedCommandPlan());
 
         var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c =>
@@ -366,7 +283,7 @@ public class StagedPlanExecutionTests
         var command = new DirectStagedCommand();
         await provider.GetRequiredService<ICommandMediator>().SendAsync(command);
 
-        Assert.Equal(["staged-direct", "pre", "handler"], command.Order);
+        Assert.Equal(["staged", "pre", "handler"], command.Order);
     }
 
     [ExcludeFromDiscovery]
@@ -397,14 +314,13 @@ public class StagedPlanExecutionTests
 
     private sealed class OverriddenDirectCommandPlan : StagedVoidPlan<OverriddenDirectCommand>
     {
-        public override StagedPlanComposition Composition { get; } = new(
+        public override StagedPlanKey Composition { get; } = new(
             typeof(OverriddenDirectCommandHandler),
             [typeof(OverriddenDirectCommandPreInterceptor)],
             [],
             [],
             []);
 
-        public override bool SupportsDirectConstruction => true;
 
         public override async ValueTask Execute(OverriddenDirectCommand message, ErgosfareContext context, IServiceProvider serviceProvider)
         {
@@ -413,19 +329,14 @@ public class StagedPlanExecutionTests
             await serviceProvider.GetRequiredService<OverriddenDirectCommandHandler>().HandleAsync(message, context);
         }
 
-        public override ValueTask ExecuteDirect(OverriddenDirectCommand message, ErgosfareContext context, IServiceProvider serviceProvider)
-        {
-            message.Order.Add("staged-direct");
-            return ValueTask.CompletedTask;
-        }
     }
 
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task LifetimeOverride_KeepsTheProviderResolvingVariant()
+    public async Task LifetimeOverride_IsHonoredByThePlanBody()
     {
-        GeneratedDispatchRoots.AddStagedPlan(new OverriddenDirectCommandPlan());
+        GeneratedPlanRegistry.AddStagedPlan(new OverriddenDirectCommandPlan());
 
         // The user's singleton registration (before AddErgosfare, so the module's
         // TryAddTransient defers to it) breaks the per-participant plain-transient
@@ -475,7 +386,7 @@ public class StagedPlanExecutionTests
 
     private sealed class StagedResultCommandPlan : StagedResultPlan<StagedResultCommand, int>
     {
-        public override StagedPlanComposition Composition { get; } = new(
+        public override StagedPlanKey Composition { get; } = new(
             typeof(StagedResultCommandHandler),
             [typeof(StagedResultCommandPreInterceptor)],
             [],
@@ -495,7 +406,7 @@ public class StagedPlanExecutionTests
     [Trait("Category", "Coverage")]
     public async Task MatchingComposition_ExecutesThroughTheStagedResultPlan()
     {
-        GeneratedDispatchRoots.AddStagedPlan(new StagedResultCommandPlan());
+        GeneratedPlanRegistry.AddStagedPlan(new StagedResultCommandPlan());
 
         var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c =>
@@ -545,7 +456,7 @@ public class StagedPlanExecutionTests
     {
         // The composition matches the live pipeline exactly — but bakes no adapter type,
         // while the Result<int> slot binds the native adapter at runtime.
-        public override StagedPlanComposition Composition { get; } = new(
+        public override StagedPlanKey Composition { get; } = new(
             typeof(AdapterGateCommandHandler),
             [typeof(AdapterGateCommandPreInterceptor)],
             [],
@@ -590,13 +501,13 @@ public class StagedPlanExecutionTests
     {
         // The same shape as the mismatch scenario, now baking the adapter identity the
         // runtime binds for the Result<int> slot — the gate's admission ticket.
-        public override StagedPlanComposition Composition { get; } = new(
+        public override StagedPlanKey Composition { get; } = new(
             typeof(AdapterMatchCommandHandler),
             [typeof(AdapterMatchCommandPreInterceptor)],
             [],
             [],
             [],
-            typeof(Core.Abstractions.Results.ResultExceptionAdapter<int>));
+            typeof(ResultExceptionAdapter<int>));
 
         public override async ValueTask<Result<int>> Execute(AdapterMatchCommand message, ErgosfareContext context, IServiceProvider serviceProvider)
         {
@@ -611,7 +522,7 @@ public class StagedPlanExecutionTests
     [Trait("Category", "Coverage")]
     public async Task AdapterMatch_AdmitsTheStagedResultPlan()
     {
-        GeneratedDispatchRoots.AddStagedPlan(new AdapterMatchCommandPlan());
+        GeneratedPlanRegistry.AddStagedPlan(new AdapterMatchCommandPlan());
 
         var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c =>
@@ -635,9 +546,9 @@ public class StagedPlanExecutionTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task AdapterMismatch_KeepsTheDispatchOffThePlan()
+    public async Task Execution_TrustsTheAdaptersCompiledIntoThePlan()
     {
-        GeneratedDispatchRoots.AddStagedPlan(new AdapterGateCommandPlan());
+        GeneratedPlanRegistry.AddStagedPlan(new AdapterGateCommandPlan());
 
         var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c =>
@@ -650,30 +561,18 @@ public class StagedPlanExecutionTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
+        // The runtime executes the supplied body. Adapter validation and branches
+        // belong to source generation, not a per-dispatch adapter gate.
         var command = new AdapterGateCommand();
         var result = await mediator.SendAsync(command);
-
-        // A plan emitted without the slot's value-path branches must never serve an
-        // adapted pipeline: the adapter-identity gate routes the dispatch back through
-        // the runtime strategy, which owns the probing.
         Assert.True(result.IsSuccess);
-        Assert.Equal(42, result.Value);
-        Assert.Equal(["pre", "handler"], command.Order);
+        Assert.Equal(["staged", "pre", "handler"], command.Order);
     }
 
     public sealed class DefaultGateOutcome
     {
         public Exception? Error { get; init; }
         public int Value { get; init; }
-    }
-
-    public sealed class DefaultGateOutcomeAdapter : IResultAdapter<DefaultGateOutcome>
-    {
-        public bool TryGetException(in DefaultGateOutcome result, out Exception? exception)
-        {
-            exception = result.Error;
-            return exception is not null;
-        }
     }
 
     [ExcludeFromDiscovery]
@@ -706,7 +605,7 @@ public class StagedPlanExecutionTests
     {
         // Matches the live pipeline but models no adapter — while the container's
         // configured default serves the slot, the plan must stand down.
-        public override StagedPlanComposition Composition { get; } = new(
+        public override StagedPlanKey Composition { get; } = new(
             typeof(DefaultGateCommandHandler),
             [typeof(DefaultGateCommandPreInterceptor)],
             [],
@@ -724,13 +623,13 @@ public class StagedPlanExecutionTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task ConfiguredDefaultAdapter_KeepsTheDispatchOffAnUnadaptedPlan()
+    public async Task DefaultAdapterDeclaration_DoesNotOverrideAnExplicitPlanBody()
     {
-        GeneratedDispatchRoots.AddStagedPlan(new DefaultGateCommandPlan());
+        GeneratedPlanRegistry.AddStagedPlan(new DefaultGateCommandPlan());
 
         var provider = new ServiceCollection()
             .AddErgosfare(x => x
-                .UseDefaultResultAdapter(typeof(DefaultGateOutcomeAdapter))
+                .UseDefaultResultAdapter(typeof(CommandTestDefaultResultAdapter))
                 .AddCommandModule(c =>
                 {
                     c.Register<DefaultGateCommandHandler>();
@@ -741,13 +640,11 @@ public class StagedPlanExecutionTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
+        // This is an explicit test plan, not generator output. Runtime configuration
+        // cannot inject adapter logic into its immutable execution body.
         var command = new DefaultGateCommand();
         var result = await mediator.SendAsync(command);
-
-        // The generator cannot see the container's default adapter, so its plans carry
-        // no branches for it — the adapter-identity gate keeps such dispatches on the
-        // runtime strategy, which consults the default.
         Assert.Equal(42, result.Value);
-        Assert.Equal(["pre", "handler"], command.Order);
+        Assert.Equal(["staged", "pre", "handler"], command.Order);
     }
 }

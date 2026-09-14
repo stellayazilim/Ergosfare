@@ -5,21 +5,19 @@ namespace Stella.Ergosfare.Commands.Abstractions;
 
 
 /// <summary>
-/// A result-agnostic exception interceptor for a specific command type that runs only for
-/// exceptions of type <typeparamref name="TException"/>. The exception arrives already
-/// typed — no <c>is</c> check in the interceptor body.
+/// Handles failures of type <typeparamref name="TException"/> raised while dispatching a
+/// <typeparamref name="TCommand"/>, without naming the result type.
 /// </summary>
-/// <typeparam name="TCommand">The type of command being intercepted. Must implement <see cref="ICommand"/>.</typeparam>
+/// <typeparam name="TCommand">The command type this interceptor accepts.</typeparam>
 /// <typeparam name="TException">
-/// The exception type this interceptor accepts, matched with <c>catch</c> semantics:
-/// derived exception types match too.
+/// The failure type this interceptor accepts. Matching follows <c>catch</c> semantics, so
+/// derived types match too.
 /// </typeparam>
 /// <remarks>
-/// The result-agnostic base is deliberate, for the same reason it is on
-/// <see cref="ICommandExceptionInterceptor{TCommand}"/>: a result-typed base is invisible to
-/// the pipeline's pattern match whenever the pipeline result is a value type. For a
-/// strongly-typed result use
-/// <see cref="ICommandExceptionInterceptorFor{TCommand, TResult, TException}"/>.
+/// The failure arrives already typed, so no type test is needed in the body. Staying
+/// result-agnostic is what lets this serve a void command, whose pipeline carries a
+/// <see cref="System.Threading.Tasks.ValueTask"/> in its result slot; for a typed result,
+/// implement <see cref="ICommandExceptionInterceptorFor{TCommand, TResult, TException}"/>.
 /// </remarks>
 // ReSharper disable once UnusedType.Global
 public interface ICommandExceptionInterceptorFor<in TCommand, TException> :
@@ -27,22 +25,30 @@ public interface ICommandExceptionInterceptorFor<in TCommand, TException> :
     where TCommand : ICommand
     where TException : Exception
 {
-    /// <inheritdoc />
+    /// <summary>
+    /// Forwards the core contract to the typed method below.
+    /// </summary>
+    /// <param name="command">The command whose dispatch failed.</param>
+    /// <param name="messageResult">The result produced so far, if any.</param>
+    /// <param name="exception">The failure being handled.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
+    /// <returns>The result the typed method returned.</returns>
     async ValueTask<object> IAsyncExceptionInterceptor<TCommand>.HandleAsync(
         TCommand command, object? messageResult, Exception exception, ErgosfareContext context)
-        // The cast cannot fail: the exception stage runs this interceptor only after its
-        // filter accepted the exception.
+        // The cast is safe: the stage only runs this interceptor once its filter accepted
+        // the failure.
         => await HandleAsync(command, messageResult, (TException)exception, context);
 
     /// <summary>
-    /// Handles the exception asynchronously, potentially replacing the pipeline result.
+    /// Handles <paramref name="exception"/> and produces the result to continue with.
     /// </summary>
-    /// <param name="command">The command being processed when the exception occurred.</param>
-    /// <param name="messageResult">The result produced before the exception occurred, if any.</param>
-    /// <param name="exception">The exception thrown during pipeline execution.</param>
-    /// <param name="context">The current execution context.</param>
+    /// <param name="command">The command whose dispatch failed.</param>
+    /// <param name="messageResult">The result produced before the failure, if any.</param>
+    /// <param name="exception">The failure being handled, already typed.</param>
+    /// <param name="context">The execution context of this dispatch.</param>
     /// <returns>
-    /// A <see cref="ValueTask{Object}"/> producing the result that continues through the pipeline.
+    /// The result the rest of the pipeline receives, which must be of the pipeline's result
+    /// type.
     /// </returns>
     ValueTask<object> HandleAsync(TCommand command, object? messageResult, TException exception, ErgosfareContext context);
 }

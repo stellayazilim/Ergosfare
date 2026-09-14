@@ -1,24 +1,24 @@
-﻿using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.Planning;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
 /// <summary>
-/// Represents the configuration context for a module, providing access to the service collection and the composition catalog.
+/// What modules register into during a single <c>AddErgosfare</c> call.
 /// </summary>
-/// <param name="services">The service collection used for dependency injection.</param>
-/// <param name="compositions">This container's view of the frozen composition table.</param>
+/// <param name="services">The container's service collection.</param>
+/// <param name="compositions">This container's view of the compiled composition table.</param>
 internal class ModuleConfiguration(
-    IServiceCollection services, FrozenCompositionCatalog compositions)
+    IServiceCollection services, DispatchPlanCatalog compositions)
     : IModuleConfiguration
 {
     /// <summary>
-    /// Gets the service collection for registering services.
+    /// The container's service collection.
     /// </summary>
     public IServiceCollection Services { get; } = services;
 
     /// <summary>
-    /// Gets this container's view of the frozen composition table.
+    /// This container's view of the compiled composition table.
     /// </summary>
-    public FrozenCompositionCatalog Compositions { get; } = compositions;
+    public DispatchPlanCatalog Compositions { get; } = compositions;
 }
