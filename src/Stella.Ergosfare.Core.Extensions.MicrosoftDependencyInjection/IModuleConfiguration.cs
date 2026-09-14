@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.Planning;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -18,5 +18,5 @@ public interface IModuleConfiguration
     /// This container's view of the compiled composition table, where a module records the
     /// participants it registered.
     /// </summary>
-    FrozenCompositionCatalog Compositions { get; }
+    DispatchPlanCatalog Compositions { get; }
 }

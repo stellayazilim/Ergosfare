@@ -35,7 +35,7 @@ public class ContestedMainHandlerDiagnosticTests
     [Fact]
     public void TwoDirectHandlers_FailTheBuild()
     {
-        var result = GeneratorTestHost.Run(Preamble + """
+        var result = GeneratorTestHost.RunWithAllCandidates(Preamble + """
 
             public sealed record Contested : ICommand;
 
@@ -57,7 +57,7 @@ public class ContestedMainHandlerDiagnosticTests
     [Fact]
     public void DirectPlusCovariant_IsNotAContest()
     {
-        var result = GeneratorTestHost.Run(Preamble + """
+        var result = GeneratorTestHost.RunWithAllCandidates(Preamble + """
 
             public abstract record EntryBase : ICommand;
 
@@ -85,14 +85,14 @@ public class ContestedMainHandlerDiagnosticTests
         // base-contract-handler idiom.
         // (EntryBase is abstract, so nothing dispatches it and it has no plan of its own.)
         Assert.Contains(
-            "AddVoidPlan<global::TestApp.Entry, global::TestApp.EntryHandler>",
+            "AddStagedPlan<global::TestApp.Entry>",
             result.GeneratedSource);
     }
 
     [Fact]
     public void TwoCovariantClaimantsWithNoDirectHandler_FailTheBuild()
     {
-        var result = GeneratorTestHost.Run(Preamble + """
+        var result = GeneratorTestHost.RunWithAllCandidates(Preamble + """
 
             public interface IArchived : ICommand;
 
@@ -116,9 +116,9 @@ public class ContestedMainHandlerDiagnosticTests
     }
 
     [Fact]
-    public void KeyedClaimants_Abstain()
+    public void SelectedKeyedClaimants_AreValidated()
     {
-        var result = GeneratorTestHost.Run(Preamble + """
+        var result = GeneratorTestHost.RunWithAllCandidates(Preamble + """
 
             public sealed record Contested : ICommand;
 
@@ -137,13 +137,13 @@ public class ContestedMainHandlerDiagnosticTests
         """, buildProperties: CompositionRoot);
 
         // Which keys a container registers is a runtime choice; nothing is provable here.
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO010");
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "ERGO010");
     }
 
     [Fact]
     public void ALiteralDirectRegistration_SuspendsTheCovariantArm()
     {
-        var result = GeneratorTestHost.Run(Preamble + """
+        var result = GeneratorTestHost.RunWithAllCandidates(Preamble + """
 
             public interface IArchived : ICommand;
 
@@ -183,7 +183,7 @@ public class ContestedMainHandlerDiagnosticTests
     [Fact]
     public void OutsideTheCompositionRoot_NoJudgmentRuns()
     {
-        var result = GeneratorTestHost.Run(Preamble + """
+        var result = GeneratorTestHost.RunWithAllCandidates(Preamble + """
 
             public sealed record Contested : ICommand;
 

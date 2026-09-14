@@ -37,6 +37,9 @@
     <Project Path="test\Stella.Ergosfare.Test.Fixtures\Stella.Ergosfare.Test.Fixtures.csproj" />
     <Project Path="test\Stella.Ergosfare.Test\Stella.Ergosfare.Test.csproj" />
   </Folder>
+  <Folder Name="/test/aot/">
+    <Project Path="examples/AotSmoke/AotSmoke.csproj" />
+  </Folder>
   <Folder Name="/workflows/">
     <File Path=".github\workflows\coverage_tests.yml" />
     <File Path=".github\workflows\github_release.yml" />

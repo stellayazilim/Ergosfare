@@ -11,7 +11,7 @@ public class VoidPlanEmissionTests
     [Fact]
     public void SoloAsyncHandler_EmitsTheVoidPlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using System.Threading.Tasks;
 
@@ -32,15 +32,14 @@ public class VoidPlanEmissionTests
 
         // The handler has an accessible parameterless constructor and is not disposable,
         // so the plan carries the direct-construction factory.
-        Assert.Contains(
-            "GeneratedDispatchRoots.AddVoidPlan<global::TestApp.SoloPing, global::TestApp.SoloPingHandler>(static () => new global::TestApp.SoloPingHandler());",
-            result.GeneratedSource);
+        Assert.Contains("new global::TestApp.SoloPingHandler()", result.GeneratedSource);
+        Assert.DoesNotContain("ExecuteDirect(", result.GeneratedSource);
     }
 
     [Fact]
-    public void ConstructorDependency_EmitsTheProviderFactory()
+    public void ConstructorDependency_ResolvesTheHandlerThroughDI()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using System.Threading.Tasks;
 
@@ -66,18 +65,14 @@ public class VoidPlanEmissionTests
         // is the one shape where the container's own selection has no choice — the plan
         // carries a provider-taking factory resolving each dependency from the
         // dispatching scope, exactly as container activation would.
-        Assert.Contains(
-            "GeneratedDispatchRoots.AddVoidPlan<global::TestApp.NeedyPing, global::TestApp.NeedyPingHandler>("
-            + "static provider => new global::TestApp.NeedyPingHandler("
-            + "global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::TestApp.IGreeter>(provider), "
-            + "global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<string>(provider)));",
-            result.GeneratedSource);
+        Assert.Contains("GetRequiredService<global::TestApp.NeedyPingHandler>(serviceProvider)", result.GeneratedSource);
+        Assert.DoesNotContain("ExecuteDirect(", result.GeneratedSource);
     }
 
     [Fact]
-    public void KeyedConstructorDependency_EmitsTheKeyedProviderFactory()
+    public void KeyedConstructorDependency_ResolvesTheHandlerThroughDI()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Microsoft.Extensions.DependencyInjection;
             using Stella.Ergosfare.Commands.Abstractions;
             using System.Threading.Tasks;
@@ -99,17 +94,14 @@ public class VoidPlanEmissionTests
             """);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.Contains(
-            "GeneratedDispatchRoots.AddVoidPlan<global::TestApp.KeyedNeedyPing, global::TestApp.KeyedNeedyPingHandler>("
-            + "static provider => new global::TestApp.KeyedNeedyPingHandler("
-            + "global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetRequiredKeyedService<global::TestApp.IGreeter>(provider, \"primary\")));",
-            result.GeneratedSource);
+        Assert.Contains("GetRequiredService<global::TestApp.KeyedNeedyPingHandler>(serviceProvider)", result.GeneratedSource);
+        Assert.DoesNotContain("ExecuteDirect(", result.GeneratedSource);
     }
 
     [Fact]
     public void OptionalParameter_SuppressesTheFactoryButKeepsThePlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using System.Threading.Tasks;
 
@@ -131,15 +123,14 @@ public class VoidPlanEmissionTests
 
         // The container uses the default value only when no string service is registered —
         // content-dependent behavior the emission cannot reproduce. Plan only, no factory.
-        Assert.Contains(
-            "GeneratedDispatchRoots.AddVoidPlan<global::TestApp.DefaultyPing, global::TestApp.DefaultyPingHandler>();",
-            result.GeneratedSource);
+        Assert.Contains("GetRequiredService<global::TestApp.DefaultyPingHandler>(serviceProvider)", result.GeneratedSource);
+        Assert.DoesNotContain("ExecuteDirect(", result.GeneratedSource);
     }
 
     [Fact]
     public void AdditionalConstructor_SuppressesTheFactoryButKeepsThePlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using System.Threading.Tasks;
 
@@ -163,15 +154,14 @@ public class VoidPlanEmissionTests
 
         // The container's greedy constructor selection would pick the richer constructor;
         // a `new()` factory would silently drop that dependency — plan only, no factory.
-        Assert.Contains(
-            "GeneratedDispatchRoots.AddVoidPlan<global::TestApp.PickyPing, global::TestApp.PickyPingHandler>();",
-            result.GeneratedSource);
+        Assert.Contains("GetRequiredService<global::TestApp.PickyPingHandler>(serviceProvider)", result.GeneratedSource);
+        Assert.DoesNotContain("ExecuteDirect(", result.GeneratedSource);
     }
 
     [Fact]
     public void RequiredMember_SuppressesTheFactoryButKeepsThePlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using System.Threading.Tasks;
 
@@ -192,15 +182,14 @@ public class VoidPlanEmissionTests
         Assert.Empty(result.CompilationErrors);
 
         // An emitted `new()` would fail compilation with CS9035 — plan only, no factory.
-        Assert.Contains(
-            "GeneratedDispatchRoots.AddVoidPlan<global::TestApp.NamedPing, global::TestApp.NamedPingHandler>();",
-            result.GeneratedSource);
+        Assert.Contains("GetRequiredService<global::TestApp.NamedPingHandler>(serviceProvider)", result.GeneratedSource);
+        Assert.DoesNotContain("ExecuteDirect(", result.GeneratedSource);
     }
 
     [Fact]
     public void DisposableHandler_SuppressesTheFactoryButKeepsThePlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using System;
             using System.Threading.Tasks;
@@ -220,15 +209,14 @@ public class VoidPlanEmissionTests
             """);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.Contains(
-            "GeneratedDispatchRoots.AddVoidPlan<global::TestApp.LeakyPing, global::TestApp.LeakyPingHandler>();",
-            result.GeneratedSource);
+        Assert.Contains("GetRequiredService<global::TestApp.LeakyPingHandler>(serviceProvider)", result.GeneratedSource);
+        Assert.DoesNotContain("ExecuteDirect(", result.GeneratedSource);
     }
 
     [Fact]
     public void SecondHandler_SuppressesThePlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using System.Threading.Tasks;
 
@@ -252,13 +240,13 @@ public class VoidPlanEmissionTests
 
         Assert.Empty(result.CompilationErrors);
         Assert.DoesNotContain("AddVoidPlan<", result.GeneratedSource);
-        Assert.Contains("AddMessage<global::TestApp.DuoPing>", result.GeneratedSource);
+        Assert.DoesNotContain("AddMessage<global::TestApp.DuoPing>", result.GeneratedSource);
     }
 
     [Fact]
     public void DiscoveredInterceptor_SuppressesThePlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using System.Threading.Tasks;
 
@@ -287,7 +275,7 @@ public class VoidPlanEmissionTests
     [Fact]
     public void KeyedOrGroupedHandler_SuppressesThePlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
             using System.Threading.Tasks;
@@ -321,7 +309,7 @@ public class VoidPlanEmissionTests
     [Fact]
     public void ResultContract_DoesNotProduceAVoidPlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using System.Threading.Tasks;
 
@@ -339,19 +327,18 @@ public class VoidPlanEmissionTests
 
         Assert.Empty(result.CompilationErrors);
         Assert.DoesNotContain("AddVoidPlan<", result.GeneratedSource);
-        Assert.Contains("AddResult<global::TestApp.TypedPing, string>", result.GeneratedSource);
+        Assert.DoesNotContain("AddResult<global::TestApp.TypedPing, string>", result.GeneratedSource);
 
         // The same solo-async-handler shape on the result side produces the result plan
         // instead, factory included.
-        Assert.Contains(
-            "GeneratedDispatchRoots.AddResultPlan<global::TestApp.TypedPing, string, global::TestApp.TypedPingHandler>(static () => new global::TestApp.TypedPingHandler());",
-            result.GeneratedSource);
+        Assert.Contains("new global::TestApp.TypedPingHandler()", result.GeneratedSource);
+        Assert.DoesNotContain("ExecuteDirect(", result.GeneratedSource);
     }
 
     [Fact]
     public void DiscoveredInterceptor_SuppressesTheResultPlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using System.Threading.Tasks;
 
@@ -380,7 +367,7 @@ public class VoidPlanEmissionTests
     [Fact]
     public void StreamContract_DoesNotProduceAResultPlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Queries.Abstractions;
             using System.Collections.Generic;
 
@@ -398,6 +385,6 @@ public class VoidPlanEmissionTests
 
         Assert.Empty(result.CompilationErrors);
         Assert.DoesNotContain("AddResultPlan<", result.GeneratedSource);
-        Assert.Contains("AddStream<global::TestApp.NumberStream, int>", result.GeneratedSource);
+        Assert.DoesNotContain("AddStream<global::TestApp.NumberStream, int>", result.GeneratedSource);
     }
 }

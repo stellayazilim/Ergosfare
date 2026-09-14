@@ -21,6 +21,7 @@
          silence it in an executable). -->
     <ItemGroup>
         <CompilerVisibleProperty Include="ErgosfareCompositionRoot" />
+        <CompilerVisibleProperty Include="ErgosfareGeneratePlans" />
     </ItemGroup>
 
     <!-- Opt-in compile-time handler trim: in a composition root with complete dispatch

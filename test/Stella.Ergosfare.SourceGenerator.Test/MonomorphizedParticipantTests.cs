@@ -48,7 +48,7 @@ public class MonomorphizedParticipantTests
     [Trait("Category", "Unit")]
     public void OpenParticipant_IsClosedOverEveryMessageItsConstraintAdmits()
     {
-        var result = GeneratorTestHost.Run(TwoCommandsOneOpenInterceptor);
+        var result = GeneratorTestHost.RunWithAllCandidates(TwoCommandsOneOpenInterceptor);
 
         Assert.Empty(result.CompilationErrors);
 
@@ -65,12 +65,12 @@ public class MonomorphizedParticipantTests
     [Trait("Category", "Unit")]
     public void EachClosedForm_LandsInItsOwnMessagePipeline()
     {
-        var result = GeneratorTestHost.Run(TwoCommandsOneOpenInterceptor);
+        var result = GeneratorTestHost.RunWithAllCandidates(TwoCommandsOneOpenInterceptor);
 
         Assert.Empty(result.CompilationErrors);
 
         var compositions = result.GeneratedSource
-            .Split("AddFrozenComposition")
+            .Split("AddPipelineDescriptor")
             .Skip(1)
             .ToList();
 
@@ -93,7 +93,7 @@ public class MonomorphizedParticipantTests
     [Trait("Category", "Unit")]
     public void MonomorphizedParticipant_NoLongerReportsErgosg016()
     {
-        var result = GeneratorTestHost.Run(TwoCommandsOneOpenInterceptor);
+        var result = GeneratorTestHost.RunWithAllCandidates(TwoCommandsOneOpenInterceptor);
 
         Assert.Empty(result.CompilationErrors);
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO016");
@@ -107,7 +107,7 @@ public class MonomorphizedParticipantTests
     [Trait("Category", "Unit")]
     public void TheConstraint_DecidesWhichMessagesCloseIt()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Queries.Abstractions;
@@ -153,7 +153,7 @@ public class MonomorphizedParticipantTests
     [Trait("Category", "Unit")]
     public void ParticipantThatClosesOverNothing_KeepsErgosg016()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Commands.Abstractions;
             using System.Threading.Tasks;

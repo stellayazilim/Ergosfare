@@ -9,7 +9,7 @@ namespace Stella.Ergosfare.Contract.Test.Pipeline;
 
 /// <summary>
 /// The pipeline contract under source-generated registration — the primary axis. The
-/// generator discovers these types at compile time and <c>RegisterGenerated()</c> installs
+/// generator discovers these types at compile time and <c>AddGenerated()</c> installs
 /// pre-computed descriptors, dispatch roots and the compile-time pipeline plans.
 /// </summary>
 /// <remarks>
@@ -24,8 +24,8 @@ public sealed class GeneratedRegistrationPipelineTests : PipelineSemanticsContra
     protected override ServiceProvider CreateProvider()
         => new ServiceCollection()
             .AddErgosfare(options => options
-                .AddCommandModule(commands => commands.RegisterGenerated())
-                .AddQueryModule(queries => queries.RegisterGenerated()))
+                .AddCommandModule(commands => commands.AddGenerated())
+                .AddQueryModule(queries => queries.AddGenerated()))
             .BuildServiceProvider();
 
     /// <inheritdoc />

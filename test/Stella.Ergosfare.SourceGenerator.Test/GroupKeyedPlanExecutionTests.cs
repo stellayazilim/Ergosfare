@@ -1,7 +1,7 @@
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.Planning;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Events.Abstractions;
 using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
@@ -89,7 +89,7 @@ public class GroupKeyedPlanExecutionTests
 
     private static readonly Lazy<(Assembly Assembly, ServiceProvider Provider)> Host = new(() =>
     {
-        var result = GeneratorTestHost.Run(Source);
+        var result = GeneratorTestHost.RunWithAllCandidates(Source);
 
         Assert.Empty(result.CompilationErrors);
 
@@ -99,7 +99,7 @@ public class GroupKeyedPlanExecutionTests
         var assembly = Assembly.Load(stream.ToArray());
         var registrations = assembly.GetType(
             "Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
-        var registerEvents = registrations.GetMethod("RegisterGenerated", [typeof(EventModuleBuilder)])!;
+        var registerEvents = registrations.GetMethod("AddGenerated", [typeof(EventModuleBuilder)])!;
 
         var provider = new ServiceCollection()
             .AddErgosfare(options => options.AddEventModule(events => registerEvents.Invoke(null, [events])))
@@ -120,8 +120,8 @@ public class GroupKeyedPlanExecutionTests
         var (assembly, _) = Host.Value;
         var eventType = assembly.GetType("TestApp.GenGroupedEvent", throwOnError: true)!;
 
-        var audit = GeneratedDispatchRoots.FindBroadcastPlan(eventType, ["audit"]);
-        var @default = GeneratedDispatchRoots.FindBroadcastPlan(eventType);
+        var audit = GeneratedPlanRegistry.FindBroadcastPlan(eventType, ["audit"]);
+        var @default = GeneratedPlanRegistry.FindBroadcastPlan(eventType);
 
         // The set the call site named is keyed; the default set is a different pipeline and
         // therefore a different plan.
@@ -131,7 +131,7 @@ public class GroupKeyedPlanExecutionTests
 
         // A set nobody dispatches under is not keyed — plans follow call sites, not the
         // cartesian product of the groups a composition happens to declare.
-        Assert.Null(GeneratedDispatchRoots.FindBroadcastPlan(eventType, ["billing"]));
+        Assert.Null(GeneratedPlanRegistry.FindBroadcastPlan(eventType, ["billing"]));
     }
 
     [Fact]
@@ -179,6 +179,6 @@ public class GroupKeyedPlanExecutionTests
         var (assembly, _) = Host.Value;
         var eventType = assembly.GetType("TestApp.GenGroupedEvent", throwOnError: true)!;
 
-        Assert.NotNull(GeneratedDispatchRoots.FindBroadcastPlan(eventType, ["audit", "audit"]));
+        Assert.NotNull(GeneratedPlanRegistry.FindBroadcastPlan(eventType, ["audit", "audit"]));
     }
 }

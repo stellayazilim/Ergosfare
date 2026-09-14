@@ -3,12 +3,12 @@
 Query module DI wiring for [Ergosfare](https://github.com/stellayazilim/Ergosfare):
 `AddQueryModule(...)` and the `QueryModuleBuilder` with explicit registration
 (`Register<T>()`) and
-source-generated registration (`RegisterGenerated()` /
-`RegisterGenerated("discovery.key.*")`).
+source-generated registration (`AddGenerated()` /
+`AddGenerated("discovery.key.*")`).
 
 ```csharp
 builder.Services.AddErgosfare(o => o
-    .AddQueryModule(q => q.RegisterGenerated()));
+    .AddQueryModule(q => q.AddGenerated()));
 ```
 
 Applications usually get this transitively through the

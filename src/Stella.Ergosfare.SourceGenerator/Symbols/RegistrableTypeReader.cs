@@ -50,14 +50,6 @@ internal static class RegistrableTypeReader
             return null;
         }
 
-        if (ParticipantAttributes.IsExcludedFromDiscovery(symbol))
-        {
-            // Deliberately outside the closed world, but the reachability judgment has to
-            // know the zone is there — so the exclusion flows through as a shadow model
-            // rather than vanishing.
-            return CreateExcludedShadowModel(symbol, isCommand, isQuery, isEvent, referencedAssemblyName: null);
-        }
-
         var isAccessible = SymbolNaming.IsAccessibleFromGeneratedCode(symbol);
         var descriptors = isAccessible ? ContractReader.BuildDescriptors(symbol) : ImmutableArray<DescriptorModel>.Empty;
         var isDispatchable = isAccessible && ContractReader.IsDispatchableMessage(symbol, descriptors);
@@ -124,7 +116,7 @@ internal static class RegistrableTypeReader
                            || resultAdapter is not null || isDispatchable
                 ? LocationInfo.From(symbol)
                 : null,
-            IsExcludedFromDiscovery = false,
+            IsExcludedFromDiscovery = ParticipantAttributes.IsExcludedFromDiscovery(symbol),
             ResultAdapter = resultAdapter,
             HasIgnoredResultAdapter = hasIgnoredResultAdapter,
             ImplementsMessageMarker = true,
@@ -142,7 +134,7 @@ internal static class RegistrableTypeReader
     /// One model per such message; empty for anything that is not a subscriber, which is
     /// nearly everything.
     /// </returns>
-    private static ImmutableArray<RegistrableTypeModel> DeriveEventMessages(INamedTypeSymbol symbol)
+    internal static ImmutableArray<RegistrableTypeModel> DeriveEventMessages(INamedTypeSymbol symbol)
     {
         var messages = ContractReader.GetDerivedEventMessages(symbol);
 
@@ -225,91 +217,4 @@ internal static class RegistrableTypeReader
         };
     }
 
-    /// <summary>
-    /// Builds the reduced model of a type marked <c>[ExcludeFromDiscovery]</c>.
-    /// </summary>
-    /// <param name="symbol">The hidden type.</param>
-    /// <param name="isCommand">Whether it reaches the command marker.</param>
-    /// <param name="isQuery">Whether it reaches the query marker.</param>
-    /// <param name="isEvent">Whether it reaches the event marker.</param>
-    /// <param name="referencedAssemblyName">
-    /// The assembly it was scanned from, or <c>null</c> when this compilation declares it.
-    /// </param>
-    /// <returns>A model that is never registered and never diagnosed.</returns>
-    /// <remarks>
-    /// It carries what the reachability judgment needs to see the exclusion zone — the
-    /// assignable chain of anything that could be a message at run time, and the messages its
-    /// main-handler contracts name — and what a hidden type still owes emission: its row in
-    /// the frozen composition, and the roots a dispatch of it would close. What it costs to
-    /// construct stays out, because nothing hidden is ever constructed from here.
-    /// </remarks>
-    internal static RegistrableTypeModel CreateExcludedShadowModel(
-        INamedTypeSymbol symbol,
-        bool isCommand,
-        bool isQuery,
-        bool isEvent,
-        string? referencedAssemblyName)
-    {
-        var descriptors = ContractReader.BuildDescriptors(symbol);
-        var isDispatchable = ContractReader.IsDispatchableMessage(symbol, descriptors);
-
-        // Hidden from discovery, yet still part of a pipeline: [ExcludeFromDiscovery] keeps a
-        // type out of bulk registration; it does not stop a handler being written for it or
-        // someone registering it by hand. So the frozen table describes these types too, as
-        // messages and as participants, and the consuming container's own registrations
-        // decide whether the rows run. Emission names the type, which is why this needs real
-        // accessibility where the judgment's exclusion zone does not.
-        var isAccessible = SymbolNaming.IsAccessibleFromGeneratedCode(symbol);
-        var isMessageShape = isAccessible && ContractReader.IsMessageShape(symbol, descriptors);
-
-        // Rooting a hidden message means rooting its result contracts as well: AddMessage
-        // closes the message generic while AddResult and AddStream close the (message,
-        // result) ones, and those are separate tables. Without the results, a hidden
-        // ICommand<string> dispatched by result would still close its generic through
-        // MakeGenericType.
-        var dispatchResults = isDispatchable
-            ? ContractReader.GetDispatchResults(symbol)
-            : ImmutableArray<DispatchResultModel>.Empty;
-
-        return new RegistrableTypeModel
-        {
-            TypeofExpression = SymbolNaming.BuildTypeofExpression(symbol),
-            DisplayName = symbol.ToDisplayString(),
-            IsCommand = isCommand,
-            IsQuery = isQuery,
-            IsEvent = isEvent,
-            IsAccessible = isAccessible,
-            Location = null,
-            Weight = ParticipantAttributes.GetWeight(symbol),
-            GroupsExpression = ParticipantAttributes.GetGroupsExpression(symbol),
-            GroupNames = ParticipantAttributes.GetGroupNames(symbol),
-            Descriptors = descriptors,
-            ReferencedAssemblyName = referencedAssemblyName,
-            DiscoveryKeys = ImmutableArray<string>.Empty,
-            IsDispatchableMessage = isDispatchable,
-            IsMessageShape = isMessageShape,
-            DispatchResults = dispatchResults,
-            IsDirectlyConstructible = false,
-            ProviderConstructionExpression = null,
-            ProviderConstructionUsesKeyedServices = false,
-            HasPipelineExclusion = ParticipantAttributes.HasPipelineExclusionAttribute(symbol),
-            ExcludedInterceptorGroups = ParticipantAttributes.GetPipelineExclusionGroups(symbol),
-            IsValueType = symbol.IsValueType,
-            IsNestedType = symbol.ContainingType is not null,
-            IsGenericParticipant = Monomorphizer.IsUnbindableGenericParticipant(symbol),
-            AssignableKeys = isMessageShape ? ParticipantAttributes.GetAssignableKeys(symbol) : ImmutableArray<string>.Empty,
-            ContractShapes = ImmutableArray<ContractShapeModel>.Empty,
-            StagedConstructionExpression = null,
-            StagedConstructionUsesKeyedServices = false,
-            HasMultiplePublicConstructors = false,
-            HasFromServicesConstructorParameter = false,
-            InfoLocation = null,
-            IsExcludedFromDiscovery = true,
-            ResultAdapter = null,
-            HasIgnoredResultAdapter = false,
-            ImplementsMessageMarker = true,
-            DerivedEventMessages = ImmutableArray<RegistrableTypeModel>.Empty,
-            MetadataSortKey = SymbolNaming.BuildMetadataName(symbol),
-        };
-    }
 }

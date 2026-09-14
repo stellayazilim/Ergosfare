@@ -2,7 +2,7 @@ using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
-using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.Planning;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions.StagedPlans;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -84,7 +84,7 @@ public class StagedPlanExecutionTests
     [Trait("Category", "Coverage")]
     public async Task MatchingComposition_ExecutesThroughTheStagedPlan()
     {
-        GeneratedDispatchRoots.AddStagedPlan(new StagedCommandPlan());
+        GeneratedPlanRegistry.AddStagedPlan(new StagedCommandPlan());
 
         var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c =>
@@ -154,7 +154,7 @@ public class StagedPlanExecutionTests
     [Trait("Category", "Coverage")]
     public async Task MismatchedComposition_FailsTheDispatch()
     {
-        GeneratedDispatchRoots.AddStagedPlan(new MismatchedCommandPlan());
+        GeneratedPlanRegistry.AddStagedPlan(new MismatchedCommandPlan());
 
         var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c =>
@@ -219,40 +219,6 @@ public class StagedPlanExecutionTests
         }
     }
 
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
-    public async Task ForceMemoizedHandlers_FailsTheDispatch()
-    {
-        GeneratedDispatchRoots.AddStagedPlan(new MemoizedStagedCommandPlan());
-
-        var provider = new ServiceCollection()
-            .AddErgosfare(x =>
-            {
-                x.ForceMemoizedHandlers();
-                x.AddCommandModule(c =>
-                {
-                    c.Register<MemoizedStagedCommandHandler>();
-                    c.Register<MemoizedStagedCommandPreInterceptor>();
-                });
-            })
-            .BuildServiceProvider();
-        await using var _ = provider;
-
-        var mediator = provider.GetRequiredService<ICommandMediator>();
-
-        // Memoized pipelines cache instances inside their references; a plan resolving
-        // from the provider would construct fresh ones. The two contracts cannot both
-        // hold, so the construct is unplanned until the generator learns it — every
-        // dispatch under ForceMemoizedHandlers fails loudly.
-        var command = new MemoizedStagedCommand();
-        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(
-            async () => await mediator.SendAsync(command));
-
-        Assert.Equal(UnplannedDispatchReason.MemoizedInstances, thrown.Reason);
-        Assert.Empty(command.Order);
-    }
-
     [ExcludeFromDiscovery]
     public sealed class DirectStagedCommand : ICommand
     {
@@ -288,7 +254,6 @@ public class StagedPlanExecutionTests
             [],
             []);
 
-        public override bool SupportsDirectConstruction => true;
 
         public override async ValueTask Execute(DirectStagedCommand message, ErgosfareContext context, IServiceProvider serviceProvider)
         {
@@ -297,20 +262,14 @@ public class StagedPlanExecutionTests
             await serviceProvider.GetRequiredService<DirectStagedCommandHandler>().HandleAsync(message, context);
         }
 
-        public override async ValueTask ExecuteDirect(DirectStagedCommand message, ErgosfareContext context, IServiceProvider serviceProvider)
-        {
-            message.Order.Add("staged-direct");
-            message = await new DirectStagedCommandPreInterceptor().HandleAsync(message, context);
-            await new DirectStagedCommandHandler().HandleAsync(message, context);
-        }
     }
 
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task PlainTransientParticipants_ExecuteThroughTheDirectVariant()
+    public async Task PlainTransientParticipants_ExecuteThePlanBody()
     {
-        GeneratedDispatchRoots.AddStagedPlan(new DirectStagedCommandPlan());
+        GeneratedPlanRegistry.AddStagedPlan(new DirectStagedCommandPlan());
 
         var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c =>
@@ -324,7 +283,7 @@ public class StagedPlanExecutionTests
         var command = new DirectStagedCommand();
         await provider.GetRequiredService<ICommandMediator>().SendAsync(command);
 
-        Assert.Equal(["staged-direct", "pre", "handler"], command.Order);
+        Assert.Equal(["staged", "pre", "handler"], command.Order);
     }
 
     [ExcludeFromDiscovery]
@@ -362,7 +321,6 @@ public class StagedPlanExecutionTests
             [],
             []);
 
-        public override bool SupportsDirectConstruction => true;
 
         public override async ValueTask Execute(OverriddenDirectCommand message, ErgosfareContext context, IServiceProvider serviceProvider)
         {
@@ -371,19 +329,14 @@ public class StagedPlanExecutionTests
             await serviceProvider.GetRequiredService<OverriddenDirectCommandHandler>().HandleAsync(message, context);
         }
 
-        public override ValueTask ExecuteDirect(OverriddenDirectCommand message, ErgosfareContext context, IServiceProvider serviceProvider)
-        {
-            message.Order.Add("staged-direct");
-            return ValueTask.CompletedTask;
-        }
     }
 
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task LifetimeOverride_KeepsTheProviderResolvingVariant()
+    public async Task LifetimeOverride_IsHonoredByThePlanBody()
     {
-        GeneratedDispatchRoots.AddStagedPlan(new OverriddenDirectCommandPlan());
+        GeneratedPlanRegistry.AddStagedPlan(new OverriddenDirectCommandPlan());
 
         // The user's singleton registration (before AddErgosfare, so the module's
         // TryAddTransient defers to it) breaks the per-participant plain-transient
@@ -453,7 +406,7 @@ public class StagedPlanExecutionTests
     [Trait("Category", "Coverage")]
     public async Task MatchingComposition_ExecutesThroughTheStagedResultPlan()
     {
-        GeneratedDispatchRoots.AddStagedPlan(new StagedResultCommandPlan());
+        GeneratedPlanRegistry.AddStagedPlan(new StagedResultCommandPlan());
 
         var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c =>
@@ -569,7 +522,7 @@ public class StagedPlanExecutionTests
     [Trait("Category", "Coverage")]
     public async Task AdapterMatch_AdmitsTheStagedResultPlan()
     {
-        GeneratedDispatchRoots.AddStagedPlan(new AdapterMatchCommandPlan());
+        GeneratedPlanRegistry.AddStagedPlan(new AdapterMatchCommandPlan());
 
         var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c =>
@@ -593,9 +546,9 @@ public class StagedPlanExecutionTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task AdapterMismatch_FailsTheDispatch()
+    public async Task Execution_TrustsTheAdaptersCompiledIntoThePlan()
     {
-        GeneratedDispatchRoots.AddStagedPlan(new AdapterGateCommandPlan());
+        GeneratedPlanRegistry.AddStagedPlan(new AdapterGateCommandPlan());
 
         var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c =>
@@ -608,16 +561,12 @@ public class StagedPlanExecutionTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        // A plan emitted without the slot's value-path branches must never serve an
-        // adapted pipeline — the Result<int> slot binds the native adapter at runtime,
-        // the plan bakes none, and with no runtime strategy left the mismatch fails the
-        // dispatch naming both types.
+        // The runtime executes the supplied body. Adapter validation and branches
+        // belong to source generation, not a per-dispatch adapter gate.
         var command = new AdapterGateCommand();
-        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(
-            async () => await mediator.SendAsync(command));
-
-        Assert.Equal(UnplannedDispatchReason.UnplannedResultAdapter, thrown.Reason);
-        Assert.Empty(command.Order);
+        var result = await mediator.SendAsync(command);
+        Assert.True(result.IsSuccess);
+        Assert.Equal(["staged", "pre", "handler"], command.Order);
     }
 
     public sealed class DefaultGateOutcome
@@ -674,9 +623,9 @@ public class StagedPlanExecutionTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task ConfiguredDefaultAdapter_FailsADispatchOnAnUnadaptedPlan()
+    public async Task DefaultAdapterDeclaration_DoesNotOverrideAnExplicitPlanBody()
     {
-        GeneratedDispatchRoots.AddStagedPlan(new DefaultGateCommandPlan());
+        GeneratedPlanRegistry.AddStagedPlan(new DefaultGateCommandPlan());
 
         var provider = new ServiceCollection()
             .AddErgosfare(x => x
@@ -691,14 +640,11 @@ public class StagedPlanExecutionTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        // A default adapter configured only in AddErgosfare options is runtime-only:
-        // this plan carries no branches for it, and an adapter the plan does not know
-        // would silently not run — so the dispatch fails naming both adapter types.
+        // This is an explicit test plan, not generator output. Runtime configuration
+        // cannot inject adapter logic into its immutable execution body.
         var command = new DefaultGateCommand();
-        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(
-            async () => await mediator.SendAsync(command));
-
-        Assert.Equal(UnplannedDispatchReason.UnplannedResultAdapter, thrown.Reason);
-        Assert.Empty(command.Order);
+        var result = await mediator.SendAsync(command);
+        Assert.Equal(42, result.Value);
+        Assert.Equal(["staged", "pre", "handler"], command.Order);
     }
 }

@@ -12,11 +12,11 @@ internal static class ContractMetadataNames
 {
     /// <summary>The per-container view of the composition table.</summary>
     internal const string CompositionCatalog =
-        "Stella.Ergosfare.Core.Abstractions.DispatchRoots.FrozenCompositionCatalog";
+        "Stella.Ergosfare.Core.Abstractions.Planning.DispatchPlanCatalog";
 
     /// <summary>The store generated registration puts everything into.</summary>
-    internal const string DispatchRoots =
-        "Stella.Ergosfare.Core.Abstractions.DispatchRoots.GeneratedDispatchRoots";
+    internal const string PlanRegistry =
+        "Stella.Ergosfare.Core.Abstractions.Planning.GeneratedPlanRegistry";
 
     /// <summary>The base type a staged plan derives from.</summary>
     internal const string StagedVoidPlan =

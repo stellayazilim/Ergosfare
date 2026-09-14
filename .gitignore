@@ -56,5 +56,7 @@ examples/Playground/
 # JUnit report under examples/e2e/reports/, and examples/e2e/run.mjs self-provisions the
 # ijhttp CLI into examples/e2e/tools/ on first run.
 examples/e2e/**/*.db
+examples/e2e/**/*.db-shm
+examples/e2e/**/*.db-wal
 examples/e2e/reports/
 examples/e2e/tools/

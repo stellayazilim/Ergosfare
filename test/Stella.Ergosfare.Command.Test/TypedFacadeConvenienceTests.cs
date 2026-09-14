@@ -77,14 +77,14 @@ public class TypedFacadeConvenienceTests
         var mediator = Facade(provider);
 
         Assert.Equal("east",
-            await mediator.SendAsync<FacadeRoutedEcho, string>(new FacadeRoutedEcho(), (IEnumerable<string>?)East, default));
+            await mediator.SendAsync<FacadeRoutedEcho, string>(new FacadeRoutedEcho(), East, default));
         Assert.Equal("west",
-            await mediator.SendAsync<FacadeRoutedEcho, string>(new FacadeRoutedEcho(), (IEnumerable<string>?)West, default));
+            await mediator.SendAsync<FacadeRoutedEcho, string>(new FacadeRoutedEcho(), West, default));
 
         // No filter at all reaches the group-less lane, which is a different pipeline —
         // not the union of the grouped ones.
         Assert.Equal("plain",
-            await mediator.SendAsync<PlainEcho, string>(new PlainEcho(), (IEnumerable<string>?)null, default));
+            await mediator.SendAsync<PlainEcho, string>(new PlainEcho(), GroupSet.Empty, default));
     }
 
     [Fact]

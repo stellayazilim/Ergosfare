@@ -1,7 +1,5 @@
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Core.Internal.Mediator;
 using Stella.Ergosfare.Events.Abstractions;
 using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,45 +30,11 @@ public sealed class HolderDerivedEventHandler : IEventHandler<HolderDerivedEvent
 /// </summary>
 public class TypedPublishHolderTests
 {
-    private sealed class NoCompositionFactory : IMessageDependenciesFactory
-    {
-        public IMessageDependencies Create(Type messageType, IEnumerable<string> groups)
-            => throw new NotSupportedException();
-
-        public IMessageDependencies? Find(Type messageType, IEnumerable<string> groups) => null;
-    }
-
     [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
-    public void TypedSlot_ServesTheSameInstance_AsTheRuntimeTypeLookup()
+    public void TheBroadcastPlan_IsTheExecutor()
     {
-        var table = new FrozenBroadcastTable(new NoCompositionFactory());
-
-        var fromSlot = table.Get<HolderDerivedEvent>();
-        var fromLookup = table.Get(typeof(HolderDerivedEvent));
-
-        // Two entries per type would mean two composition caches and two gate verdicts for
-        // one pipeline — the typed slot has to be a shortcut to the dictionary, not a second
-        // store beside it.
-        Assert.Same(fromLookup, fromSlot);
-    }
-
-    [Fact]
-    [Trait("Category", "Unit")]
-    public void TypedSlot_DoesNotLeakBetweenContainers()
-    {
-        var first = new FrozenBroadcastTable(new NoCompositionFactory());
-        var second = new FrozenBroadcastTable(new NoCompositionFactory());
-
-        var fromFirst = first.Get<HolderDerivedEvent>();
-        var fromSecond = second.Get<HolderDerivedEvent>();
-
-        // The slot is process-wide while the table is per container, so it carries a table
-        // identity check; without it the second container would be served the first's
-        // pipeline — and with it, the first still reads its own on the next publish.
-        Assert.NotSame(fromFirst, fromSecond);
-        Assert.Same(fromFirst, first.Get<HolderDerivedEvent>());
+        var plan = global::Stella.Ergosfare.Core.Abstractions.Planning.GeneratedPlanRegistry.FindBroadcastPlan(typeof(HolderDerivedEvent));
+        Assert.IsAssignableFrom<IPipelineExecutor>(plan);
     }
 
     [Fact]

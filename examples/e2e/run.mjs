@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import http from 'node:http';
+import net from 'node:net';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const isWin = process.platform === 'win32';
@@ -84,10 +85,13 @@ function resolveJavaHome() {
 
 // ---- app lifecycle -----------------------------------------------------------------------
 
-function waitForReady(url, timeoutMs) {
+function waitForReady(url, timeoutMs, app) {
   const deadline = Date.now() + timeoutMs;
   return new Promise((resolve, reject) => {
     const attempt = () => {
+      if (app.exitCode !== null || app.signalCode !== null) {
+        return reject(new Error(`API exited before becoming ready (exit ${app.exitCode}). See its output above.`));
+      }
       const req = http.get(url, (res) => {
         res.resume();
         if (res.statusCode === 200) return resolve();
@@ -114,13 +118,30 @@ function killTree(child) {
 }
 
 async function main() {
+  // Do not accidentally run the assertions against an app started by Rider or another run.
+  const occupied = await Promise.all(['127.0.0.1', '::1'].map(host => new Promise((resolve, reject) => {
+    const probe = net.connect({ host, port: 5099 });
+    probe.once('connect', () => { probe.destroy(); resolve(true); });
+    probe.once('error', () => { probe.destroy(); resolve(false); });
+    probe.setTimeout(2000, () => { probe.destroy(); reject(new Error(`Could not check ${host}:5099 before starting the API.`)); });
+  })));
+  if (occupied.some(Boolean)) {
+    throw new Error('Port 5099 is already in use. Stop the running API before using the automated runner, or run todos.http against it in Rider.');
+  }
   if (!ensureIjhttp()) return 127;
 
   const javaHome = resolveJavaHome();
   const childEnv = { ...process.env, ...(javaHome ? { JAVA_HOME: javaHome } : {}) };
 
+  log('building the Todo Api…');
+  const build = spawnSync('dotnet', ['build', API_PROJECT, '-c', 'Release', '--nologo', '-m:1'], {
+    cwd: here, stdio: 'inherit',
+  });
+  if (build.error) throw build.error;
+  if (build.status !== 0) return build.status ?? 1;
+
   log('starting the Todo Api…');
-  const app = spawn('dotnet', ['run', '--project', API_PROJECT, '-c', 'Release', '--nologo'], {
+  const app = spawn('dotnet', ['run', '--project', API_PROJECT, '-c', 'Release', '--no-build', '--no-launch-profile', '--', '--urls', HOST], {
     cwd: here,
     env: { ...process.env, ASPNETCORE_URLS: HOST },
     stdio: ['ignore', 'inherit', 'inherit'],
@@ -130,15 +151,13 @@ async function main() {
 
   try {
     log(`waiting for ${HOST}/health…`);
-    await waitForReady(`${HOST}/health`, READY_TIMEOUT_MS);
+    await waitForReady(`${HOST}/health`, READY_TIMEOUT_MS, app);
     if (appExited) throw new Error('app exited before becoming ready');
     log('app is ready — running the ijhttp suite');
 
     const code = await new Promise((resolve) => {
       const ij = spawn(IJHTTP_BIN, [
         'http/todos.http',
-        '--env', 'e2e',
-        '--env-file', 'http/http-client.env.json',
         '--report', 'reports',
       ], { cwd: here, env: childEnv, stdio: 'inherit', shell: true });
       ij.on('error', (err) => { log(`ijhttp failed to start: ${err.message}`); resolve(1); });

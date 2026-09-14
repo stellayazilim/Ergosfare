@@ -1,3 +1,120 @@
+## v2.15.0-preview – '2026-09-14'
+
+### Keep module selection calls in application libraries
+
+* Moved `AddGenerated()` and `AddGenerated(pattern)` onto the public command, query and
+  event builders, so configuration libraries can compile without generated extension methods.
+* Configuration libraries can set `ErgosfareGeneratePlans=false` to export compiler-only
+  selections and dispatch manifests. The composition root follows called configuration
+  methods, including helper calls, and emits their executable plans and exact selections.
+* Referenced event subscribers now contribute their unmarked POCO message types to
+  root plan generation, matching source-declared subscribers.
+* E2E keeps `AddApplication()` and module selection in UseCases; API owns executable plan
+  generation. The runtime applies compiled selections without discovering participants.
+
+
+### Keep IDE analysis and E2E startup consistent
+
+* Source project references are read with the same semantic selection readers as local
+  declarations when a generated manifest is not yet available. This fixes false ERGO005
+  reports during IDE analysis without disabling missing-handler checks.
+* E2E starts directly through `dotnet run`, Rider's `http` launch profile, or `task e2e`.
+  Root and E2E solution directories have working relative commands, all using port 5099.
+* `http/run-all.http` executes the full HTTP flow with one Run action. Requests requiring
+  `todoId` explain the create prerequisite instead of suggesting an environment setting.
+  Startup logs show the listening address; `task e2e:test` retains optional automation.
+
+### Select participants before generating plans
+
+* Assembly scanning supplies candidates only. `AddGenerated(pattern)` and explicit
+  `Register<T>()` / `Register(typeof(T))` declarations select the application composition
+  before validation, descriptors, executable plans and registration code are emitted.
+* `ExcludeFromDiscovery` prevents automatic selection; explicit selection uses the same
+  complete participant model, including construction, groups, interceptors and adapters.
+* Removed `ManualRegistrationAttribute`. An uncalled library registration method does not
+  select participants for its consumer. Selected handlers retain covariant coverage.
+* Unreadable types, discovery patterns and user-supplied participant batches report ERGO018;
+  they no longer suppress missing-handler or group diagnostics. Explicit referenced types
+  can be selected with automatic reference scanning disabled.
+* Catalog registration and descriptor mutation are rejected after initialization.
+
+
+### Name runtime planning infrastructure by responsibility
+
+* Moved `Core.Abstractions.DispatchRoots` to `Core.Abstractions.Planning`.
+* Renamed `FrozenComposition` to `PipelineDescriptor`, `GeneratedDispatchRoots` to
+  `GeneratedPlanRegistry`, and `FrozenCompositionCatalog` to `DispatchPlanCatalog`.
+  These hold runtime metadata, generated plan registrations and per-container plan
+  selections respectively; no compiler or execution behavior changed.
+
+Applications continue to inject module mediator interfaces or concrete classes through DI.
+The infrastructure cleanup and handlerless event correction are separate from the explicit
+group-argument simplification below.
+
+### Use GroupSet for every grouped dispatch
+
+* Command, query, stream and event mediator group arguments now use `GroupSet` exclusively.
+  Removed array/enumerable overloads. Collection expressions such as `["audit", "metrics"]`
+  keep their existing call syntax and now construct `GroupSet` directly.
+* A string implicitly converts to a one-name `GroupSet`; no separate string overload is
+  needed. `""` and `[""]` name an empty-string group, while `[]` selects the default group.
+  The generator reads literal string selections and validates their main-handler coverage.
+* Group sequences are converted by callers (`GroupSet.Of(array)` or `[.. names]`), so dispatch
+  no longer materializes an arbitrary iterator. Reused benchmark group sets are unchanged.
+
+### Require a handler and remove obsolete runtime APIs
+
+* Events require at least one selected main handler. Known missing handlers and empty
+  literal group selections fail compilation (`ERGO005` / `ERGO024`); dynamic empty
+  selections throw `NoHandlerFoundException` before interceptor execution.
+* Removed runtime shape construction (`BuildShape`, `FrozenPipelineShape`, catalog
+  projections), legacy message roots and single-handler plan tables, plan visitors and
+  unused direct-execution variants. Every pipeline uses its generated executable plan.
+* Removed runtime result-adapter binding APIs and production reflection helpers.
+  Adapter selection and construction remain embedded in generated plans.
+* Preserved command/query handler priority (direct, then covariant) and event delivery
+  to both direct and covariant handlers. Dynamic groups use generated filtering plans.
+
+### Simplify dispatch infrastructure
+
+* Split plan execution, preparation and diagnostics into internal engine extensions;
+  group normalization and composition comparison have separate extension classes.
+  The engine and module mediator constructors are internal. Applications resolve the public
+  module mediator interfaces or classes through DI; direct construction is no longer public.
+* Removed the empty `EngineBacked*Mediator` subclasses. DI factories construct the public module
+  mediators directly, preserving lifetimes and registration overrides. UserBenchmark
+  measures module mediator surfaces only; the direct-engine diagnostic row was removed.
+* Removed `ErgosfareRuntimeOptions` and `ForceMemoizedHandlers`. Generated plans do not
+  memoize participant instances; injected participants use DI lifetimes. Removed the
+  obsolete memoized benchmark rows without changing historical reports.
+
+### Remove the unused core mediator API
+
+* Removed `IMessageMediator`, its internal implementation and DI registration, and the
+  associated dispatch-manifest kind. Use the command, query or event module mediator;
+  these already call `MessageDispatchEngine` directly with their scope provider.
+  This is a public API removal, with no change to module dispatch behavior.
+
+### A dispatch that selects nobody is a build error
+
+* A dispatch whose group filter provably selects no main handler fails the build with
+  `ERGO024`, the mirror of `ERGO023`. The closed-world judgment asked only whether some handler
+  in the closure covers the message type; group membership was never part of the question. So a
+  message whose every handler carries `[Group]`, dispatched without groups — or dispatched
+  under a literal set no handler declares — compiled, and then threw `NoHandlerFoundException`
+  on every send, or reached nobody in silence on the event lane. The message names the set, the
+  handlers that cover the message and the groups each of them carries, so the fix is readable
+  without opening the other file.
+* The event lane is judged with the rest of them. A publish that selects no main handler throws
+  `NoHandlerFoundException`, including dynamic group sets. A group containing only
+  interceptors is rejected before those interceptors run.
+* Literal group sets are checked against the selected handler descriptors in the composition
+  root. Explicit and keyed selections retain full group evidence. Dynamic group values
+  remain runtime checks within generated filtering plans.
+* `ERGO019` through `ERGO023` were never recorded in the analyzer release-tracking file, and
+  `ERGO021`'s message tripped the single-sentence rule; the generator's own build reported both
+  as `RS2000`/`RS1032`. All are fixed, and `ERGO024` is recorded with them.
+
 ## v2.14.0-preview – '2026-08-18'
 
 Preview release. The theme: **one lane.** The runtime dispatch lane is deleted end to end —

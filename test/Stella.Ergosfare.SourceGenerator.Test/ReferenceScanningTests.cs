@@ -35,7 +35,7 @@ public class ReferenceScanningTests
     [Fact]
     public void PublicLibraryTypes_RegisterThroughTheConsumingCompilation()
     {
-        var result = GeneratorTestHost.Run(
+        var result = GeneratorTestHost.RunWithAllCandidates(
             AppSource,
             libraries: [("Ergosfare.TestLibrary", LibrarySource)]);
 
@@ -56,7 +56,7 @@ public class ReferenceScanningTests
     [Fact]
     public void LibraryParticipants_AreDiscoveredFromMetadata()
     {
-        var result = GeneratorTestHost.Run(
+        var result = GeneratorTestHost.RunWithAllCandidates(
             AppSource,
             libraries:
             [
@@ -94,7 +94,7 @@ public class ReferenceScanningTests
     [Fact]
     public void InternalLibraryType_WithoutIvt_IsSkippedWithErgosg002()
     {
-        var result = GeneratorTestHost.Run(
+        var result = GeneratorTestHost.RunWithAllCandidates(
             AppSource,
             libraries:
             [
@@ -120,7 +120,7 @@ public class ReferenceScanningTests
     [Fact]
     public void InternalLibraryType_WithIvt_IsRegistered()
     {
-        var result = GeneratorTestHost.Run(
+        var result = GeneratorTestHost.RunWithAllCandidates(
             AppSource,
             libraries:
             [
@@ -144,7 +144,7 @@ public class ReferenceScanningTests
     [Fact]
     public void ScanReferencesFalse_RestrictsRegistrationToTheCompilation()
     {
-        var result = GeneratorTestHost.Run(
+        var result = GeneratorTestHost.RunWithAllCandidates(
             AppSource,
             libraries: [("Ergosfare.TestLibrary", LibrarySource)],
             scanReferences: false);
@@ -158,7 +158,7 @@ public class ReferenceScanningTests
     [Fact]
     public void ScanReferencesTrue_MatchesTheDefault()
     {
-        var result = GeneratorTestHost.Run(
+        var result = GeneratorTestHost.RunWithAllCandidates(
             AppSource,
             libraries: [("Ergosfare.TestLibrary", LibrarySource)],
             scanReferences: true);
@@ -173,7 +173,7 @@ public class ReferenceScanningTests
     {
         // Ergosfare's own assemblies are excluded by name: their handler contract
         // interfaces inherit the module markers and must never register as user types.
-        var result = GeneratorTestHost.Run(
+        var result = GeneratorTestHost.RunWithAllCandidates(
             AppSource,
             libraries: [("Stella.Ergosfare.FakeSatellite", LibrarySource)]);
 
@@ -185,7 +185,7 @@ public class ReferenceScanningTests
     [Fact]
     public void LibraryTypes_AppearInTheirModulesBuilderExtension()
     {
-        var result = GeneratorTestHost.Run(
+        var result = GeneratorTestHost.RunWithAllCandidates(
             AppSource,
             libraries: [("Ergosfare.TestLibrary", LibrarySource)]);
 

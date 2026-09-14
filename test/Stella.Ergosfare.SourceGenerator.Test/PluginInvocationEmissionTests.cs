@@ -18,7 +18,7 @@ public class PluginInvocationEmissionTests
     [Fact]
     public void Invokable_IsCalledInTheStagedPlanBody()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Plugins.Abstractions;
@@ -72,7 +72,7 @@ public class PluginInvocationEmissionTests
     [Fact]
     public void OneDeclaration_ReachesBothTheVoidAndTheResultPlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Plugins.Abstractions;
@@ -126,7 +126,7 @@ public class PluginInvocationEmissionTests
     [Fact]
     public void InterceptorlessPipeline_IsPulledIntoTheStagedFamily()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Plugins.Abstractions;
@@ -154,7 +154,7 @@ public class PluginInvocationEmissionTests
         Assert.Empty(result.CompilationErrors);
 
         Assert.Contains(
-            "GeneratedDispatchRoots.AddStagedPlan<global::TestApp.BarePing>(new StagedPlan0());",
+            "GeneratedPlanRegistry.AddStagedPlan<global::TestApp.BarePing>(new StagedPlan0());",
             result.GeneratedSource);
         Assert.DoesNotContain("AddVoidPlan<global::TestApp.BarePing", result.GeneratedSource);
     }
@@ -168,7 +168,7 @@ public class PluginInvocationEmissionTests
     [Fact]
     public void EveryHook_LeavesACollapsedPlanUnguarded()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Plugins.Abstractions;
@@ -226,7 +226,7 @@ public class PluginInvocationEmissionTests
     [Fact]
     public void FinishHook_SitsOnTheSuccessPathAfterThePostChain()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Plugins.Abstractions;
@@ -287,7 +287,7 @@ public class PluginInvocationEmissionTests
     [Fact]
     public void ModuleFilter_KeepsThePluginOutOfTheOtherFamily()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Plugins.Abstractions;
@@ -326,18 +326,18 @@ public class PluginInvocationEmissionTests
 
         Assert.Contains("Commit<global::TestApp.WritePing>", result.GeneratedSource);
         Assert.DoesNotContain("Commit<global::TestApp.ReadPing", result.GeneratedSource);
-        Assert.DoesNotContain("AddStagedPlan<global::TestApp.ReadPing", result.GeneratedSource);
+        Assert.Contains("AddStagedPlan<global::TestApp.ReadPing", result.GeneratedSource);
     }
 
     /// <summary>
     ///     The key filter's default: saying nothing selects the default key alone, the same
-    ///     set a pattern-less <c>RegisterGenerated()</c> selects. A keyed message was opted out
+    ///     set a pattern-less <c>AddGenerated()</c> selects. A keyed message was opted out
     ///     of default discovery by its author, and a silent plugin does not opt it back in.
     /// </summary>
     [Fact]
     public void UnwrittenKeyFilter_SelectsTheDefaultKeyAlone()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
@@ -381,7 +381,7 @@ public class PluginInvocationEmissionTests
     [Fact]
     public void NamedKeyFilter_SelectsThatKeyAlone()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
@@ -430,7 +430,7 @@ public class PluginInvocationEmissionTests
     [Fact]
     public void GenericConstraint_NarrowsTheEmissionToSatisfyingMessages()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Plugins.Abstractions;
@@ -469,7 +469,7 @@ public class PluginInvocationEmissionTests
 
         Assert.Contains("Audit<global::TestApp.AuditedPing>", result.GeneratedSource);
         Assert.DoesNotContain("Audit<global::TestApp.PlainPing>", result.GeneratedSource);
-        Assert.DoesNotContain("AddStagedPlan<global::TestApp.PlainPing", result.GeneratedSource);
+        Assert.Contains("AddStagedPlan<global::TestApp.PlainPing", result.GeneratedSource);
     }
 
     /// <summary>
@@ -479,7 +479,7 @@ public class PluginInvocationEmissionTests
     [Fact]
     public void UnrecognizedParameter_ResolvesFromTheDispatchingProvider()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Plugins.Abstractions;
@@ -522,7 +522,7 @@ public class PluginInvocationEmissionTests
     [Fact]
     public void StaticInvokable_IsCalledWithoutResolvingAService()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Plugins.Abstractions;
@@ -562,7 +562,7 @@ public class PluginInvocationEmissionTests
     [Fact]
     public void WithoutAPlugin_TheInterceptorlessPlanIsUnchanged()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
             using System.Threading.Tasks;
@@ -580,7 +580,7 @@ public class PluginInvocationEmissionTests
 
         Assert.Empty(result.CompilationErrors);
 
-        Assert.Contains("AddVoidPlan<global::TestApp.BarePing", result.GeneratedSource);
-        Assert.DoesNotContain("AddStagedPlan<global::TestApp.BarePing", result.GeneratedSource);
+        Assert.DoesNotContain("AddVoidPlan<global::TestApp.BarePing", result.GeneratedSource);
+        Assert.Contains("AddStagedPlan<global::TestApp.BarePing", result.GeneratedSource);
     }
 }

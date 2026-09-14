@@ -26,16 +26,11 @@ public enum UnplannedDispatchReason
     /// </summary>
     CompositionDiverged,
 
-    /// <summary>
-    /// The pipeline memoizes participant instances, and a compiled plan resolves or
-    /// constructs its participants fresh — the two contracts cannot both hold.
-    /// </summary>
-    MemoizedInstances,
 
     /// <summary>
     /// A result adapter is bound that the plan was not compiled against.
     /// </summary>
-    UnplannedResultAdapter,
+    UnplannedResultAdapter = 4,
 
     /// <summary>
     /// The container uses a dependencies factory the engine does not know, so nothing the

@@ -1,6 +1,6 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Commands.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.Planning;
 
 namespace Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 
@@ -10,7 +10,19 @@ namespace Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 /// </summary>
 public sealed class CommandModuleBuilder
 {
-    private readonly FrozenCompositionCatalog _compositions;
+    private readonly DispatchPlanCatalog _compositions;
+
+    /// <summary>Applies the compile-time default selection for this module.</summary>
+    public CommandModuleBuilder AddGenerated() => AddGenerated("");
+
+    /// <summary>Applies the compile-time selection for a constant discovery-key pattern.</summary>
+    /// <param name="discoveryKeyPattern">An exact key or trailing-star prefix.</param>
+    /// <returns>The same builder.</returns>
+    public CommandModuleBuilder AddGenerated(string discoveryKeyPattern)
+    {
+        GeneratedPlanRegistry.ApplyGeneratedSelection(_compositions, 1, discoveryKeyPattern);
+        return this;
+    }
 
     /// <summary>
     /// Initializes the builder over the container's composition catalog.
@@ -19,7 +31,7 @@ public sealed class CommandModuleBuilder
     /// The catalog this builder records the container's selection in.
     /// </param>
     /// <exception cref="ArgumentNullException"><paramref name="compositions"/> is <c>null</c>.</exception>
-    public CommandModuleBuilder(FrozenCompositionCatalog compositions)
+    public CommandModuleBuilder(DispatchPlanCatalog compositions)
     {
         _compositions = compositions ?? throw new ArgumentNullException(nameof(compositions));
     }

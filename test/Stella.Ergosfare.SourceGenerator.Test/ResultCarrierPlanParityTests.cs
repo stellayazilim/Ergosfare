@@ -1,7 +1,7 @@
 using System.Reflection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.Planning;
 using Stella.Ergosfare.Core.Abstractions.Results;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
@@ -210,7 +210,7 @@ public class ResultCarrierPlanParityTests
 
     private static readonly Lazy<(Assembly Assembly, ServiceProvider Provider)> Host = new(() =>
     {
-        var result = GeneratorTestHost.Run(Source);
+        var result = GeneratorTestHost.RunWithAllCandidates(Source);
 
         Assert.Empty(result.CompilationErrors);
 
@@ -219,7 +219,7 @@ public class ResultCarrierPlanParityTests
 
         var assembly = Assembly.Load(stream.ToArray());
         var registrations = assembly.GetType("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
-        var registerCommands = registrations.GetMethod("RegisterGenerated", [typeof(CommandModuleBuilder)])!;
+        var registerCommands = registrations.GetMethod("AddGenerated", [typeof(CommandModuleBuilder)])!;
 
         var provider = new ServiceCollection()
             .AddErgosfare(options => options.AddCommandModule(commands => registerCommands.Invoke(null, [commands])))
@@ -241,7 +241,7 @@ public class ResultCarrierPlanParityTests
         var (assembly, provider) = Host.Value;
 
         var commandType = assembly.GetType("TestApp.GenCarrierSwallowCommand", throwOnError: true)!;
-        var plan = GeneratedDispatchRoots.FindStagedResultPlan(commandType, typeof(Result<string>));
+        var plan = GeneratedPlanRegistry.FindStagedResultPlan(commandType, typeof(Result<string>));
         Assert.NotNull(plan);
 
         // The baked adapter identity is the executor gate's admission ticket.
@@ -265,7 +265,7 @@ public class ResultCarrierPlanParityTests
         var (assembly, provider) = Host.Value;
 
         var commandType = assembly.GetType("TestApp.GenCarrierThrowCommand", throwOnError: true)!;
-        Assert.NotNull(GeneratedDispatchRoots.FindStagedResultPlan(commandType, typeof(Result<string>)));
+        Assert.NotNull(GeneratedPlanRegistry.FindStagedResultPlan(commandType, typeof(Result<string>)));
 
         Entries.Clear();
 
@@ -287,7 +287,7 @@ public class ResultCarrierPlanParityTests
         var (assembly, provider) = Host.Value;
 
         var commandType = assembly.GetType("TestApp.GenPostCarrierCommand", throwOnError: true)!;
-        Assert.NotNull(GeneratedDispatchRoots.FindStagedResultPlan(commandType, typeof(Result<string>)));
+        Assert.NotNull(GeneratedPlanRegistry.FindStagedResultPlan(commandType, typeof(Result<string>)));
 
         Entries.Clear();
 
@@ -309,7 +309,7 @@ public class ResultCarrierPlanParityTests
         var (assembly, provider) = Host.Value;
 
         var commandType = assembly.GetType("TestApp.GenForeignCommand", throwOnError: true)!;
-        var plan = GeneratedDispatchRoots.FindStagedResultPlan(commandType, assembly.GetType("TestApp.ForeignOutcome", throwOnError: true)!);
+        var plan = GeneratedPlanRegistry.FindStagedResultPlan(commandType, assembly.GetType("TestApp.ForeignOutcome", throwOnError: true)!);
         Assert.NotNull(plan);
         Assert.Equal(assembly.GetType("TestApp.ForeignOutcomeAdapter"), plan.Composition.ResultAdapterType);
 
@@ -334,7 +334,7 @@ public class ResultCarrierPlanParityTests
 
         var commandType = assembly.GetType("TestApp.GenAbsorbentCommand", throwOnError: true)!;
         var outcomeType = assembly.GetType("TestApp.AbsorbentOutcome", throwOnError: true)!;
-        Assert.NotNull(GeneratedDispatchRoots.FindStagedResultPlan(commandType, outcomeType));
+        Assert.NotNull(GeneratedPlanRegistry.FindStagedResultPlan(commandType, outcomeType));
 
         Entries.Clear();
 
@@ -361,10 +361,10 @@ public class ResultCarrierPlanParityTests
             .Single(m => m.Name == "SendAsync" && m.IsGenericMethodDefinition
                 && m.GetGenericArguments().Length == 1
                 && m.GetParameters() is { Length: 3 } parameters
-                && parameters[1].ParameterType == typeof(IEnumerable<string>))
+                && parameters[1].ParameterType == typeof(Stella.Ergosfare.Core.Abstractions.GroupSet))
             .MakeGenericMethod(resultType);
 
-        var valueTask = send.Invoke(mediator, [command, null, default(CancellationToken)])!;
+        var valueTask = send.Invoke(mediator, [command, Stella.Ergosfare.Core.Abstractions.GroupSet.Empty, default(CancellationToken)])!;
         var task = (Task)valueTask.GetType().GetMethod("AsTask")!.Invoke(valueTask, null)!;
         await task;
         return task.GetType().GetProperty("Result")!.GetValue(task);

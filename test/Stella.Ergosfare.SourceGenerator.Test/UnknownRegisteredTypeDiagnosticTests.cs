@@ -43,7 +43,7 @@ public class UnknownRegisteredTypeDiagnosticTests
     [Fact]
     public void RegisterOfARuntimeTypeValue_FailsTheBuild()
     {
-        AssertSingle018(GeneratorTestHost.Run(Preamble + """
+        AssertSingle018(GeneratorTestHost.RunWithAllCandidates(Preamble + """
                 public static class Boot
                 {
                     public static void Configure(CommandModuleBuilder commands, Type runtimeType)
@@ -60,7 +60,7 @@ public class UnknownRegisteredTypeDiagnosticTests
     [Fact]
     public void RegisterOfATypeResolvedFromAString_FailsTheBuild()
     {
-        AssertSingle018(GeneratorTestHost.Run(Preamble + """
+        AssertSingle018(GeneratorTestHost.RunWithAllCandidates(Preamble + """
                 public static class Boot
                 {
                     public static void Configure(CommandModuleBuilder commands, string configuredName)
@@ -77,7 +77,7 @@ public class UnknownRegisteredTypeDiagnosticTests
     [Fact]
     public void RegisterOfAnOpenTypeParameter_FailsTheBuild()
     {
-        AssertSingle018(GeneratorTestHost.Run(Preamble + """
+        AssertSingle018(GeneratorTestHost.RunWithAllCandidates(Preamble + """
                 public static class Boot
                 {
                     public static void Add<T>(CommandModuleBuilder commands) where T : class, ICommand
@@ -94,7 +94,7 @@ public class UnknownRegisteredTypeDiagnosticTests
     [Fact]
     public void TypeofAndConcreteGenericRegistrations_AreClean()
     {
-        var result = GeneratorTestHost.Run(Preamble + """
+        var result = GeneratorTestHost.RunWithAllCandidates(Preamble + """
                 public static class Boot
                 {
                     public static void Configure(CommandModuleBuilder commands)
@@ -110,15 +110,11 @@ public class UnknownRegisteredTypeDiagnosticTests
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO018");
     }
 
-    /// <summary>
-    ///     <c>RegisterParticipants</c> takes an <c>IEnumerable&lt;Type&gt;</c> by design —
-    ///     it is the bulk channel <c>RegisterGenerated()</c> emits, and the types it carries
-    ///     were known when the generator wrote the call. Opaque, but not a defect.
-    /// </summary>
+    /// <summary>User code cannot use the generator's batch wiring channel for dynamic selection.</summary>
     [Fact]
-    public void TheGeneratedBulkChannel_IsNotReported()
+    public void UserSuppliedDynamicBatch_IsRejected()
     {
-        var result = GeneratorTestHost.Run(Preamble + """
+        var result = GeneratorTestHost.RunWithAllCandidates(Preamble + """
                 public static class Boot
                 {
                     public static void Configure(CommandModuleBuilder commands, System.Collections.Generic.List<Type> batch)
@@ -128,7 +124,7 @@ public class UnknownRegisteredTypeDiagnosticTests
             """);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO018");
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "ERGO018");
     }
 
     /// <summary>
@@ -145,7 +141,7 @@ public class UnknownRegisteredTypeDiagnosticTests
     [Fact]
     public void RegisterOfATypeofParkedInALocal_IsReportedToo()
     {
-        AssertSingle018(GeneratorTestHost.Run(Preamble + """
+        AssertSingle018(GeneratorTestHost.RunWithAllCandidates(Preamble + """
                 public static class Boot
                 {
                     public static void Configure(CommandModuleBuilder commands)

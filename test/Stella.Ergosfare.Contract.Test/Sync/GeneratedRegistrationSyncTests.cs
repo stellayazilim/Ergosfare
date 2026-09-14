@@ -22,7 +22,7 @@ public sealed class GeneratedRegistrationSyncTests : SyncSemanticsContract
     protected override ServiceProvider CreateProvider()
         => new ServiceCollection()
             .AddErgosfare(options => options
-                .AddCommandModule(commands => commands.RegisterGenerated()))
+                .AddCommandModule(commands => commands.AddGenerated()))
             .BuildServiceProvider();
 
     /// <inheritdoc />

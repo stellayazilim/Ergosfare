@@ -232,17 +232,13 @@ internal static class ReferenceScanner
             return null;
         }
 
-        if (assemblyExcluded || ParticipantAttributes.IsExcludedFromDiscovery(symbol))
-        {
-            // The same posture a source-declared exclusion takes; see Transform.
-            return RegistrableTypeReader.CreateExcludedShadowModel(symbol, isCommand, isQuery, isEvent, assemblyName);
-        }
-
         var isAccessible = IsVisibleToCompilation(symbol, givesAccess) && SymbolNaming.HasSpellableName(symbol);
         var descriptors = isAccessible ? ContractReader.BuildDescriptors(symbol) : ImmutableArray<DescriptorModel>.Empty;
         var isDispatchable = isAccessible && ContractReader.IsDispatchableMessage(symbol, descriptors);
         var isMessageShape = isAccessible && ContractReader.IsMessageShape(symbol, descriptors);
-        var typeofExpression = SymbolNaming.BuildTypeofExpression(symbol);
+        var typeofExpression = symbol.IsGenericType && !Monomorphizer.IsUnboundOrDefinition(symbol)
+            ? SymbolNaming.VerbatimTypeExpression(symbol)
+            : SymbolNaming.BuildTypeofExpression(symbol);
         var dispatchResults = isDispatchable ? ContractReader.GetDispatchResults(symbol) : ImmutableArray<DispatchResultModel>.Empty;
 
         // A referenced adapter is read without a current-assembly grant, so baking qualifies
@@ -300,11 +296,11 @@ internal static class ReferenceScanner
             HasMultiplePublicConstructors = false,
             HasFromServicesConstructorParameter = false,
             InfoLocation = null,
-            IsExcludedFromDiscovery = false,
+            IsExcludedFromDiscovery = assemblyExcluded || ParticipantAttributes.IsExcludedFromDiscovery(symbol),
             ResultAdapter = resultAdapter,
             HasIgnoredResultAdapter = referencedHasIgnore,
             ImplementsMessageMarker = true,
-            DerivedEventMessages = ImmutableArray<RegistrableTypeModel>.Empty,
+            DerivedEventMessages = isAccessible ? RegistrableTypeReader.DeriveEventMessages(symbol) : ImmutableArray<RegistrableTypeModel>.Empty,
             MetadataSortKey = SymbolNaming.BuildMetadataName(symbol),
         };
     }

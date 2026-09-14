@@ -12,3 +12,12 @@ using System.Runtime.CompilerServices;
 [assembly:InternalsVisibleTo("Stella.Ergosfare.Test")]
 [assembly:InternalsVisibleTo("Stella.Ergosfare.Command.Test")]
 [assembly:InternalsVisibleTo("Stella.Ergosfare.Test.Fixtures")]
+
+[assembly: InternalsVisibleTo("Stella.Ergosfare.Commands")]
+[assembly: InternalsVisibleTo("Stella.Ergosfare.Queries")]
+[assembly: InternalsVisibleTo("Stella.Ergosfare.Events")]
+[assembly: InternalsVisibleTo("Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection")]
+[assembly: InternalsVisibleTo("Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection")]
+[assembly: InternalsVisibleTo("Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection")]
+[assembly: InternalsVisibleTo("Stella.Ergosfare.Queries.Test")]
+[assembly: InternalsVisibleTo("Stella.Ergosfare.SourceGenerator.Test")]

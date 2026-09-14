@@ -347,7 +347,7 @@ internal static class ContractReader
                     (mainSync ??= []).Add(new DescriptorModel(
                         DescriptorKind.MainHandler,
                         SymbolNaming.VerbatimTypeExpression(arguments[0]),
-                        SymbolNaming.VerbatimTypeExpression(arguments[1])));
+                        SymbolNaming.VerbatimTypeExpression(arguments[1]), IsAsync: false));
                     break;
                 case "IAsyncHandler" when iface.Arity == 1:
                     (mainAsyncVoid ??= []).Add(new DescriptorModel(

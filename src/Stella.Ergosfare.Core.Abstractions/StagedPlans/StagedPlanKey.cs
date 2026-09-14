@@ -8,16 +8,14 @@ namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 /// </summary>
 /// <remarks>
 /// <para>
-/// This is what a plan is checked against before it is used. Whenever the live pipeline is
-/// rebuilt, the executor compares it with this key, and any difference — an interceptor
-/// registered at runtime, a different handler, a different order — sends the dispatch back
-/// through the general strategy.
+/// Registration is compared with this descriptor when the engine is initialized. Runtime
+/// dispatch never rebuilds a pipeline; a mismatch is rejected.
 /// </para>
 /// <para>
 /// The arrays are kept as given rather than copied: a plan is a compile-time singleton
 /// whose pipeline never changes. Handlers are a list because a broadcast runs all of them;
-/// a single-handler pipeline is the same shape with one direct handler and no indirect
-/// ones, so one comparison serves every family.
+/// commands and queries keep both segments as metadata while executing the winning
+/// handler according to direct-then-covariant priority.
 /// </para>
 /// </remarks>
 public sealed class StagedPlanKey
@@ -103,10 +101,8 @@ public sealed class StagedPlanKey
     /// <c>null</c> when the plan assumed none.
     /// </summary>
     /// <remarks>
-    /// Part of the comparison: the executor trusts the plan only while the adapter bound to
-    /// the (message, result) pair is exactly this type. A plan compiled before an annotation
-    /// was added falls back to the general strategy instead of quietly skipping the value
-    /// path.
+    /// Describes the adapter embedded in the generated body. Adapter selection and
+    /// validation happen at compile time; dispatch does not resolve an adapter service.
     /// </remarks>
     public Type? ResultAdapterType { get; }
 
@@ -117,8 +113,7 @@ public sealed class StagedPlanKey
 
     /// <summary>
     /// The main handlers registered for a base type of the message, in execution order.
-    /// Always empty for a single-handler pipeline: one such handler disqualifies those
-    /// plans outright.
+    /// Commands and queries execute this segment only when no direct handler wins.
     /// </summary>
     public IReadOnlyList<Type> IndirectHandlerTypes => IndirectHandlerTypeArray;
 

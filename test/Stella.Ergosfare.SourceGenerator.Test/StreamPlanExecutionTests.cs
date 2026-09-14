@@ -3,7 +3,7 @@
 #pragma warning disable CS0618
 
 using System.Reflection;
-using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.Planning;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Queries.Abstractions;
@@ -15,7 +15,7 @@ namespace Stella.Ergosfare.SourceGenerator.Test;
 /// <summary>
 /// Strategy-parity matrix for the emitted stream plans, executed end to end: the app
 /// source below compiles with the generator, the emitted assembly loads into the test
-/// process, its <c>RegisterGenerated</c> wires a real container, and streams run through
+/// process, its <c>AddGenerated</c> wires a real container, and streams run through
 /// the public query mediator. Covered: query rewrite by pre-interceptors with the items
 /// flowing to the caller, the post and final stages observing the enumerator after
 /// enumeration, a mid-stream failure swallowed by the exception stage after the items
@@ -165,7 +165,7 @@ public class StreamPlanExecutionTests
 
     private static readonly Lazy<(Assembly Assembly, ServiceProvider Provider)> Host = new(() =>
     {
-        var result = GeneratorTestHost.Run(Source);
+        var result = GeneratorTestHost.RunWithAllCandidates(Source);
 
         Assert.Empty(result.CompilationErrors);
 
@@ -174,7 +174,7 @@ public class StreamPlanExecutionTests
 
         var assembly = Assembly.Load(stream.ToArray());
         var registrations = assembly.GetType("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
-        var registerQueries = registrations.GetMethod("RegisterGenerated", [typeof(QueryModuleBuilder)])!;
+        var registerQueries = registrations.GetMethod("AddGenerated", [typeof(QueryModuleBuilder)])!;
 
         var provider = new ServiceCollection()
             .AddErgosfare(options => options.AddQueryModule(queries => registerQueries.Invoke(null, [queries])))
@@ -198,7 +198,7 @@ public class StreamPlanExecutionTests
     {
         var (assembly, provider) = Host.Value;
 
-        Assert.NotNull(GeneratedDispatchRoots.FindStagedStreamPlan(
+        Assert.NotNull(GeneratedPlanRegistry.FindStagedStreamPlan(
             assembly.GetType("StreamTestApp.GenTickStream")!, typeof(int)));
 
         Entries.Clear();
@@ -224,7 +224,7 @@ public class StreamPlanExecutionTests
     {
         var (assembly, provider) = Host.Value;
 
-        Assert.NotNull(GeneratedDispatchRoots.FindStagedStreamPlan(
+        Assert.NotNull(GeneratedPlanRegistry.FindStagedStreamPlan(
             assembly.GetType("StreamTestApp.GenFailStream")!, typeof(int)));
 
         Entries.Clear();
@@ -249,7 +249,7 @@ public class StreamPlanExecutionTests
     {
         var (assembly, provider) = Host.Value;
 
-        Assert.NotNull(GeneratedDispatchRoots.FindStagedStreamPlan(
+        Assert.NotNull(GeneratedPlanRegistry.FindStagedStreamPlan(
             assembly.GetType("StreamTestApp.GenAbortStream")!, typeof(int)));
 
         Entries.Clear();

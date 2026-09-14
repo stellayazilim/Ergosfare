@@ -67,7 +67,7 @@ public class OpenGenericInterceptorTests
     public async Task GeneratedRegistration_RunsTheMonomorphizedInterceptor()
     {
         await using var provider = new ServiceCollection()
-            .AddErgosfare(o => o.AddCommandModule(c => c.RegisterGenerated()))
+            .AddErgosfare(o => o.AddCommandModule(c => c.AddGenerated()))
             .BuildServiceProvider();
 
         var context = new ErgosfareContext();
@@ -87,7 +87,7 @@ public class OpenGenericInterceptorTests
     public async Task EachMessage_GetsItsOwnInstantiation()
     {
         await using var provider = new ServiceCollection()
-            .AddErgosfare(o => o.AddCommandModule(c => c.RegisterGenerated()))
+            .AddErgosfare(o => o.AddCommandModule(c => c.AddGenerated()))
             .BuildServiceProvider();
 
         var mediator = provider.GetRequiredService<ICommandMediator>();

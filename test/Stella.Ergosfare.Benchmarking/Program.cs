@@ -6,7 +6,7 @@ using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
-using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.Planning;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Events.Abstractions;
 using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
@@ -519,10 +519,8 @@ public sealed class MediatrResultRewriteBehavior : IPipelineBehavior<MediatrPipe
 /// <para>Competitors run their out-of-the-box defaults: MediatR (reflection-based,
 /// transient handlers) as the ubiquitous baseline, and martinothamar/Mediator
 /// (source-generated dispatch, singleton lifetime by default) as the fastest widely-used
-/// alternative — the <c>MediatorSg_*</c> rows. Ergosfare's default rows resolve transient
-/// handlers per dispatch; the <c>Command_Void_Memoized</c> row shows the zero-allocation
-/// shape <c>ForceMemoizedHandlers()</c> (or plain singleton handler registration) yields,
-/// which is the apples-to-apples comparison against Mediator's singleton default.</para>
+/// reference — the <c>MediatorSg_*</c> rows. Ergosfare uses generated plans; injected
+/// participants resolve through DI and eligible parameterless participants are constructed directly.</para>
 /// </summary>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
@@ -531,14 +529,11 @@ public class MediationBenchmark
 {
     private ServiceProvider _ergosfare = null!;
     private ServiceProvider _ergosfareGenerated = null!;
-    private ServiceProvider _ergosfareMemoized = null!;
     private ServiceProvider _mediatr = null!;
     private ServiceProvider _mediatorSg = null!;
 
     private ICommandMediator _commands = null!;
     private ICommandMediator _generatedCommands = null!;
-    private ICommandMediator _memoizedCommands = null!;
-    private IQueryMediator _memoizedQueries = null!;
     private IQueryMediator _queries = null!;
     private IQueryMediator _generatedQueries = null!;
     private IEventMediator _events = null!;
@@ -559,7 +554,7 @@ public class MediationBenchmark
     private readonly MediatrPipelineIntRequest _mediatrPipelineInt = new();
     private readonly MediatorSgPipelineIntQuery _mediatorSgPipelineInt = new();
 
-    private static readonly string[] BenchGroups = ["bench"];
+    private static readonly GroupSet BenchGroups = ["bench"];
     private static readonly GroupSet BenchGroupSet = GroupSet.Of("bench");
 
     // Reused across dispatches, mirroring a caller that keeps its settings: the grouped
@@ -688,22 +683,21 @@ public class MediationBenchmark
 
     /// <summary>
     /// Source-generated registration variant, isolated to its own benchmark process via
-    /// targets: <c>RegisterGenerated()</c> installs the compile-time dispatch roots and
+    /// targets: <c>AddGenerated()</c> installs the compile-time dispatch roots and
     /// void pipeline plans process-wide, and the targeted setup keeps that installation
     /// away from the runtime-registration rows' processes so the comparison stays honest.
     /// </summary>
     [GlobalSetup(Targets = [nameof(Command_Void_Generated), nameof(Query_Result_Generated),
         nameof(Command_Void_Intercepted_Generated), nameof(Query_Result_Intercepted_Generated),
-        nameof(Query_Result_Pipeline5_Generated), nameof(Event_Publish_Intercepted_Generated),
-        nameof(Event_Publish_Intercepted_Unplanned)])]
+        nameof(Query_Result_Pipeline5_Generated), nameof(Event_Publish_Intercepted_Generated)])]
     public void SetupGenerated()
     {
         _ergosfareGenerated = new ServiceCollection()
             .AddErgosfare(options =>
             {
-                options.AddCommandModule(commands => commands.RegisterGenerated());
-                options.AddQueryModule(queries => queries.RegisterGenerated());
-                options.AddEventModule(events => events.RegisterGenerated());
+                options.AddCommandModule(commands => commands.AddGenerated());
+                options.AddQueryModule(queries => queries.AddGenerated());
+                options.AddEventModule(events => events.AddGenerated());
             })
             .BuildServiceProvider();
 
@@ -719,15 +713,23 @@ public class MediationBenchmark
         // broadcast plan and the other does not. Without this the pair degrades silently
         // into two rows measuring the same lane — the failure mode that makes an A/B
         // table read as "the plan bought nothing".
-        if (GeneratedDispatchRoots.FindBroadcastPlan(typeof(InterceptedPingEvent)) is null)
+        if (GeneratedPlanRegistry.FindBroadcastPlan(typeof(InterceptedPingEvent)) is null)
             throw new InvalidOperationException(
                 $"{nameof(Event_Publish_Intercepted_Generated)} lost its plan arm: no broadcast plan was emitted for {nameof(InterceptedPingEvent)}.");
 
-        if (GeneratedDispatchRoots.FindBroadcastPlan(typeof(UnplannedPingEvent)) is not null)
+        AssertBroadcastScenario(() => _generatedEvents.PublishAsync(_interceptedPingEvent), nameof(Event_Publish_Intercepted_Generated));
+    }
+
+    // Keep the legacy runtime-fallback premise local to that benchmark. Its removal
+    // must not prevent unrelated generated pipelines from being measured.
+    [GlobalSetup(Target = nameof(Event_Publish_Intercepted_Unplanned))]
+    public void SetupUnplanned()
+    {
+        SetupGenerated();
+        if (GeneratedPlanRegistry.FindBroadcastPlan(typeof(UnplannedPingEvent)) is not null)
             throw new InvalidOperationException(
                 $"{nameof(Event_Publish_Intercepted_Unplanned)} lost its runtime arm: {nameof(UnplannedPingEvent)} got a broadcast plan, so both A/B rows measure the plan.");
 
-        AssertBroadcastScenario(() => _generatedEvents.PublishAsync(_interceptedPingEvent), nameof(Event_Publish_Intercepted_Generated));
         AssertBroadcastScenario(() => _generatedEvents.PublishAsync(_unplannedPingEvent), nameof(Event_Publish_Intercepted_Unplanned));
     }
 
@@ -740,50 +742,6 @@ public class MediationBenchmark
         _ergosfareGenerated.Dispose();
     }
 
-    /// <summary>
-    /// Zero-allocation variant: <c>ForceMemoizedHandlers()</c> resolves each handler graph
-    /// once and reuses it for every dispatch, so the transient handler instance — the last
-    /// 24 B on the default root path — disappears. Plain singleton handler registration
-    /// reaches the same shape without the switch. Isolated to its own process via targets,
-    /// like the generated variant above.
-    /// </summary>
-    [GlobalSetup(Targets = [nameof(Command_Void_Memoized), nameof(Query_Result_Memoized),
-        nameof(Query_Result_Pipeline5_Memoized)])]
-    public void SetupMemoized()
-    {
-        _ergosfareMemoized = new ServiceCollection()
-            .AddErgosfare(options =>
-            {
-                options.ForceMemoizedHandlers();
-                options.AddCommandModule(commands => commands.Register<VoidCommandHandler>());
-                options.AddQueryModule(queries =>
-                {
-                    queries.Register<IntQueryHandler>();
-                    queries.Register<PipelineIntQueryHandler>();
-                    queries.Register<PipelineValidationPreInterceptor>();
-                    queries.Register<PipelineRewritePreInterceptor>();
-                    queries.Register<PipelineResultPostInterceptor>();
-                    queries.Register<PipelineRecoveryExceptionInterceptor>();
-                    queries.Register<PipelineFinalInterceptor>();
-                });
-            })
-            .BuildServiceProvider();
-
-        _memoizedCommands = _ergosfareMemoized.GetRequiredService<ICommandMediator>();
-        _memoizedQueries = _ergosfareMemoized.GetRequiredService<IQueryMediator>();
-
-        AssertPipelineScenario(
-            () => _memoizedQueries.QueryAsync(_pipelineIntQuery).AsTask().GetAwaiter().GetResult(),
-            "Ergosfare (memoized)");
-    }
-
-    [GlobalCleanup(Targets = [nameof(Command_Void_Memoized), nameof(Query_Result_Memoized),
-        nameof(Query_Result_Pipeline5_Memoized)])]
-    public void CleanupMemoized()
-    {
-        _ergosfareMemoized.Dispose();
-    }
-
     // ------------------------------------------------------------------
     // Root — mediators resolved once, no per-dispatch scope
     // ------------------------------------------------------------------
@@ -793,9 +751,6 @@ public class MediationBenchmark
 
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask Command_Void_Generated() => _generatedCommands.SendAsync(_voidCommand);
-
-    [Benchmark, BenchmarkCategory("Root")]
-    public ValueTask Command_Void_Memoized() => _memoizedCommands.SendAsync(_voidCommand);
 
     /// <summary>
     /// The interceptor-bearing strategy path (one pass-through pre- and post-interceptor):
@@ -817,7 +772,7 @@ public class MediationBenchmark
     /// <summary>
     /// The staged-plan lane: the same interceptor-bearing pipelines as the
     /// <c>*_Intercepted</c> rows, dispatched through the generated provider whose
-    /// <c>RegisterGenerated</c> installed bespoke staged plans — the strategy machinery
+    /// <c>AddGenerated</c> installed bespoke staged plans — the strategy machinery
     /// those baseline rows pay for is replaced by straight-line emitted code.
     /// </summary>
     [Benchmark, BenchmarkCategory("Root")]
@@ -848,22 +803,6 @@ public class MediationBenchmark
     /// <summary>Five closed-generic Mediator behaviors with the equivalent purposes.</summary>
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask<int> MediatorSg_Send_Result_Pipeline5() => _martinMediator.Send(_mediatorSgPipelineInt);
-
-    // ------------------------------------------------------------------
-    // Singleton-path rows — the apples-to-apples comparison against
-    // Mediator's singleton default: ForceMemoizedHandlers resolves each
-    // participant graph once and reuses it, which is Ergosfare's
-    // singleton-equivalent shape.
-    // ------------------------------------------------------------------
-
-    [Benchmark, BenchmarkCategory("Root")]
-    public ValueTask<int> Query_Result_Memoized() => _memoizedQueries.QueryAsync(_intQuery);
-
-    /// <summary>The five-participant pipeline with memoized participants. Memoized
-    /// compositions run the strategy path — the staged-plan gate deliberately steps
-    /// aside for them — so this row also measures that open optimization gap.</summary>
-    [Benchmark, BenchmarkCategory("Root")]
-    public ValueTask<int> Query_Result_Pipeline5_Memoized() => _memoizedQueries.QueryAsync(_pipelineIntQuery);
 
     [Benchmark, BenchmarkCategory("Root")]
     public ValueTask Command_Void_Grouped() => _commands.SendAsync(_groupedCommand, BenchGroups);

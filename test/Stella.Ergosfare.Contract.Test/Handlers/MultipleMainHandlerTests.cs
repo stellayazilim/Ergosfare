@@ -190,7 +190,7 @@ public sealed class GeneratedRegistrationMultipleMainHandlerTests : MultipleMain
     protected override ServiceProvider CreateProvider()
         => new ServiceCollection()
             .AddErgosfare(options => options
-                .AddCommandModule(commands => commands.RegisterGenerated(Key)))
+                .AddCommandModule(commands => commands.AddGenerated(Key)))
             .BuildServiceProvider();
 
     /// <inheritdoc />

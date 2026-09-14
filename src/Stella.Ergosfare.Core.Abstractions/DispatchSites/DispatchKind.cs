@@ -17,7 +17,4 @@ public enum DispatchKind : byte
 
     /// <summary>A call to <c>IEventMediator.PublishAsync</c>.</summary>
     Event = 3,
-
-    /// <summary>A call to <c>IMessageMediator</c>, which belongs to no module.</summary>
-    Message = 4,
 }

@@ -32,10 +32,24 @@ public class PocoEventDerivationTests
         """;
 
     [Fact]
+    public void ReferencedSubscriber_BringsItsUnmarkedEventIntoRootPlans()
+    {
+        var result = GeneratorTestHost.Run("""
+            public static class Host {
+                public static void Configure(Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.EventModuleBuilder builder)
+                    => builder.AddGenerated();
+            }
+            """, libraries: [("PocoSubscriberLibrary", Source)]);
+        Assert.Empty(result.CompilationErrors);
+        Assert.Contains("StagedBroadcastPlan<global::TestApp.OrderPlaced>", result.GeneratedSource);
+        Assert.Contains("typeof(global::TestApp.OrderPlaced)", result.GeneratedSource);
+    }
+
+    [Fact]
     [Trait("Category", "Unit")]
     public void APlainTypeASubscriberNames_BecomesAnEventMessage()
     {
-        var result = GeneratorTestHost.Run(Source);
+        var result = GeneratorTestHost.RunWithAllCandidates(Source);
 
         Assert.Empty(result.CompilationErrors);
 
@@ -55,7 +69,7 @@ public class PocoEventDerivationTests
     [Trait("Category", "Unit")]
     public void AMarkedEvent_IsNotDerivedTwice()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Events.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
             using System.Threading.Tasks;
@@ -82,6 +96,6 @@ public class PocoEventDerivationTests
         Assert.Equal(1, occurrences);
 
         // Marked, so it is a message on its own terms and keeps its root.
-        Assert.Contains("AddMessage<global::TestApp.OrderShipped>", source);
+        Assert.DoesNotContain("AddMessage<global::TestApp.OrderShipped>", source);
     }
 }

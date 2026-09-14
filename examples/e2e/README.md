@@ -5,7 +5,7 @@ clean-architecture web app wired from the **local `src/` projects** (not NuGet),
 over HTTP and asserted with the JetBrains HTTP Client CLI (`ijhttp`).
 
 This lives outside `test/` on purpose — it is a separate solution with its own runtime
-dependencies (EF Core + SQLite, Stella.MinimalApi) and must not weigh on the unit-test
+dependencies (SQLite, Stella.MinimalApi) and must not weigh on the unit-test
 build.
 
 ## What it covers
@@ -17,15 +17,24 @@ exercises the cross-assembly paths that unit tests don't:
 |---|---|---|
 | Domain | `…E2E.Domain` | plain entities, no framework |
 | Contracts | `…E2E.Contracts` | commands / queries / events as messages |
-| Use cases | `…E2E.UseCases` | handlers + a pre-interceptor, **one assembly away** from the Api |
-| Infrastructure | `…E2E.Infrastructure` | EF Core + SQLite persistence |
-| Api | `…E2E.Api` | Stella.MinimalApi endpoints, `RegisterGenerated()` |
+| Use cases | `…E2E.UseCases` | handlers, interceptors and `AddApplication()` selections; metadata-only generation |
+| Infrastructure | `…E2E.Infrastructure` | SQLite persistence (ADO.NET) |
+| Api | `…E2E.Api` | endpoints and executable plan generation from referenced selections |
 
 A single run touches: a result-producing command, a result-less command, a single-result
 query, a collection query, an event (broadcast to a handler in another assembly), a
-pre-interceptor (trim + validate), domain-exception → HTTP status mapping, and EF Core
+pre-interceptor (trim + validate), domain-exception → HTTP status mapping, and SQLite
 persistence — all discovered at compile time by the source generator scanning **referenced
 assemblies**.
+
+### Generator placement
+
+`AddApplication()` and its `AddGenerated()` calls stay in UseCases. Module builders own
+these public methods; consumers do not need a generated namespace or extra arguments.
+UseCases runs the generator with `ErgosfareGeneratePlans=false`, exporting selection and
+dispatch metadata only. The API runs the normal generator, follows `AddApplication()`'s
+selection metadata and generates executable plans against the referenced handlers.
+Merely referencing a configuration assembly does not select its participants.
 
 ### The reserved-prefix opt-in
 
@@ -34,27 +43,98 @@ skips during cross-assembly discovery by default. [`Directory.Build.props`](Dire
 opts back in with `ErgosfareSourceGeneratorForceScanReferences=true`, so this run also
 exercises the generator's force-scan path.
 
-## Running
+## Run manually in Rider or a terminal
 
-From the repo root:
+Use the command matching your terminal's working directory. Both start the same API at
+**http://localhost:5099**. These commands work in PowerShell, cmd and bash.
 
-```bash
+### From the Ergosfare solution directory
+
+Working directory: repository root, beside `Stella.Ergosfare.slnx`.
+
+```sh
+dotnet run --project ./examples/e2e/Stella.Ergosfare.E2E.Api/Stella.Ergosfare.E2E.Api.csproj --launch-profile http
+```
+
+### From the E2E solution directory
+
+Working directory: `examples/e2e`, beside `Stella.Ergosfare.E2E.slnx`.
+
+```sh
+dotnet run --project ./Stella.Ergosfare.E2E.Api/Stella.Ergosfare.E2E.Api.csproj --launch-profile http
+```
+
+Wait for `Now listening on: http://localhost:5099` and `Application started`.
+The terminal remaining open is normal: it is hosting the API. Open
+[http://localhost:5099/health](http://localhost:5099/health); expect `{"status":"ok"}`.
+The root `/` has no endpoint. Stop the API with Ctrl+C when finished.
+
+In Rider, select the API project's **http** launch profile and press **Run/Debug**.
+It uses the same port 5099 as the commands above. No Node.js process is involved. If an existing run
+configuration launches the `.exe` directly instead of that profile, give it the application
+arguments `--urls http://localhost:5099` and use the API project as its working directory.
+
+### Execute the HTTP file
+
+Open [`http/run-all.http`](http/run-all.http) and press **Play** next to
+`run ./todos.http`. That one action runs the complete flow in order, including creating
+the todo before completing it. This uses Rider's [HTTP request include support](https://www.jetbrains.com/help/rider/Http_client_in__product__code_editor.html#import-http-requests-from-other-http-files).
+
+Alternatively, open [`http/todos.http`](http/todos.http) and choose **Run All Requests**.
+No HTTP Client environment selection is needed: the file declares `@host` itself.
+
+`todoId` is returned by **Create a todo** and saved in the HTTP client's session. It is not
+an environment setting. Clicking only **Complete it** in a fresh session cannot supply
+that ID: run Create first, or use `run-all.http`. If the ID is missing, the pre-request
+script now explains this before sending the request. A health check does not clear the ID.
+Each full run creates a new todo; restarting Rider clears the HTTP client's saved ID.
+
+The file path is `examples/e2e/http/todos.http` from the root solution, or `http/todos.http`
+from the E2E solution. The URL is the same in both cases. Restarting the API recreates the
+sample database, so rerun the whole HTTP file after a restart.
+
+Requirements for manual use: .NET 10 SDK and Rider's HTTP Client (or another client that
+supports JetBrains response-handler scripts). Node.js and Java are only needed for the
+automated runner below.
+
+## Start through Taskfile
+
+From **either** solution directory, run:
+
+```sh
 task e2e
 ```
 
-That builds and boots the app, waits for `/health`, runs [`http/todos.http`](http/todos.http)
-with the [JetBrains HTTP Client CLI](https://www.jetbrains.com/help/idea/http-client-cli.html),
-and tears the app down — failing the run on any failed assertion. The JUnit report is written
-to `examples/e2e/reports/`.
+Each directory has a Taskfile with the correct relative project path. This task runs
+`dotnet run --launch-profile http` directly and keeps the API running. Press Ctrl+C to
+stop it. Execute `http/run-all.http` from Rider while the API runs. Node.js is not needed.
 
-The CLI itself is self-provisioned: the first run downloads it from `https://jb.gg/ijhttp/latest`
-into `examples/e2e/tools/` (gitignored). `ijhttp` is a Java app, so a JDK 17+ must be installed
-(`winget install Microsoft.OpenJDK.21` works); the runner finds it via `JAVA_HOME`, PATH,
-or the standard install locations.
+## Optional automated suite
 
-To iterate on the `.http` file by hand, run the app yourself and point your editor's HTTP
-client at it:
+Stop any manually started API on port 5099 first. The runner builds the API, starts its own
+process, waits for `/health`, executes the same HTTP file and stops its process afterwards.
+A failed build, startup or HTTP assertion produces a nonzero exit code.
 
-```bash
-dotnet run --project examples/e2e/Stella.Ergosfare.E2E.Api
+From the **Ergosfare solution directory**:
+
+```sh
+node ./examples/e2e/run.mjs
 ```
+
+From the **E2E solution directory**:
+
+```sh
+node ./run.mjs
+```
+
+`task e2e:test` runs this optional automation from either solution directory when Go Task
+is installed. Unlike `task e2e`, it also starts and stops the API for the test run.
+The runner resolves its files relative to `run.mjs`, so both commands write the report to
+[`reports/report.xml`](reports/report.xml) under `examples/e2e`.
+
+The automated runner requires .NET 10 SDK, Node.js and JDK 17+. The first run downloads
+the JetBrains HTTP Client CLI (`ijhttp`) into `examples/e2e/tools/`. Set `JAVA_HOME` or put
+Java on PATH; the runner also checks standard Windows JDK installation directories.
+
+If port 5099 is busy, the runner fails immediately rather than testing a different running
+application. Either stop that application or use the manual HTTP workflow above.

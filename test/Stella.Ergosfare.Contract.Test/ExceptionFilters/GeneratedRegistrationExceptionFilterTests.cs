@@ -23,7 +23,7 @@ public sealed class GeneratedRegistrationExceptionFilterTests : ExceptionFilterS
     protected override ServiceProvider CreateProvider()
         => new ServiceCollection()
             .AddErgosfare(options => options
-                .AddCommandModule(commands => commands.RegisterGenerated()))
+                .AddCommandModule(commands => commands.AddGenerated()))
             .BuildServiceProvider();
 
     /// <inheritdoc />

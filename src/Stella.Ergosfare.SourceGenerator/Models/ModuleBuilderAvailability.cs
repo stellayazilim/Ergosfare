@@ -1,4 +1,4 @@
-﻿namespace Stella.Ergosfare.SourceGenerator.Models;
+namespace Stella.Ergosfare.SourceGenerator.Models;
 
 /// <summary>
 /// Which Ergosfare surfaces the consuming compilation can actually reach.
@@ -10,40 +10,25 @@
 /// <param name="CommandBuilderHasRegisterParticipants">Whether the command builder takes participants in bulk.</param>
 /// <param name="QueryBuilderHasRegisterParticipants">Whether the query builder takes participants in bulk.</param>
 /// <param name="EventBuilderHasRegisterParticipants">Whether the event builder takes participants in bulk.</param>
-/// <param name="HasDispatchRoots">Whether the store generated registration writes into is available.</param>
-/// <param name="DispatchRootsHasVoidPlans">Whether the store accepts plans for resultless messages.</param>
-/// <param name="DispatchRootsHasResultPlans">Whether the store accepts plans for result-producing messages.</param>
-/// <param name="DispatchRootsHasPlanFactories">
-/// Whether plans may carry a way to construct the handler. An older package takes only the
-/// plain form, and generation falls back to it.
-/// </param>
-/// <param name="DispatchRootsHasProviderPlanFactories">
-/// Whether plans may carry a construction that resolves the handler's dependencies from a
-/// provider, and the compilation can name the extensions such a construction needs. Without
-/// both, a handler with dependencies keeps the plan form that has no construction at all.
-/// </param>
+/// <param name="HasPlanRegistry">Whether the store generated registration writes into is available.</param>
 /// <param name="HasKeyedServiceExtensions">
 /// Whether the keyed-service extensions are available, which a construction needs when the
 /// handler takes keyed parameters; without them such a handler keeps the plan form with no
 /// construction.
 /// </param>
-/// <param name="DispatchRootsHasStagedPlans">
+/// <param name="PlanRegistryHasStagedPlans">
 /// Whether the store accepts staged plans, for messages whose pipelines carry interceptors.
 /// An older package simply gets none.
 /// </param>
-/// <param name="DispatchRootsHasStreamPlans">
+/// <param name="PlanRegistryHasStreamPlans">
 /// Whether the store accepts compiled stream plans, for streaming queries. An older package
 /// simply gets none.
-/// </param>
-/// <param name="StagedPlansSupportDirectConstruction">
-/// Whether staged plans can construct participants themselves. Against an older package the
-/// direct variant is not written and plans resolve through the provider.
 /// </param>
 /// <param name="HasDispatchSiteAttribute">
 /// Whether the dispatch-manifest attributes are available. Without them no manifest is
 /// written, and reachability is judged from this compilation's own dispatch sites alone.
 /// </param>
-/// <param name="DispatchRootsHasFrozenCompositions">
+/// <param name="PlanRegistryHasPipelineDescriptors">
 /// Whether the store accepts compiled compositions.
 /// </param>
 /// <remarks>
@@ -59,14 +44,9 @@ internal readonly record struct ModuleBuilderAvailability(
     bool CommandBuilderHasRegisterParticipants,
     bool QueryBuilderHasRegisterParticipants,
     bool EventBuilderHasRegisterParticipants,
-    bool HasDispatchRoots,
-    bool DispatchRootsHasVoidPlans,
-    bool DispatchRootsHasResultPlans,
-    bool DispatchRootsHasPlanFactories,
-    bool DispatchRootsHasProviderPlanFactories,
+    bool HasPlanRegistry,
     bool HasKeyedServiceExtensions,
-    bool DispatchRootsHasStagedPlans,
-    bool DispatchRootsHasStreamPlans,
-    bool StagedPlansSupportDirectConstruction,
+    bool PlanRegistryHasStagedPlans,
+    bool PlanRegistryHasStreamPlans,
     bool HasDispatchSiteAttribute,
-    bool DispatchRootsHasFrozenCompositions);
+    bool PlanRegistryHasPipelineDescriptors);

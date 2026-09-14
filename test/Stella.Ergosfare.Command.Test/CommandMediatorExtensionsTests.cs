@@ -38,7 +38,7 @@ public class CommandMediatorExtensionsTests
 
         var mediator = services.GetRequiredService<ICommandMediator>();
 
-        await mediator.SendAsync(cmd, new[] { "group2" }, cancellationToken);
+        await mediator.SendAsync(cmd, ["group2"], cancellationToken);
 
         Assert.True(StubNonGenericCommandHandler.HasCalled);
         Assert.False(StubCommandPreInterceptor1.HasCalled);
@@ -138,7 +138,7 @@ public class CommandMediatorExtensionsTests
 
         var mediator = services.GetRequiredService<ICommandMediator>();
 
-        var result = await mediator.SendAsync(cmd, new[] { "default" }, cancellationToken);
+        var result = await mediator.SendAsync(cmd, ["default"], cancellationToken);
 
         Assert.True(StubNonGenericCommandStringResultHandler.HasCalled);
         Assert.Equal(string.Empty, result);

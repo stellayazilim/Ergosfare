@@ -90,7 +90,7 @@ internal sealed partial class PlanBuilder
     /// <returns><c>true</c> when the two overlap.</returns>
     /// <remarks>
     /// Naming no keys selects the default key alone — the same set a pattern-less
-    /// <c>RegisterGenerated()</c> selects. A keyed message was kept out of default discovery
+    /// <c>AddGenerated()</c> selects. A keyed message was kept out of default discovery
     /// by its author, and a plugin installed without naming a key should not quietly put it
     /// back in.
     /// </remarks>

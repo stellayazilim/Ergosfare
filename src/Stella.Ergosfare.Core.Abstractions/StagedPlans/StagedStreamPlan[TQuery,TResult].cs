@@ -1,3 +1,4 @@
+using Stella.Ergosfare.Core.Abstractions.Results;
 
 namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 
@@ -7,9 +8,13 @@ namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 /// </summary>
 /// <typeparam name="TQuery">The streaming query this plan serves.</typeparam>
 /// <typeparam name="TResult">The type of the items it streams.</typeparam>
-public abstract class StagedStreamPlan<TQuery, TResult> : StagedStreamPlan
+public abstract class StagedStreamPlan<TQuery, TResult> : StagedStreamPlan, ICompiledStreamPlan<TResult>
     where TQuery : notnull
 {
+    IAsyncEnumerable<TResult> ICompiledStreamPlan<TResult>.Execute(object message,
+        ErgosfareContext context, IServiceProvider serviceProvider, CancellationToken cancellationToken)
+        => Execute((TQuery)message, context, serviceProvider, cancellationToken);
+
     /// <summary>
     /// Streams the results of <paramref name="query"/> through the compiled pipeline.
     /// </summary>
@@ -31,15 +36,4 @@ public abstract class StagedStreamPlan<TQuery, TResult> : StagedStreamPlan
         TQuery query, ErgosfareContext context, IServiceProvider serviceProvider,
         CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Calls <paramref name="visitor"/> with <typeparamref name="TQuery"/> and
-    /// <typeparamref name="TResult"/> as its generic arguments.
-    /// </summary>
-    /// <typeparam name="TReturn">What the visitor produces.</typeparam>
-    /// <typeparam name="TState">The state the visitor needs.</typeparam>
-    /// <param name="visitor">The visitor to call.</param>
-    /// <param name="state">Passed to the visitor unchanged.</param>
-    /// <returns>Whatever the visitor produced.</returns>
-    public sealed override TReturn Accept<TReturn, TState>(IStagedStreamPlanVisitor<TReturn, TState> visitor, TState state)
-        => visitor.Visit<TQuery, TResult>(state);
 }

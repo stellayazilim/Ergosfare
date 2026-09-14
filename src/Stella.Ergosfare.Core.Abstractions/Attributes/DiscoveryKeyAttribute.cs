@@ -7,9 +7,9 @@ namespace Stella.Ergosfare.Core.Abstractions.Attributes;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A keyed type is left out of key-less discovery (<c>RegisterGenerated()</c>) and picked
-/// up by <c>RegisterGenerated("reporting")</c> or by a prefix pattern such as
-/// <c>RegisterGenerated("reporting.*")</c>. To keep a type in key-less discovery while
+/// A keyed type is left out of key-less discovery (<c>AddGenerated()</c>) and picked
+/// up by <c>AddGenerated("reporting")</c> or by a prefix pattern such as
+/// <c>AddGenerated("reporting.*")</c>. To keep a type in key-less discovery while
 /// still making it selectable, list <see cref="DefaultKey"/> among its keys —
 /// <c>[DiscoveryKey("", "debug")]</c>.
 /// </para>

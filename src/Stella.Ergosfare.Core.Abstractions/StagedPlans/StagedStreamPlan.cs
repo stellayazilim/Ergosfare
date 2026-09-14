@@ -10,21 +10,11 @@ namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 /// it runs, and its <see cref="StagedStreamPlan{TQuery, TResult}.Execute"/> must resolve
 /// every participant from the provider it is given.
 /// </remarks>
-public abstract class StagedStreamPlan
+public abstract class StagedStreamPlan : ICompiledPlan
 {
     /// <summary>
     /// The pipeline this plan was compiled against.
     /// </summary>
     public abstract StagedPlanKey Composition { get; }
 
-    /// <summary>
-    /// Calls <paramref name="visitor"/> with this plan's query and item types as its
-    /// generic arguments.
-    /// </summary>
-    /// <typeparam name="TReturn">What the visitor produces.</typeparam>
-    /// <typeparam name="TState">The state the visitor needs.</typeparam>
-    /// <param name="visitor">The visitor to call.</param>
-    /// <param name="state">Passed to the visitor unchanged.</param>
-    /// <returns>Whatever the visitor produced.</returns>
-    public abstract TReturn Accept<TReturn, TState>(IStagedStreamPlanVisitor<TReturn, TState> visitor, TState state);
 }

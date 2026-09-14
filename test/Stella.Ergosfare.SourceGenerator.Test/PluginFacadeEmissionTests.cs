@@ -39,7 +39,7 @@ public class PluginFacadeEmissionTests
             public sealed class Nothing;
             """;
 
-        var result = GeneratorTestHost.Run(source);
+        var result = GeneratorTestHost.RunWithAllCandidates(source);
 
         var facade = Facade(result);
 
@@ -82,7 +82,7 @@ public class PluginFacadeEmissionTests
             }
             """;
 
-        var result = GeneratorTestHost.Run(source);
+        var result = GeneratorTestHost.RunWithAllCandidates(source);
 
         var facade = Facade(result);
 
@@ -119,7 +119,7 @@ public class PluginFacadeEmissionTests
             }
             """;
 
-        var result = GeneratorTestHost.Run(source);
+        var result = GeneratorTestHost.RunWithAllCandidates(source);
 
         var facade = Facade(result);
 
@@ -148,7 +148,7 @@ public class PluginFacadeEmissionTests
             }
             """;
 
-        var result = GeneratorTestHost.Run(source);
+        var result = GeneratorTestHost.RunWithAllCandidates(source);
 
         Assert.Null(Facade(result));
     }
@@ -183,7 +183,7 @@ public class PluginFacadeEmissionTests
             }
             """;
 
-        var result = GeneratorTestHost.Run(source);
+        var result = GeneratorTestHost.RunWithAllCandidates(source);
 
         var facade = Facade(result);
 
@@ -231,7 +231,7 @@ public class PluginFacadeEmissionTests
             }
             """;
 
-        var result = GeneratorTestHost.Run(source);
+        var result = GeneratorTestHost.RunWithAllCandidates(source);
 
         var facade = Facade(result);
 
@@ -272,7 +272,7 @@ public class PluginFacadeEmissionTests
             }
             """;
 
-        var result = GeneratorTestHost.Run(source);
+        var result = GeneratorTestHost.RunWithAllCandidates(source);
 
         // The other half lands in the service's own namespace, so it is its own file.
         var parts = ServiceParts(result);
@@ -316,7 +316,7 @@ public class PluginFacadeEmissionTests
             }
             """;
 
-        var result = GeneratorTestHost.Run(source);
+        var result = GeneratorTestHost.RunWithAllCandidates(source);
 
         var diagnostic = Assert.Single(result.GeneratorDiagnostics);
 
@@ -353,7 +353,7 @@ public class PluginFacadeEmissionTests
             }
             """;
 
-        var result = GeneratorTestHost.Run(source);
+        var result = GeneratorTestHost.RunWithAllCandidates(source);
 
         var facade = Facade(result);
 

@@ -117,7 +117,7 @@ So a consumer installs the plugin with one reference and one line:
 ```csharp
 services.AddErgosfare(options =>
 {
-    options.AddCommandModule(commands => commands.RegisterGenerated());
+    options.AddCommandModule(commands => commands.AddGenerated());
     options.AddTiming();
 });
 ```

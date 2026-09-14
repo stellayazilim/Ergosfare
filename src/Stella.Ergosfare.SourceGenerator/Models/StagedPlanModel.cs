@@ -3,10 +3,8 @@ using System.Collections.Immutable;
 namespace Stella.Ergosfare.SourceGenerator.Models;
 
 /// <summary>
-/// A plan for a message whose whole pipeline — its main handlers plus at least one
-/// interceptor stage or plugin call — could be modelled exactly. A streaming pair gets a
-/// plan even bare: streaming has no single-handler family to fall back on, so the plain
-/// enumeration is the plan.
+/// An executable plan for a message whose handlers, interceptor stages and plugin calls
+/// are known at compile time. Pipelines without interceptors use the same plan model.
 /// </summary>
 /// <param name="MessageTypeExpression">The message this plan serves.</param>
 /// <param name="Groups">The group set this plan was compiled for, empty for the default one.</param>
@@ -32,9 +30,8 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 /// <para>
 /// Every stage is in invocation order — participants registered for the message type first,
 /// then those registered for a base type, each by descending weight and then type name — and
-/// the contract each call goes through was chosen at compile time. Like every plan it is a
-/// proposal: the executor checks it against the composition the container selected and falls
-/// back to the general strategy if they differ.
+/// the contract each call goes through was chosen at compile time. Registration binds it
+/// against the selected composition. A mismatch cannot execute an alternative pipeline.
 /// </para>
 /// <para>
 /// Handlers are two segments because a broadcast runs all of them. A command or query plan

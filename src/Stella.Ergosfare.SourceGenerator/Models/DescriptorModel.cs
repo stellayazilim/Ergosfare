@@ -17,4 +17,5 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 internal readonly record struct DescriptorModel(
     DescriptorKind Kind,
     string MessageTypeExpression,
-    string? ResultTypeExpression);
+    string? ResultTypeExpression,
+    bool IsAsync = true);

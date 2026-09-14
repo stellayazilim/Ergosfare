@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.Planning;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
 namespace Stella.Ergosfare.SourceGenerator.Test;
@@ -72,7 +72,7 @@ public class GroupedCommandPlanExecutionTests
 
     private static readonly Lazy<(Assembly Assembly, ServiceProvider Provider)> Host = new(() =>
     {
-        var result = GeneratorTestHost.Run(Source);
+        var result = GeneratorTestHost.RunWithAllCandidates(Source);
 
         Assert.Empty(result.CompilationErrors);
 
@@ -82,7 +82,7 @@ public class GroupedCommandPlanExecutionTests
         var assembly = Assembly.Load(stream.ToArray());
         var registrations = assembly.GetType(
             "Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
-        var registerCommands = registrations.GetMethod("RegisterGenerated", [typeof(CommandModuleBuilder)])!;
+        var registerCommands = registrations.GetMethod("AddGenerated", [typeof(CommandModuleBuilder)])!;
 
         var provider = new ServiceCollection()
             .AddErgosfare(options => options.AddCommandModule(commands => registerCommands.Invoke(null, [commands])))
@@ -107,13 +107,13 @@ public class GroupedCommandPlanExecutionTests
         var (assembly, _) = Host.Value;
         var commandType = assembly.GetType("TestApp.GenArchiveTodo", throwOnError: true)!;
 
-        var audit = GeneratedDispatchRoots.FindStagedVoidPlan(commandType, ["audit"]);
-        var billing = GeneratedDispatchRoots.FindStagedVoidPlan(commandType, ["billing"]);
+        var audit = GeneratedPlanRegistry.FindStagedVoidPlan(commandType, ["audit"]);
+        var billing = GeneratedPlanRegistry.FindStagedVoidPlan(commandType, ["billing"]);
 
         Assert.NotNull(audit);
         Assert.NotNull(billing);
         Assert.NotSame(audit, billing);
-        Assert.Null(GeneratedDispatchRoots.FindStagedVoidPlan(commandType));
+        Assert.Null(GeneratedPlanRegistry.FindStagedVoidPlan(commandType));
     }
 
     [Fact]

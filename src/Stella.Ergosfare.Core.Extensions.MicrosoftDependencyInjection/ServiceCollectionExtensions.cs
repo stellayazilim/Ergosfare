@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.Planning;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -36,7 +36,7 @@ public static class ServiceCollectionExtensions
     {
         // One catalog per container: the composition table it reads is process-wide, but
         // which of its rows this application registered is not.
-        var compositions = new FrozenCompositionCatalog();
+        var compositions = new DispatchPlanCatalog();
 
         var ergosfareBuilder = new ModuleRegistry(services, compositions);
         ergosfareBuilderAction(ergosfareBuilder);

@@ -10,6 +10,33 @@ namespace Stella.Ergosfare.Core.Test;
 public class GroupSetTests
 {
     [Fact]
+    public void CollectionExpressions_CreateGroupSets_AndPreserveEmptyStringNames()
+    {
+        GroupSet names = ["groupset.literal.a", "groupset.literal.b"];
+        GroupSet empty = [];
+        GroupSet emptyName = [""];
+
+        Assert.Same(GroupSet.Of("groupset.literal.a", "groupset.literal.b"), names);
+        Assert.Same(GroupSet.Empty, empty);
+        Assert.Single(emptyName);
+        Assert.Equal("", emptyName[0]);
+        Assert.NotSame(empty, emptyName);
+    }
+
+    [Fact]
+    public void ImplicitStringConversion_PreservesTheWholeName_AndRejectsNull()
+    {
+        GroupSet named = "groupset.literal.a";
+        GroupSet emptyName = "";
+        GroupSet comma = "one,two";
+        Assert.Same(GroupSet.Of("groupset.literal.a"), named);
+        Assert.Same(GroupSet.Of(""), emptyName);
+        Assert.Single(comma);
+        Assert.Equal("one,two", comma[0]);
+        Assert.Throws<ArgumentNullException>(() => { GroupSet invalid = (string)null!; });
+    }
+
+    [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
     public void Of_InternsEqualSequences_ToTheSameInstance()

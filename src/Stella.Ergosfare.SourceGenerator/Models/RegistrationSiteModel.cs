@@ -8,7 +8,7 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 /// </summary>
 /// <remarks>
 /// Registering by hand collects a type through the same generated path as
-/// <c>RegisterGenerated()</c>, one at a time rather than in bulk, so the type's handler
+/// <c>AddGenerated()</c>, one at a time rather than in bulk, so the type's handler
 /// contracts count as evidence that a message is handled exactly as a discovered handler
 /// would. A registration whose type cannot be known at compile time — a <c>Type</c>
 /// argument that is not a <c>typeof</c>, a batch of descriptors, or the assembly scan older
@@ -16,6 +16,11 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 /// </remarks>
 internal readonly struct RegistrationSiteModel : IEquatable<RegistrationSiteModel>
 {
+    public string? TypeExpression { get; init; }
+    public string? DiscoveryPattern { get; init; }
+    public string? DeclaringMethod { get; init; }
+    // 0: all modules, 1: commands, 2: queries, 3: events.
+    public byte Module { get; init; }
     /// <summary>
     /// The CLR metadata name of the registered type, or <c>null</c> when the type is
     /// unknown.
@@ -51,7 +56,8 @@ internal readonly struct RegistrationSiteModel : IEquatable<RegistrationSiteMode
     /// <returns><c>true</c> when both describe the same registration.</returns>
     public bool Equals(RegistrationSiteModel other)
     {
-        if (TypeMetadataName != other.TypeMetadataName
+        if (TypeExpression != other.TypeExpression || DiscoveryPattern != other.DiscoveryPattern || DeclaringMethod != other.DeclaringMethod || Module != other.Module
+            || TypeMetadataName != other.TypeMetadataName
             || IsOpaque != other.IsOpaque
             || !Nullable.Equals(UnknownTypeLocation, other.UnknownTypeLocation)
             || MainHandlerMessageKeys.Length != other.MainHandlerMessageKeys.Length)
@@ -86,6 +92,10 @@ internal readonly struct RegistrationSiteModel : IEquatable<RegistrationSiteMode
         unchecked
         {
             return ((TypeMetadataName?.GetHashCode() ?? 0) * 397)
+                   ^ (TypeExpression?.GetHashCode() ?? 0)
+                   ^ (DiscoveryPattern?.GetHashCode() ?? 0)
+                   ^ (DeclaringMethod?.GetHashCode() ?? 0)
+                   ^ Module
                    ^ (MainHandlerMessageKeys.Length << 1)
                    ^ (IsOpaque ? 1 : 0);
         }

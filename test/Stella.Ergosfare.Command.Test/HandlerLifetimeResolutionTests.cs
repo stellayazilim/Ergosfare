@@ -61,9 +61,7 @@ public sealed class ForcedCommandHandler(LifetimeScopedProbe probe) : ICommandHa
 }
 
 /// <summary>
-/// Verifies that handler resolution honors registered DI lifetimes by default
-/// (scoped dependencies are isolated per scope) and that <c>ForceMemoizedHandlers()</c> —
-/// a contract no compiled plan can keep — now fails the dispatch loudly.
+/// Verifies scoped dependency isolation and transient handler construction.
 /// </summary>
 public class HandlerLifetimeResolutionTests
 {
@@ -102,7 +100,7 @@ public class HandlerLifetimeResolutionTests
 
     [Fact]
     [Trait("Category", "Unit")]
-    public async Task SingletonRegisteredHandler_IsMemoizedAcrossScopes()
+    public async Task ParameterlessHandler_IsConstructedPerDispatch()
     {
         // arrange: an explicit singleton registration before AddErgosfare wins over
         // the module's TryAddTransient and keeps the memoized fast path
@@ -126,31 +124,7 @@ public class HandlerLifetimeResolutionTests
         }
 
         // assert
-        Assert.Equal(firstCommand.ObservedHandlerId, secondCommand.ObservedHandlerId);
+        Assert.NotEqual(firstCommand.ObservedHandlerId, secondCommand.ObservedHandlerId);
     }
 
-    [Fact]
-    [Trait("Category", "Unit")]
-    public async Task ForceMemoizedHandlers_FailsTheDispatch()
-    {
-        // arrange
-        var services = new ServiceCollection();
-        services.AddScoped<LifetimeScopedProbe>();
-        services.AddErgosfare(o =>
-        {
-            o.ForceMemoizedHandlers();
-            o.AddCommandModule(m => m.Register<ForcedCommandHandler>());
-        });
-        await using var provider = services.BuildServiceProvider();
-
-        // act + assert: a memoized pipeline caches instances inside its references, and a
-        // compiled plan resolves fresh ones — the two contracts cannot both hold, so the
-        // construct is unplanned until the generator learns it and every dispatch fails.
-        using var scope = provider.CreateScope();
-        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
-            await scope.ServiceProvider.GetRequiredService<ICommandMediator>().SendAsync(new ForcedCommand()));
-
-        Assert.Equal(UnplannedDispatchReason.MemoizedInstances, thrown.Reason);
-        Assert.Equal(typeof(ForcedCommand), thrown.MessageType);
-    }
 }

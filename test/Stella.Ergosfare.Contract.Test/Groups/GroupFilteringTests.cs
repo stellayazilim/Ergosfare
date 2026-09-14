@@ -72,6 +72,27 @@ public sealed class GroupFilteringTests
     /// <summary>The canonical filter form, interned and reused as the API intends.</summary>
     private static readonly GroupSet ReportingSet = GroupSet.Of(Reporting);
 
+    [Fact]
+    public async Task A_spread_collection_expression_materializes_a_single_use_source_once()
+    {
+        await using var provider = CreateProvider();
+        var mediator = provider.GetRequiredService<ICommandMediator>();
+        var command = new ReportingOnly();
+        var reads = 0;
+
+        await mediator.SendAsync(command, [.. ReadOnce()], CancellationToken.None);
+
+        Assert.True(command.Handled);
+        Assert.Equal(1, reads);
+
+        IEnumerable<string> ReadOnce()
+        {
+            if (++reads != 1)
+                throw new InvalidOperationException("The group source cannot be enumerated twice.");
+            yield return Reporting;
+        }
+    }
+
     private static ServiceProvider CreateProvider()
         => new ServiceCollection()
             .AddErgosfare(options => options
@@ -83,24 +104,14 @@ public sealed class GroupFilteringTests
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_message_mixing_grouped_and_ungrouped_participants_is_unplanned_today()
+    public async Task The_default_plan_runs_only_the_ungrouped_participants()
     {
         await using var provider = CreateProvider();
         var recorder = new PipelineRecorder();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        // Engine suspect, pinned as observed: the generator emits no plan at all — default
-        // or per-set — for a send whose pipeline mixes grouped and ungrouped participants,
-        // so the default dispatch that used to run the ungrouped handler alone now fails
-        // unplanned. The broadcast side models the same mix fine (StockChanged in
-        // Events/EventPublishTests.cs gets a default plan and a per-set plan), so this
-        // looks like a send-side gap rather than a doctrine. See the suite README's
-        // suspicious-behaviors entry on the runtime-lane removal.
-        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(
-            async () => await mediator.SendAsync(new MixedAudience(), recorder.Commands()));
-
-        Assert.Equal(UnplannedDispatchReason.NoCompiledPlan, thrown.Reason);
-        Assert.Empty(recorder.Stages);
+        await mediator.SendAsync(new MixedAudience(), recorder.Commands());
+        Assert.Equal(["handler"], recorder.Stages);
     }
 
     [Fact]
@@ -137,18 +148,18 @@ public sealed class GroupFilteringTests
         var mediator = provider.GetRequiredService<ICommandMediator>();
         await Assert.ThrowsAsync<NoHandlerFoundException>(
             async () => await mediator.SendAsync(
-                new MixedAudience(), new[] { Reporting }, CancellationToken.None));
+                new MixedAudience(), [Reporting], CancellationToken.None));
     }
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_plain_group_sequence_and_a_canonical_GroupSet_select_the_same_participants()
+    public async Task A_collection_expression_and_a_reused_GroupSet_select_the_same_participants()
     {
         await using var provider = CreateProvider();
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
         var viaSequence = new PipelineRecorder();
-        await mediator.SendAsync(new ReportingOnly(), viaSequence.Commands(), new[] { Reporting });
+        await mediator.SendAsync(new ReportingOnly(), viaSequence.Commands(), [Reporting]);
 
         var viaGroupSet = new PipelineRecorder();
         await mediator.SendAsync(new ReportingOnly(), viaGroupSet.Commands(), ReportingSet);
@@ -183,12 +194,12 @@ public sealed class GroupFilteringTests
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task The_string_array_extension_selects_the_grouped_pipeline_too()
+    public async Task The_collection_expression_selects_the_grouped_pipeline_too()
     {
         await using var provider = CreateProvider();
         var command = new ReportingOnly();
 
-        await provider.GetRequiredService<ICommandMediator>().SendAsync(command, new[] { Reporting });
+        await provider.GetRequiredService<ICommandMediator>().SendAsync(command, [Reporting]);
 
         Assert.True(command.Handled);
     }

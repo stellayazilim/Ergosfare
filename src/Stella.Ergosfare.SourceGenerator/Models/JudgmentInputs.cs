@@ -14,4 +14,5 @@ internal readonly record struct JudgmentInputs(
     bool? CompositionRootOverride,
     bool TrimUnusedHandlers,
     bool ScanReferences,
-    bool IsExecutableOutput);
+    bool IsExecutableOutput,
+    bool GeneratePlans = true);

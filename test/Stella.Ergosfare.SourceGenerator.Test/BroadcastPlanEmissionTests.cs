@@ -43,7 +43,7 @@ public class BroadcastPlanEmissionTests
     [Fact]
     public void InterceptedBroadcast_EmitsABroadcastPlan()
     {
-        var result = GeneratorTestHost.Run(EventPipeline);
+        var result = GeneratorTestHost.RunWithAllCandidates(EventPipeline);
 
         Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
@@ -52,7 +52,7 @@ public class BroadcastPlanEmissionTests
         // one, so which store answered settles the delivery difference — nothing branches on
         // the message.
         Assert.Contains(
-            "GeneratedDispatchRoots.AddBroadcastPlan<global::TestApp.OrderPlaced>(new StagedPlan0());",
+            "GeneratedPlanRegistry.AddBroadcastPlan<global::TestApp.OrderPlaced>(new StagedPlan0());",
             result.GeneratedSource);
         Assert.Contains("StagedBroadcastPlan<global::TestApp.OrderPlaced>", result.GeneratedSource);
         Assert.DoesNotContain("StagedVoidPlan<global::TestApp.OrderPlaced>", result.GeneratedSource);
@@ -66,7 +66,7 @@ public class BroadcastPlanEmissionTests
     [Fact]
     public void EveryMatchedHandler_IsBakedAndCalled()
     {
-        var result = GeneratorTestHost.Run(EventPipeline);
+        var result = GeneratorTestHost.RunWithAllCandidates(EventPipeline);
 
         Assert.Empty(result.CompilationErrors);
 
@@ -74,9 +74,9 @@ public class BroadcastPlanEmissionTests
             "new global::System.Type[] { typeof(global::TestApp.AuditHandler), typeof(global::TestApp.NotifyHandler) }",
             result.GeneratedSource);
 
-        Assert.Contains("GetRequiredService<global::TestApp.AuditHandler>(serviceProvider).HandleAsync(message, context);",
+        Assert.Contains("new global::TestApp.AuditHandler().HandleAsync(message, context);",
             result.GeneratedSource);
-        Assert.Contains("GetRequiredService<global::TestApp.NotifyHandler>(serviceProvider).HandleAsync(message, context);",
+        Assert.Contains("new global::TestApp.NotifyHandler().HandleAsync(message, context);",
             result.GeneratedSource);
     }
 
@@ -89,7 +89,7 @@ public class BroadcastPlanEmissionTests
     [Fact]
     public void CovariantHandler_LandsInTheIndirectSegment()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Events.Abstractions;
             using System.Threading.Tasks;
@@ -136,7 +136,7 @@ public class BroadcastPlanEmissionTests
     [Fact]
     public void SingleHandlerPlan_KeepsTheOneHandlerShape()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
             using System.Threading.Tasks;
@@ -176,7 +176,7 @@ public class BroadcastPlanEmissionTests
     [Fact]
     public void PlainBroadcast_GetsABarePlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Events.Abstractions;
             using System.Threading.Tasks;

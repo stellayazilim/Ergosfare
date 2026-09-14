@@ -23,3 +23,9 @@ ERGO015 | Usage | Warning | Plugin assembly is excluded from reference scanning 
 ERGO016 | Usage | Warning | Generic participant closes over no message and never executes
 ERGO017 | Usage | Warning | Plugin service cannot receive the plugin's options
 ERGO018 | Usage | Error | Registered type is not known at compile time
+ERGO019 | Usage | Error | Default result adapter is not named at compile time
+ERGO020 | Usage | Error | Conflicting default result adapters
+ERGO021 | Usage | Error | Default result adapter cannot be constructed by generated code
+ERGO022 | Usage | Error | Stream message is published
+ERGO023 | Usage | Error | Group set selects two main handlers
+ERGO024 | Usage | Error | Group set selects no main handler

@@ -1,0 +1,3 @@
+# Start the API with dotnet, Rider's http launch profile, or task e2e.
+# Press Play on the run line below: create runs before the requests that need todoId.
+run ./todos.http

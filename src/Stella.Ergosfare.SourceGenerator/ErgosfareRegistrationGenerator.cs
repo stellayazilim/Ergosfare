@@ -116,6 +116,25 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
             .Select(static (model, _) => model!.Value)
             .Collect();
 
+        var selectionCalls = context.SyntaxProvider
+            .CreateSyntaxProvider(static (node, _) => node is InvocationExpressionSyntax,
+                static (ctx, ct) => ReadSelectionCall(ctx, ct))
+            .Where(static call => call is not null).Select(static (call, _) => call!.Value).Collect();
+        context.RegisterSourceOutput(registrationSites.Combine(selectionCalls),
+            static (spc, pair) => EmitSelectionManifest(spc, pair.Left, pair.Right));
+        var referencedSelections = context.CompilationProvider.Combine(selectionCalls)
+            .Select(static (pair, ct) => ReadReferencedSelections(pair.Left, pair.Right, ct));
+        registrationSites = registrationSites.Combine(referencedSelections)
+            .Select(static (pair, _) => pair.Left.AddRange(pair.Right));
+
+        var explicitCandidates = context.SyntaxProvider
+            .CreateSyntaxProvider(static (node, _) => IsRegistrationInvocationCandidate(node),
+                static (ctx, ct) => ReadExplicitCandidates(ctx, ct))
+            .Collect()
+            .Select(static (batches, _) => batches.SelectMany(static batch => batch).ToImmutableArray());
+        referencedTypes = referencedTypes.Combine(explicitCandidates)
+            .Select(static (pair, _) => pair.Left.AddRange(pair.Right));
+
         // The container's default result adapter, when UseDefaultResultAdapter names it
         // literally in this compilation; the staged plans then bake the binding for the
         // slots it serves.
@@ -148,7 +167,9 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
                 ReadCompositionRootOverride(pair.Left.Left),
                 ReadTrimUnusedHandlers(pair.Left.Left),
                 pair.Left.Right,
-                pair.Right));
+                pair.Right,
+                !pair.Left.Left.GlobalOptions.TryGetValue("build_property.ErgosfareGeneratePlans", out var generatePlans)
+                    || !string.Equals(generatePlans, "false", StringComparison.OrdinalIgnoreCase)));
 
         // The plugin methods this compilation can see. Gated on the scan like every other
         // reference-derived input: a plugin arrives as referenced metadata, so scanning

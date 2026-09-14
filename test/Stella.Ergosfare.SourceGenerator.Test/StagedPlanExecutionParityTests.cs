@@ -1,7 +1,7 @@
 using System.Reflection;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.Planning;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Queries.Abstractions;
@@ -13,7 +13,7 @@ namespace Stella.Ergosfare.SourceGenerator.Test;
 /// <summary>
 /// Strategy-parity matrix for the emitted staged plans, executed end to end: the app
 /// source below compiles with the generator, the emitted assembly loads into the test
-/// process (it shares the real Ergosfare assemblies), its <c>RegisterGenerated</c> wires a
+/// process (it shares the real Ergosfare assemblies), its <c>AddGenerated</c> wires a
 /// real container, and dispatches run through the public mediators. Covered: message
 /// rewrite by pre-interceptors, execution order across stages, post result rewrite,
 /// exception capture with strategy-identical swallowing, propagation without exception
@@ -226,7 +226,7 @@ public class StagedPlanExecutionParityTests
 
     private static readonly Lazy<(Assembly Assembly, ServiceProvider Provider)> Host = new(() =>
     {
-        var result = GeneratorTestHost.Run(Source);
+        var result = GeneratorTestHost.RunWithAllCandidates(Source);
 
         Assert.Empty(result.CompilationErrors);
 
@@ -235,8 +235,8 @@ public class StagedPlanExecutionParityTests
 
         var assembly = Assembly.Load(stream.ToArray());
         var registrations = assembly.GetType("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
-        var registerCommands = registrations.GetMethod("RegisterGenerated", [typeof(CommandModuleBuilder)])!;
-        var registerQueries = registrations.GetMethod("RegisterGenerated", [typeof(QueryModuleBuilder)])!;
+        var registerCommands = registrations.GetMethod("AddGenerated", [typeof(CommandModuleBuilder)])!;
+        var registerQueries = registrations.GetMethod("AddGenerated", [typeof(QueryModuleBuilder)])!;
 
         var provider = new ServiceCollection()
             .AddErgosfare(options =>
@@ -264,7 +264,7 @@ public class StagedPlanExecutionParityTests
     {
         var (assembly, provider) = Host.Value;
 
-        Assert.NotNull(GeneratedDispatchRoots.FindStagedVoidPlan(assembly.GetType("TestApp.GenHappyCommand")!));
+        Assert.NotNull(GeneratedPlanRegistry.FindStagedVoidPlan(assembly.GetType("TestApp.GenHappyCommand")!));
 
         Entries.Clear();
         await provider.GetRequiredService<ICommandMediator>().SendAsync(CreateCommand("TestApp.GenHappyCommand"));
@@ -283,7 +283,7 @@ public class StagedPlanExecutionParityTests
 
         // The re-based (result-agnostic) flavored exception contract makes this pipeline
         // both runnable at all on the strategy path and modelable for a staged plan.
-        Assert.NotNull(GeneratedDispatchRoots.FindStagedVoidPlan(assembly.GetType("TestApp.GenVoidSwallowCommand")!));
+        Assert.NotNull(GeneratedPlanRegistry.FindStagedVoidPlan(assembly.GetType("TestApp.GenVoidSwallowCommand")!));
 
         Entries.Clear();
 
@@ -300,7 +300,7 @@ public class StagedPlanExecutionParityTests
         var (assembly, provider) = Host.Value;
 
         var commandType = assembly.GetType("TestApp.GenSwallowCommand", throwOnError: true)!;
-        Assert.NotNull(GeneratedDispatchRoots.FindStagedResultPlan(commandType, typeof(string)));
+        Assert.NotNull(GeneratedPlanRegistry.FindStagedResultPlan(commandType, typeof(string)));
 
         Entries.Clear();
 
@@ -321,7 +321,7 @@ public class StagedPlanExecutionParityTests
     {
         var (assembly, provider) = Host.Value;
 
-        Assert.NotNull(GeneratedDispatchRoots.FindStagedVoidPlan(assembly.GetType("TestApp.GenPropagateCommand")!));
+        Assert.NotNull(GeneratedPlanRegistry.FindStagedVoidPlan(assembly.GetType("TestApp.GenPropagateCommand")!));
 
         Entries.Clear();
 
@@ -340,7 +340,7 @@ public class StagedPlanExecutionParityTests
         var (assembly, provider) = Host.Value;
 
         var commandType = assembly.GetType("TestApp.GenAbortCommand", throwOnError: true)!;
-        Assert.NotNull(GeneratedDispatchRoots.FindStagedResultPlan(commandType, typeof(string)));
+        Assert.NotNull(GeneratedPlanRegistry.FindStagedResultPlan(commandType, typeof(string)));
 
         Entries.Clear();
 
@@ -358,7 +358,7 @@ public class StagedPlanExecutionParityTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public void FrozenComposition_MirrorsThePipelineTheDispatchActuallyRuns()
+    public void PipelineDescriptor_MirrorsThePipelineTheDispatchActuallyRuns()
     {
         var (assembly, _) = Host.Value;
         var commandType = assembly.GetType("TestApp.GenHappyCommand", throwOnError: true)!;
@@ -366,17 +366,17 @@ public class StagedPlanExecutionParityTests
         // The dual-run parity seam: the generator's frozen table derives, for the same
         // message, exactly the stage sequence the registry-backed dispatch executes —
         // which HappyPath_RewritesTheMessageAndRunsStagesInOrder pins observationally.
-        var frozen = GeneratedDispatchRoots.FindFrozenComposition(commandType);
+        var frozen = GeneratedPlanRegistry.FindPipelineDescriptor(commandType);
         Assert.NotNull(frozen);
 
-        var shape = frozen.BuildShape(commandType, []);
+        var shape = GeneratedPlanRegistry.FindStagedVoidPlan(commandType)!.Composition;
 
-        Assert.Equal([assembly.GetType("TestApp.GenHappyCommandHandler")!], shape.Handlers);
-        Assert.Empty(shape.IndirectHandlers);
-        Assert.Equal([assembly.GetType("TestApp.GenHappyCommandPre")!], shape.PreInterceptors);
-        Assert.Equal([assembly.GetType("TestApp.GenHappyCommandPost")!], shape.PostInterceptors);
-        Assert.Empty(shape.ExceptionInterceptors);
-        Assert.Equal([assembly.GetType("TestApp.GenHappyCommandFinal")!], shape.FinalInterceptors);
+        Assert.Equal([assembly.GetType("TestApp.GenHappyCommandHandler")!], shape.HandlerTypes);
+        Assert.Empty(shape.IndirectHandlerTypes);
+        Assert.Equal([assembly.GetType("TestApp.GenHappyCommandPre")!], shape.PreInterceptorTypes);
+        Assert.Equal([assembly.GetType("TestApp.GenHappyCommandPost")!], shape.PostInterceptorTypes);
+        Assert.Empty(shape.ExceptionInterceptorTypes);
+        Assert.Equal([assembly.GetType("TestApp.GenHappyCommandFinal")!], shape.FinalInterceptorTypes);
     }
 
     [Fact]
@@ -387,7 +387,7 @@ public class StagedPlanExecutionParityTests
         var (assembly, _) = Host.Value;
 
         var queryType = assembly.GetType("TestApp.GenRewriteQuery", throwOnError: true)!;
-        Assert.NotNull(GeneratedDispatchRoots.FindStagedResultPlan(queryType, typeof(int)));
+        Assert.NotNull(GeneratedPlanRegistry.FindStagedResultPlan(queryType, typeof(int)));
 
         var query = (IQuery<int>)Activator.CreateInstance(queryType)!;
         var result = await Host.Value.Provider.GetRequiredService<IQueryMediator>().QueryAsync(query);

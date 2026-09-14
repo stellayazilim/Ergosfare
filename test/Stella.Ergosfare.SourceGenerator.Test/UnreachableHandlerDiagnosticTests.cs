@@ -40,7 +40,7 @@ public class UnreachableHandlerDiagnosticTests
     [Fact]
     public void HandlerWithoutAnyDispatchSite_Warns()
     {
-        var result = GeneratorTestHost.Run(HandlerWithoutAnySite, buildProperties: CompositionRoot);
+        var result = GeneratorTestHost.RunWithAllCandidates(HandlerWithoutAnySite, buildProperties: CompositionRoot);
 
         Assert.Empty(result.CompilationErrors);
 
@@ -55,7 +55,7 @@ public class UnreachableHandlerDiagnosticTests
     [Fact]
     public void DispatchSite_MakesTheHandlerReachable()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
 
@@ -84,7 +84,7 @@ public class UnreachableHandlerDiagnosticTests
     [Fact]
     public void OpaqueMarkerSite_ReachesEveryHandlerOfTheKind()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
 
@@ -124,7 +124,7 @@ public class UnreachableHandlerDiagnosticTests
     [Fact]
     public void BaseTypedSite_ReachesTheSubtypeHandler()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
 
@@ -153,9 +153,9 @@ public class UnreachableHandlerDiagnosticTests
     }
 
     [Fact]
-    public void KeyedDiscoveryHandler_IsExemptFromTheJudgment()
+    public void SelectedKeyedHandler_IsCheckedForReachability()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
@@ -178,13 +178,13 @@ public class UnreachableHandlerDiagnosticTests
 
         // Keyed participation is deliberately conditional; reachability says nothing
         // about whether the key is ever selected.
-        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "ERGO007");
     }
 
     [Fact]
     public void ManifestlessReferencedAssembly_SuspendsTheJudgment()
     {
-        var result = GeneratorTestHost.Run(HandlerWithoutAnySite,
+        var result = GeneratorTestHost.RunWithAllCandidates(HandlerWithoutAnySite,
             libraries:
             [
                 ("Ergosfare.LegacyLibrary", """
@@ -208,7 +208,7 @@ public class UnreachableHandlerDiagnosticTests
     [Fact]
     public void ManifestSiteInAReferencedAssembly_ReachesTheRootHandler()
     {
-        var result = GeneratorTestHost.Run(HandlerWithoutAnySite,
+        var result = GeneratorTestHost.RunWithAllCandidates(HandlerWithoutAnySite,
             libraries:
             [
                 ("Ergosfare.SiteLibrary", """
@@ -232,7 +232,7 @@ public class UnreachableHandlerDiagnosticTests
     [Fact]
     public void ExcludedSubtypePresence_DoesNotShieldAnUnreachedHandler()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
@@ -266,7 +266,7 @@ public class UnreachableHandlerDiagnosticTests
     [Fact]
     public void ADispatchOfTheExcludedSubtype_ReachesTheBaseHandler()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
@@ -302,7 +302,7 @@ public class UnreachableHandlerDiagnosticTests
     [Fact]
     public void UnusedEventHandler_WarnsToo()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System.Threading.Tasks;
             using Stella.Ergosfare.Events.Abstractions;
 
@@ -329,7 +329,7 @@ public class UnreachableHandlerDiagnosticTests
     [Fact]
     public void Trim_ExcludesTheUnreachableHandlerAndReportsErgosg008()
     {
-        var result = GeneratorTestHost.Run(HandlerWithoutAnySite, buildProperties: CompositionRootWithTrim);
+        var result = GeneratorTestHost.RunWithAllCandidates(HandlerWithoutAnySite, buildProperties: CompositionRootWithTrim);
 
         Assert.Empty(result.CompilationErrors);
 
@@ -345,7 +345,7 @@ public class UnreachableHandlerDiagnosticTests
     [Fact]
     public void Trim_KeepsReachableHandlers()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
 
@@ -375,7 +375,7 @@ public class UnreachableHandlerDiagnosticTests
     [Fact]
     public void Trim_SparesTypesThatAlsoCarryInterceptorContracts()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;

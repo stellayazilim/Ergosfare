@@ -113,12 +113,12 @@ public class StreamFastLaneTests
         // unplanned rather than running a pipeline no plan produced.
         var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
         {
-            await foreach (var _ in mediator.StreamAsync(new RoutedStream(), new[] { "east" }))
+            await foreach (var _ in mediator.StreamAsync(new RoutedStream(), ["east"]))
             {
             }
         });
 
-        Assert.Equal(UnplannedDispatchReason.NoCompiledPlan, thrown.Reason);
+        Assert.Equal(UnplannedDispatchReason.UnplannedGroupSet, thrown.Reason);
     }
 
     [Fact]

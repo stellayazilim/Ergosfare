@@ -23,7 +23,4 @@ internal enum DispatchSiteKind : byte
 
     /// <summary>A call to the event mediator.</summary>
     Event = 3,
-
-    /// <summary>A call to the core message mediator.</summary>
-    Message = 4,
 }

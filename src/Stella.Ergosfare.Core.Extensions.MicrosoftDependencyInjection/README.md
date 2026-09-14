@@ -6,7 +6,7 @@ module registry the command/query/event modules plug into.
 
 ```csharp
 builder.Services.AddErgosfare(o => o
-    .AddCommandModule(c => c.RegisterGenerated()));
+    .AddCommandModule(c => c.AddGenerated()));
 ```
 
 Applications usually get this transitively through the

@@ -117,11 +117,13 @@ tasks:
   # ---------------------------------------------------------------- e2e
 
   e2e:
-    desc: Boot the sample Todo app and assert the .http suite with ijhttp.
+    desc: Start the Todo API on port 5099 with dotnet (HTTP tests run from the editor).
     cmds:
-      # run.mjs builds+boots examples/e2e/Stella.Ergosfare.E2E.Api, waits for /health, runs
-      # the ijhttp suite, then tears the app down and propagates ijhttp's exit code. Needs
-      # the JetBrains HTTP Client CLI (ijhttp) on PATH.
+      - dotnet run --project ./examples/e2e/Stella.Ergosfare.E2E.Api/Stella.Ergosfare.E2E.Api.csproj --launch-profile http
+
+  e2e:test:
+    desc: Run the optional automated HTTP suite, including API startup and shutdown.
+    cmds:
       - node examples/e2e/run.mjs
 
   # ---------------------------------------------------------------- mcp

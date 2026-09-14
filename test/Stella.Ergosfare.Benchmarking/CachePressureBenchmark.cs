@@ -23,17 +23,9 @@ namespace Stella.Ergosfare.Benchmarking;
 /// paid for its speed with instruction-cache footprint or an extra unpredictable branch,
 /// which is exactly what a single-core deployment feels first. A baseline is captured
 /// before the surgery and re-run after every large merge.</para>
-/// <para>Each shape carries the same five rows: Ergosfare's three registration lanes —
-/// default (runtime-registered, transient handlers), generated (compile-time dispatch
-/// roots and plans) and memoized (handler graph resolved once) — against MediatR and
-/// martinothamar/Mediator on their own defaults, the two competitors
-/// <see cref="MediationBenchmark"/> already tracks. Ergosfare's default lane is the
-/// per-shape baseline, so the Ratio column reads as "what does this lane, or this
-/// library, cost relative to a plain runtime-registered Ergosfare dispatch".</para>
-/// <para>The generated and memoized lanes install process-wide state
-/// (<c>RegisterGenerated()</c> writes the dispatch roots; <c>ForceMemoizedHandlers()</c>
-/// changes how every handler resolves), so each gets a targeted setup and therefore its
-/// own benchmark process — the same isolation <see cref="MediationBenchmark"/> uses.</para>
+/// <para>Compares explicit and generated registration using compiled plans against
+/// MediatR and martinothamar/Mediator defaults. The generated registration rows use
+/// a targeted setup in their own benchmark process.</para>
 /// <para>Counter collection needs an elevated console on Windows; see
 /// <see cref="CachePressureConfig"/> for what an unelevated run still reports.</para>
 /// </remarks>
@@ -48,7 +40,6 @@ public class CachePressureBenchmark
 
     private ServiceProvider _ergosfare = null!;
     private ServiceProvider _ergosfareGenerated = null!;
-    private ServiceProvider _ergosfareMemoized = null!;
     private ServiceProvider _mediatr = null!;
     private ServiceProvider _mediatorSg = null!;
 
@@ -56,8 +47,6 @@ public class CachePressureBenchmark
     private IQueryMediator _queries = null!;
     private ICommandMediator _generatedCommands = null!;
     private IQueryMediator _generatedQueries = null!;
-    private ICommandMediator _memoizedCommands = null!;
-    private IQueryMediator _memoizedQueries = null!;
     private IMediator _mediator = null!;
     private Mediator.IMediator _martinMediator = null!;
 
@@ -118,8 +107,8 @@ public class CachePressureBenchmark
         _ergosfareGenerated = new ServiceCollection()
             .AddErgosfare(options =>
             {
-                options.AddCommandModule(commands => commands.RegisterGenerated());
-                options.AddQueryModule(queries => queries.RegisterGenerated());
+                options.AddCommandModule(commands => commands.AddGenerated());
+                options.AddQueryModule(queries => queries.AddGenerated());
             })
             .BuildServiceProvider();
 
@@ -136,31 +125,6 @@ public class CachePressureBenchmark
         nameof(Query_Result_Generated_Typed)])]
     public void CleanupGenerated() => _ergosfareGenerated.Dispose();
 
-    /// <summary>Builds the memoized lane in its own benchmark process.</summary>
-    [GlobalSetup(Targets = [nameof(Command_Void_Memoized), nameof(Query_Result_Memoized)])]
-    public void SetupMemoized()
-    {
-        _ergosfareMemoized = new ServiceCollection()
-            .AddErgosfare(options =>
-            {
-                options.ForceMemoizedHandlers();
-                options.AddCommandModule(commands => commands.Register<VoidCommandHandler>());
-                options.AddQueryModule(queries => queries.Register<IntQueryHandler>());
-            })
-            .BuildServiceProvider();
-
-        _memoizedCommands = _ergosfareMemoized.GetRequiredService<ICommandMediator>();
-        _memoizedQueries = _ergosfareMemoized.GetRequiredService<IQueryMediator>();
-
-        AssertQueryAnswers(
-            () => _memoizedQueries.QueryAsync(_intQuery).AsTask().GetAwaiter().GetResult(),
-            "Ergosfare (memoized)");
-    }
-
-    /// <summary>Releases the memoized lane's provider.</summary>
-    [GlobalCleanup(Targets = [nameof(Command_Void_Memoized), nameof(Query_Result_Memoized)])]
-    public void CleanupMemoized() => _ergosfareMemoized.Dispose();
-
     // ------------------------------------------------------------------
     // Void command — nothing comes back; the shape every fast lane targets first
     // ------------------------------------------------------------------
@@ -172,10 +136,6 @@ public class CachePressureBenchmark
     /// <summary>The compile-time dispatch root and plan emitted by the generator.</summary>
     [Benchmark, BenchmarkCategory(VoidShape)]
     public ValueTask Command_Void_Generated() => _generatedCommands.SendAsync(_voidCommand);
-
-    /// <summary>The handler graph resolved once and reused — no per-dispatch allocation.</summary>
-    [Benchmark, BenchmarkCategory(VoidShape)]
-    public ValueTask Command_Void_Memoized() => _memoizedCommands.SendAsync(_voidCommand);
 
     /// <summary>MediatR on its defaults: reflection-based dispatch, transient handlers.</summary>
     [Benchmark, BenchmarkCategory(VoidShape)]
@@ -206,10 +166,6 @@ public class CachePressureBenchmark
     [Benchmark, BenchmarkCategory(ResultShape)]
     public ValueTask<int> Query_Result_Generated_Typed()
         => _generatedQueries.QueryAsync<IntQuery, int>(_intQuery);
-
-    /// <inheritdoc cref="Command_Void_Memoized" />
-    [Benchmark, BenchmarkCategory(ResultShape)]
-    public ValueTask<int> Query_Result_Memoized() => _memoizedQueries.QueryAsync(_intQuery);
 
     /// <inheritdoc cref="MediatR_Send_Void" />
     [Benchmark, BenchmarkCategory(ResultShape)]

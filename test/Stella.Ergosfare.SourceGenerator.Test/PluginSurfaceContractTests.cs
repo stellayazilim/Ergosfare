@@ -36,7 +36,7 @@ public class PluginSurfaceContractTests
         Assert.Equal(Module.Command | Module.Event, filter.Modules);
 
         // Saying nothing about keys is not "every key": an empty key list selects the
-        // default key alone, exactly as a pattern-less RegisterGenerated() does.
+        // default key alone, exactly as a pattern-less AddGenerated() does.
         Assert.Empty(filter.Keys);
     }
 

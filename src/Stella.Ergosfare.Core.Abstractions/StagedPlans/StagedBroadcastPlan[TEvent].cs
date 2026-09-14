@@ -1,3 +1,4 @@
+using Stella.Ergosfare.Core.Abstractions.Results;
 namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 
 /// <summary>
@@ -11,9 +12,15 @@ namespace Stella.Ergosfare.Core.Abstractions.StagedPlans;
 /// constraint. That lets the publishing path name this type directly, where reaching a void
 /// plan from a publish would need an untyped step.
 /// </remarks>
-public abstract class StagedBroadcastPlan<TEvent> : StagedBroadcastPlan
+public abstract class StagedBroadcastPlan<TEvent> : StagedBroadcastPlan, IPipelineExecutor, ICompiledPlan
     where TEvent : notnull
 {
+    ValueTask IPipelineExecutor.Execute(object message, ErgosfareContext context,
+        IServiceProvider serviceProvider, IEnumerable<string>? groups)
+        => FilterGroups is not null && groups is IReadOnlyList<string> requested
+            ? ExecuteFiltered((TEvent)message, context, serviceProvider, requested)
+            : Execute((TEvent)message, context, serviceProvider);
+
     /// <summary>
     /// Runs the compiled pipeline for <paramref name="message"/>, delivering it to every
     /// handler the plan was compiled with.
@@ -31,24 +38,6 @@ public abstract class StagedBroadcastPlan<TEvent> : StagedBroadcastPlan
     public abstract ValueTask Execute(TEvent message, ErgosfareContext context, IServiceProvider serviceProvider);
 
     /// <summary>
-    /// Runs the compiled pipeline with participants constructed directly rather than
-    /// resolved.
-    /// </summary>
-    /// <param name="message">The event to publish.</param>
-    /// <param name="context">The execution context of this publish.</param>
-    /// <param name="serviceProvider">
-    /// The provider participants' own dependencies are resolved from.
-    /// </param>
-    /// <returns>A task that completes when every handler has run.</returns>
-    /// <remarks>
-    /// Only called when <see cref="StagedBroadcastPlan.SupportsDirectConstruction"/> is
-    /// <c>true</c> and the publishing path has confirmed every participant's plain transient
-    /// registration. The default implementation runs <see cref="Execute"/> instead.
-    /// </remarks>
-    public virtual ValueTask ExecuteDirect(TEvent message, ErgosfareContext context, IServiceProvider serviceProvider)
-        => Execute(message, context, serviceProvider);
-
-    /// <summary>
     /// Runs the compiled pipeline for a publish whose groups are only known now, testing
     /// each participant's groups before calling it.
     /// </summary>
@@ -64,20 +53,5 @@ public abstract class StagedBroadcastPlan<TEvent> : StagedBroadcastPlan
     public virtual ValueTask ExecuteFiltered(
         TEvent message, ErgosfareContext context, IServiceProvider serviceProvider, IReadOnlyList<string> groups)
         => Execute(message, context, serviceProvider);
-
-    /// <summary>
-    /// Runs <see cref="ExecuteFiltered"/> with participants constructed directly; see
-    /// <see cref="ExecuteDirect"/> for when that applies.
-    /// </summary>
-    /// <param name="message">The event to publish.</param>
-    /// <param name="context">The execution context of this publish.</param>
-    /// <param name="serviceProvider">
-    /// The provider participants' own dependencies are resolved from.
-    /// </param>
-    /// <param name="groups">The groups the publish asked for.</param>
-    /// <returns>A task that completes when every matching handler has run.</returns>
-    public virtual ValueTask ExecuteFilteredDirect(
-        TEvent message, ErgosfareContext context, IServiceProvider serviceProvider, IReadOnlyList<string> groups)
-        => ExecuteFiltered(message, context, serviceProvider, groups);
 
 }

@@ -79,7 +79,7 @@ public class GroupedBroadcastFastLaneTests
         var settings = new ErgosfareContext();
         var groupFilter = groups;
 
-        await mediator.PublishAsync(new LaneEvent(), settings, groupFilter);
+        await mediator.PublishAsync(new LaneEvent(), settings, [.. groupFilter]);
 
         return settings;
     }
@@ -126,14 +126,14 @@ public class GroupedBroadcastFastLaneTests
         var settings = new ErgosfareContext();
         var groupFilter = groups;
 
-        await mediator.PublishAsync(new LaneEvent(), settings, groupFilter);
+        await mediator.PublishAsync(new LaneEvent(), settings, [.. groupFilter]);
         Assert.Equal(true, settings.Items["alphaRan"]);
 
         groups.Clear();
         groups.Add("lane.beta");
         settings.Items.Clear();
 
-        await mediator.PublishAsync(new LaneEvent(), settings, groupFilter);
+        await mediator.PublishAsync(new LaneEvent(), settings, [.. groupFilter]);
         Assert.Equal(true, settings.Items["betaRan"]);
         Assert.False(settings.Items.ContainsKey("alphaRan"));
     }
@@ -158,7 +158,7 @@ public class GroupedBroadcastFastLaneTests
         var settings = new ErgosfareContext();
         string[] groupFilter = ["lane.guarded"];
 
-        await mediator.PublishAsync(new InterceptedLaneEvent(), settings, groupFilter);
+        await mediator.PublishAsync(new InterceptedLaneEvent(), settings, [.. groupFilter]);
 
         // A grouped pipeline that carries an interceptor runs the interceptor before the
         // handler — the plan bakes both.

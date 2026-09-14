@@ -59,8 +59,9 @@ public class ConcreteFacadeResolutionTests
         // One object graph behind two names: the concrete registration projects the
         // interface's own registration rather than building a second facade, so replacing
         // the interface registration replaces both.
-        Assert.IsAssignableFrom<CommandMediator>(provider.GetRequiredService<ICommandMediator>());
-        Assert.IsAssignableFrom<QueryMediator>(provider.GetRequiredService<IQueryMediator>());
-        Assert.IsAssignableFrom<EventMediator>(provider.GetRequiredService<IEventMediator>());
+        Assert.IsType<CommandMediator>(provider.GetRequiredService<ICommandMediator>());
+        Assert.IsType<QueryMediator>(provider.GetRequiredService<IQueryMediator>());
+        Assert.IsType<EventMediator>(provider.GetRequiredService<IEventMediator>());
+        Assert.IsType<EventMediator>(provider.GetRequiredService<IPublisher>());
     }
 }

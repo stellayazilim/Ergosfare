@@ -128,6 +128,6 @@ public class GroupSetQueryTests
             }
         });
 
-        Assert.Equal(UnplannedDispatchReason.NoCompiledPlan, thrown.Reason);
+        Assert.Equal(UnplannedDispatchReason.UnplannedGroupSet, thrown.Reason);
     }
 }

@@ -59,27 +59,27 @@ public class EventMediatorDefaultImplementationTests
         /// <summary>The type argument the typed lane was reached with.</summary>
         public Type? TypeArgument { get; private set; }
 
-        public ValueTask PublishAsync(IEvent @event, IEnumerable<string>? groups,
+        public ValueTask PublishAsync(IEvent @event, GroupSet groups,
             CancellationToken cancellationToken)
         {
             Record(Lane.Untyped, @event, groups, cancellationToken, null);
             return ValueTask.CompletedTask;
         }
 
-        public ValueTask PublishAsync(IEvent @event, ErgosfareContext context, IEnumerable<string>? groups = null)
+        public ValueTask PublishAsync(IEvent @event, ErgosfareContext context, GroupSet? groups = null)
         {
             Record(Lane.Context, @event, groups, context.CancellationToken, null);
             return ValueTask.CompletedTask;
         }
 
-        public ValueTask PublishAsync<TEvent>(TEvent @event, IEnumerable<string>? groups,
+        public ValueTask PublishAsync<TEvent>(TEvent @event, GroupSet groups,
             CancellationToken cancellationToken) where TEvent : notnull
         {
             Record(Lane.Typed, @event, groups, cancellationToken, typeof(TEvent));
             return ValueTask.CompletedTask;
         }
 
-        private void Record(Lane lane, object @event, IEnumerable<string>? groups, CancellationToken token,
+        private void Record(Lane lane, object @event, GroupSet? groups, CancellationToken token,
             Type? typeArgument)
         {
             Landed = lane;
@@ -107,7 +107,7 @@ public class EventMediatorDefaultImplementationTests
 
         Assert.Equal(Lane.Untyped, recorder.Landed);
         Assert.Same(erased, recorder.Event);
-        Assert.Null(recorder.Groups);
+        Assert.Empty(recorder.Groups!);
         Assert.Equal(cts.Token, recorder.Token);
     }
 
@@ -123,13 +123,13 @@ public class EventMediatorDefaultImplementationTests
         await mediator.PublishAsync(erased, Auditing);
 
         Assert.Equal(Lane.Untyped, recorder.Landed);
-        Assert.Equal(new[] { "evt.dim.auditing" }, recorder.Groups);
+        Assert.Equal(["evt.dim.auditing"], recorder.Groups!);
 
         // The empty set is not a filter naming nothing — it is the absence of a filter.
         await mediator.PublishAsync(erased, GroupSet.Empty);
 
         Assert.Equal(Lane.Untyped, recorder.Landed);
-        Assert.Null(recorder.Groups);
+        Assert.Empty(recorder.Groups!);
     }
 
     [Fact]
@@ -149,7 +149,7 @@ public class EventMediatorDefaultImplementationTests
         Assert.Equal(Lane.Typed, recorder.Landed);
         Assert.Equal(typeof(Ping), recorder.TypeArgument);
         Assert.Same(ping, recorder.Event);
-        Assert.Null(recorder.Groups);
+        Assert.Empty(recorder.Groups!);
         Assert.Equal(cts.Token, recorder.Token);
     }
 
@@ -166,7 +166,7 @@ public class EventMediatorDefaultImplementationTests
 
         Assert.Equal(Lane.Typed, recorder.Landed);
         Assert.Equal(typeof(Ping), recorder.TypeArgument);
-        Assert.Equal(new[] { "evt.dim.auditing" }, recorder.Groups);
+        Assert.Equal(["evt.dim.auditing"], recorder.Groups!);
 
         await mediator.PublishAsync(ping, GroupSet.Empty);
 
@@ -174,6 +174,6 @@ public class EventMediatorDefaultImplementationTests
         // is still a typed publish.
         Assert.Equal(Lane.Typed, recorder.Landed);
         Assert.Equal(typeof(Ping), recorder.TypeArgument);
-        Assert.Null(recorder.Groups);
+        Assert.Empty(recorder.Groups!);
     }
 }

@@ -10,7 +10,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Results;
 /// carried as data rather than thrown, neither outcome allocates, and the framework reads
 /// the carrier without any registration.
 /// </remarks>
-public readonly record struct Result<TValue> : INativeAdapterCarrier
+public readonly record struct Result<TValue>
 {
     private readonly TValue? _value;
 
@@ -20,10 +20,6 @@ public readonly record struct Result<TValue> : INativeAdapterCarrier
         Exception = exception;
     }
 
-    /// <summary>
-    /// The adapter that reads this carrier, named by the carrier itself.
-    /// </summary>
-    object INativeAdapterCarrier.NativeAdapter => ResultExceptionAdapter<TValue>.Instance;
 
     /// <summary>
     /// The carried failure, or <c>null</c> on success.

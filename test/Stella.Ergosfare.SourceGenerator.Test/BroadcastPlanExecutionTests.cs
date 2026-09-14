@@ -1,6 +1,6 @@
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
-using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.Planning;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Events.Abstractions;
 using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
@@ -102,7 +102,7 @@ public class BroadcastPlanExecutionTests
 
     private static readonly Lazy<(Assembly Assembly, ServiceProvider Provider)> Host = new(() =>
     {
-        var result = GeneratorTestHost.Run(Source);
+        var result = GeneratorTestHost.RunWithAllCandidates(Source);
 
         Assert.Empty(result.CompilationErrors);
 
@@ -112,7 +112,7 @@ public class BroadcastPlanExecutionTests
         var assembly = Assembly.Load(stream.ToArray());
         var registrations = assembly.GetType(
             "Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
-        var registerEvents = registrations.GetMethod("RegisterGenerated", [typeof(EventModuleBuilder)])!;
+        var registerEvents = registrations.GetMethod("AddGenerated", [typeof(EventModuleBuilder)])!;
         var hooks = assembly.GetType("TestApp.GenBroadcastHooks", throwOnError: true)!;
 
         var services = new ServiceCollection();
@@ -136,7 +136,7 @@ public class BroadcastPlanExecutionTests
     {
         var (assembly, provider) = Host.Value;
 
-        Assert.NotNull(GeneratedDispatchRoots.FindBroadcastPlan(assembly.GetType("TestApp.GenOrderPlaced")!));
+        Assert.NotNull(GeneratedPlanRegistry.FindBroadcastPlan(assembly.GetType("TestApp.GenOrderPlaced")!));
 
         Entries.Clear();
 

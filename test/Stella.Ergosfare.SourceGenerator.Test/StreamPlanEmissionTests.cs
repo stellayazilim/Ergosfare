@@ -12,7 +12,7 @@ public class StreamPlanEmissionTests
     [Trait("Category", "Unit")]
     public void SoleStreamHandler_EmitsTheStreamPlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             #pragma warning disable CS0618
             using System.Collections.Generic;
             using Stella.Ergosfare.Core.Abstractions;
@@ -39,7 +39,7 @@ public class StreamPlanEmissionTests
         // The pair gets its plan even with no interceptor at all: streaming has no
         // single-handler family to fall back on, so the bare enumeration is the plan.
         Assert.Contains(
-            "GeneratedDispatchRoots.AddStreamPlan<global::TestApp.TickStream, int>(new StagedPlan0());",
+            "GeneratedPlanRegistry.AddStreamPlan<global::TestApp.TickStream, int>(new StagedPlan0());",
             result.GeneratedSource);
         Assert.Contains(
             "private sealed class StagedPlan0 : global::Stella.Ergosfare.Core.Abstractions.StagedPlans.StagedStreamPlan<global::TestApp.TickStream, int>",
@@ -49,7 +49,7 @@ public class StreamPlanEmissionTests
         // contract, whose Handle is a default interface member.
         Assert.Contains(
             "((global::Stella.Ergosfare.Core.Abstractions.Handlers.IHandler<global::TestApp.TickStream, global::System.Collections.Generic.IAsyncEnumerable<int>>)"
-            + "global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::TestApp.TickStreamHandler>(serviceProvider)).Handle(message, context);",
+            + "new global::TestApp.TickStreamHandler()).Handle(message, context);",
             result.GeneratedSource);
         Assert.Contains("yield return item;", result.GeneratedSource);
 
@@ -63,7 +63,7 @@ public class StreamPlanEmissionTests
     [Trait("Category", "Unit")]
     public void InterceptedStream_ClosesItsStagesOverTheEnumerator()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             #pragma warning disable CS0618
             using System;
             using System.Collections.Generic;
@@ -134,9 +134,9 @@ public class StreamPlanEmissionTests
 
     [Fact]
     [Trait("Category", "Unit")]
-    public void KeyedStreamHandler_SuppressesTheStreamPlan()
+    public void SelectedKeyedStreamHandler_HasAStreamPlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             #pragma warning disable CS0618
             using System.Collections.Generic;
             using Stella.Ergosfare.Core.Abstractions;
@@ -164,14 +164,14 @@ public class StreamPlanEmissionTests
 
         // A keyed handler may not be registered at all; the pair stays off the store and
         // the engine fails its dispatches loudly.
-        Assert.DoesNotContain("AddStreamPlan<global::TestApp.KeyedTickStream", result.GeneratedSource);
+        Assert.Contains("AddStreamPlan<global::TestApp.KeyedTickStream", result.GeneratedSource);
     }
 
     [Fact]
     [Trait("Category", "Unit")]
     public void NestedStreamFixtures_SuppressTheStreamPlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             #pragma warning disable CS0618
             using System.Collections.Generic;
             using Stella.Ergosfare.Core.Abstractions;
@@ -203,7 +203,7 @@ public class StreamPlanEmissionTests
     [Trait("Category", "Unit")]
     public void ContestedStreamPair_SuppressesTheStreamPlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             #pragma warning disable CS0618
             using System.Collections.Generic;
             using Stella.Ergosfare.Core.Abstractions;
@@ -244,7 +244,7 @@ public class StreamPlanEmissionTests
     [Trait("Category", "Unit")]
     public void GroupedStreamHandler_SuppressesTheStreamPlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             #pragma warning disable CS0618
             using System.Collections.Generic;
             using Stella.Ergosfare.Core.Abstractions;
@@ -277,7 +277,7 @@ public class StreamPlanEmissionTests
     [Trait("Category", "Unit")]
     public void CovariantClaim_SuppressesTheStreamPlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             #pragma warning disable CS0618
             using System.Collections.Generic;
             using Stella.Ergosfare.Core.Abstractions;

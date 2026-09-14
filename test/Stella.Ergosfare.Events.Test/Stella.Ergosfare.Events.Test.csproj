@@ -1,6 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
+        <!-- Runtime negative tests deliberately construct incomplete/contested catalogs.
+             Compile-time rejection is exercised separately by SourceGenerator.Test. -->
+        <ErgosfareCompositionRoot>false</ErgosfareCompositionRoot>
         <!-- Fixtures dispatch messages nothing registers; the dead-dispatch judgment is
              about applications, not about a suite exercising the runtime. -->
         <NoWarn>$(NoWarn)</NoWarn>
@@ -37,4 +40,7 @@
                         ReferenceOutputAssembly="false" />
 </ItemGroup>
 
+    <ItemGroup>
+        <CompilerVisibleProperty Include="ErgosfareCompositionRoot" />
+    </ItemGroup>
 </Project>

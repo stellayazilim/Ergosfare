@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
+        <!-- Runtime negative tests deliberately construct incomplete/contested catalogs.
+             Compile-time rejection is exercised separately by SourceGenerator.Test. -->
+        <ErgosfareCompositionRoot>false</ErgosfareCompositionRoot>
         <IsPackable>false</IsPackable>
         <!-- Deliberate consumer of the experimental result-adapter surface under test. -->
         <NoWarn>$(NoWarn);ERGOEXP001</NoWarn>
@@ -50,4 +53,7 @@
                         ReferenceOutputAssembly="false" />
 </ItemGroup>
 
+    <ItemGroup>
+        <CompilerVisibleProperty Include="ErgosfareCompositionRoot" />
+    </ItemGroup>
 </Project>

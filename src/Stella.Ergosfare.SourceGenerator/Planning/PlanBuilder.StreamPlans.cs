@@ -70,7 +70,7 @@ internal sealed partial class PlanBuilder
                 // It must be nameable, discovered by default, and claim exactly this pair
                 // through the stream-handler contract — the one contract a stream plan calls.
                 if (!handler.IsAccessible
-                    || !handler.DiscoveryKeys.IsEmpty
+
                     || handler.IsNestedType
                     || handlerDescriptor.ResultTypeExpression
                         != EmittedExpressions.AsyncEnumerable + "<" + dispatchResult.ResultTypeExpression + ">"

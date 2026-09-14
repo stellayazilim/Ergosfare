@@ -11,7 +11,7 @@ public class StagedPlanEmissionTests
     [Fact]
     public void InterceptedSoloHandler_EmitsTheStagedPlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using System.Threading.Tasks;
 
@@ -39,7 +39,7 @@ public class StagedPlanEmissionTests
         // The interceptor suppresses the single-handler plan and produces the staged one.
         Assert.DoesNotContain("AddVoidPlan<global::TestApp.StagedPing", result.GeneratedSource);
         Assert.Contains(
-            "GeneratedDispatchRoots.AddStagedPlan<global::TestApp.StagedPing>(new StagedPlan0());",
+            "GeneratedPlanRegistry.AddStagedPlan<global::TestApp.StagedPing>(new StagedPlan0());",
             result.GeneratedSource);
         Assert.Contains("typeof(global::TestApp.StagedPingHandler)", result.GeneratedSource);
         Assert.Contains(
@@ -57,7 +57,7 @@ public class StagedPlanEmissionTests
     [Fact]
     public void CovariantSibling_KeepsThePlanAndEntersItsComposition()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
             using System.Threading.Tasks;
@@ -90,7 +90,7 @@ public class StagedPlanEmissionTests
         Assert.Empty(result.CompilationErrors);
 
         Assert.Contains(
-            "GeneratedDispatchRoots.AddStagedPlan<global::TestApp.TransferMoney>(new StagedPlan0());",
+            "GeneratedPlanRegistry.AddStagedPlan<global::TestApp.TransferMoney>(new StagedPlan0());",
             result.GeneratedSource);
 
         // The covariant handler is in the composition the plan is gated on — and in the
@@ -112,7 +112,7 @@ public class StagedPlanEmissionTests
     [Fact]
     public void WeightAndSegmentOrdering_BakesTheRuntimeOrder()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
             using System.Threading.Tasks;
@@ -159,9 +159,9 @@ public class StagedPlanEmissionTests
     }
 
     [Fact]
-    public void GroupedInterceptor_SuppressesTheStagedPlan()
+    public void GroupedInterceptor_IsAbsentFromTheDefaultPlanBody()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
             using System.Threading.Tasks;
@@ -190,13 +190,13 @@ public class StagedPlanEmissionTests
         // A grouped participant makes the group-less pipeline content unmodelable-enough:
         // conservatively no staged plan (and the interceptor also suppresses the
         // single-handler plan) — the runtime strategy serves the message.
-        Assert.DoesNotContain("AddStagedPlan<global::TestApp.GroupedStagedPing", result.GeneratedSource);
+        Assert.Contains("AddStagedPlan<global::TestApp.GroupedStagedPing", result.GeneratedSource);
     }
 
     [Fact]
     public void ResultPipeline_EmitsTheStagedResultPlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Queries.Abstractions;
             using System.Threading.Tasks;
 
@@ -220,7 +220,7 @@ public class StagedPlanEmissionTests
 
         Assert.Empty(result.CompilationErrors);
         Assert.Contains(
-            "GeneratedDispatchRoots.AddStagedPlan<global::TestApp.StagedNumberQuery, int>(new StagedPlan0());",
+            "GeneratedPlanRegistry.AddStagedPlan<global::TestApp.StagedNumberQuery, int>(new StagedPlan0());",
             result.GeneratedSource);
 
         // The typed async post arm with the value-typed result's unbox-parity casts.
@@ -234,7 +234,7 @@ public class StagedPlanEmissionTests
     [Fact]
     public void ReferenceTypedStages_EachTakeTheCastTheirOwnContractDeclares()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System;
             using System.Threading.Tasks;
             using Stella.Ergosfare.Queries.Abstractions;
@@ -286,9 +286,9 @@ public class StagedPlanEmissionTests
     }
 
     [Fact]
-    public void ConstructibleParticipants_EmitTheDirectConstructionVariant()
+    public void MixedParticipants_UseNewAndDIInOneBody()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using System.Threading.Tasks;
 
@@ -315,22 +315,22 @@ public class StagedPlanEmissionTests
             """);
 
         Assert.Empty(result.CompilationErrors);
-        Assert.Contains("public override bool SupportsDirectConstruction", result.GeneratedSource);
-        Assert.Contains("ExecuteDirect(", result.GeneratedSource);
+        Assert.DoesNotContain("public override bool SupportsDirectConstruction", result.GeneratedSource);
+        Assert.DoesNotContain("ExecuteDirect(", result.GeneratedSource);
 
         // The direct variant constructs participants with `new` — the parameterless
         // interceptor directly, the dependency-injected handler with its dependencies
         // still resolved from the dispatching provider.
         Assert.Contains("new global::TestApp.DirectPingInterceptor()", result.GeneratedSource);
         Assert.Contains(
-            "new global::TestApp.DirectPingHandler(global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::TestApp.IGreeter>(serviceProvider))",
+            "GetRequiredService<global::TestApp.DirectPingHandler>(serviceProvider)",
             result.GeneratedSource);
     }
 
     [Fact]
     public void MultiConstructorParticipant_SkipsTheDirectVariantAndReportsTheInfo()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using System.Threading.Tasks;
 
@@ -368,7 +368,7 @@ public class StagedPlanEmissionTests
     [Fact]
     public void FromServicesOnConstructor_ReportsTheInfo()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System;
             using Stella.Ergosfare.Commands.Abstractions;
             using System.Threading.Tasks;
@@ -399,7 +399,7 @@ public class StagedPlanEmissionTests
     [Fact]
     public void ExcludeFromPipelineMessage_SuppressesTheStagedPlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
             using System.Threading.Tasks;

@@ -16,7 +16,7 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 /// No contract choice travels with a handler the way it does with an interceptor
 /// (<see cref="StagedCallModel"/>). A plan is only produced when every handler it calls
 /// implements the asynchronous contract, so the call is always the same member on the
-/// concrete type; anything else means no plan and the general strategy serves the message. A
+/// concrete type; unsupported contracts cannot execute without a generated plan. A
 /// single-handler plan never calls its covariant segment, so those contracts are never
 /// examined — only their types, which the plan's check compares.
 /// </remarks>

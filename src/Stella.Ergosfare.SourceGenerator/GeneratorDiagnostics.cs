@@ -363,7 +363,7 @@ internal static class GeneratorDiagnostics
         messageFormat:
             "This registration names its type at run time, which the closed-world model cannot follow — the type gets " +
             "no compiled pipeline, no frozen composition and no plan. Register it as 'Register(typeof(T))' or " +
-            "'Register<T>()' with a concrete type, or let 'RegisterGenerated()' collect it.",
+            "'Register<T>()' with a concrete type, or let 'AddGenerated()' collect it.",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -424,8 +424,10 @@ internal static class GeneratorDiagnostics
     public static readonly DiagnosticDescriptor UnbakeableDefaultResultAdapter = new(
         id: "ERGO021",
         title: "Default result adapter cannot be constructed by generated code",
+        // Two sentences rather than one joined by a colon: a single-sentence message may not
+        // end in a period, which is what RS1032 was reporting here.
         messageFormat:
-            "The default result adapter '{0}' cannot be named and constructed by the generated registration: a " +
+            "The default result adapter '{0}' cannot be named and constructed by the generated registration. A " +
             "concrete type, accessible from this compilation and with a public parameterless constructor, is " +
             "required.",
         category: "Usage",
@@ -475,6 +477,40 @@ internal static class GeneratorDiagnostics
             "Group set [{1}] selects both '{2}' and '{3}' for message '{0}' — a send delivers to one handler, so " +
             "every dispatch under that set throws MultipleHandlerFoundException. Keep one handler in the set, or " +
             "publish the message to both as an event.",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// ERGO024: a dispatch's group filter provably selects no main handler.
+    /// </summary>
+    /// <remarks>
+    /// The mirror of ERGO023. The message is covered — some main handler in the closure
+    /// claims it — and the set this dispatch names selects none of those handlers, so the
+    /// filter empties a pipeline that otherwise exists: every handler is grouped and the
+    /// dispatch names no groups, or it names a set no handler declares. Every lane throws
+    /// NoHandlerFoundException for that selection. An error, because nothing at run time
+    /// can add the missing group to a handler
+    /// this compilation already read.
+    /// <para>
+    /// Judged only where ERGO005 is: at a composition root, with reference scanning on and
+    /// no registration in the closure the compilation could not read — a registration it
+    /// cannot see could be the one supplying the group. And only where the message is
+    /// covered at all; a message no handler claims is ERGO005's verdict, not this one.
+    /// </para>
+    /// <para>
+    /// A set computed at run time names nothing this can judge, and a set recorded in a
+    /// referenced assembly's manifest is only judged when it is non-empty: the manifest
+    /// writes an unreadable set down as no set, so an empty one there proves nothing.
+    /// </para>
+    /// </remarks>
+    public static readonly DiagnosticDescriptor NoHandlerInGroupSet = new(
+        id: "ERGO024",
+        title: "Group set selects no main handler",
+        messageFormat:
+            "Message '{0}' is dispatched under {1}, and no main handler covering it takes part in that set{4} — the " +
+            "handlers that cover it are {2}. So {3}. Dispatch under a group set one of those handlers declares, or " +
+            "leave one of them ungrouped so it serves the default set.",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);

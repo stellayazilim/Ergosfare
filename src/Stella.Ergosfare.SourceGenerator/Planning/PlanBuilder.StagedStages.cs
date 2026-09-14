@@ -4,21 +4,11 @@ using Stella.Ergosfare.SourceGenerator.Models;
 namespace Stella.Ergosfare.SourceGenerator.Planning;
 internal sealed partial class PlanBuilder
 {
-    /// <summary>
-    /// Gives the expression that constructs a participant inside a staged plan.
-    /// </summary>
-    /// <param name="participant">The participant to construct.</param>
-    /// <param name="hasKeyedServiceExtensions">
-    /// Whether the consuming compilation can resolve the keyed-service extensions.
-    /// </param>
-    /// <returns>
-    /// The construction expression, or <c>null</c> when it would need keyed resolution the
-    /// consuming compilation cannot spell — the call then goes through the container.
-    /// </returns>
+    /// <summary>Chooses parameterless construction at compile time; injected types stay with DI.</summary>
     private static string? GatedConstructionExpression(RegistrableTypeModel participant, bool hasKeyedServiceExtensions)
-        => participant.StagedConstructionUsesKeyedServices && !hasKeyedServiceExtensions
-            ? null
-            : participant.StagedConstructionExpression;
+        => participant.IsDirectlyConstructible
+            ? "new " + participant.TypeofExpression + "()"
+            : null;
 
     /// <summary>
     /// Builds the four interceptor stages of one staged plan.
@@ -93,6 +83,8 @@ internal sealed partial class PlanBuilder
 
                     var direct = shape.MessageTypeExpression == message.TypeofExpression;
 
+                    if (!direct && IsExcludedFromPipeline(message, candidate)) continue;
+
                     if (!direct && !message.AssignableKeys.Contains(shape.MessageTypeExpression))
                     {
                         continue;
@@ -133,7 +125,6 @@ internal sealed partial class PlanBuilder
                 // It participates; now it must be nameable. A keyed or nested participant is
                 // not something the plan can call directly.
                 if (!candidate.IsAccessible
-                    || !candidate.DiscoveryKeys.IsEmpty
                     || candidate.IsNestedType)
                 {
                     return false;

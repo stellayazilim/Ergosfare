@@ -61,7 +61,7 @@ public sealed class ThrowingEventHandler : IEventHandler<ThrowingEvent>
 
 /// <summary>
 /// An event no handler anywhere subscribes to. Nothing participates, so the generator
-/// emits no composition for it and a publish reaches nobody — silently.
+/// emits no composition for it and publishing throws NoHandlerFoundException.
 /// </summary>
 public sealed class HandlerlessEvent : IEvent { }
 
@@ -233,15 +233,14 @@ public class BroadcastFastLaneTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task Publish_OfAHandlerlessEvent_IsSilent()
+    public async Task Publish_OfAHandlerlessEvent_ThrowsForMissingHandler()
     {
         await using var provider = Build(e => e.Register<HandlerlessEvent>());
         var mediator = provider.GetRequiredService<IEventMediator>();
 
-        // Silent, and unconditionally so: nothing in the compilation participates in this
-        // event, so it has no composition and a publish reaches nobody.
-        Assert.Null(await Record.ExceptionAsync(
-            async () => await mediator.PublishAsync(new HandlerlessEvent())));
+        // A registered event still needs a main handler.
+        await Assert.ThrowsAsync<NoHandlerFoundException>(
+            async () => await mediator.PublishAsync(new HandlerlessEvent()));
     }
 
     [Fact]
@@ -307,13 +306,9 @@ public class BroadcastFastLaneTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task Publish_WithASingletonSubscriber_DeliversTheOneInstanceEveryTime()
+    public async Task Publish_WithAParameterlessSubscriber_ConstructsEachDelivery()
     {
-        // A singleton-registered handler makes the pipeline memoized underneath, but only
-        // demanded memoization (ForceMemoizedHandlers) bars a compiled plan: the plan's
-        // resolving variant returns the one singleton per publish, which is exactly what
-        // memoization promises, so the publish runs — and every delivery is the same
-        // instance.
+        // The generated plan directly constructs this parameterless subscriber.
         await using var provider = new ServiceCollection()
             .AddSingleton<IsolatedEventHandler>()
             .AddErgosfare(x => x.AddEventModule(e => e.Register<IsolatedEventHandler>()))
@@ -328,8 +323,8 @@ public class BroadcastFastLaneTests
         await mediator.PublishAsync(new IsolatedEvent(), secondContext);
 
         var delivered = Assert.IsType<IsolatedEventHandler>(firstContext.Get<object>("handlerInstance"));
-        Assert.Same(delivered, secondContext.Get<object>("handlerInstance"));
-        Assert.Same(delivered, provider.GetRequiredService<IsolatedEventHandler>());
+        Assert.NotSame(delivered, secondContext.Get<object>("handlerInstance"));
+        Assert.NotSame(delivered, provider.GetRequiredService<IsolatedEventHandler>());
     }
 
     [Fact]
@@ -363,16 +358,14 @@ public class BroadcastFastLaneTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task Publish_OfANeverRegisteredType_IsSilent()
+    public async Task Publish_OfANeverRegisteredType_ThrowsForMissingHandler()
     {
         await using var provider = Build();
 
         var mediator = provider.GetRequiredService<IEventMediator>();
 
-        // Silent, exactly as for a registered event nobody handles: no composition serves
-        // the type, so the publish reaches nobody and reaching nobody is not an error.
-        await mediator.PublishAsync(new NeverRegisteredEvent());
-        Assert.Null(await Record.ExceptionAsync(
-            async () => await mediator.PublishAsync(new NeverRegisteredEvent())));
+        // An unknown event has no executable handler plan.
+        await Assert.ThrowsAsync<NoHandlerFoundException>(
+            async () => await mediator.PublishAsync(new NeverRegisteredEvent()));
     }
 }

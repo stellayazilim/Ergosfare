@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
-using Stella.Ergosfare.Core.Abstractions.Factories;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Events.Abstractions;
 using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
@@ -188,6 +187,6 @@ public class EngineBroadcastTests
         // The broadcast fast lane reads the factory off the engine rather than resolving
         // its own, so it has to be this container's — an executor built on another
         // container's factory would resolve handlers from the wrong scope.
-        Assert.Same(provider.GetRequiredService<IMessageDependenciesFactory>(), engine.DependenciesFactory);
+        Assert.Same(engine, provider.GetRequiredService<MessageDispatchEngine>());
     }
 }

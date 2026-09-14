@@ -224,27 +224,28 @@ public sealed class EventPublishTests
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task Publishing_an_event_nobody_handles_is_a_no_op()
+    public async Task Publishing_an_event_nobody_handles_throws()
     {
         await using var provider = CreateProvider();
         var recorder = new PipelineRecorder();
 
         // A publish reaching nobody is not an error at run time — with or without a plan,
         // because there is nothing a plan could have run.
-        await provider.GetRequiredService<IEventMediator>().PublishAsync(new NobodyListens(), recorder.Events());
+        await Assert.ThrowsAsync<NoHandlerFoundException>(async () =>
+            await provider.GetRequiredService<IEventMediator>().PublishAsync(new NobodyListens(), recorder.Events()));
 
         recorder.AssertStages();
     }
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task Publishing_an_unregistered_event_type_is_a_no_op_like_a_registered_one()
+    public async Task Publishing_an_unregistered_event_type_throws()
     {
         await using var provider = CreateProvider();
         var mediator = provider.GetRequiredService<IEventMediator>();
 
-        Assert.Null(await Record.ExceptionAsync(
-            async () => await mediator.PublishAsync(new UnknownEvent())));
+        await Assert.ThrowsAsync<NoHandlerFoundException>(
+            async () => await mediator.PublishAsync(new UnknownEvent()));
     }
 
     [Fact]

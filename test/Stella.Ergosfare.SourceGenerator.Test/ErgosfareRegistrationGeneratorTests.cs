@@ -1,5 +1,5 @@
 using System.Reflection;
-using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.Planning;
 
 namespace Stella.Ergosfare.SourceGenerator.Test;
 
@@ -30,28 +30,28 @@ public class ErgosfareRegistrationGeneratorTests
     [Fact]
     public void FullSurface_EmitsRegisterAllAndBuilderExtensions()
     {
-        var result = GeneratorTestHost.Run(FullSurfaceSource);
+        var result = GeneratorTestHost.RunWithAllCandidates(FullSurfaceSource);
 
         Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
 
         var source = result.GeneratedSource;
         Assert.Contains("internal static class ErgosfareGeneratedRegistrations", source);
-        Assert.Contains("public static void RegisterAll(global::Stella.Ergosfare.Core.Abstractions.DispatchRoots.FrozenCompositionCatalog compositions)", source);
+        Assert.Contains("public static void RegisterAll(global::Stella.Ergosfare.Core.Abstractions.Planning.DispatchPlanCatalog compositions)", source);
         Assert.Contains("typeof(global::TestApp.CreatePing)", source);
         Assert.Contains("typeof(global::TestApp.CreatePingHandler)", source);
         Assert.Contains("typeof(global::TestApp.GetPong)", source);
         Assert.Contains("typeof(global::TestApp.PingCreated)", source);
 
-        Assert.Contains("global::Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.CommandModuleBuilder RegisterGenerated(", source);
-        Assert.Contains("global::Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.QueryModuleBuilder RegisterGenerated(", source);
-        Assert.Contains("global::Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.EventModuleBuilder RegisterGenerated(", source);
+        Assert.Contains("global::Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.CommandModuleBuilder AddGenerated(", source);
+        Assert.Contains("global::Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.QueryModuleBuilder AddGenerated(", source);
+        Assert.Contains("global::Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.EventModuleBuilder AddGenerated(", source);
     }
 
     [Fact]
     public void ModuleMembership_TypesAppearInTheirModulesRegistrationOnly()
     {
-        var result = GeneratorTestHost.Run(FullSurfaceSource);
+        var result = GeneratorTestHost.RunWithAllCandidates(FullSurfaceSource);
         var source = result.GeneratedSource;
 
         // Messages are named one call each: once in the module-agnostic catalog surface
@@ -74,7 +74,7 @@ public class ErgosfareRegistrationGeneratorTests
     [Fact]
     public void GenericMessages_AreNamedByDefinitionWhileParticipantsStayVerbatim()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Core.Abstractions.Handlers;
@@ -111,7 +111,7 @@ public class ErgosfareRegistrationGeneratorTests
     [Fact]
     public void MarkerInterfacesAndAbstractBases_AreRegisteredLikeRuntimeScanning()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
 
             namespace TestApp
@@ -131,7 +131,7 @@ public class ErgosfareRegistrationGeneratorTests
     [Fact]
     public void OpenGenericHandler_IsEmittedInUnboundForm()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using System.Threading.Tasks;
 
@@ -159,7 +159,7 @@ public class ErgosfareRegistrationGeneratorTests
     [Fact]
     public void NestedTypes_PublicIsRegistered_PrivateIsSkippedWithWarning()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
 
             namespace TestApp
@@ -185,7 +185,7 @@ public class ErgosfareRegistrationGeneratorTests
     [Fact]
     public void WithoutModuleBuilderReferences_OnlyRegisterAllIsEmitted()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
 
             namespace TestApp
@@ -198,13 +198,13 @@ public class ErgosfareRegistrationGeneratorTests
         Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
         Assert.Contains("RegisterAll", result.GeneratedSource);
-        Assert.DoesNotContain("RegisterGenerated", result.GeneratedSource);
+        Assert.DoesNotContain("AddGenerated(", result.GeneratedSource);
     }
 
     [Fact]
     public void NoRegistrableTypes_EmitsOnlyTheDispatchManifestMarker()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             namespace TestApp
             {
                 public sealed class JustAClass;
@@ -222,7 +222,7 @@ public class ErgosfareRegistrationGeneratorTests
     [Fact]
     public void StructAndRecordStructMessages_AreRegistered()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Events.Abstractions;
 
             namespace TestApp
@@ -242,7 +242,7 @@ public class ErgosfareRegistrationGeneratorTests
     [Fact]
     public void PartialTypeWithMarkerOnBothParts_IsRegisteredOnce()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
 
             namespace TestApp
@@ -261,13 +261,13 @@ public class ErgosfareRegistrationGeneratorTests
     [Fact]
     public void GeneratedRegisterAll_ExecutesAgainstACatalog()
     {
-        var result = GeneratorTestHost.Run(FullSurfaceSource);
+        var result = GeneratorTestHost.RunWithAllCandidates(FullSurfaceSource);
 
         Assert.Empty(result.CompilationErrors);
 
         // Make sure the real abstractions assembly is loaded so the emitted assembly's
         // references bind to it by name.
-        _ = typeof(FrozenCompositionCatalog);
+        _ = typeof(DispatchPlanCatalog);
 
         using var stream = new MemoryStream();
         var emitResult = result.OutputCompilation.Emit(stream);
@@ -275,9 +275,9 @@ public class ErgosfareRegistrationGeneratorTests
 
         var assembly = Assembly.Load(stream.ToArray());
         var registrations = assembly.GetType("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
-        var catalog = new FrozenCompositionCatalog();
+        var catalog = new DispatchPlanCatalog();
 
-        registrations.GetMethod("RegisterAll", [typeof(FrozenCompositionCatalog)])!.Invoke(null, [catalog]);
+        registrations.GetMethod("RegisterAll", [typeof(DispatchPlanCatalog)])!.Invoke(null, [catalog]);
 
         // Messages and participants alike land in the container's selection — registration
         // names constructs, and the compiled table decides what each one's pipeline is.

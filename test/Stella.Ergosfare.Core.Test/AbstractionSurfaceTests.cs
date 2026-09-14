@@ -155,7 +155,6 @@ public class AbstractionSurfaceTests
 
         Assert.Equal(new[] { "reporting" }, site.Groups);
 
-        Assert.Equal("Ns.Probe", new ManualRegistrationAttribute("Ns.Probe").TypeMetadataName);
     }
 
     [Fact]

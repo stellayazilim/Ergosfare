@@ -53,7 +53,7 @@ public class QueryMediatorTests
         var expected = new []  {"Foo", "Bar", "Baz"};
         var result = new List<string>();
         // act
-        await foreach (var item in mediator.StreamAsync(new StubNonGenericStreamStringResultQuery(), (IEnumerable<string>?)null, CancellationToken.None))
+        await foreach (var item in mediator.StreamAsync(new StubNonGenericStreamStringResultQuery(), Stella.Ergosfare.Core.Abstractions.GroupSet.Empty, CancellationToken.None))
         {
             result.Add(item);
         }

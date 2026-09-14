@@ -1,3 +1,4 @@
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Attributes;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -51,7 +52,8 @@ public class GroupOnlyLifetimeTests
 
         // The group-less publish first: it settles the type's empty default shape — the
         // exact order that once poisoned the per-type singleton verdict.
-        await mediator.PublishAsync(new GroupOnlyEvent(), context);
+        await Assert.ThrowsAsync<NoHandlerFoundException>(async () =>
+            await mediator.PublishAsync(new GroupOnlyEvent(), context));
 
         await mediator.PublishAsync(new GroupOnlyEvent(), context, LifetimeGroup);
         await mediator.PublishAsync(new GroupOnlyEvent(), context, LifetimeGroup);

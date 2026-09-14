@@ -397,7 +397,7 @@ public class ResultCarrierPipelineTests
     }
 
     [Fact]
-    public async Task Without_the_assemblys_default_adapter_the_dispatch_fails()
+    public async Task Compiled_default_adapter_works_without_a_DI_adapter_registration()
     {
         DefaultBoundObserver.Observed = null;
 
@@ -407,16 +407,11 @@ public class ResultCarrierPipelineTests
                 .Register<DefaultBoundObserver>()))
             .BuildServiceProvider();
 
-        // The generator read this assembly's one UseDefaultResultAdapter call and baked
-        // the adapter into the message's plan, so the adapter identity is part of the
-        // compiled pipeline: a container that does not configure that default holds a
-        // pipeline the plan was not baked against, and the dispatch fails naming both
-        // adapter types instead of quietly skipping the value channel.
-        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
-            await provider.GetRequiredService<ICommandMediator>().SendAsync(new DefaultBoundCommand()));
-
-        Assert.Equal(UnplannedDispatchReason.UnplannedResultAdapter, thrown.Reason);
-        Assert.Null(DefaultBoundObserver.Observed);
+        // The assembly declaration has already selected the adapter at compile time.
+        var result = await provider.GetRequiredService<ICommandMediator>().SendAsync(new DefaultBoundCommand());
+        Assert.NotNull(DefaultBoundObserver.Observed);
+        Assert.Equal("default-carried", DefaultBoundObserver.Observed.Message);
+        Assert.Equal("recovered", result.Value);
     }
 
     [Fact]

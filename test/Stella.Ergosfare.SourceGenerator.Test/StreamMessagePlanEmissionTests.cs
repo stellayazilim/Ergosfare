@@ -49,9 +49,9 @@ public class StreamMessagePlanEmissionTests
 
     [Fact]
     [Trait("Category", "Unit")]
-    public void AStreamMessage_IsClassifiedThroughItsBaseAndGetsItsDispatchRoots()
+    public void AStreamMessage_IsClassifiedThroughItsBaseAndGetsItsPlanRegistry()
     {
-        var result = GeneratorTestHost.Run(StreamApp + """
+        var result = GeneratorTestHost.RunWithAllCandidates(StreamApp + """
             }
             """);
 
@@ -60,8 +60,8 @@ public class StreamMessagePlanEmissionTests
 
         // The command contract is reached through the streaming base, two levels up — the
         // message declares nothing itself.
-        Assert.Contains("AddMessage<global::TestApp.FileUpload>();", result.GeneratedSource);
-        Assert.Contains("AddResult<global::TestApp.FileUpload, global::TestApp.UploadReport>();", result.GeneratedSource);
+        Assert.DoesNotContain("AddMessage<global::TestApp.FileUpload>();", result.GeneratedSource);
+        Assert.DoesNotContain("AddResult<global::TestApp.FileUpload, global::TestApp.UploadReport>();", result.GeneratedSource);
 
         // And nothing streaming-shaped is emitted: no lane, no stream root, no second table.
         Assert.DoesNotContain("AddStream<global::TestApp.FileUpload", result.GeneratedSource);
@@ -71,7 +71,7 @@ public class StreamMessagePlanEmissionTests
     [Trait("Category", "Unit")]
     public void AStreamMessageWithInterceptors_GetsTheSameCompiledPlanAnOrdinaryCommandWould()
     {
-        var result = GeneratorTestHost.Run(StreamApp + """
+        var result = GeneratorTestHost.RunWithAllCandidates(StreamApp + """
 
             public sealed class RejectEmptyNames : ICommandPreInterceptor<FileUpload>
             {
@@ -103,7 +103,7 @@ public class StreamMessagePlanEmissionTests
     [Trait("Category", "Unit")]
     public void PublishingAStreamMessage_FailsTheBuild()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             #pragma warning disable ERGOEXP003
             using System;
             using System.Collections.Generic;

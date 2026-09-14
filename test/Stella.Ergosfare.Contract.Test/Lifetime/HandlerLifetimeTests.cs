@@ -40,16 +40,6 @@ public sealed class CountedPre : ICommandPreInterceptor<Counted>
         => ValueTask.FromResult(command);
 }
 
-/// <summary>Command dispatched under <c>ForceMemoizedHandlers</c>.</summary>
-public sealed class Memoized : ICommand;
-
-/// <inheritdoc />
-public sealed class MemoizedHandler : ICommandHandler<Memoized>
-{
-    /// <inheritdoc />
-    public ValueTask HandleAsync(Memoized command, ErgosfareContext context) => ValueTask.CompletedTask;
-}
-
 /// <summary>Command whose handler the user registers as their own instance.</summary>
 public sealed class Owned : ICommand
 {
@@ -119,30 +109,7 @@ public sealed class HandlerLifetimeTests
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task ForceMemoizedHandlers_fails_the_dispatch()
-    {
-        await using var provider = new ServiceCollection()
-            .AddErgosfare(options => options
-                .ForceMemoizedHandlers()
-                .AddCommandModule(commands => commands.Register<MemoizedHandler>()))
-            .BuildServiceProvider();
-
-        var mediator = provider.GetRequiredService<ICommandMediator>();
-
-        // Memoized pipelines are unplanned by contract: a compiled plan resolves or
-        // constructs its participants fresh, and a pipeline that caches instances is not
-        // the pipeline the plan was compiled against. The two contracts cannot both hold,
-        // so every dispatch under ForceMemoizedHandlers fails, saying why.
-        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(
-            async () => await mediator.SendAsync(new Memoized()));
-
-        Assert.Equal(UnplannedDispatchReason.MemoizedInstances, thrown.Reason);
-        Assert.Equal(typeof(Memoized), thrown.MessageType);
-    }
-
-    [Fact]
-    [Trait("Category", "Contract")]
-    public async Task A_users_own_registration_of_a_handler_type_wins_over_the_modules()
+    public async Task A_parameterless_handler_is_constructed_by_the_plan_despite_a_DI_factory()
     {
         // Transient on purpose: a singleton registration makes every participant of the
         // pipeline singleton, which the engine counts as memoization — and memoized
@@ -161,13 +128,13 @@ public sealed class HandlerLifetimeTests
         await mediator.SendAsync(first);
         await mediator.SendAsync(second);
 
-        Assert.Equal("user-instance", first.Tag);
-        Assert.Equal("user-instance", second.Tag);
+        Assert.Equal("module-built", first.Tag);
+        Assert.Equal("module-built", second.Tag);
     }
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_users_singleton_registration_serves_every_dispatch_with_the_one_instance()
+    public async Task A_parameterless_handler_is_constructed_by_the_plan_despite_a_DI_singleton()
     {
         var chosen = new OwnedHandler { Tag = "user-instance" };
 
@@ -181,14 +148,11 @@ public sealed class HandlerLifetimeTests
         var first = new Owned();
         var second = new Owned();
 
-        // An all-singleton pipeline is memoized underneath, but only demanded memoization
-        // (ForceMemoizedHandlers) bars a compiled plan: the plan's resolving variant
-        // returns the one singleton per dispatch, which is exactly what memoization
-        // promises, so the two cannot be told apart and the dispatch runs.
+        // The generated plan constructs a parameterless handler without consulting DI.
         await mediator.SendAsync(first);
         await mediator.SendAsync(second);
 
-        Assert.Equal("user-instance", first.Tag);
-        Assert.Equal("user-instance", second.Tag);
+        Assert.Equal("module-built", first.Tag);
+        Assert.Equal("module-built", second.Tag);
     }
 }

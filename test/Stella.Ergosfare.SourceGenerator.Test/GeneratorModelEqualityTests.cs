@@ -104,7 +104,7 @@ public class GeneratorModelEqualityTests
         MessageTypeExpression = "global::TestApp.Ping",
         MessageTypeMetadataName = "TestApp.Ping",
         DisplayName = "TestApp.Ping",
-        Kind = DispatchSiteKind.Message,
+        Kind = DispatchSiteKind.Event,
         IsOpaque = true,
         IsValueType = true,
         IsStreamMessage = true,
@@ -119,6 +119,10 @@ public class GeneratorModelEqualityTests
     private static RegistrationSiteModel Registration() => new()
     {
         TypeMetadataName = "TestApp.PingHandler",
+        TypeExpression = "global::TestApp.PingHandler",
+        DiscoveryPattern = "users",
+        DeclaringMethod = "M:App.Configure",
+        Module = 1,
         MainHandlerMessageKeys = ["global::TestApp.Ping"],
         IsOpaque = true,
         UnknownTypeLocation = Where,

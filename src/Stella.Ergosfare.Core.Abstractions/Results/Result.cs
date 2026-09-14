@@ -17,14 +17,10 @@ namespace Stella.Ergosfare.Core.Abstractions.Results;
 /// being thrown.
 /// </para>
 /// </remarks>
-public readonly record struct Result : INativeAdapterCarrier
+public readonly record struct Result
 {
     private Result(Exception? exception) => Exception = exception;
 
-    /// <summary>
-    /// The adapter that reads this carrier, named by the carrier itself.
-    /// </summary>
-    object INativeAdapterCarrier.NativeAdapter => ResultExceptionAdapter.Instance;
 
     /// <summary>
     /// The carried failure, or <c>null</c> on success.

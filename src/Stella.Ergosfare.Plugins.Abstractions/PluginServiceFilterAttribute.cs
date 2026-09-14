@@ -48,7 +48,7 @@ public sealed class PluginServiceFilterAttribute : Attribute
     /// </param>
     /// <remarks>
     /// Declaring no key filter is not the same as "every key": it selects the default key
-    /// alone, exactly as a key-less <c>RegisterGenerated()</c> does. A keyed construct was
+    /// alone, exactly as a key-less <c>AddGenerated()</c> does. A keyed construct was
     /// deliberately kept out of default discovery by its author, and a plugin saying nothing
     /// should not put it back in. To reach keyed pipelines, name their keys — adding the
     /// empty string alongside covers both.

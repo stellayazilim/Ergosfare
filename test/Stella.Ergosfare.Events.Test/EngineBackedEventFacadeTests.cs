@@ -53,15 +53,14 @@ public class EngineBackedEventFacadeTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task DiResolvedFacade_IsTheEngineBackedShape_AndPublishes()
+    public async Task DiResolvedFacade_IsThePublicFacade_AndPublishes()
     {
         var provider = Build();
         await using var _ = provider;
 
         var mediator = provider.GetRequiredService<IEventMediator>();
 
-        Assert.IsAssignableFrom<EventMediator>(mediator);
-        Assert.NotEqual(typeof(EventMediator), mediator.GetType());
+        Assert.IsType<EventMediator>(mediator);
 
         var settings = new ErgosfareContext();
         await mediator.PublishAsync(new FacadeGroupedEvent(), settings);
@@ -84,7 +83,7 @@ public class EngineBackedEventFacadeTests
         var items = new ErgosfareContext();
         string[] groupFilter = ["facade.audit"];
 
-        await mediator.PublishAsync(new FacadeGroupedEvent(), items, groupFilter);
+        await mediator.PublishAsync(new FacadeGroupedEvent(), items, [.. groupFilter]);
 
         // The grouped publish runs the group-filtered plan; only the requested group's
         // handler runs.

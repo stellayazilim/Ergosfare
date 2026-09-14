@@ -1,6 +1,9 @@
 # End-to-end flow for the Todo app, asserted with ijhttp response handlers.
 # Every `> {% ... %}` block runs client.test assertions; a failed assertion fails the run.
-# `host` comes from http-client.env.json (the `e2e` environment).
+# For a single Play button that runs the whole flow, open run-all.http.
+# Otherwise Run All Requests in file order, or run Create before any request using todoId.
+# No HTTP Client environment selection is required. Create saves todoId for later requests.
+@host = http://localhost:5099
 
 ### Readiness probe
 GET {{host}}/health
@@ -27,10 +30,13 @@ Content-Type: application/json
     client.test("create returns an id", function () {
         client.assert(response.body.id !== undefined && response.body.id !== null, "no id in body");
     });
-    client.global.set("todoId", response.body.id);
+    if (response.status === 201 && response.body.id) {
+        client.global.set("todoId", response.body.id);
+    }
 %}
 
 ### Read it back — the interceptor (which lives in a separate assembly) must have trimmed the title
+< require-todo.js
 GET {{host}}/todos/{{todoId}}
 Accept: application/json
 
@@ -48,6 +54,7 @@ Accept: application/json
 %}
 
 ### Complete it (a result-less command)
+< require-todo.js
 POST {{host}}/todos/{{todoId}}/complete
 
 > {%
@@ -57,11 +64,13 @@ POST {{host}}/todos/{{todoId}}/complete
 %}
 
 ### Read again — now completed
+< require-todo.js
 GET {{host}}/todos/{{todoId}}
 Accept: application/json
 
 > {%
     client.test("todo is now completed", function () {
+        client.assert(response.status === 200, "expected 200, got " + response.status);
         client.assert(response.body.isCompleted === true, "expected isCompleted=true");
     });
 %}
@@ -81,8 +90,8 @@ Accept: application/json
     });
 %}
 
-### Stats — both event styles ran: the explicit IEvent (created) and the POCO domain event
-### (completed), the latter raised by the aggregate and published by the DbContext on commit
+### Stats — created IEvent and completed POCO domain event
+# The aggregate raises the completed event; TodoStore publishes it after saving.
 GET {{host}}/stats
 Accept: application/json
 

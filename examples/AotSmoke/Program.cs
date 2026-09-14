@@ -16,9 +16,9 @@ using Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
 var provider = new ServiceCollection()
     .AddErgosfare(options =>
     {
-        options.AddCommandModule(commands => commands.RegisterGenerated());
-        options.AddQueryModule(queries => queries.RegisterGenerated());
-        options.AddEventModule(events => events.RegisterGenerated());
+        options.AddCommandModule(commands => commands.AddGenerated());
+        options.AddQueryModule(queries => queries.AddGenerated());
+        options.AddEventModule(events => events.AddGenerated());
     })
     .BuildServiceProvider();
 

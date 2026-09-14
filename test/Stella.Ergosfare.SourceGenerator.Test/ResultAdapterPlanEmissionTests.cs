@@ -15,7 +15,7 @@ public class ResultAdapterPlanEmissionTests
     [Fact]
     public void NativeCarrierSlot_EmitsTheValueChannelAndMaterializes()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System;
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
@@ -76,7 +76,7 @@ public class ResultAdapterPlanEmissionTests
     [Fact]
     public void AnnotatedForeignSlot_BakesTheAdapterAndKeepsTheUnhandledRethrow()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System;
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
@@ -134,7 +134,7 @@ public class ResultAdapterPlanEmissionTests
     [Fact]
     public void MaterializingForeignSlot_MaterializesThroughTheAdapter()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System;
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
@@ -188,7 +188,7 @@ public class ResultAdapterPlanEmissionTests
     [Fact]
     public void UnadaptedSlot_KeepsTheClassicEmissionWithNoProbe()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System;
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
@@ -230,7 +230,7 @@ public class ResultAdapterPlanEmissionTests
     [Fact]
     public void UnitFittingAnnotation_DisqualifiesTheVoidPlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System;
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
@@ -277,7 +277,7 @@ public class ResultAdapterPlanEmissionTests
     [Fact]
     public void OptedOutNativeCarrierSlot_KeepsTheClassicEmission()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using System;
             using System.Threading.Tasks;
             using Stella.Ergosfare.Commands.Abstractions;
@@ -353,7 +353,7 @@ public class ResultAdapterPlanEmissionTests
     [Fact]
     public void DiscoveredOpenGenericDefault_IsClosedOverTheSlotAndBaked()
     {
-        var result = GeneratorTestHost.Run(DefaultAdapterBoot + """
+        var result = GeneratorTestHost.RunWithAllCandidates(DefaultAdapterBoot + """
 
             public sealed record BoxPing : ICommand<Box<int>>;
 
@@ -385,7 +385,7 @@ public class ResultAdapterPlanEmissionTests
     [Fact]
     public void AnnotationNativeAndOptOut_AllWinOverTheDiscoveredDefault()
     {
-        var result = GeneratorTestHost.Run(DefaultAdapterBoot + """
+        var result = GeneratorTestHost.RunWithAllCandidates(DefaultAdapterBoot + """
 
             // Native slot: the built-in adapter is baked, not the default.
             public sealed record NativePing : ICommand<Result<string>>;
@@ -452,9 +452,9 @@ public class ResultAdapterPlanEmissionTests
     }
 
     [Fact]
-    public void EveryTier_ReachesTheGeneratedAdapterTable()
+    public void AdapterSelections_AreEmbeddedInPlansWithoutRuntimeTables()
     {
-        var result = GeneratorTestHost.Run(DefaultAdapterBoot + """
+        var result = GeneratorTestHost.RunWithAllCandidates(DefaultAdapterBoot + """
 
             // The fallback serves this one.
             public sealed record BoxTablePing : ICommand<Box<int>>;
@@ -504,33 +504,18 @@ public class ResultAdapterPlanEmissionTests
         Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
 
-        // The annotation tier, per (message, slot). The adapter is a type argument, so the
-        // compiler is what checks that it serves the slot.
-        Assert.Contains(
-            "AddResultAdapter<global::TestApp.AnnotatedTablePing, global::TestApp.Outcome, global::TestApp.OutcomeAdapter>();",
-            result.GeneratedSource);
-
-        // The opt-out, per message — and no slot entry for it, the entry being the whole
-        // answer.
-        Assert.Contains("AddIgnoredResultAdapter<global::TestApp.OptedOutTablePing>();", result.GeneratedSource);
-        Assert.DoesNotContain("AddDefaultResultAdapter<global::TestApp.Box<string>", result.GeneratedSource);
-
-        // The fallback tier, per result type, already closed over the slot.
-        Assert.Contains(
-            "AddDefaultResultAdapter<global::TestApp.Box<int>, global::TestApp.BoxAdapter<int>>();",
-            result.GeneratedSource);
-
-        // A command's void dispatch binds over Unit, and nothing here serves it.
-        Assert.DoesNotContain("AddDefaultResultAdapter<global::Stella.Ergosfare.Core.Abstractions.Unit", result.GeneratedSource);
-
-        // Sealed: past this, a slot missing from the table is an answer.
-        Assert.Contains("SealResultAdapters();", result.GeneratedSource);
+        Assert.DoesNotContain("AddResultAdapter<", result.GeneratedSource);
+        Assert.DoesNotContain("AddIgnoredResultAdapter<", result.GeneratedSource);
+        Assert.DoesNotContain("AddDefaultResultAdapter<", result.GeneratedSource);
+        Assert.DoesNotContain("SealResultAdapters", result.GeneratedSource);
+        Assert.Contains("new global::TestApp.OutcomeAdapter()", result.GeneratedSource);
+        Assert.Contains("new global::TestApp.BoxAdapter<int>()", result.GeneratedSource);
     }
 
     [Fact]
     public void OpaqueDefaultCallsite_FailsTheBuild()
     {
-        var result = GeneratorTestHost.Run(DefaultAdapterBoot.Replace(
+        var result = GeneratorTestHost.RunWithAllCandidates(DefaultAdapterBoot.Replace(
             "=> registry.UseDefaultResultAdapter(typeof(BoxAdapter<>));",
             """
             {
@@ -570,7 +555,7 @@ public class ResultAdapterPlanEmissionTests
     [Fact]
     public void DisagreeingDefaultCallsites_FailTheBuild()
     {
-        var result = GeneratorTestHost.Run(DefaultAdapterBoot.Replace(
+        var result = GeneratorTestHost.RunWithAllCandidates(DefaultAdapterBoot.Replace(
             "=> registry.UseDefaultResultAdapter(typeof(BoxAdapter<>));",
             """
             {

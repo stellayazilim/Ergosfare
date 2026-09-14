@@ -41,8 +41,8 @@ public sealed class EchoCommandHandler : ICommandHandler<EchoCommand, string>
 /// <summary>
 /// Covers the engine-backed facade shape: DI resolves a single-object facade bound to the
 /// process-wide <see cref="MessageDispatchEngine"/>, handler resolution still binds to the
-/// calling scope (verified under <c>ValidateScopes</c>), and the facade's two public
-/// constructors dispatch identically. Fixtures are top-level and discoverable, so the
+/// calling scope (verified under <c>ValidateScopes</c>), and the public facade dispatches
+/// through the engine. Fixtures are top-level and discoverable, so the
 /// dispatches run through compiled plans.
 /// </summary>
 public class EngineBackedFacadeTests
@@ -51,7 +51,7 @@ public class EngineBackedFacadeTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task DiResolvedFacade_IsTheEngineBackedShape()
+    public async Task DiResolvedFacade_IsThePublicFacade()
     {
         var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c => c.Register<EchoCommandHandler>()))
@@ -60,10 +60,8 @@ public class EngineBackedFacadeTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        // The DI shape derives from the public facade (compat for callers typed to it) but
-        // is not the bare facade — it must be the single-constructor engine-backed type.
-        Assert.IsAssignableFrom<CommandMediator>(mediator);
-        Assert.NotEqual(typeof(CommandMediator), mediator.GetType());
+        // DI activates the public facade directly, without an adapter subclass.
+        Assert.IsType<CommandMediator>(mediator);
     }
 
     [Fact]
@@ -143,8 +141,8 @@ public class EngineBackedFacadeTests
             .Where(m => m.Name == nameof(ICommandMediator.SendAsync) && m.GetGenericArguments().Length == 2)
             .ToArray();
 
-        // One per shape: groups, context, cancellation token, GroupSet, string[].
-        Assert.Equal(5, declared.Length);
+        // One per shape: GroupSet, context, cancellation token.
+        Assert.Equal(3, declared.Length);
         Assert.All(declared, m => Assert.Equal(typeof(CommandMediator), m.DeclaringType));
     }
 }

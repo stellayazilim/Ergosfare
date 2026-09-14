@@ -122,53 +122,32 @@ public class TypedEngineDispatchTests
     }
 
     [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
     public async Task TypedDispatch_DoesNotServeAnotherContainersExecutor()
     {
-        // The message registry is process-wide, so a second container can dispatch the
-        // same message type. What must not leak between containers is the executor: it
-        // carries the container's dependencies factory — and with it the container's
-        // dispatch verdict, made observable here via ForceMemoizedHandlers, whose
-        // pipelines a compiled plan refuses to serve.
-        await using var transientContainer = new ServiceCollection()
+        // Generated plans are shared, but each container selects its own registrations.
+        await using var registered = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c => c.Register<IdentityProbeCommandHandler>()))
             .BuildServiceProvider();
-        var transientEngine = transientContainer.GetRequiredService<MessageDispatchEngine>();
-
-        // Populate the static-generic slot from the transient container: every dispatch
-        // resolves a fresh handler instance.
-        var first = await DispatchAndReadId(transientEngine, transientContainer);
-        var second = await DispatchAndReadId(transientEngine, transientContainer);
+        var engine = registered.GetRequiredService<MessageDispatchEngine>();
+        var first = await DispatchAndReadId(engine, registered);
+        var second = await DispatchAndReadId(engine, registered);
         Assert.NotEqual(first, second);
 
-        await using var memoizedContainer = new ServiceCollection()
-            .AddErgosfare(x =>
-            {
-                x.ForceMemoizedHandlers();
-                x.AddCommandModule(c => c.Register<IdentityProbeCommandHandler>());
-            })
+        await using var empty = new ServiceCollection()
+            .AddErgosfare(x => x.AddCommandModule(c => { }))
             .BuildServiceProvider();
-        var memoizedEngine = memoizedContainer.GetRequiredService<MessageDispatchEngine>();
+        var rejected = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
+            await DispatchAndReadId(empty.GetRequiredService<MessageDispatchEngine>(), empty));
+        Assert.Equal(UnplannedDispatchReason.CompositionDiverged, rejected.Reason);
 
-        // Served through its own executor the memoized container fails loudly — its
-        // pipeline memoizes instances, which no compiled plan serves. Being served the
-        // transient container's cached executor instead would dispatch just fine, which
-        // is exactly the leak the holder's cache-identity guard exists to prevent.
-        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
-            await memoizedEngine.DispatchVoidAsync(new IdentityProbeCommand(), new ErgosfareContext(), memoizedContainer));
-        Assert.Equal(UnplannedDispatchReason.MemoizedInstances, thrown.Reason);
-
-        // And after the slot moved on, the original container still dispatches through
-        // its own transient-resolving executor.
-        var third = await DispatchAndReadId(transientEngine, transientContainer);
+        var third = await DispatchAndReadId(engine, registered);
         Assert.NotEqual(first, third);
 
         static async Task<Guid> DispatchAndReadId(MessageDispatchEngine engine, IServiceProvider provider)
         {
-            var items = new ErgosfareContext();
-            await engine.DispatchVoidAsync(new IdentityProbeCommand(), items, provider);
-            return Assert.IsType<Guid>(items.Items["handlerId"]);
+            var context = new ErgosfareContext();
+            await engine.DispatchVoidAsync(new IdentityProbeCommand(), context, provider);
+            return Assert.IsType<Guid>(context.Items["handlerId"]);
         }
     }
 
@@ -233,48 +212,31 @@ public class TypedEngineDispatchTests
     }
 
     [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
     public async Task TypedResultDispatch_DoesNotServeAnotherContainersExecutor()
     {
-        // The result holder is keyed by the (message, result) pair and is process-wide,
-        // while an executor belongs to one container. Without the cache-identity guard the
-        // second container would run the first one's pipeline — observable here because a
-        // memoized container's own executor refuses to dispatch, exactly as the void
-        // lane's twin asserts it.
-        await using var transientContainer = new ServiceCollection()
+        // Generated plans are shared, but each container selects its own registrations.
+        await using var registered = new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c => c.Register<ResultIdentityProbeCommandHandler>()))
             .BuildServiceProvider();
-        var transientEngine = transientContainer.GetRequiredService<MessageDispatchEngine>();
-
-        var first = await DispatchAndReadId(transientEngine, transientContainer);
-        var second = await DispatchAndReadId(transientEngine, transientContainer);
+        var engine = registered.GetRequiredService<MessageDispatchEngine>();
+        var first = await DispatchAndReadId(engine, registered);
+        var second = await DispatchAndReadId(engine, registered);
         Assert.NotEqual(first, second);
 
-        await using var memoizedContainer = new ServiceCollection()
-            .AddErgosfare(x =>
-            {
-                x.ForceMemoizedHandlers();
-                x.AddCommandModule(c => c.Register<ResultIdentityProbeCommandHandler>());
-            })
+        await using var empty = new ServiceCollection()
+            .AddErgosfare(x => x.AddCommandModule(c => { }))
             .BuildServiceProvider();
-        var memoizedEngine = memoizedContainer.GetRequiredService<MessageDispatchEngine>();
+        var rejected = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
+            await DispatchAndReadId(empty.GetRequiredService<MessageDispatchEngine>(), empty));
+        Assert.Equal(UnplannedDispatchReason.CompositionDiverged, rejected.Reason);
 
-        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
-            await memoizedEngine.DispatchAsync<ResultIdentityProbeCommand, Guid>(
-                new ResultIdentityProbeCommand(), new ErgosfareContext(), memoizedContainer));
-        Assert.Equal(UnplannedDispatchReason.MemoizedInstances, thrown.Reason);
-
-        // And after the slot moved on, the original container still resolves transiently.
-        var third = await DispatchAndReadId(transientEngine, transientContainer);
+        var third = await DispatchAndReadId(engine, registered);
         Assert.NotEqual(first, third);
 
         static async Task<Guid> DispatchAndReadId(MessageDispatchEngine engine, IServiceProvider provider)
         {
-            var items = new ErgosfareContext();
-
-            return await engine.DispatchAsync<ResultIdentityProbeCommand, Guid>(
-                new ResultIdentityProbeCommand(), items, provider);
+            var context = new ErgosfareContext();
+            return await engine.DispatchAsync<ResultIdentityProbeCommand, Guid>(new ResultIdentityProbeCommand(), context, provider);
         }
     }
 

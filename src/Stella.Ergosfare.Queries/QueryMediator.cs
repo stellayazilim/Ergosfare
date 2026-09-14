@@ -32,7 +32,7 @@ public class QueryMediator : IQueryMediator
     /// <param name="engine">The container's dispatch engine.</param>
     /// <param name="serviceProvider">The provider of the scope this facade serves.</param>
     /// <exception cref="ArgumentNullException">Either argument is <c>null</c>.</exception>
-    public QueryMediator(
+    internal QueryMediator(
         MessageDispatchEngine engine,
         IServiceProvider serviceProvider)
     {
@@ -44,27 +44,27 @@ public class QueryMediator : IQueryMediator
     }
 
     /// <inheritdoc />
-    public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, IEnumerable<string>? groups,
-        CancellationToken cancellationToken)
-        => _engine.DispatchAsync<TResult>(query, _serviceProvider, cancellationToken, groups);
+    public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, GroupSet groups,
+        CancellationToken cancellationToken = default)
+        => _engine.DispatchAsync<TResult>(query, _serviceProvider, cancellationToken, groups ?? throw new ArgumentNullException(nameof(groups)));
 
     /// <inheritdoc />
     public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, ErgosfareContext context,
-        IEnumerable<string>? groups = null)
+        GroupSet? groups = null)
         => _engine.DispatchAsync<TResult>(query, context, _serviceProvider, groups);
 
     /// <inheritdoc />
     [Obsolete(StreamRevision.Notice)]
-    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, IEnumerable<string>? groups,
-        CancellationToken cancellationToken)
+    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, GroupSet groups,
+        CancellationToken cancellationToken = default)
         // The engine keeps this container's streaming pipelines, so nothing is resolved or
         // looked up per call.
-        => _engine.StreamAsync<TResult>(query, _serviceProvider, cancellationToken, groups);
+        => _engine.StreamAsync<TResult>(query, _serviceProvider, cancellationToken, groups ?? throw new ArgumentNullException(nameof(groups)));
 
     /// <inheritdoc />
     [Obsolete(StreamRevision.Notice)]
     public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, ErgosfareContext context,
-        IEnumerable<string>? groups = null)
+        GroupSet? groups = null)
         => _engine.StreamAsync<TResult>(query, context, _serviceProvider, groups);
 
     /// <summary>
@@ -80,39 +80,8 @@ public class QueryMediator : IQueryMediator
     /// only on the interface would leave those calls without an overload to bind to.
     /// </remarks>
     public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, CancellationToken cancellationToken = default)
-        => QueryAsync(query, (IEnumerable<string>?)null, cancellationToken);
+        => QueryAsync(query, GroupSet.Empty, cancellationToken);
 
-
-    /// <summary>
-    /// Executes <paramref name="query"/> under a canonical group set.
-    /// </summary>
-    /// <typeparam name="TResult">The result type the query declares.</typeparam>
-    /// <param name="query">The query to execute.</param>
-    /// <param name="groups">
-    /// The groups to run. An empty set executes through the default pipeline.
-    /// </param>
-    /// <param name="cancellationToken">Token exposed on the execution context.</param>
-    /// <returns>The result the handler produced.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="groups"/> is <c>null</c>.</exception>
-    public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, GroupSet groups,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(groups);
-
-        return QueryAsync(query, groups.Count == 0 ? null : (IEnumerable<string>?)groups, cancellationToken);
-    }
-
-    /// <summary>
-    /// Executes <paramref name="query"/> under groups given as an array.
-    /// </summary>
-    /// <typeparam name="TResult">The result type the query declares.</typeparam>
-    /// <param name="query">The query to execute.</param>
-    /// <param name="groups">The groups to run.</param>
-    /// <param name="cancellationToken">Token exposed on the execution context.</param>
-    /// <returns>The result the handler produced.</returns>
-    public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, string[] groups,
-        CancellationToken cancellationToken = default)
-        => QueryAsync(query, (IEnumerable<string>?)groups, cancellationToken);
 
     /// <summary>
     /// Streams the results of <paramref name="query"/> through its default pipeline.
@@ -124,40 +93,7 @@ public class QueryMediator : IQueryMediator
     [Obsolete(StreamRevision.Notice)]
     public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query,
         CancellationToken cancellationToken = default)
-        => StreamAsync(query, (IEnumerable<string>?)null, cancellationToken);
-
-    /// <summary>
-    /// Streams the results of <paramref name="query"/> under a canonical group set.
-    /// </summary>
-    /// <typeparam name="TResult">The type of each streamed item.</typeparam>
-    /// <param name="query">The query to stream.</param>
-    /// <param name="groups">
-    /// The groups to run. An empty set streams through the default pipeline.
-    /// </param>
-    /// <param name="cancellationToken">Token for the enumeration.</param>
-    /// <returns>The streamed results.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="groups"/> is <c>null</c>.</exception>
-    [Obsolete(StreamRevision.Notice)]
-    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, GroupSet groups,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(groups);
-
-        return StreamAsync(query, groups.Count == 0 ? null : (IEnumerable<string>?)groups, cancellationToken);
-    }
-
-    /// <summary>
-    /// Streams the results of <paramref name="query"/> under groups given as an array.
-    /// </summary>
-    /// <typeparam name="TResult">The type of each streamed item.</typeparam>
-    /// <param name="query">The query to stream.</param>
-    /// <param name="groups">The groups to run.</param>
-    /// <param name="cancellationToken">Token for the enumeration.</param>
-    /// <returns>The streamed results.</returns>
-    [Obsolete(StreamRevision.Notice)]
-    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, string[] groups,
-        CancellationToken cancellationToken = default)
-        => StreamAsync(query, (IEnumerable<string>?)groups, cancellationToken);
+        => StreamAsync(query, GroupSet.Empty, cancellationToken);
 
     /// <summary>
     /// Executes <paramref name="query"/> naming both its own type and its result, so the
@@ -167,13 +103,13 @@ public class QueryMediator : IQueryMediator
     /// <typeparam name="TQuery">The query's own type.</typeparam>
     /// <typeparam name="TResult">The result type the query declares.</typeparam>
     /// <param name="query">The query to execute.</param>
-    /// <param name="groups">The groups to run; <c>null</c> runs the default group.</param>
+    /// <param name="groups">The groups to run; an empty set runs the default group.</param>
     /// <param name="cancellationToken">Token exposed on the execution context.</param>
     /// <returns>The result the handler produced.</returns>
-    public ValueTask<TResult> QueryAsync<TQuery, TResult>(TQuery query, IEnumerable<string>? groups,
-        CancellationToken cancellationToken)
+    public ValueTask<TResult> QueryAsync<TQuery, TResult>(TQuery query, GroupSet groups,
+        CancellationToken cancellationToken = default)
         where TQuery : IQuery<TResult>
-        => _engine.DispatchAsync<TQuery, TResult>(query, _serviceProvider, cancellationToken, groups);
+        => _engine.DispatchAsync<TQuery, TResult>(query, _serviceProvider, cancellationToken, groups ?? throw new ArgumentNullException(nameof(groups)));
 
     /// <summary>
     /// Executes <paramref name="query"/> under a caller-owned context, naming both types.
@@ -182,10 +118,10 @@ public class QueryMediator : IQueryMediator
     /// <typeparam name="TResult">The result type the query declares.</typeparam>
     /// <param name="query">The query to execute.</param>
     /// <param name="context">The context to run under; the caller owns its lifetime.</param>
-    /// <param name="groups">The groups to run; <c>null</c> runs the default group.</param>
+    /// <param name="groups">The groups to run; an empty set runs the default group.</param>
     /// <returns>The result the handler produced.</returns>
     public ValueTask<TResult> QueryAsync<TQuery, TResult>(TQuery query, ErgosfareContext context,
-        IEnumerable<string>? groups = null)
+        GroupSet? groups = null)
         where TQuery : IQuery<TResult>
         => _engine.DispatchAsync<TQuery, TResult>(query, context, _serviceProvider, groups);
 
@@ -199,41 +135,6 @@ public class QueryMediator : IQueryMediator
     /// <returns>The result the handler produced.</returns>
     public ValueTask<TResult> QueryAsync<TQuery, TResult>(TQuery query, CancellationToken cancellationToken = default)
         where TQuery : IQuery<TResult>
-        => QueryAsync<TQuery, TResult>(query, (IEnumerable<string>?)null, cancellationToken);
+        => QueryAsync<TQuery, TResult>(query, GroupSet.Empty, cancellationToken);
 
-    /// <summary>
-    /// Executes <paramref name="query"/> under a canonical group set, naming both types.
-    /// </summary>
-    /// <typeparam name="TQuery">The query's own type.</typeparam>
-    /// <typeparam name="TResult">The result type the query declares.</typeparam>
-    /// <param name="query">The query to execute.</param>
-    /// <param name="groups">
-    /// The groups to run. An empty set executes through the default pipeline.
-    /// </param>
-    /// <param name="cancellationToken">Token exposed on the execution context.</param>
-    /// <returns>The result the handler produced.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="groups"/> is <c>null</c>.</exception>
-    public ValueTask<TResult> QueryAsync<TQuery, TResult>(TQuery query, GroupSet groups,
-        CancellationToken cancellationToken = default)
-        where TQuery : IQuery<TResult>
-    {
-        ArgumentNullException.ThrowIfNull(groups);
-
-        return QueryAsync<TQuery, TResult>(query, groups.Count == 0 ? null : (IEnumerable<string>?)groups,
-            cancellationToken);
-    }
-
-    /// <summary>
-    /// Executes <paramref name="query"/> under groups given as an array, naming both types.
-    /// </summary>
-    /// <typeparam name="TQuery">The query's own type.</typeparam>
-    /// <typeparam name="TResult">The result type the query declares.</typeparam>
-    /// <param name="query">The query to execute.</param>
-    /// <param name="groups">The groups to run.</param>
-    /// <param name="cancellationToken">Token exposed on the execution context.</param>
-    /// <returns>The result the handler produced.</returns>
-    public ValueTask<TResult> QueryAsync<TQuery, TResult>(TQuery query, string[] groups,
-        CancellationToken cancellationToken = default)
-        where TQuery : IQuery<TResult>
-        => QueryAsync<TQuery, TResult>(query, (IEnumerable<string>?)groups, cancellationToken);
 }

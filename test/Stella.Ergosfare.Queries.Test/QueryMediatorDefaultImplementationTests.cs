@@ -18,9 +18,7 @@ namespace Stella.Ergosfare.Queries.Test;
 /// the defaults exist for.
 /// </para>
 /// <para>
-/// The distinction each assertion is really pinning: <see cref="GroupSet.Empty"/> arrives as
-/// <c>null</c> (no filter, the default pipeline), while an empty <c>string[]</c> arrives as
-/// itself — a filter that names no group.
+/// GroupSet instances pass through unchanged; no-group convenience calls pass GroupSet.Empty.
 /// </para>
 /// <para>
 /// The streaming conveniences are exercised through the same recorder. They are obsolete
@@ -71,14 +69,14 @@ public class QueryMediatorDefaultImplementationTests
         public object Reply { get; init; } = "answered";
 
         public ValueTask<TQueryResult> QueryAsync<TQueryResult>(IQuery<TQueryResult> query,
-            IEnumerable<string>? groups, CancellationToken cancellationToken)
+            GroupSet groups, CancellationToken cancellationToken)
         {
             Record(Lane.Query, query, groups, cancellationToken, null);
             return ValueTask.FromResult((TQueryResult)Reply);
         }
 
         public ValueTask<TQueryResult> QueryAsync<TQueryResult>(IQuery<TQueryResult> query,
-            ErgosfareContext context, IEnumerable<string>? groups = null)
+            ErgosfareContext context, GroupSet? groups = null)
         {
             Record(Lane.QueryContext, query, groups, context.CancellationToken, context);
             return ValueTask.FromResult((TQueryResult)Reply);
@@ -86,7 +84,7 @@ public class QueryMediatorDefaultImplementationTests
 
         [Obsolete(StreamRevision.Notice)]
         public IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query,
-            IEnumerable<string>? groups, CancellationToken cancellationToken)
+            GroupSet groups, CancellationToken cancellationToken)
         {
             Record(Lane.Stream, query, groups, cancellationToken, null);
             return One<TQueryResult>();
@@ -94,7 +92,7 @@ public class QueryMediatorDefaultImplementationTests
 
         [Obsolete(StreamRevision.Notice)]
         public IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query,
-            ErgosfareContext context, IEnumerable<string>? groups = null)
+            ErgosfareContext context, GroupSet? groups = null)
         {
             Record(Lane.StreamContext, query, groups, context.CancellationToken, context);
             return One<TQueryResult>();
@@ -106,7 +104,7 @@ public class QueryMediatorDefaultImplementationTests
             yield return (TQueryResult)Reply;
         }
 
-        private void Record(Lane lane, object query, IEnumerable<string>? groups, CancellationToken token,
+        private void Record(Lane lane, object query, GroupSet? groups, CancellationToken token,
             ErgosfareContext? context)
         {
             Landed = lane;
@@ -131,27 +129,26 @@ public class QueryMediatorDefaultImplementationTests
 
         Assert.Equal(Lane.Query, recorder.Landed);
         Assert.Same(ask, recorder.Query);
-        Assert.Null(recorder.Groups);
+        Assert.Empty(recorder.Groups!);
         Assert.Equal(cts.Token, recorder.Token);
 
         Assert.Equal("answered", await mediator.QueryAsync(ask, Reporting));
 
-        Assert.Equal(new[] { "qry.dim.reporting" }, recorder.Groups);
+        Assert.Equal(["qry.dim.reporting"], recorder.Groups!);
 
         // The empty set is not a filter naming nothing — it is the absence of a filter.
         Assert.Equal("answered", await mediator.QueryAsync(ask, GroupSet.Empty));
 
-        Assert.Null(recorder.Groups);
+        Assert.Empty(recorder.Groups!);
 
-        Assert.Equal("answered", await mediator.QueryAsync(ask, new[] { "qry.dim.east" }));
+        Assert.Equal("answered", await mediator.QueryAsync(ask, ["qry.dim.east"]));
 
-        Assert.Equal(new[] { "qry.dim.east" }, recorder.Groups);
+        Assert.Equal(["qry.dim.east"], recorder.Groups!);
 
-        // Unlike GroupSet.Empty, an empty array stays an empty filter: the array overload
-        // hands over what it was given without reading it.
-        Assert.Equal("answered", await mediator.QueryAsync(ask, Array.Empty<string>()));
+        // A collection expression and GroupSet.Empty represent the same default selection.
+        Assert.Equal("answered", await mediator.QueryAsync(ask, GroupSet.Empty));
 
-        Assert.NotNull(recorder.Groups);
+        Assert.NotNull(recorder.Groups!);
         Assert.Empty(recorder.Groups!);
     }
 
@@ -166,29 +163,29 @@ public class QueryMediatorDefaultImplementationTests
         var ask = new Ask();
 
         Assert.Equal("answered",
-            await mediator.QueryAsync<Ask, string>(ask, (IEnumerable<string>?)new[] { "qry.dim.typed" }, cts.Token));
+            await mediator.QueryAsync<Ask, string>(ask, ["qry.dim.typed"], cts.Token));
 
         Assert.Equal(Lane.Query, recorder.Landed);
         Assert.Same(ask, recorder.Query);
-        Assert.Equal(new[] { "qry.dim.typed" }, recorder.Groups);
+        Assert.Equal(["qry.dim.typed"], recorder.Groups!);
         Assert.Equal(cts.Token, recorder.Token);
 
         Assert.Equal("answered", await mediator.QueryAsync<Ask, string>(ask, cts.Token));
 
-        Assert.Null(recorder.Groups);
+        Assert.Empty(recorder.Groups!);
         Assert.Equal(cts.Token, recorder.Token);
 
         Assert.Equal("answered", await mediator.QueryAsync<Ask, string>(ask, Reporting));
 
-        Assert.Equal(new[] { "qry.dim.reporting" }, recorder.Groups);
+        Assert.Equal(["qry.dim.reporting"], recorder.Groups!);
 
         Assert.Equal("answered", await mediator.QueryAsync<Ask, string>(ask, GroupSet.Empty));
 
-        Assert.Null(recorder.Groups);
+        Assert.Empty(recorder.Groups!);
 
-        Assert.Equal("answered", await mediator.QueryAsync<Ask, string>(ask, new[] { "qry.dim.array" }));
+        Assert.Equal("answered", await mediator.QueryAsync<Ask, string>(ask, ["qry.dim.array"]));
 
-        Assert.Equal(new[] { "qry.dim.array" }, recorder.Groups);
+        Assert.Equal(["qry.dim.array"], recorder.Groups!);
     }
 
     [Fact]
@@ -203,19 +200,19 @@ public class QueryMediatorDefaultImplementationTests
         var ask = new Ask();
 
         Assert.Equal("answered",
-            await mediator.QueryAsync<Ask, string>(ask, context, new[] { "qry.dim.nested" }));
+            await mediator.QueryAsync<Ask, string>(ask, context, ["qry.dim.nested"]));
 
         // The nested-dispatch path: the caller owns the context, so it must arrive as the
         // very instance passed — cancellation flows from it, not from an ambient token.
         Assert.Equal(Lane.QueryContext, recorder.Landed);
         Assert.Same(context, recorder.Context);
-        Assert.Equal(new[] { "qry.dim.nested" }, recorder.Groups);
+        Assert.Equal(["qry.dim.nested"], recorder.Groups!);
         Assert.Equal(cts.Token, recorder.Token);
 
         Assert.Equal("answered", await mediator.QueryAsync<Ask, string>(ask, context));
 
         Assert.Equal(Lane.QueryContext, recorder.Landed);
-        Assert.Null(recorder.Groups);
+        Assert.Null(recorder.Groups!);
     }
 
 #pragma warning disable CS0618 // the stream lanes are obsolete pending the revision, not gone
@@ -235,20 +232,20 @@ public class QueryMediatorDefaultImplementationTests
         // enumerated — while the sequence itself is produced on the caller's pull.
         Assert.Equal(Lane.Stream, recorder.Landed);
         Assert.Same(feed, recorder.Query);
-        Assert.Null(recorder.Groups);
+        Assert.Empty(recorder.Groups!);
         Assert.Equal(cts.Token, recorder.Token);
 
         Assert.Equal("answered", await Single(mediator.StreamAsync(feed, Reporting)));
 
-        Assert.Equal(new[] { "qry.dim.reporting" }, recorder.Groups);
+        Assert.Equal(["qry.dim.reporting"], recorder.Groups!);
 
         Assert.Equal("answered", await Single(mediator.StreamAsync(feed, GroupSet.Empty)));
 
-        Assert.Null(recorder.Groups);
+        Assert.Empty(recorder.Groups!);
 
-        Assert.Equal("answered", await Single(mediator.StreamAsync(feed, new[] { "qry.dim.east" })));
+        Assert.Equal("answered", await Single(mediator.StreamAsync(feed, ["qry.dim.east"])));
 
-        Assert.Equal(new[] { "qry.dim.east" }, recorder.Groups);
+        Assert.Equal(["qry.dim.east"], recorder.Groups!);
     }
 #pragma warning restore CS0618
 

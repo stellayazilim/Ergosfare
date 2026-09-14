@@ -13,16 +13,15 @@ namespace Stella.Ergosfare.Queries.Test;
 
 /// <summary>
 /// Covers the engine-backed facade shape for queries: DI resolves a single-object facade
-/// bound to the process-wide <see cref="MessageDispatchEngine"/>, both public constructors
-/// query identically, and the streaming path — which stays on the mediator's
-/// <c>Mediate(options)</c> machinery — resolves the scope's mediator on demand.
+/// bound to the container's <see cref="MessageDispatchEngine"/>. Queries and streams
+/// execute through the public mediator surface.
 /// </summary>
 public class EngineBackedQueryFacadeTests
 {
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task DiResolvedFacade_IsTheEngineBackedShape_AndQueries()
+    public async Task DiResolvedFacade_IsThePublicFacade_AndQueries()
     {
         var provider = new ServiceCollection()
             .AddErgosfare(x => x.AddQueryModule(q => q.Register<StubNonGenericStringResultQueryHandler>()))
@@ -31,8 +30,7 @@ public class EngineBackedQueryFacadeTests
 
         var mediator = provider.GetRequiredService<IQueryMediator>();
 
-        Assert.IsAssignableFrom<QueryMediator>(mediator);
-        Assert.NotEqual(typeof(QueryMediator), mediator.GetType());
+        Assert.IsType<QueryMediator>(mediator);
         Assert.Equal(string.Empty, await mediator.QueryAsync(new StubNonGenericStringResultQuery()));
     }
 
@@ -112,9 +110,9 @@ public class EngineBackedQueryFacadeTests
             .Where(m => m.Name == nameof(IQueryMediator.QueryAsync) && m.GetGenericArguments().Length == 2)
             .ToArray();
 
-        // One per shape: groups, context, cancellation token, GroupSet, string[]. The
+        // One per shape: GroupSet, context, cancellation token. The
         // streaming members stay untyped on purpose — their shape is under revision.
-        Assert.Equal(5, declared.Length);
+        Assert.Equal(3, declared.Length);
         Assert.All(declared, m => Assert.Equal(typeof(QueryMediator), m.DeclaringType));
     }
 }

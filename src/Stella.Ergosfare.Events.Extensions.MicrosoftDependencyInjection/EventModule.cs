@@ -1,3 +1,4 @@
+using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Events.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,7 +23,8 @@ internal class EventModule(Action<EventModuleBuilder> builder) : IModule
 
         // Transient: the mediator holds nothing but the provider that resolved it, and a
         // transient still receives the calling scope's provider.
-        configuration.Services.TryAddTransient<IEventMediator, EngineBackedEventMediator>();
+        configuration.Services.TryAddTransient<IEventMediator>(
+            static provider => new EventMediator(provider.GetRequiredService<MessageDispatchEngine>(), provider));
 
         // The same facade under its concrete name, so an application can inject either and
         // a publish through the class is a direct call rather than a virtual one.
@@ -33,6 +35,7 @@ internal class EventModule(Action<EventModuleBuilder> builder) : IModule
 
         // And under the publisher name, for code that reads better asking a publisher to
         // publish.
-        configuration.Services.TryAddTransient<IPublisher, EngineBackedEventMediator>();
+        configuration.Services.TryAddTransient<IPublisher>(
+            static provider => new EventMediator(provider.GetRequiredService<MessageDispatchEngine>(), provider));
     }
 }

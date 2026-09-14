@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 
 namespace Stella.Ergosfare.Core.Abstractions;
 
@@ -23,6 +24,7 @@ namespace Stella.Ergosfare.Core.Abstractions;
 /// names. The cap only guards against group names generated dynamically without bound.
 /// </para>
 /// </remarks>
+[CollectionBuilder(typeof(GroupSet), nameof(Create))]
 public sealed class GroupSet : IReadOnlyList<string>
 {
     private const int InternCap = 1024;
@@ -66,7 +68,25 @@ public sealed class GroupSet : IReadOnlyList<string>
     public static GroupSet Of(params string[] groups)
     {
         ArgumentNullException.ThrowIfNull(groups);
+        return Create(groups);
+    }
 
+    /// <summary>Converts one group name into a single-group set.</summary>
+    /// <param name="group">The group name. An empty string is a valid group name.</param>
+    /// <returns>A set containing exactly the supplied name.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="group"/> is null.</exception>
+    public static implicit operator GroupSet(string group)
+    {
+        ArgumentNullException.ThrowIfNull(group);
+        return Create([group]);
+    }
+
+    /// <summary>Creates an immutable group set from a collection expression, such as ["audit"].</summary>
+    /// <param name="groups">Group names; an empty string is a valid name, distinct from no names.</param>
+    /// <returns>The canonical group set when available.</returns>
+    /// <exception cref="ArgumentException">A group name is null.</exception>
+    public static GroupSet Create(ReadOnlySpan<string> groups)
+    {
         if (groups.Length == 0)
         {
             return Empty;

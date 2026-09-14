@@ -48,7 +48,7 @@ public class GroupKeyedPlanEmissionTests
     [Fact]
     public void ProvenGroupSet_KeysItsOwnPlan()
     {
-        var result = GeneratorTestHost.Run(GroupedPipeline);
+        var result = GeneratorTestHost.RunWithAllCandidates(GroupedPipeline);
 
         Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
@@ -73,7 +73,7 @@ public class GroupKeyedPlanEmissionTests
     [Fact]
     public void GroupSetHeldInAField_IsStillProven()
     {
-        var result = GeneratorTestHost.Run(GroupedPipeline);
+        var result = GeneratorTestHost.RunWithAllCandidates(GroupedPipeline);
 
         Assert.Contains("new string[] { \"audit\" }", result.GeneratedSource);
     }
@@ -86,7 +86,7 @@ public class GroupKeyedPlanEmissionTests
     [Fact]
     public void UnprovableGroupSet_KeysNoPlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
             using Stella.Ergosfare.Events.Abstractions;
@@ -104,7 +104,7 @@ public class GroupKeyedPlanEmissionTests
 
                 public static class Caller
                 {
-                    public static ValueTask Publish(IEventMediator mediator, string[] runtimeGroups)
+                    public static ValueTask Publish(IEventMediator mediator, GroupSet runtimeGroups)
                         => mediator.PublishAsync(new OrderPlaced(), runtimeGroups, System.Threading.CancellationToken.None);
                 }
             }
@@ -123,7 +123,7 @@ public class GroupKeyedPlanEmissionTests
     [Fact]
     public void GroupSetSpellings_NormalizeToOneKey()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Core.Abstractions.Attributes;
             using Stella.Ergosfare.Events.Abstractions;
@@ -179,7 +179,7 @@ public class GroupKeyedPlanEmissionTests
     [Fact]
     public void HandlersInDifferentGroups_EachKeyItsOwnPlan()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Core.Abstractions.Attributes;

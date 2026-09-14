@@ -18,10 +18,7 @@ namespace Stella.Ergosfare.Command.Test;
 /// the defaults exist for.
 /// </para>
 /// <para>
-/// The distinction each assertion is really pinning: <see cref="GroupSet.Empty"/> arrives as
-/// <c>null</c> (no filter, the default pipeline), while an empty <c>string[]</c> arrives as
-/// itself — a filter that names no group. Two ways of saying "no groups" that do not mean the
-/// same thing downstream.
+/// GroupSet instances pass through unchanged; no-group convenience calls pass GroupSet.Empty.
 /// </para>
 /// </remarks>
 public class CommandMediatorDefaultImplementationTests
@@ -66,34 +63,34 @@ public class CommandMediatorDefaultImplementationTests
         /// <summary>What the result lanes answer with; read back to prove the value travels.</summary>
         public object Reply { get; init; } = "answered";
 
-        public ValueTask SendAsync(ICommand command, IEnumerable<string>? groups,
+        public ValueTask SendAsync(ICommand command, GroupSet groups,
             CancellationToken cancellationToken)
         {
             Record(Lane.Void, command, groups, cancellationToken, null);
             return ValueTask.CompletedTask;
         }
 
-        public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, IEnumerable<string>? groups,
+        public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, GroupSet groups,
             CancellationToken cancellationToken)
         {
             Record(Lane.Result, command, groups, cancellationToken, null);
             return ValueTask.FromResult((TResult)Reply);
         }
 
-        public ValueTask SendAsync(ICommand command, ErgosfareContext context, IEnumerable<string>? groups = null)
+        public ValueTask SendAsync(ICommand command, ErgosfareContext context, GroupSet? groups = null)
         {
             Record(Lane.VoidContext, command, groups, context.CancellationToken, context);
             return ValueTask.CompletedTask;
         }
 
         public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, ErgosfareContext context,
-            IEnumerable<string>? groups = null)
+            GroupSet? groups = null)
         {
             Record(Lane.ResultContext, command, groups, context.CancellationToken, context);
             return ValueTask.FromResult((TResult)Reply);
         }
 
-        private void Record(Lane lane, object command, IEnumerable<string>? groups, CancellationToken token,
+        private void Record(Lane lane, object command, GroupSet? groups, CancellationToken token,
             ErgosfareContext? context)
         {
             Landed = lane;
@@ -119,7 +116,7 @@ public class CommandMediatorDefaultImplementationTests
 
         Assert.Equal(Lane.Void, recorder.Landed);
         Assert.Same(ping, recorder.Command);
-        Assert.Null(recorder.Groups);
+        Assert.Empty(recorder.Groups!);
         Assert.Equal(cts.Token, recorder.Token);
 
         // A result command binds the result overload even though it is also an ICommand:
@@ -128,7 +125,7 @@ public class CommandMediatorDefaultImplementationTests
 
         Assert.Equal(Lane.Result, recorder.Landed);
         Assert.Same(ask, recorder.Command);
-        Assert.Null(recorder.Groups);
+        Assert.Empty(recorder.Groups!);
         Assert.Equal(cts.Token, recorder.Token);
     }
 
@@ -143,47 +140,46 @@ public class CommandMediatorDefaultImplementationTests
         await mediator.SendAsync(new Ping(), Reporting);
 
         Assert.Equal(Lane.Void, recorder.Landed);
-        Assert.Equal(new[] { "cmd.dim.reporting" }, recorder.Groups);
+        Assert.Equal(["cmd.dim.reporting"], recorder.Groups!);
 
         await mediator.SendAsync(new Ping(), GroupSet.Empty);
 
         // The empty set is not a filter naming nothing — it is the absence of a filter.
-        Assert.Null(recorder.Groups);
+        Assert.Empty(recorder.Groups!);
 
         Assert.Equal("answered", await mediator.SendAsync(new Ask(), Reporting));
 
         Assert.Equal(Lane.Result, recorder.Landed);
-        Assert.Equal(new[] { "cmd.dim.reporting" }, recorder.Groups);
+        Assert.Equal(["cmd.dim.reporting"], recorder.Groups!);
 
         await mediator.SendAsync(new Ask(), GroupSet.Empty);
 
-        Assert.Null(recorder.Groups);
+        Assert.Empty(recorder.Groups!);
     }
 
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task ArraySends_ForwardTheArrayItself_EmptyIncluded()
+    public async Task CollectionExpressions_ForwardGroupSets_EmptyIncluded()
     {
         var recorder = new RecordingMediator();
         ICommandMediator mediator = recorder;
 
-        await mediator.SendAsync(new Ping(), new[] { "cmd.dim.east", "cmd.dim.west" });
+        await mediator.SendAsync(new Ping(), ["cmd.dim.east", "cmd.dim.west"]);
 
         Assert.Equal(Lane.Void, recorder.Landed);
-        Assert.Equal(new[] { "cmd.dim.east", "cmd.dim.west" }, recorder.Groups);
+        Assert.Equal(["cmd.dim.east", "cmd.dim.west"], recorder.Groups!);
 
-        // Unlike GroupSet.Empty, an empty array stays an empty filter: the array overload
-        // hands over what it was given without reading it.
-        await mediator.SendAsync(new Ping(), Array.Empty<string>());
+        // A collection expression and GroupSet.Empty represent the same default selection.
+        await mediator.SendAsync(new Ping(), GroupSet.Empty);
 
-        Assert.NotNull(recorder.Groups);
+        Assert.NotNull(recorder.Groups!);
         Assert.Empty(recorder.Groups!);
 
-        Assert.Equal("answered", await mediator.SendAsync(new Ask(), new[] { "cmd.dim.east" }));
+        Assert.Equal("answered", await mediator.SendAsync(new Ask(), ["cmd.dim.east"]));
 
         Assert.Equal(Lane.Result, recorder.Landed);
-        Assert.Equal(new[] { "cmd.dim.east" }, recorder.Groups);
+        Assert.Equal(["cmd.dim.east"], recorder.Groups!);
     }
 
     [Fact]
@@ -199,29 +195,29 @@ public class CommandMediatorDefaultImplementationTests
         // Full form: the type pair is the only difference from the untyped call, so the
         // default body must reach the same lane with the same filter.
         Assert.Equal("answered",
-            await mediator.SendAsync<Ask, string>(ask, (IEnumerable<string>?)new[] { "cmd.dim.typed" }, cts.Token));
+            await mediator.SendAsync<Ask, string>(ask, ["cmd.dim.typed"], cts.Token));
 
         Assert.Equal(Lane.Result, recorder.Landed);
         Assert.Same(ask, recorder.Command);
-        Assert.Equal(new[] { "cmd.dim.typed" }, recorder.Groups);
+        Assert.Equal(["cmd.dim.typed"], recorder.Groups!);
         Assert.Equal(cts.Token, recorder.Token);
 
         Assert.Equal("answered", await mediator.SendAsync<Ask, string>(ask, cts.Token));
 
-        Assert.Null(recorder.Groups);
+        Assert.Empty(recorder.Groups!);
         Assert.Equal(cts.Token, recorder.Token);
 
         Assert.Equal("answered", await mediator.SendAsync<Ask, string>(ask, Reporting));
 
-        Assert.Equal(new[] { "cmd.dim.reporting" }, recorder.Groups);
+        Assert.Equal(["cmd.dim.reporting"], recorder.Groups!);
 
         Assert.Equal("answered", await mediator.SendAsync<Ask, string>(ask, GroupSet.Empty));
 
-        Assert.Null(recorder.Groups);
+        Assert.Empty(recorder.Groups!);
 
-        Assert.Equal("answered", await mediator.SendAsync<Ask, string>(ask, new[] { "cmd.dim.array" }));
+        Assert.Equal("answered", await mediator.SendAsync<Ask, string>(ask, ["cmd.dim.array"]));
 
-        Assert.Equal(new[] { "cmd.dim.array" }, recorder.Groups);
+        Assert.Equal(["cmd.dim.array"], recorder.Groups!);
     }
 
     [Fact]
@@ -236,19 +232,19 @@ public class CommandMediatorDefaultImplementationTests
         var ask = new Ask();
 
         Assert.Equal("answered",
-            await mediator.SendAsync<Ask, string>(ask, context, new[] { "cmd.dim.nested" }));
+            await mediator.SendAsync<Ask, string>(ask, context, ["cmd.dim.nested"]));
 
         // The nested-dispatch path: the caller owns the context, so it must arrive as the
         // very instance passed — cancellation flows from it, not from an ambient token.
         Assert.Equal(Lane.ResultContext, recorder.Landed);
         Assert.Same(context, recorder.Context);
         Assert.Same(ask, recorder.Command);
-        Assert.Equal(new[] { "cmd.dim.nested" }, recorder.Groups);
+        Assert.Equal(["cmd.dim.nested"], recorder.Groups!);
         Assert.Equal(cts.Token, recorder.Token);
 
         await mediator.SendAsync<Ask, string>(ask, context);
 
         Assert.Equal(Lane.ResultContext, recorder.Landed);
-        Assert.Null(recorder.Groups);
+        Assert.Null(recorder.Groups!);
     }
 }

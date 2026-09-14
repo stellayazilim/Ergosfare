@@ -12,7 +12,7 @@
         <!-- The e2e app is deliberately named under the reserved Stella.Ergosfare.* prefix,
              which the source generator skips during cross-assembly discovery by default.
              Opt back in so the handlers in the UseCases/Contracts assemblies are still
-             found by the Api's RegisterGenerated(). This exercises the generator's
+             found by the Api's AddGenerated(). This exercises the generator's
              force-scan path end to end. -->
         <ErgosfareSourceGeneratorForceScanReferences>true</ErgosfareSourceGeneratorForceScanReferences>
     </PropertyGroup>

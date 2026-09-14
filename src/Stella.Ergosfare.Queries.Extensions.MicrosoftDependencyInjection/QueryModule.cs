@@ -1,3 +1,4 @@
+using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Queries.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,7 +24,8 @@ internal class QueryModule(
 
         // Transient: the mediator holds nothing but the provider that resolved it, and a
         // transient still receives the calling scope's provider.
-        configuration.Services.TryAddTransient<IQueryMediator, EngineBackedQueryMediator>();
+        configuration.Services.TryAddTransient<IQueryMediator>(
+            static provider => new QueryMediator(provider.GetRequiredService<MessageDispatchEngine>(), provider));
 
         // The same facade under its concrete name, so an application can inject either and
         // a query through the class is a direct call rather than a virtual one.

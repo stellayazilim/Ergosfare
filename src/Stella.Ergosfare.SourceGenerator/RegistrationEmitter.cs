@@ -19,7 +19,7 @@ namespace Stella.Ergosfare.SourceGenerator;
 /// <para>
 /// Every registration surface comes in two overloads. The one taking no pattern selects
 /// default discovery, the types carrying no <c>[DiscoveryKey]</c>; the one taking a pattern
-/// picks keyed types, as in <c>RegisterGenerated("reporting.*")</c>. Types are written in
+/// picks keyed types, as in <c>AddGenerated("reporting.*")</c>. Types are written in
 /// clusters sharing a discovery-key set, each behind a key-match test, and selection is a
 /// union, so overlapping selections across chained calls are safe.
 /// </para>
@@ -33,14 +33,13 @@ namespace Stella.Ergosfare.SourceGenerator;
 /// </remarks>
 internal static class RegistrationEmitter
 {
-    private const string CatalogFullName = "global::Stella.Ergosfare.Core.Abstractions.DispatchRoots.FrozenCompositionCatalog";
+    private const string CatalogFullName = "global::Stella.Ergosfare.Core.Abstractions.Planning.DispatchPlanCatalog";
     private const string CommandBuilderFullName = "global::Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.CommandModuleBuilder";
     private const string QueryBuilderFullName = "global::Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.QueryModuleBuilder";
     private const string EventBuilderFullName = "global::Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.EventModuleBuilder";
-    private const string DispatchRootsFullName = "global::Stella.Ergosfare.Core.Abstractions.DispatchRoots.GeneratedDispatchRoots";
+    private const string PlanRegistryFullName = "global::Stella.Ergosfare.Core.Abstractions.Planning.GeneratedPlanRegistry";
     private const string DispatchSiteAttributeFullName = "global::Stella.Ergosfare.Core.Abstractions.DispatchSites.DispatchSiteAttribute";
     private const string DispatchManifestAttributeFullName = "global::Stella.Ergosfare.Core.Abstractions.DispatchSites.DispatchManifestAttribute";
-    private const string ManualRegistrationAttributeFullName = "global::Stella.Ergosfare.Core.Abstractions.DispatchSites.ManualRegistrationAttribute";
     private const string DispatchKindFullName = "global::Stella.Ergosfare.Core.Abstractions.DispatchSites.DispatchKind";
 
     /// <summary>
@@ -54,14 +53,10 @@ internal static class RegistrationEmitter
     /// <param name="types">The types to register.</param>
     /// <param name="registeredShadows">The hidden messages to root.</param>
     /// <param name="builders">What the referenced Ergosfare package's surface offers.</param>
-    /// <param name="voidPlans">The single-handler plans for void pipelines.</param>
-    /// <param name="resultPlans">The single-handler plans for result pipelines.</param>
     /// <param name="stagedPlans">The compiled pipeline bodies.</param>
-    /// <param name="frozenCompositions">The baked composition table.</param>
+    /// <param name="pipelineDescriptors">The baked composition table.</param>
     /// <param name="dispatchSites">The dispatches to record in the manifest.</param>
     /// <param name="registrationSites">The registrations to record in the manifest.</param>
-    /// <param name="defaultResultAdapter">The container's fallback result adapter, if it names one.</param>
-    /// <param name="defaultResultAdapter">The container's fallback result adapter, if it names one.</param>
     /// <param name="emitDispatchManifest">Whether this assembly carries a manifest.</param>
     /// <param name="generatorVersion">The version stamped on the generated code.</param>
     /// <returns>The generated source.</returns>
@@ -69,17 +64,14 @@ internal static class RegistrationEmitter
         IReadOnlyList<RegistrableTypeModel> types,
         IReadOnlyList<RegistrableTypeModel> registeredShadows,
         ModuleBuilderAvailability builders,
-        IReadOnlyList<VoidPlanModel> voidPlans,
-        IReadOnlyList<ResultPlanModel> resultPlans,
         IReadOnlyList<StagedPlanModel> stagedPlans,
-        IReadOnlyList<FrozenCompositionModel> frozenCompositions,
+        IReadOnlyList<PipelineDescriptorModel> pipelineDescriptors,
         IReadOnlyList<DispatchSiteModel> dispatchSites,
         IReadOnlyList<RegistrationSiteModel> registrationSites,
-        DefaultResultAdapterSiteModel? defaultResultAdapter,
         bool emitDispatchManifest,
         string generatorVersion)
     {
-        var emitDispatchRoots = builders.HasDispatchRoots
+        var emitPlanRegistry = builders.HasPlanRegistry
                                 && (HasDispatchableMessages(types) || registeredShadows.Count > 0);
         var sb = new StringBuilder(8192);
 
@@ -112,7 +104,7 @@ internal static class RegistrationEmitter
         sb.AppendLine("    ///     Ergosfare constructs (messages, handlers, interceptors) discovered at compile");
         sb.AppendLine("    ///     time in this compilation and its scanned references. Handler descriptors are");
         sb.AppendLine("    ///     pre-computed, so registration performs no reflection over handler types; plain");
-        sb.AppendLine("    ///     messages and open generic types register through the runtime fallback.");
+        sb.AppendLine("    ///     closed message types execute generated plans.");
         sb.AppendLine("    ///     Trimmed/AOT builds stay warning-free: every type is referenced statically via");
         sb.AppendLine("    ///     <c>typeof</c>.");
         sb.AppendLine("    /// </summary>");
@@ -124,50 +116,48 @@ internal static class RegistrationEmitter
 
         var wroteMember = false;
 
+        EmitGeneratedSelections(sb, types, registrationSites);
+
         if (builders.HasCompositionCatalog)
         {
-            EmitCatalogSurface(sb, ref wroteMember, types, emitDispatchRoots);
+            EmitCatalogSurface(sb, ref wroteMember, types, emitPlanRegistry);
         }
 
         if (builders.HasCommandModuleBuilder)
         {
             EmitBuilderSurface(sb, ref wroteMember, CommandBuilderFullName, "command",
                 Filter(types, static t => t.IsCommand), builders.CommandBuilderHasRegisterParticipants,
-                emitDispatchRoots);
+                emitPlanRegistry);
         }
 
         if (builders.HasQueryModuleBuilder)
         {
             EmitBuilderSurface(sb, ref wroteMember, QueryBuilderFullName, "query",
                 Filter(types, static t => t.IsQuery), builders.QueryBuilderHasRegisterParticipants,
-                emitDispatchRoots);
+                emitPlanRegistry);
         }
 
         if (builders.HasEventModuleBuilder)
         {
             EmitBuilderSurface(sb, ref wroteMember, EventBuilderFullName, "event",
                 Filter(types, static t => t.IsEvent), builders.EventBuilderHasRegisterParticipants,
-                emitDispatchRoots);
+                emitPlanRegistry);
         }
 
-        if (emitDispatchRoots)
+        if (emitPlanRegistry)
         {
-            EmitDispatchRoots(sb, ref wroteMember, types, registeredShadows, voidPlans, resultPlans, stagedPlans,
-                builders.DispatchRootsHasPlanFactories,
-                builders.DispatchRootsHasProviderPlanFactories,
-                builders.HasKeyedServiceExtensions,
-                defaultResultAdapter);
+            EmitPlanRegistry(sb, ref wroteMember, stagedPlans);
 
-            EmitStagedPlanClasses(sb, ref wroteMember, stagedPlans, builders.StagedPlansSupportDirectConstruction);
+            EmitStagedPlanClasses(sb, ref wroteMember, stagedPlans);
         }
 
         // A separate question from the roots above. That one asks whether this compilation
         // declares a message worth closing generics for; the table says what serves a
         // message, including the abstract bases a dispatched subtype resolves through, which
         // are never rooted themselves.
-        if (builders.HasDispatchRoots)
+        if (builders.HasPlanRegistry)
         {
-            EmitFrozenCompositions(sb, ref wroteMember, frozenCompositions);
+            EmitPipelineDescriptors(sb, ref wroteMember, pipelineDescriptors);
         }
 
         EmitMatchesHelper(sb, ref wroteMember);
@@ -176,6 +166,32 @@ internal static class RegistrationEmitter
         sb.AppendLine("}");
 
         return sb.ToString();
+    }
+
+    private static void EmitGeneratedSelections(StringBuilder sb, IReadOnlyList<RegistrableTypeModel> types,
+        IReadOnlyList<RegistrationSiteModel> requests)
+    {
+        var emitted = new HashSet<(byte, string)>();
+        var opened = false;
+        foreach (var request in requests)
+        {
+            if (request.Module == 0 || request.IsOpaque
+                || request.DiscoveryPattern is not { } pattern || !emitted.Add((request.Module, pattern))) continue;
+            if (!opened)
+            {
+                sb.AppendLine("        [global::System.Runtime.CompilerServices.ModuleInitializer]");
+                sb.AppendLine("        internal static void PopulateGeneratedSelections()");
+                sb.AppendLine("        {");
+                opened = true;
+            }
+            var selected = Planning.ParticipantSelection.Select(types.ToImmutableArray(), ImmutableArray.Create(request));
+            sb.Append("            ").Append(PlanRegistryFullName).Append(".AddGeneratedSelection(")
+                .Append(request.Module).Append(", ")
+                .Append(SymbolDisplay.FormatLiteral(pattern, true)).Append(", new global::System.Type[] { ");
+            foreach (var type in selected) sb.Append("typeof(").Append(type.TypeofExpression).Append("), ");
+            sb.AppendLine("});");
+        }
+        if (opened) sb.AppendLine("        }");
     }
 
     /// <summary>
@@ -187,11 +203,10 @@ internal static class RegistrationEmitter
     /// <remarks>
     /// The marker attribute is written even with no site at all — it is what separates
     /// "dispatches nothing" from "unknown", and it carries the opaque-registration flag —
-    /// followed by one site attribute per distinct message, surface and opacity, and one
-    /// registration attribute per named registered type. A referenced assembly's entries are
-    /// never re-exported: each assembly records only what it does itself.
+    /// followed by one site attribute per distinct message, surface and opacity.
+    /// Participant selections travel in the separate method-scoped selection manifest.
     /// </remarks>
-    private static void EmitDispatchManifest(
+    internal static void EmitDispatchManifest(
         StringBuilder sb,
         IReadOnlyList<DispatchSiteModel> dispatchSites,
         IReadOnlyList<RegistrationSiteModel> registrationSites)
@@ -281,28 +296,6 @@ internal static class RegistrationEmitter
             }
         }
 
-        if (registrationSites.Count > 0)
-        {
-            var registeredNames = new List<string>(registrationSites.Count);
-            var seenNames = new HashSet<string>(StringComparer.Ordinal);
-
-            foreach (var registration in registrationSites)
-            {
-                if (registration.TypeMetadataName is { } name && seenNames.Add(name))
-                {
-                    registeredNames.Add(name);
-                }
-            }
-
-            registeredNames.Sort(StringComparer.Ordinal);
-
-            foreach (var name in registeredNames)
-            {
-                sb.Append("[assembly: ").Append(ManualRegistrationAttributeFullName).Append('(')
-                  .Append(SymbolDisplay.FormatLiteral(name, quote: true)).AppendLine(")]");
-            }
-        }
-
         sb.AppendLine();
     }
 
@@ -340,21 +333,20 @@ internal static class RegistrationEmitter
     /// <param name="sb">The buffer to write to.</param>
     /// <param name="plan">The plan being written.</param>
     /// <param name="isVoid">Whether its pipeline produces no result.</param>
-    /// <param name="direct">Whether this is the directly constructed entry point.</param>
     /// <remarks>
     /// The base class declares it either way, so it forwards to the filtered body with the
     /// empty set: a dispatch naming no group is asking for the default one, which is exactly
     /// what an empty request means to every baked test.
     /// </remarks>
-    private static void AppendUnfilteredForward(StringBuilder sb, StagedPlanModel plan, bool isVoid, bool direct)
+    private static void AppendUnfilteredForward(StringBuilder sb, StagedPlanModel plan, bool isVoid)
     {
         if (!plan.IsGroupFiltering)
         {
             return;
         }
 
-        var name = direct ? "ExecuteDirect" : "Execute";
-        var target = direct ? "ExecuteFilteredDirect" : "ExecuteFiltered";
+        const string name = "Execute";
+        const string target = "ExecuteFiltered";
 
         sb.AppendLine();
         sb.Append("            public override ").Append(ValueTaskFullName);
@@ -451,8 +443,32 @@ internal static class RegistrationEmitter
               .Append(guard.Expression).AppendLine(";");
         }
 
+        if (plan.IsBroadcast)
+        {
+            sb.Append(indent).Append("var selectedHandlers = 0");
+            foreach (var handler in plan.Handlers.Concat(plan.IndirectHandlers))
+                sb.Append(" + (").Append(handler.GroupGuard ?? "true").Append(" ? 1 : 0)");
+            sb.AppendLine(";");
+            sb.Append(indent).Append("if (selectedHandlers == 0) throw new global::Stella.Ergosfare.Core.Abstractions.Exceptions.NoHandlerFoundException(typeof(")
+                .Append(plan.MessageTypeExpression).AppendLine("));");
+        }
+
         if (!plan.GroupGuards.IsEmpty)
         {
+            if (!plan.IsBroadcast)
+            {
+                sb.Append(indent).Append("var selectedHandlers = ");
+                for (var i = 0; i < plan.Handlers.Length; i++)
+                {
+                    if (i > 0) sb.Append(" + ");
+                    sb.Append('(').Append(plan.Handlers[i].GroupGuard ?? "true").Append(" ? 1 : 0)");
+                }
+                sb.AppendLine(";");
+                sb.Append(indent).Append("if (selectedHandlers == 0) throw new global::Stella.Ergosfare.Core.Abstractions.Exceptions.NoHandlerFoundException(typeof(")
+                    .Append(plan.MessageTypeExpression).AppendLine("));");
+                sb.Append(indent).Append("if (selectedHandlers > 1) throw new global::Stella.Ergosfare.Core.Abstractions.Exceptions.MultipleHandlerFoundException(typeof(")
+                    .Append(plan.MessageTypeExpression).AppendLine("), selectedHandlers);");
+            }
             sb.AppendLine();
         }
     }
@@ -538,12 +554,12 @@ internal static class RegistrationEmitter
     /// <param name="sb">The buffer to write to.</param>
     /// <param name="wroteMember">Tracks whether a blank line is owed before the next member.</param>
     /// <param name="types">The types to select.</param>
-    /// <param name="emitDispatchRoots">Whether this assembly roots dispatch generics.</param>
+    /// <param name="emitPlanRegistry">Whether this assembly roots dispatch generics.</param>
     private static void EmitCatalogSurface(
         StringBuilder sb,
         ref bool wroteMember,
         IReadOnlyList<RegistrableTypeModel> types,
-        bool emitDispatchRoots)
+        bool emitPlanRegistry)
     {
         StartMember(sb, ref wroteMember);
         sb.AppendLine("        /// <summary>");
@@ -565,9 +581,9 @@ internal static class RegistrationEmitter
         sb.Append("        public static void RegisterAll(").Append(CatalogFullName).AppendLine(" compositions, string discoveryKeyPattern)");
         sb.AppendLine("        {");
 
-        if (emitDispatchRoots)
+        if (emitPlanRegistry)
         {
-            sb.AppendLine("            RootDispatchInstantiations();");
+            sb.AppendLine("            RegisterGeneratedPlans();");
             sb.AppendLine();
         }
 
@@ -576,7 +592,7 @@ internal static class RegistrationEmitter
     }
 
     /// <summary>
-    /// Writes one module's registration surface: the two <c>RegisterGenerated</c> overloads.
+    /// Writes one module's registration surface: the two <c>AddGenerated</c> overloads.
     /// </summary>
     /// <param name="sb">The buffer to write to.</param>
     /// <param name="wroteMember">Tracks whether a blank line is owed before the next member.</param>
@@ -586,7 +602,7 @@ internal static class RegistrationEmitter
     /// <param name="batchParticipants">
     /// Whether the referenced package offers the batch registration call.
     /// </param>
-    /// <param name="emitDispatchRoots">Whether this assembly roots dispatch generics.</param>
+    /// <param name="emitPlanRegistry">Whether this assembly roots dispatch generics.</param>
     private static void EmitBuilderSurface(
         StringBuilder sb,
         ref bool wroteMember,
@@ -594,17 +610,17 @@ internal static class RegistrationEmitter
         string moduleName,
         List<RegistrableTypeModel> moduleTypes,
         bool batchParticipants,
-        bool emitDispatchRoots)
+        bool emitPlanRegistry)
     {
         StartMember(sb, ref wroteMember);
         sb.AppendLine("        /// <summary>");
         sb.Append("        ///     Registers every discovered ").Append(moduleName).AppendLine("-module construct that participates");
         sb.AppendLine("        ///     in default discovery (no <c>[DiscoveryKey]</c>) — the bulk collection path.");
         sb.AppendLine("        /// </summary>");
-        sb.Append("        public static ").Append(builderFullName).AppendLine(" RegisterGenerated(");
+        sb.Append("        public static ").Append(builderFullName).AppendLine(" AddGenerated(");
         sb.Append("            this ").Append(builderFullName).AppendLine(" builder)");
         sb.AppendLine("        {");
-        sb.AppendLine("            return RegisterGenerated(builder, \"\");");
+        sb.AppendLine("            return AddGenerated(builder, \"\");");
         sb.AppendLine("        }");
 
         StartMember(sb, ref wroteMember);
@@ -613,13 +629,13 @@ internal static class RegistrationEmitter
         sb.AppendLine("        ///     keys match the given pattern — an exact key or a trailing-<c>*</c> prefix");
         sb.AppendLine("        ///     glob. Chain calls to compose selections; overlapping patterns are safe.");
         sb.AppendLine("        /// </summary>");
-        sb.Append("        public static ").Append(builderFullName).AppendLine(" RegisterGenerated(");
+        sb.Append("        public static ").Append(builderFullName).AppendLine(" AddGenerated(");
         sb.Append("            this ").Append(builderFullName).AppendLine(" builder, string discoveryKeyPattern)");
         sb.AppendLine("        {");
 
-        if (emitDispatchRoots)
+        if (emitPlanRegistry)
         {
-            sb.AppendLine("            RootDispatchInstantiations();");
+            sb.AppendLine("            RegisterGeneratedPlans();");
             sb.AppendLine();
         }
 
@@ -633,113 +649,29 @@ internal static class RegistrationEmitter
     /// </summary>
     /// <param name="sb">The buffer to write to.</param>
     /// <param name="wroteMember">Tracks whether a blank line is owed before the next member.</param>
-    /// <param name="types">The discovered types.</param>
-    /// <param name="registeredShadows">The hidden messages to root.</param>
-    /// <param name="voidPlans">The single-handler plans for void pipelines.</param>
-    /// <param name="resultPlans">The single-handler plans for result pipelines.</param>
     /// <param name="stagedPlans">The compiled pipeline bodies.</param>
-    /// <param name="emitPlanFactories">
-    /// Whether the referenced package accepts a construction factory with a plan.
-    /// </param>
-    /// <param name="emitProviderPlanFactories">
-    /// Whether it accepts a provider-taking one.
-    /// </param>
-    /// <param name="hasKeyedServiceExtensions">
-    /// Whether the consuming compilation can resolve the keyed-service extensions.
-    /// </param>
-    /// <param name="defaultResultAdapter">The container's fallback result adapter, if it names one.</param>
     /// <remarks>
-    /// One <c>AddMessage</c> per dispatchable message, plus an <c>AddResult</c> or
-    /// <c>AddStream</c> per closed result contract. Those closures let the runtime's dispatch
-    /// caches build their executors and invokers without <c>MakeGenericType</c>, and give
-    /// NativeAOT a static anchor for every instantiation. Every addition is idempotent, so
-    /// each registration surface calls this without checking.
+    /// Registers executable plans and their descriptors with static generic closures.
+    /// Every addition is idempotent; runtime dispatch never constructs an executor.
     /// </remarks>
-    private static void EmitDispatchRoots(
+    private static void EmitPlanRegistry(
         StringBuilder sb,
         ref bool wroteMember,
-        IReadOnlyList<RegistrableTypeModel> types,
-        IReadOnlyList<RegistrableTypeModel> registeredShadows,
-        IReadOnlyList<VoidPlanModel> voidPlans,
-        IReadOnlyList<ResultPlanModel> resultPlans,
-        IReadOnlyList<StagedPlanModel> stagedPlans,
-        bool emitPlanFactories,
-        bool emitProviderPlanFactories,
-        bool hasKeyedServiceExtensions,
-        DefaultResultAdapterSiteModel? defaultResultAdapter)
+        IReadOnlyList<StagedPlanModel> stagedPlans)
     {
         StartMember(sb, ref wroteMember);
         // A module initializer rather than something a registration call does: the roots and
         // the compiled plans are properties of the compilation, like the frozen compositions,
         // so they enter the process-wide tables the moment the assembly loads. A container
-        // that never calls RegisterGenerated or RegisterAll still dispatches through the
+        // that never calls AddGenerated or RegisterAll still dispatches through the
         // plans compiled here, and which rows it runs is settled by what it registered. The
         // registration surfaces call this too; every addition below is idempotent.
         sb.AppendLine("        [global::System.Runtime.CompilerServices.ModuleInitializer]");
-        sb.AppendLine("        internal static void RootDispatchInstantiations()");
+        sb.AppendLine("        internal static void RegisterGeneratedPlans()");
         sb.AppendLine("        {");
 
-        foreach (var type in types)
-        {
-            // A derived event message implements no marker, so it cannot be named where
-            // IMessage is required — and it needs no root: a publish is generic over the
-            // event, so its dispatch closes without ever consulting the root table.
-            if (!type.IsDispatchableMessage || !type.ImplementsMessageMarker)
-            {
-                continue;
-            }
-
-            AppendMessageRoot(sb, type);
-        }
-
-        // The hidden messages. Rooted, not registered: a root only lets a dispatch close its
-        // generic without MakeGenericType, and which rows run is still whatever the container
-        // selected.
-        foreach (var shadow in registeredShadows)
-        {
-            AppendMessageRoot(sb, shadow);
-        }
-
-        AppendResultAdapterTable(sb, types, registeredShadows, defaultResultAdapter);
-
-        // The single-handler plans. The executor checks each one against the pipeline the
-        // container actually composed, so a plan can only lose its speedup, never change
-        // behavior. A qualifying handler also carries a construction factory — a
-        // parameterless `new`, or a provider-taking one for an injected constructor — which
-        // the runtime uses only after confirming the handler's registration is the module's
-        // own plain transient one.
-        foreach (var plan in voidPlans)
-        {
-            sb.Append("            ").Append(DispatchRootsFullName)
-              .Append(".AddVoidPlan<").Append(plan.MessageTypeExpression)
-              .Append(", ").Append(plan.HandlerTypeExpression)
-              .Append(">(");
-
-            AppendPlanFactory(sb, plan.HandlerTypeExpression, plan.HasDirectConstruction,
-                plan.ProviderConstructionExpression, plan.UsesKeyedServices,
-                emitPlanFactories, emitProviderPlanFactories, hasKeyedServiceExtensions);
-
-            sb.AppendLine(");");
-        }
-
-        foreach (var plan in resultPlans)
-        {
-            sb.Append("            ").Append(DispatchRootsFullName)
-              .Append(".AddResultPlan<").Append(plan.MessageTypeExpression)
-              .Append(", ").Append(plan.ResultTypeExpression)
-              .Append(", ").Append(plan.HandlerTypeExpression)
-              .Append(">(");
-
-            AppendPlanFactory(sb, plan.HandlerTypeExpression, plan.HasDirectConstruction,
-                plan.ProviderConstructionExpression, plan.UsesKeyedServices,
-                emitPlanFactories, emitProviderPlanFactories, hasKeyedServiceExtensions);
-
-            sb.AppendLine(");");
-        }
-
-        // The staged plans: straight-line pipeline bodies for messages with interceptors,
-        // written as sealed classes below. Advisory like every plan — the executor compares
-        // the composition they were baked against with the live one before running them.
+        // Every pipeline is a generated sealed plan, bound to the selected registrations
+        // once during engine construction.
         for (var i = 0; i < stagedPlans.Count; i++)
         {
             var plan = stagedPlans[i];
@@ -755,7 +687,7 @@ internal static class RegistrationEmitter
                     ? plan.IsBroadcast ? ".AddFilteredBroadcastPlan<" : ".AddFilteredPlan<"
                     : plan.IsBroadcast ? ".AddBroadcastPlan<" : ".AddStagedPlan<";
 
-            sb.Append("            ").Append(DispatchRootsFullName)
+            sb.Append("            ").Append(PlanRegistryFullName)
               .Append(addMethod)
               .Append(plan.MessageTypeExpression);
 
@@ -794,30 +726,30 @@ internal static class RegistrationEmitter
     /// </summary>
     /// <param name="sb">The buffer to write to.</param>
     /// <param name="wroteMember">Tracks whether a blank line is owed before the next member.</param>
-    /// <param name="frozenCompositions">The compositions to write.</param>
+    /// <param name="pipelineDescriptors">The compositions to write.</param>
     /// <remarks>
     /// A composition belongs to the compilation rather than to any registration call: a
-    /// container that never calls <c>RegisterGenerated</c> still dispatches the messages
+    /// container that never calls <c>AddGenerated</c> still dispatches the messages
     /// compiled here, and a plugin assembly contributes its table the moment it loads. Which
     /// rows a given container runs is settled separately, by what that container registered.
     /// </remarks>
-    private static void EmitFrozenCompositions(
-        StringBuilder sb, ref bool wroteMember, IReadOnlyList<FrozenCompositionModel> frozenCompositions)
+    private static void EmitPipelineDescriptors(
+        StringBuilder sb, ref bool wroteMember, IReadOnlyList<PipelineDescriptorModel> pipelineDescriptors)
     {
-        if (frozenCompositions.Count == 0)
+        if (pipelineDescriptors.Count == 0)
         {
             return;
         }
 
         StartMember(sb, ref wroteMember);
         sb.AppendLine("        [global::System.Runtime.CompilerServices.ModuleInitializer]");
-        sb.AppendLine("        internal static void PopulateFrozenCompositions()");
+        sb.AppendLine("        internal static void PopulatePipelineDescriptors()");
         sb.AppendLine("        {");
 
-        foreach (var composition in frozenCompositions)
+        foreach (var composition in pipelineDescriptors)
         {
-            sb.Append("            ").Append(DispatchRootsFullName)
-              .Append(".AddFrozenComposition(new ").Append(FrozenCompositionFullName).AppendLine("(");
+            sb.Append("            ").Append(PlanRegistryFullName)
+              .Append(".AddPipelineDescriptor(new ").Append(PipelineDescriptorFullName).AppendLine("(");
             sb.Append("                typeof(").Append(composition.MessageTypeExpression).AppendLine("),");
             AppendFrozenSegment(sb, composition.Handlers);
             AppendFrozenSegment(sb, composition.IndirectHandlers);
@@ -835,8 +767,8 @@ internal static class RegistrationEmitter
         sb.AppendLine("        }");
     }
 
-    private const string FrozenCompositionFullName = "global::Stella.Ergosfare.Core.Abstractions.DispatchRoots.FrozenComposition";
-    private const string FrozenParticipantFullName = "global::Stella.Ergosfare.Core.Abstractions.DispatchRoots.FrozenParticipant";
+    private const string PipelineDescriptorFullName = "global::Stella.Ergosfare.Core.Abstractions.Planning.PipelineDescriptor";
+    private const string FrozenParticipantFullName = "global::Stella.Ergosfare.Core.Abstractions.Planning.FrozenParticipant";
 
     /// <summary>
     /// Writes one segment of a composition.
@@ -902,10 +834,6 @@ internal static class RegistrationEmitter
     /// <param name="sb">The buffer to write to.</param>
     /// <param name="wroteMember">Tracks whether a blank line is owed before the next member.</param>
     /// <param name="stagedPlans">The plans to write.</param>
-    /// <param name="supportsDirectConstruction">
-    /// Whether the referenced package's plan base declares the directly constructed entry
-    /// point.
-    /// </param>
     /// <remarks>
     /// Each class holds the composition it was baked against and an <c>Execute</c> that runs
     /// that pipeline exactly as the general path would: the pre stages in order, each able to
@@ -918,16 +846,13 @@ internal static class RegistrationEmitter
     private static void EmitStagedPlanClasses(
         StringBuilder sb,
         ref bool wroteMember,
-        IReadOnlyList<StagedPlanModel> stagedPlans,
-        bool supportsDirectConstruction)
+        IReadOnlyList<StagedPlanModel> stagedPlans)
     {
         for (var i = 0; i < stagedPlans.Count; i++)
         {
             var plan = stagedPlans[i];
             var isVoid = plan.ResultTypeExpression is null;
-            // A stream plan's base declares no directly constructed entry point, so the
-            // variant is never written for one.
-            var emitDirect = supportsDirectConstruction && plan.SupportsDirectConstruction && !plan.IsStream;
+
 
             StartMember(sb, ref wroteMember);
             sb.Append("        private sealed class StagedPlan").Append(i).Append(" : global::Stella.Ergosfare.Core.Abstractions.StagedPlans.");
@@ -1058,11 +983,11 @@ internal static class RegistrationEmitter
 
             if (isVoid)
             {
-                EmitVoidExecuteBody(sb, plan, direct: false);
+                EmitVoidExecuteBody(sb, plan);
             }
             else
             {
-                EmitResultExecuteBody(sb, plan, direct: false);
+                EmitResultExecuteBody(sb, plan);
             }
 
             sb.AppendLine("            }");
@@ -1070,46 +995,7 @@ internal static class RegistrationEmitter
             // The unfiltered entry of a filtering plan. A dispatch naming no group asks for
             // the default one, which is what an empty set means to every test, so the same
             // body answers it with no participant treated specially.
-            AppendUnfilteredForward(sb, plan, isVoid, direct: false);
-
-            // The directly constructed variant: the same pipeline with every participant
-            // built by `new`, which the executor uses only after confirming each one's
-            // registration is the plain transient it expects.
-            if (emitDirect)
-            {
-                sb.AppendLine();
-                sb.AppendLine("            public override bool SupportsDirectConstruction");
-                sb.AppendLine("            {");
-                sb.AppendLine("                get { return true; }");
-                sb.AppendLine("            }");
-                sb.AppendLine();
-                sb.Append("            public override async ").Append(ValueTaskFullName);
-
-                if (!isVoid)
-                {
-                    sb.Append('<').Append(plan.ResultTypeExpression).Append('>');
-                }
-
-                sb.Append(plan.IsGroupFiltering ? " ExecuteFilteredDirect(" : " ExecuteDirect(").AppendLine();
-                sb.Append("                ").Append(plan.MessageTypeExpression).AppendLine(" message,");
-                sb.Append("                ").Append(ExecutionContextFullName).AppendLine(" context,");
-                sb.Append("                global::System.IServiceProvider serviceProvider");
-                AppendGroupsParameter(sb, plan);
-                sb.AppendLine("            {");
-
-                if (isVoid)
-                {
-                    EmitVoidExecuteBody(sb, plan, direct: true);
-                }
-                else
-                {
-                    EmitResultExecuteBody(sb, plan, direct: true);
-                }
-
-                sb.AppendLine("            }");
-
-                AppendUnfilteredForward(sb, plan, isVoid, direct: true);
-            }
+            AppendUnfilteredForward(sb, plan, isVoid);
 
             sb.AppendLine("        }");
         }
@@ -1193,6 +1079,21 @@ internal static class RegistrationEmitter
     /// Its <c>new</c> expression in the directly constructed body, or <c>null</c> to resolve
     /// it from the container.
     /// </param>
+    private static void AppendResultHandlerInvocation(StringBuilder sb, StagedPlanModel plan)
+    {
+        if (plan.Handlers.Length > 1) sb.Append('(');
+        for (var i = 0; i < plan.Handlers.Length; i++)
+        {
+            var handler = plan.Handlers[i];
+            if (i < plan.Handlers.Length - 1)
+                sb.Append(handler.GroupGuard ?? "true").Append(" ? ");
+            AppendParticipant(sb, handler.TypeExpression, handler.ConstructionExpression);
+            sb.Append(".HandleAsync(message, context)");
+            if (i < plan.Handlers.Length - 1) sb.Append(" : ");
+        }
+        if (plan.Handlers.Length > 1) sb.Append(')');
+    }
+
     private static void AppendParticipant(StringBuilder sb, string typeExpression, string? constructionExpression)
     {
         if (constructionExpression is null)
@@ -1309,7 +1210,6 @@ internal static class RegistrationEmitter
     /// </summary>
     /// <param name="sb">The buffer to write to.</param>
     /// <param name="plan">The plan being written.</param>
-    /// <param name="direct">Whether participants are constructed rather than resolved.</param>
     /// <param name="indent">The indent to write them at.</param>
     /// <remarks>
     /// The directly registered segment, followed for a broadcast by the covariantly matched
@@ -1320,13 +1220,13 @@ internal static class RegistrationEmitter
     /// written per handler, because that is the seam they name, and a broadcast has one per
     /// delivery.
     /// </remarks>
-    private static void EmitHandlerCalls(StringBuilder sb, StagedPlanModel plan, bool direct, string indent)
+    private static void EmitHandlerCalls(StringBuilder sb, StagedPlanModel plan, string indent)
     {
-        EmitHandlerSegment(sb, plan, plan.Handlers, direct, indent);
+        EmitHandlerSegment(sb, plan, plan.Handlers, indent);
 
         if (plan.IsBroadcast)
         {
-            EmitHandlerSegment(sb, plan, plan.IndirectHandlers, direct, indent);
+            EmitHandlerSegment(sb, plan, plan.IndirectHandlers, indent);
         }
     }
 
@@ -1336,13 +1236,11 @@ internal static class RegistrationEmitter
     /// <param name="sb">The buffer to write to.</param>
     /// <param name="plan">The plan being written.</param>
     /// <param name="handlers">The handlers in that segment.</param>
-    /// <param name="direct">Whether participants are constructed rather than resolved.</param>
     /// <param name="indent">The indent to write them at.</param>
     private static void EmitHandlerSegment(
         StringBuilder sb,
         StagedPlanModel plan,
         ImmutableArray<StagedHandlerModel> handlers,
-        bool direct,
         string indent)
     {
         foreach (var handler in handlers)
@@ -1351,7 +1249,7 @@ internal static class RegistrationEmitter
 
             EmitPluginCalls(sb, plan, PluginHook.PreMain, body);
             sb.Append(body).Append("await ");
-            AppendParticipant(sb, handler.TypeExpression, direct ? handler.ConstructionExpression : null);
+            AppendParticipant(sb, handler.TypeExpression, handler.ConstructionExpression);
             sb.AppendLine(".HandleAsync(message, context);");
             EmitPluginCalls(sb, plan, PluginHook.PostMain, body);
 
@@ -1364,12 +1262,11 @@ internal static class RegistrationEmitter
     /// </summary>
     /// <param name="sb">The buffer to write to.</param>
     /// <param name="plan">The plan being written.</param>
-    /// <param name="direct">Whether participants are constructed rather than resolved.</param>
     /// <param name="indent">The indent to write them at.</param>
     /// <remarks>
     /// Each call reassigns the message, which is how a pre-interceptor rewrites it.
     /// </remarks>
-    private static void EmitPreCalls(StringBuilder sb, StagedPlanModel plan, bool direct, string indent)
+    private static void EmitPreCalls(StringBuilder sb, StagedPlanModel plan, string indent)
     {
         foreach (var call in plan.PreCalls)
         {
@@ -1380,13 +1277,13 @@ internal static class RegistrationEmitter
             if (call.Arm == StagedCallArm.Sync)
             {
                 sb.Append("((").Append(HandlersNamespace).Append("IPreInterceptor<").Append(plan.MessageTypeExpression).Append(">)");
-                AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
+                AppendParticipant(sb, call.TypeExpression, call.ConstructionExpression);
                 sb.AppendLine(").Handle(message, context);");
             }
             else
             {
                 sb.Append("await ((").Append(HandlersNamespace).Append("IAsyncPreInterceptor<").Append(plan.MessageTypeExpression).Append(">)");
-                AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
+                AppendParticipant(sb, call.TypeExpression, call.ConstructionExpression);
                 sb.AppendLine(").HandleAsync(message, context);");
             }
 
@@ -1400,7 +1297,6 @@ internal static class RegistrationEmitter
     /// <param name="sb">The buffer to write to.</param>
     /// <param name="plan">The plan being written.</param>
     /// <param name="call">The interceptor to call.</param>
-    /// <param name="direct">Whether participants are constructed rather than resolved.</param>
     /// <param name="stageInterface">The stage's contract name, without its <c>I</c> prefix.</param>
     /// <param name="chainVariable">The variable carrying the result from call to call.</param>
     /// <param name="exceptionArgument">
@@ -1415,7 +1311,6 @@ internal static class RegistrationEmitter
         StringBuilder sb,
         StagedPlanModel plan,
         StagedCallModel call,
-        bool direct,
         string stageInterface,
         string chainVariable,
         string? exceptionArgument,
@@ -1440,7 +1335,7 @@ internal static class RegistrationEmitter
             case StagedCallArm.AsyncTyped:
                 sb.Append("await ((").Append(HandlersNamespace).Append("IAsync").Append(stageInterface)
                   .Append('<').Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
-                AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
+                AppendParticipant(sb, call.TypeExpression, call.ConstructionExpression);
                 sb.Append(").HandleAsync(message, ")
                   .Append(ResultCast(pipelineResult, pipelineResultIsValueType, targetAcceptsNull, chainVariable))
                   .Append(extraArgument).AppendLine(", context);");
@@ -1448,7 +1343,7 @@ internal static class RegistrationEmitter
             case StagedCallArm.AsyncAgnostic:
                 sb.Append("await ((").Append(HandlersNamespace).Append("IAsync").Append(stageInterface)
                   .Append('<').Append(plan.MessageTypeExpression).Append(">)");
-                AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
+                AppendParticipant(sb, call.TypeExpression, call.ConstructionExpression);
                 sb.Append(").HandleAsync(message, ").Append(chainVariable)
                   .Append(exceptionArgument is null ? "!" : string.Empty)
                   .Append(extraArgument).AppendLine(", context);");
@@ -1456,7 +1351,7 @@ internal static class RegistrationEmitter
             default:
                 sb.Append("((").Append(HandlersNamespace).Append('I').Append(stageInterface)
                   .Append('<').Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
-                AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
+                AppendParticipant(sb, call.TypeExpression, call.ConstructionExpression);
                 sb.Append(").Handle(message, ")
                   .Append(ResultCast(pipelineResult, pipelineResultIsValueType, targetAcceptsNull, chainVariable))
                   .Append(extraArgument).AppendLine(", context);");
@@ -1471,14 +1366,13 @@ internal static class RegistrationEmitter
     /// </summary>
     /// <param name="sb">The buffer to write to.</param>
     /// <param name="plan">The plan being written.</param>
-    /// <param name="direct">Whether participants are constructed rather than resolved.</param>
     /// <param name="resultExpressionText">The expression holding the pipeline's result.</param>
     /// <param name="indent">The indent to write them at.</param>
     /// <remarks>
     /// These run from a <c>finally</c>, so they see the exception when there was one and
     /// take the result as nullable — the pipeline may never have produced one.
     /// </remarks>
-    private static void EmitFinalCalls(StringBuilder sb, StagedPlanModel plan, bool direct, string resultExpressionText, string indent)
+    private static void EmitFinalCalls(StringBuilder sb, StagedPlanModel plan, string resultExpressionText, string indent)
     {
         var pipelineResult = plan.PipelineResultTypeExpression;
         var pipelineResultIsValueType = plan.PipelineResultIsValueType;
@@ -1496,7 +1390,7 @@ internal static class RegistrationEmitter
                 case StagedCallArm.AsyncTyped:
                     sb.Append(body).Append("await ((").Append(HandlersNamespace).Append("IAsyncFinalInterceptor<")
                       .Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
-                    AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
+                    AppendParticipant(sb, call.TypeExpression, call.ConstructionExpression);
                     sb.Append(").HandleAsync(message, ")
                       .Append(ResultCast(pipelineResult, pipelineResultIsValueType, targetAcceptsNull, resultExpressionText))
                       .AppendLine(", exception, context);");
@@ -1504,13 +1398,13 @@ internal static class RegistrationEmitter
                 case StagedCallArm.AsyncAgnostic:
                     sb.Append(body).Append("await ((").Append(HandlersNamespace).Append("IAsyncFinalInterceptor<")
                       .Append(plan.MessageTypeExpression).Append(">)");
-                    AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
+                    AppendParticipant(sb, call.TypeExpression, call.ConstructionExpression);
                     sb.Append(").HandleAsync(message, ").Append(resultExpressionText).AppendLine(", exception, context);");
                     break;
                 default:
                     sb.Append(body).Append("((").Append(HandlersNamespace).Append("IFinalInterceptor<")
                       .Append(plan.MessageTypeExpression).Append(", ").Append(pipelineResult).Append(">)");
-                    AppendParticipant(sb, call.TypeExpression, direct ? call.ConstructionExpression : null);
+                    AppendParticipant(sb, call.TypeExpression, call.ConstructionExpression);
                     sb.Append(").Handle(message, ")
                       .Append(ResultCast(pipelineResult, pipelineResultIsValueType, targetAcceptsNull, resultExpressionText))
                       .AppendLine(", exception, context);");
@@ -1548,7 +1442,6 @@ internal static class RegistrationEmitter
     /// </summary>
     /// <param name="sb">The buffer to write to.</param>
     /// <param name="plan">The plan being written.</param>
-    /// <param name="direct">Whether participants are constructed rather than resolved.</param>
     /// <param name="chainVariable">The variable carrying the result from call to call.</param>
     /// <param name="exceptionVariable">The variable holding the caught exception.</param>
     /// <param name="trackMatched">
@@ -1561,7 +1454,7 @@ internal static class RegistrationEmitter
     /// already makes a miss impossible.
     /// </remarks>
     private static bool EmitExceptionCallLoop(
-        StringBuilder sb, StagedPlanModel plan, bool direct, string chainVariable, string exceptionVariable,
+        StringBuilder sb, StagedPlanModel plan, string chainVariable, string exceptionVariable,
         bool trackMatched, string indent)
     {
         var alwaysMatches = StageAlwaysMatches(plan);
@@ -1576,7 +1469,7 @@ internal static class RegistrationEmitter
         {
             if (call.ExceptionFilterExpression is null)
             {
-                EmitChainCall(sb, plan, call, direct, "ExceptionInterceptor", chainVariable, exceptionVariable, indent);
+                EmitChainCall(sb, plan, call, "ExceptionInterceptor", chainVariable, exceptionVariable, indent);
                 continue;
             }
 
@@ -1589,7 +1482,7 @@ internal static class RegistrationEmitter
                 sb.Append(indent).AppendLine("    matchedExceptionInterceptor = true;");
             }
 
-            EmitChainCall(sb, plan, call, direct, "ExceptionInterceptor", chainVariable, exceptionVariable, indent + "    ");
+            EmitChainCall(sb, plan, call, "ExceptionInterceptor", chainVariable, exceptionVariable, indent + "    ");
             sb.Append(indent).AppendLine("}");
         }
 
@@ -1601,7 +1494,6 @@ internal static class RegistrationEmitter
     /// </summary>
     /// <param name="sb">The buffer to write to.</param>
     /// <param name="plan">The plan being written.</param>
-    /// <param name="direct">Whether participants are constructed rather than resolved.</param>
     /// <param name="chainVariable">The variable carrying the result from call to call.</param>
     /// <param name="indent">The indent to write it at.</param>
     /// <remarks>
@@ -1611,9 +1503,9 @@ internal static class RegistrationEmitter
     /// in which case no flag is written at all.
     /// </remarks>
     private static void EmitExceptionCalls(
-        StringBuilder sb, StagedPlanModel plan, bool direct, string chainVariable, string indent)
+        StringBuilder sb, StagedPlanModel plan, string chainVariable, string indent)
     {
-        if (EmitExceptionCallLoop(sb, plan, direct, chainVariable, "e", trackMatched: true, indent))
+        if (EmitExceptionCallLoop(sb, plan, chainVariable, "e", trackMatched: true, indent))
         {
             return;
         }
@@ -1629,12 +1521,11 @@ internal static class RegistrationEmitter
     /// </summary>
     /// <param name="sb">The buffer to write to.</param>
     /// <param name="plan">The plan being written.</param>
-    /// <param name="direct">Whether participants are constructed rather than resolved.</param>
     /// <remarks>
     /// The stages still carry a result along, holding <c>Unit</c>, so a post- or
     /// exception-interceptor written against the void pipeline sees what it expects.
     /// </remarks>
-    private static void EmitVoidExecuteBody(StringBuilder sb, StagedPlanModel plan, bool direct)
+    private static void EmitVoidExecuteBody(StringBuilder sb, StagedPlanModel plan)
     {
         EmitGroupGuards(sb, plan, "                ");
 
@@ -1647,8 +1538,8 @@ internal static class RegistrationEmitter
             // exceptions and aborts alike travel straight out. Every plugin hook is a
             // straight-line point, so a plugin never moves a plan off this shape.
             EmitPluginCalls(sb, plan, PluginHook.Start, "                ");
-            EmitPreCalls(sb, plan, direct, "                ");
-            EmitHandlerCalls(sb, plan, direct, "                ");
+            EmitPreCalls(sb, plan, "                ");
+            EmitHandlerCalls(sb, plan, "                ");
             EmitPluginCalls(sb, plan, PluginHook.Finish, "                ");
             return;
         }
@@ -1668,15 +1559,15 @@ internal static class RegistrationEmitter
         sb.AppendLine("                try");
         sb.AppendLine("                {");
         EmitPluginCalls(sb, plan, PluginHook.Start, "                    ");
-        EmitPreCalls(sb, plan, direct, "                    ");
-        EmitHandlerCalls(sb, plan, direct, "                    ");
+        EmitPreCalls(sb, plan, "                    ");
+        EmitHandlerCalls(sb, plan, "                    ");
         sb.Append("                    result = ").Append(UnitFullName).AppendLine(".Value;");
 
         if (!plan.PostCalls.IsEmpty)
         {
             foreach (var call in plan.PostCalls)
             {
-                EmitChainCall(sb, plan, call, direct, "PostInterceptor", "result", null, "                    ");
+                EmitChainCall(sb, plan, call, "PostInterceptor", "result", null, "                    ");
             }
 
             // What the general path does after the post stage: a null result restores the
@@ -1712,7 +1603,7 @@ internal static class RegistrationEmitter
         {
             sb.AppendLine("                    var resultBeforeExceptions = result;");
 
-            EmitExceptionCalls(sb, plan, direct, "result", "                    ");
+            EmitExceptionCalls(sb, plan, "result", "                    ");
 
             sb.Append("                    var invokedExceptionResult = (").Append(UnitFullName).AppendLine("?) result;");
             sb.AppendLine("                    result = invokedExceptionResult == null ? resultBeforeExceptions : result;");
@@ -1726,7 +1617,7 @@ internal static class RegistrationEmitter
             sb.AppendLine("                {");
             sb.AppendLine("                    if (!aborted)");
             sb.AppendLine("                    {");
-            EmitFinalCalls(sb, plan, direct, "result", "                        ");
+            EmitFinalCalls(sb, plan, "result", "                        ");
             sb.AppendLine("                    }");
             sb.AppendLine("                }");
         }
@@ -1737,14 +1628,13 @@ internal static class RegistrationEmitter
     /// </summary>
     /// <param name="sb">The buffer to write to.</param>
     /// <param name="plan">The plan being written.</param>
-    /// <param name="direct">Whether participants are constructed rather than resolved.</param>
-    private static void EmitResultExecuteBody(StringBuilder sb, StagedPlanModel plan, bool direct)
+    private static void EmitResultExecuteBody(StringBuilder sb, StagedPlanModel plan)
     {
         EmitGroupGuards(sb, plan, "                ");
 
         if (plan.AdapterKind != StagedResultAdapterKind.None)
         {
-            EmitAdaptedResultExecuteBody(sb, plan, direct);
+            EmitAdaptedResultExecuteBody(sb, plan);
             return;
         }
 
@@ -1758,7 +1648,7 @@ internal static class RegistrationEmitter
             // Pre-interceptors only, as in the void body: with nothing to skip and nothing to
             // clean up there is no try, and exceptions and aborts travel straight out.
             EmitPluginCalls(sb, plan, PluginHook.Start, "                ");
-            EmitPreCalls(sb, plan, direct, "                ");
+            EmitPreCalls(sb, plan, "                ");
             EmitPluginCalls(sb, plan, PluginHook.PreMain, "                ");
 
             if (!plan.PluginCalls.IsEmpty)
@@ -1766,8 +1656,8 @@ internal static class RegistrationEmitter
                 // Plugin calls come after the handler, so its result lands in a local rather
                 // than going straight out.
                 sb.Append("                ").Append(resultExpression).Append(" result = await ");
-                AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
-                sb.AppendLine(".HandleAsync(message, context);");
+                AppendResultHandlerInvocation(sb, plan);
+                sb.AppendLine(";");
                 EmitPluginCalls(sb, plan, PluginHook.PostMain, "                ");
                 EmitPluginCalls(sb, plan, PluginHook.Finish, "                ");
                 sb.AppendLine("                return result;");
@@ -1775,8 +1665,8 @@ internal static class RegistrationEmitter
             }
 
             sb.Append("                return await ");
-            AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
-            sb.AppendLine(".HandleAsync(message, context);");
+            AppendResultHandlerInvocation(sb, plan);
+            sb.AppendLine(";");
             return;
         }
 
@@ -1791,11 +1681,11 @@ internal static class RegistrationEmitter
         sb.AppendLine("                try");
         sb.AppendLine("                {");
         EmitPluginCalls(sb, plan, PluginHook.Start, "                    ");
-        EmitPreCalls(sb, plan, direct, "                    ");
+        EmitPreCalls(sb, plan, "                    ");
         EmitPluginCalls(sb, plan, PluginHook.PreMain, "                    ");
         sb.Append("                    result = await ");
-        AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
-        sb.AppendLine(".HandleAsync(message, context);");
+        AppendResultHandlerInvocation(sb, plan);
+        sb.AppendLine(";");
         EmitPluginCalls(sb, plan, PluginHook.PostMain, "                    ");
 
         if (!plan.PostCalls.IsEmpty)
@@ -1804,7 +1694,7 @@ internal static class RegistrationEmitter
 
             foreach (var call in plan.PostCalls)
             {
-                EmitChainCall(sb, plan, call, direct, "PostInterceptor", "postChain", null, "                    ");
+                EmitChainCall(sb, plan, call, "PostInterceptor", "postChain", null, "                    ");
             }
 
             if (plan.ResultIsValueType)
@@ -1845,7 +1735,7 @@ internal static class RegistrationEmitter
         {
             sb.AppendLine("                    object? exceptionChain = result;");
 
-            EmitExceptionCalls(sb, plan, direct, "exceptionChain", "                    ");
+            EmitExceptionCalls(sb, plan, "exceptionChain", "                    ");
 
             if (plan.ResultIsValueType)
             {
@@ -1866,7 +1756,7 @@ internal static class RegistrationEmitter
             sb.AppendLine("                {");
             sb.AppendLine("                    if (!aborted)");
             sb.AppendLine("                    {");
-            EmitFinalCalls(sb, plan, direct, "result", "                        ");
+            EmitFinalCalls(sb, plan, "result", "                        ");
             sb.AppendLine("                    }");
             sb.AppendLine("                }");
         }
@@ -1910,7 +1800,7 @@ internal static class RegistrationEmitter
         sb.AppendLine();
         sb.AppendLine("                try");
         sb.AppendLine("                {");
-        EmitPreCalls(sb, plan, direct: false, "                    ");
+        EmitPreCalls(sb, plan, "                    ");
 
         // Calling Handle only builds the sequence; the handler body runs as the caller
         // enumerates below. The concrete handler implements the contract through a default
@@ -1918,7 +1808,7 @@ internal static class RegistrationEmitter
         sb.Append("                    enumerable = ((").Append(HandlersNamespace).Append("IHandler<")
           .Append(plan.MessageTypeExpression).Append(", ").Append(EmittedExpressions.AsyncEnumerable)
           .Append('<').Append(plan.ResultTypeExpression).Append(">>)");
-        AppendResolve(sb, plan.HandlerTypeExpression);
+        AppendParticipant(sb, plan.HandlerTypeExpression, plan.HandlerConstructionExpression);
         sb.AppendLine(").Handle(message, context);");
         sb.AppendLine("                }");
         // Stopped before a single item existed: nothing else runs, the final stage
@@ -2002,7 +1892,7 @@ internal static class RegistrationEmitter
 
             foreach (var call in plan.PostCalls)
             {
-                EmitChainCall(sb, plan, call, direct: false, "PostInterceptor", "postChain", null, "                        ");
+                EmitChainCall(sb, plan, call, "PostInterceptor", "postChain", null, "                        ");
             }
 
             sb.AppendLine("                    }");
@@ -2052,7 +1942,7 @@ internal static class RegistrationEmitter
         {
             sb.Append(inner).AppendLine("object? exceptionChain = enumerator;");
 
-            if (!EmitExceptionCallLoop(sb, plan, direct: false, "exceptionChain", "exception", trackMatched: true, inner))
+            if (!EmitExceptionCallLoop(sb, plan, "exceptionChain", "exception", trackMatched: true, inner))
             {
                 sb.Append(inner).AppendLine("if (!matchedExceptionInterceptor)");
                 sb.Append(inner).AppendLine("{");
@@ -2070,7 +1960,7 @@ internal static class RegistrationEmitter
             sb.AppendLine("                {");
             sb.AppendLine("                    if (!aborted)");
             sb.AppendLine("                    {");
-            EmitFinalCalls(sb, plan, direct: false, "enumerator", "                        ");
+            EmitFinalCalls(sb, plan, "enumerator", "                        ");
             sb.AppendLine("                    }");
             sb.AppendLine("                }");
         }
@@ -2186,7 +2076,6 @@ internal static class RegistrationEmitter
     /// </summary>
     /// <param name="sb">The buffer to write to.</param>
     /// <param name="plan">The plan being written.</param>
-    /// <param name="direct">Whether participants are constructed rather than resolved.</param>
     /// <remarks>
     /// The counterpart of <see cref="EmitResultExecuteBody"/> for a pipeline whose failures
     /// travel as values. A check after the handler and after each post-interceptor enters the
@@ -2195,7 +2084,7 @@ internal static class RegistrationEmitter
     /// turned into a failed carrier where the carrier can hold one; where it cannot, the
     /// exception is captured and rethrown after the final stage.
     /// </remarks>
-    private static void EmitAdaptedResultExecuteBody(StringBuilder sb, StagedPlanModel plan, bool direct)
+    private static void EmitAdaptedResultExecuteBody(StringBuilder sb, StagedPlanModel plan)
     {
         var resultExpression = plan.ResultTypeExpression!;
         var materializes = plan.ResultAdapterMaterializes;
@@ -2210,22 +2099,22 @@ internal static class RegistrationEmitter
             sb.AppendLine("                try");
             sb.AppendLine("                {");
             EmitPluginCalls(sb, plan, PluginHook.Start, "                    ");
-            EmitPreCalls(sb, plan, direct, "                    ");
+            EmitPreCalls(sb, plan, "                    ");
             EmitPluginCalls(sb, plan, PluginHook.PreMain, "                    ");
 
             if (materializes && plan.PluginCalls.IsEmpty)
             {
                 sb.Append("                    return await ");
-                AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
-                sb.AppendLine(".HandleAsync(message, context);");
+                AppendResultHandlerInvocation(sb, plan);
+                sb.AppendLine(";");
             }
             else if (materializes)
             {
                 // Plugin calls stand between the handler and the return, so its result lands
                 // in a local first.
                 sb.Append("                    var handlerResult = await ");
-                AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
-                sb.AppendLine(".HandleAsync(message, context);");
+                AppendResultHandlerInvocation(sb, plan);
+                sb.AppendLine(";");
                 EmitPluginCalls(sb, plan, PluginHook.PostMain, "                    ");
                 EmitPluginCalls(sb, plan, PluginHook.Finish, "                    ");
                 sb.AppendLine("                    return handlerResult;");
@@ -2233,8 +2122,8 @@ internal static class RegistrationEmitter
             else
             {
                 sb.Append("                    var handlerResult = await ");
-                AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
-                sb.AppendLine(".HandleAsync(message, context);");
+                AppendResultHandlerInvocation(sb, plan);
+                sb.AppendLine(";");
                 EmitPluginCalls(sb, plan, PluginHook.PostMain, "                    ");
                 sb.AppendLine();
                 sb.AppendLine("                    if (ResultAdapter.TryGetException(in handlerResult, out var carriedException) && carriedException is not null)");
@@ -2280,11 +2169,11 @@ internal static class RegistrationEmitter
         sb.AppendLine("                    try");
         sb.AppendLine("                    {");
         EmitPluginCalls(sb, plan, PluginHook.Start, "                        ");
-        EmitPreCalls(sb, plan, direct, "                        ");
+        EmitPreCalls(sb, plan, "                        ");
         EmitPluginCalls(sb, plan, PluginHook.PreMain, "                        ");
         sb.Append("                        result = await ");
-        AppendParticipant(sb, plan.HandlerTypeExpression, direct ? plan.HandlerConstructionExpression : null);
-        sb.AppendLine(".HandleAsync(message, context);");
+        AppendResultHandlerInvocation(sb, plan);
+        sb.AppendLine(";");
         sb.AppendLine();
         EmitHandlerProbe(sb, plan, "                        ");
         EmitPluginCalls(sb, plan, PluginHook.PostMain, "                        ");
@@ -2301,7 +2190,7 @@ internal static class RegistrationEmitter
                 sb.AppendLine();
                 sb.AppendLine("                        if (exception is null)");
                 sb.AppendLine("                        {");
-                EmitChainCall(sb, plan, call, direct, "PostInterceptor", "postChain", null, "                            ");
+                EmitChainCall(sb, plan, call, "PostInterceptor", "postChain", null, "                            ");
                 EmitPostProbe(sb, plan, probeIndex++, "                            ");
                 sb.AppendLine("                        }");
             }
@@ -2343,7 +2232,7 @@ internal static class RegistrationEmitter
             sb.AppendLine("                    if (exception is not null)");
             sb.AppendLine("                    {");
             sb.AppendLine("                        object? exceptionChain = result;");
-            EmitExceptionCallLoop(sb, plan, direct, "exceptionChain", "exception",
+            EmitExceptionCallLoop(sb, plan, "exceptionChain", "exception",
                 trackMatched: needsUnhandled, "                        ");
 
             if (needsUnhandled)
@@ -2371,7 +2260,7 @@ internal static class RegistrationEmitter
         sb.AppendLine("                }");
         sb.AppendLine("                finally");
         sb.AppendLine("                {");
-        EmitFinalCalls(sb, plan, direct, "result", "                    ");
+        EmitFinalCalls(sb, plan, "result", "                    ");
         sb.AppendLine("                }");
         sb.AppendLine();
 
@@ -2385,180 +2274,6 @@ internal static class RegistrationEmitter
         }
 
         sb.AppendLine("                return result;");
-    }
-
-    /// <summary>
-    /// Writes the compilation's result-adapter table.
-    /// </summary>
-    /// <param name="sb">The buffer to write to.</param>
-    /// <param name="types">The discovered types.</param>
-    /// <param name="registeredShadows">The hidden messages a registration reaches.</param>
-    /// <param name="defaultResultAdapter">The container's fallback adapter, if it names one.</param>
-    /// <remarks>
-    /// <para>
-    /// One entry per (message, result) slot an annotation binds, one per message that opts
-    /// out, and one per result type the fallback serves — the same three tiers the runtime
-    /// binding consults, answered here where the types are still types. Each entry passes its
-    /// adapter as a type argument constrained to the slot's contract, so an adapter that does
-    /// not serve the slot, or cannot be constructed, is a compile error in this file rather
-    /// than a reflective test at first dispatch.
-    /// </para>
-    /// <para>
-    /// The seal closes it: past that call a slot missing from the table means the tier bound
-    /// nothing, and a configured fallback in a process that never got a table says so instead
-    /// of silently serving no one.
-    /// </para>
-    /// </remarks>
-    private static void AppendResultAdapterTable(
-        StringBuilder sb,
-        IReadOnlyList<RegistrableTypeModel> types,
-        IReadOnlyList<RegistrableTypeModel> registeredShadows,
-        DefaultResultAdapterSiteModel? defaultResultAdapter)
-    {
-        var defaultSlots = new SortedSet<string>(StringComparer.Ordinal);
-
-        foreach (var type in types.Concat(registeredShadows))
-        {
-            if (!type.IsDispatchableMessage)
-            {
-                continue;
-            }
-
-            if (type.HasIgnoredResultAdapter)
-            {
-                // The opt-out outranks every tier, so the slots below are not written for it
-                // at all — the one entry is the whole answer.
-                sb.Append("            ").Append(DispatchRootsFullName)
-                  .Append(".AddIgnoredResultAdapter<").Append(type.TypeofExpression).AppendLine(">();");
-                continue;
-            }
-
-            foreach (var slot in ResultSlots(type))
-            {
-                if (type.ResultAdapter is { IsBakeable: true } annotation && annotation.Fits(slot))
-                {
-                    sb.Append("            ").Append(DispatchRootsFullName)
-                      .Append(".AddResultAdapter<").Append(type.TypeofExpression)
-                      .Append(", ").Append(slot)
-                      .Append(", ").Append(annotation.TypeofExpression).AppendLine(">();");
-                    continue;
-                }
-
-                // The fallback answers per result type rather than per message, so the slots
-                // are collected and written once each.
-                defaultSlots.Add(slot);
-            }
-        }
-
-        if (defaultResultAdapter is { IsBakeable: true })
-        {
-            var binder = new DefaultResultAdapterBinder(defaultResultAdapter);
-
-            foreach (var slot in defaultSlots)
-            {
-                if (binder.TryBind(slot, out var adapterTypeExpression, out _))
-                {
-                    sb.Append("            ").Append(DispatchRootsFullName)
-                      .Append(".AddDefaultResultAdapter<").Append(slot)
-                      .Append(", ").Append(adapterTypeExpression).AppendLine(">();");
-                }
-            }
-        }
-
-        sb.Append("            ").Append(DispatchRootsFullName).AppendLine(".SealResultAdapters();");
-    }
-
-    /// <summary>
-    /// The result slots a message's dispatches bind an adapter for.
-    /// </summary>
-    /// <param name="type">The message to read.</param>
-    /// <returns>Each slot's type expression.</returns>
-    /// <remarks>
-    /// A command's void dispatch binds over <c>Unit</c>, a stream's over its enumerator, and
-    /// everything else over the declared result type — which is the set of slots the runtime
-    /// asks the binding about.
-    /// </remarks>
-    private static IEnumerable<string> ResultSlots(RegistrableTypeModel type)
-    {
-        if (type.IsCommand)
-        {
-            yield return EmittedExpressions.Unit;
-        }
-
-        foreach (var result in type.DispatchResults)
-        {
-            yield return result.IsStream
-                ? EmittedExpressions.AsyncEnumerator + "<" + result.ResultTypeExpression + ">"
-                : result.ResultTypeExpression;
-        }
-    }
-
-    /// <summary>
-    /// Writes one message's dispatch roots.
-    /// </summary>
-    /// <param name="sb">The buffer to write to.</param>
-    /// <param name="type">The message to root.</param>
-    /// <remarks>
-    /// The message generic first, then one root per result contract it declares. Both are
-    /// closed at compile time, which is what keeps <c>MakeGenericType</c> off the dispatch
-    /// path.
-    /// </remarks>
-    private static void AppendMessageRoot(StringBuilder sb, RegistrableTypeModel type)
-    {
-        sb.Append("            ").Append(DispatchRootsFullName)
-          .Append(".AddMessage<").Append(type.TypeofExpression).AppendLine(">();");
-
-        foreach (var result in type.DispatchResults)
-        {
-            sb.Append("            ").Append(DispatchRootsFullName)
-              .Append(result.IsStream ? ".AddStream<" : ".AddResult<")
-              .Append(type.TypeofExpression).Append(", ").Append(result.ResultTypeExpression)
-              .AppendLine(">();");
-        }
-    }
-
-    /// <summary>
-    /// Writes a plan's construction-factory argument, when it has one.
-    /// </summary>
-    /// <param name="sb">The buffer to write to.</param>
-    /// <param name="handlerTypeExpression">The handler the plan calls.</param>
-    /// <param name="hasDirectConstruction">Whether a parameterless <c>new</c> would do.</param>
-    /// <param name="providerConstructionExpression">
-    /// The provider-taking factory, or <c>null</c> when the handler does not qualify for one.
-    /// </param>
-    /// <param name="usesKeyedServices">Whether that factory resolves a keyed service.</param>
-    /// <param name="emitPlanFactories">
-    /// Whether the referenced package accepts a factory with a plan.
-    /// </param>
-    /// <param name="emitProviderPlanFactories">Whether it accepts a provider-taking one.</param>
-    /// <param name="hasKeyedServiceExtensions">
-    /// Whether the consuming compilation can resolve the keyed-service extensions.
-    /// </param>
-    /// <remarks>
-    /// The parameterless shape is preferred, being the cheaper one and available against
-    /// older packages; the provider-taking one covers an injected constructor, and is written
-    /// only when the consuming compilation can spell every resolution in it.
-    /// </remarks>
-    private static void AppendPlanFactory(
-        StringBuilder sb,
-        string handlerTypeExpression,
-        bool hasDirectConstruction,
-        string? providerConstructionExpression,
-        bool usesKeyedServices,
-        bool emitPlanFactories,
-        bool emitProviderPlanFactories,
-        bool hasKeyedServiceExtensions)
-    {
-        if (emitPlanFactories && hasDirectConstruction)
-        {
-            sb.Append("static () => new ").Append(handlerTypeExpression).Append("()");
-        }
-        else if (emitProviderPlanFactories
-                 && providerConstructionExpression is not null
-                 && (!usesKeyedServices || hasKeyedServiceExtensions))
-        {
-            sb.Append(providerConstructionExpression);
-        }
     }
 
     /// <summary>

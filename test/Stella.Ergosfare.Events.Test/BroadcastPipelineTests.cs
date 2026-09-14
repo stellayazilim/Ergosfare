@@ -1,8 +1,7 @@
+using Stella.Ergosfare.Core.Abstractions.Exceptions;
 
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Core.Internal.Factories;
-using Stella.Ergosfare.Core.Internal.Mediator;
 using Stella.Ergosfare.Events.Abstractions;
 using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,9 +20,7 @@ public class BroadcastPipelineTests
     /// </summary>
     private static MessageDispatchEngine Engine(IServiceProvider services)
     {
-        var factory = new MessageDependenciesFactory(services);
-
-        return new MessageDispatchEngine(new PipelineExecutorCache(factory), factory);
+        return new MessageDispatchEngine(new global::Stella.Ergosfare.Core.Abstractions.Planning.DispatchPlanCatalog());
     }
 
     /// <summary>
@@ -34,14 +31,14 @@ public class BroadcastPipelineTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task ShouldReturnWhenNoHandlerFound()
+    public async Task ShouldRejectMissingPipeline()
     {
         // A container that composed nothing: the event has no pipeline at all.
         var services = new ServiceCollection().BuildServiceProvider();
         var mediator = new EventMediator(Engine(services), services);
 
-        Assert.Null(await Record.ExceptionAsync(
-            async () => await mediator.PublishAsync(new StubNonGenericEvent())));
+        await Assert.ThrowsAsync<NoHandlerFoundException>(
+            async () => await mediator.PublishAsync(new StubNonGenericEvent()));
     }
     
     /// <summary>
@@ -51,20 +48,20 @@ public class BroadcastPipelineTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task ShouldNotThrowWhenNoHandlerFound()
+    public async Task ShouldThrowWhenNoHandlerFound()
     {
         var services = new ServiceCollection().BuildServiceProvider();
         var mediator = new EventMediator(Engine(services), services);
         Exception? exception = null;
         try
         {
-            await mediator.PublishAsync(new StubNonGenericEvent(), (IEnumerable<string>?)null, CancellationToken.None);
+            await mediator.PublishAsync(new StubNonGenericEvent(), Stella.Ergosfare.Core.Abstractions.GroupSet.Empty, CancellationToken.None);
         }
         catch (Exception ex)
         {
             exception = ex;
         }
-        Assert.Null(exception);
+        Assert.IsType<NoHandlerFoundException>(exception);
          
     }
 

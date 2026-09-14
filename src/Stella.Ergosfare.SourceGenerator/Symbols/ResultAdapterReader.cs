@@ -104,8 +104,7 @@ internal static class ResultAdapterReader
             }
         }
 
-        // What the runtime binding's Activator.CreateInstance needs. Baking asks for that and
-        // for a type the emitted plan can name.
+        // Generated adapter construction requires a concrete, accessible parameterless type.
         var isInstantiable = hasPublicParameterlessConstructor
             && !adapterSymbol.IsAbstract
             && !adapterSymbol.IsUnboundGenericType

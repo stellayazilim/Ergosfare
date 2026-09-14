@@ -10,11 +10,10 @@ using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
 
 namespace Stella.Ergosfare.Contract.Test.Unplanned;
 
-// Fresh area-local types. The hand-registered ones are excluded from discovery — the
-// generator never sees them, which is exactly the situation being pinned; the partial
+// Fresh area-local types. The hand-registered ones are excluded from discovery — explicit Register<T>() must still select them; the partial
 // pipeline is discoverable, so its plan exists and the container is what falls short.
 
-/// <summary>Void command whose only handler the generator never saw.</summary>
+/// <summary>Void command whose only handler explicit selection collects.</summary>
 [ExcludeFromDiscovery]
 public sealed class HandRegisteredCommand : ICommand;
 
@@ -27,7 +26,7 @@ public sealed class HandRegisteredCommandHandler : ICommandHandler<HandRegistere
         => ValueTask.CompletedTask;
 }
 
-/// <summary>String command whose only handler the generator never saw.</summary>
+/// <summary>String command whose only handler explicit selection collects.</summary>
 [ExcludeFromDiscovery]
 public sealed class HandRegisteredResultCommand : ICommand<string>;
 
@@ -37,10 +36,10 @@ public sealed class HandRegisteredResultCommandHandler : ICommandHandler<HandReg
 {
     /// <inheritdoc />
     public ValueTask<string> HandleAsync(HandRegisteredResultCommand command, ErgosfareContext context)
-        => ValueTask.FromResult("never-delivered");
+        => ValueTask.FromResult("delivered");
 }
 
-/// <summary>Event whose only subscriber the generator never saw.</summary>
+/// <summary>Event whose only subscriber explicit selection collects.</summary>
 [ExcludeFromDiscovery]
 public sealed class HandRegisteredEvent : IEvent;
 
@@ -73,16 +72,14 @@ public sealed class PartialPipelineCommandPre : ICommandPreInterceptor<PartialPi
 }
 
 /// <summary>
-/// The unplanned-dispatch contract from the public surface: nothing is dispatched at run
-/// time that was not produced at compile time. A pipeline the generator never saw serves
-/// nothing however carefully it is registered by hand, and a container holding only part
-/// of a compiled pipeline is refused with the diverged stage named.
+/// Explicit selections produce executable plans even for excluded types. A deliberately
+/// incomplete runtime catalog cannot execute a different composition from its compiled plan.
 /// </summary>
 public sealed class UnplannedDispatchTests
 {
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_hand_registered_handler_the_generator_never_saw_serves_no_void_send()
+    public async Task An_explicitly_selected_excluded_handler_serves_void_send()
     {
         await using var provider = new ServiceCollection()
             .AddErgosfare(options => options
@@ -91,18 +88,12 @@ public sealed class UnplannedDispatchTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        // The handler is registered and resolvable — and serves nothing, because no
-        // compiled plan names it. The failure is the plan's absence, not the handler's.
-        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(
-            async () => await mediator.SendAsync(new HandRegisteredCommand()));
-
-        Assert.Equal(UnplannedDispatchReason.NoCompiledPlan, thrown.Reason);
-        Assert.Equal(typeof(HandRegisteredCommand), thrown.MessageType);
+        await mediator.SendAsync(new HandRegisteredCommand());
     }
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_hand_registered_handler_the_generator_never_saw_serves_no_result_send()
+    public async Task An_explicitly_selected_excluded_handler_serves_result_send()
     {
         await using var provider = new ServiceCollection()
             .AddErgosfare(options => options
@@ -111,16 +102,12 @@ public sealed class UnplannedDispatchTests
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
 
-        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(
-            async () => await mediator.SendAsync(new HandRegisteredResultCommand()));
-
-        Assert.Equal(UnplannedDispatchReason.NoCompiledPlan, thrown.Reason);
-        Assert.Equal(typeof(HandRegisteredResultCommand), thrown.MessageType);
+        Assert.Equal("delivered", await mediator.SendAsync(new HandRegisteredResultCommand()));
     }
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_publish_whose_only_subscriber_the_generator_never_saw_fails_unplanned()
+    public async Task An_explicitly_selected_excluded_subscriber_receives_publish()
     {
         await using var provider = new ServiceCollection()
             .AddErgosfare(options => options
@@ -129,13 +116,7 @@ public sealed class UnplannedDispatchTests
 
         var mediator = provider.GetRequiredService<IEventMediator>();
 
-        // A publish reaching nobody is a no-op; a publish that would reach somebody
-        // without a plan is not — the subscriber would silently go unserved.
-        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(
-            async () => await mediator.PublishAsync(new HandRegisteredEvent()));
-
-        Assert.Equal(UnplannedDispatchReason.NoCompiledPlan, thrown.Reason);
-        Assert.Equal(typeof(HandRegisteredEvent), thrown.MessageType);
+        await mediator.PublishAsync(new HandRegisteredEvent());
     }
 
     [Fact]

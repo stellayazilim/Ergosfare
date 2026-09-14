@@ -1,6 +1,6 @@
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
-using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using Stella.Ergosfare.Core.Abstractions.Planning;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Events.Abstractions;
 using Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
@@ -65,7 +65,7 @@ public class FilteringPlanExecutionTests
                 }
             }
 
-            [Group("audit")]
+            [Group("audit", "pre-only")]
             public sealed class GenAuditPre : IEventPreInterceptor<GenFilteredEvent>
             {
                 public ValueTask<GenFilteredEvent> HandleAsync(GenFilteredEvent @event, ErgosfareContext context)
@@ -79,7 +79,7 @@ public class FilteringPlanExecutionTests
             {
                 // The set is a parameter, so no call site proves it — this is exactly the
                 // shape the filtering plan exists for.
-                public static ValueTask Publish(IEventMediator mediator, GenFilteredEvent @event, string[] groups)
+                public static ValueTask Publish(IEventMediator mediator, GenFilteredEvent @event, GroupSet groups)
                     => mediator.PublishAsync(@event, groups, System.Threading.CancellationToken.None);
             }
         }
@@ -87,7 +87,7 @@ public class FilteringPlanExecutionTests
 
     private static readonly Lazy<(Assembly Assembly, ServiceProvider Provider)> Host = new(() =>
     {
-        var result = GeneratorTestHost.Run(Source);
+        var result = GeneratorTestHost.RunWithAllCandidates(Source);
 
         Assert.Empty(result.CompilationErrors);
 
@@ -97,7 +97,7 @@ public class FilteringPlanExecutionTests
         var assembly = Assembly.Load(stream.ToArray());
         var registrations = assembly.GetType(
             "Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
-        var registerEvents = registrations.GetMethod("RegisterGenerated", [typeof(EventModuleBuilder)])!;
+        var registerEvents = registrations.GetMethod("AddGenerated", [typeof(EventModuleBuilder)])!;
 
         var provider = new ServiceCollection()
             .AddErgosfare(options => options.AddEventModule(events => registerEvents.Invoke(null, [events])))
@@ -120,7 +120,7 @@ public class FilteringPlanExecutionTests
         var @event = (IEvent)Activator.CreateInstance(
             assembly.GetType("TestApp.GenFilteredEvent", throwOnError: true)!)!;
 
-        await provider.GetRequiredService<IEventMediator>().PublishAsync(@event, groups, System.Threading.CancellationToken.None);
+        await provider.GetRequiredService<IEventMediator>().PublishAsync(@event, [.. groups], System.Threading.CancellationToken.None);
 
         return [.. Entries];
     }
@@ -132,16 +132,16 @@ public class FilteringPlanExecutionTests
         var (assembly, _) = Host.Value;
         var eventType = assembly.GetType("TestApp.GenFilteredEvent", throwOnError: true)!;
 
-        var filtering = GeneratedDispatchRoots.FindFilteredBroadcastPlan(eventType);
+        var filtering = GeneratedPlanRegistry.FindFilteredBroadcastPlan(eventType);
 
         Assert.NotNull(filtering);
 
         // It covers every group its participants declare — the set the gate validates it
         // against, and the reason one body can answer any request.
-        Assert.Equal(["audit", "billing", "default"], filtering.FilterGroups!);
+        Assert.Equal(["audit", "billing", "default", "pre-only"], filtering.FilterGroups!);
 
         // And no set is keyed, because no call site proved one.
-        Assert.Null(GeneratedDispatchRoots.FindBroadcastPlan(eventType, ["audit"]));
+        Assert.Null(GeneratedPlanRegistry.FindBroadcastPlan(eventType, ["audit"]));
     }
 
     [Fact]
@@ -165,10 +165,14 @@ public class FilteringPlanExecutionTests
         Assert.Equal(["default"], await PublishAsync());
     }
 
-    [Fact]
+    [Theory]
+    [InlineData("nobody-declares-this")]
+    [InlineData("pre-only")]
     [Trait("Category", "Unit")]
-    public async Task FilteringPlan_DeliversNothingForAnUnknownGroup()
+    public async Task FilteringPlan_RejectsGroupsWithoutHandlers(string group)
     {
-        Assert.Empty(await PublishAsync("nobody-declares-this"));
+        await Assert.ThrowsAsync<Stella.Ergosfare.Core.Abstractions.Exceptions.NoHandlerFoundException>(
+            async () => await PublishAsync(group));
+        Assert.Empty(Entries);
     }
 }

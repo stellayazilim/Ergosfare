@@ -38,12 +38,12 @@ public class ContestedGroupSetDiagnosticTests
     [Trait("Category", "Unit")]
     public void AGroupSetSelectingTwoHandlers_FailsTheBuild()
     {
-        var result = GeneratorTestHost.Run(TwoGroupedHandlers + """
+        var result = GeneratorTestHost.RunWithAllCandidates(TwoGroupedHandlers + """
 
             public static class Caller
             {
                 public static async Task Run(ICommandMediator mediator)
-                    => await mediator.SendAsync(new LoginCommand(), new[] { "User", "Admin" });
+                    => await mediator.SendAsync(new LoginCommand(), ["User", "Admin"]);
             }
         }
         """);
@@ -66,12 +66,12 @@ public class ContestedGroupSetDiagnosticTests
     [Trait("Category", "Unit")]
     public void AGroupSetSelectingOneHandler_IsPlannedAsUsual()
     {
-        var result = GeneratorTestHost.Run(TwoGroupedHandlers + """
+        var result = GeneratorTestHost.RunWithAllCandidates(TwoGroupedHandlers + """
 
             public static class Caller
             {
                 public static async Task Run(ICommandMediator mediator)
-                    => await mediator.SendAsync(new LoginCommand(), new[] { "User" });
+                    => await mediator.SendAsync(new LoginCommand(), ["User"]);
             }
         }
         """);

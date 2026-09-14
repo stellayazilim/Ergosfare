@@ -1,5 +1,5 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using Stella.Ergosfare.Core.Abstractions.DispatchRoots;
+using System.Diagnostics.CodeAnalysis;
+using Stella.Ergosfare.Core.Abstractions.Planning;
 using Stella.Ergosfare.Events.Abstractions;
 
 namespace Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
@@ -11,9 +11,21 @@ namespace Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection;
 /// The catalog this builder records the container's selection in.
 /// </param>
 /// <exception cref="ArgumentNullException"><paramref name="compositions"/> is <c>null</c>.</exception>
-public class EventModuleBuilder(FrozenCompositionCatalog compositions)
+public class EventModuleBuilder(DispatchPlanCatalog compositions)
 {
-    private readonly FrozenCompositionCatalog _compositions = compositions ?? throw new ArgumentNullException(nameof(compositions));
+    private readonly DispatchPlanCatalog _compositions = compositions ?? throw new ArgumentNullException(nameof(compositions));
+
+    /// <summary>Applies the compile-time default selection for this module.</summary>
+    public EventModuleBuilder AddGenerated() => AddGenerated("");
+
+    /// <summary>Applies the compile-time selection for a constant discovery-key pattern.</summary>
+    /// <param name="discoveryKeyPattern">An exact key or trailing-star prefix.</param>
+    /// <returns>The same builder.</returns>
+    public EventModuleBuilder AddGenerated(string discoveryKeyPattern)
+    {
+        GeneratedPlanRegistry.ApplyGeneratedSelection(_compositions, 3, discoveryKeyPattern);
+        return this;
+    }
 
     /// <summary>
     /// Registers one event construct.

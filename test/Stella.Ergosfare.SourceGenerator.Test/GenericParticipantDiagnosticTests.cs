@@ -44,7 +44,7 @@ public class GenericParticipantDiagnosticTests
     [Trait("Category", "Unit")]
     public void GenericParticipant_ReportsErgosg016()
     {
-        var result = GeneratorTestHost.Run(GenericInterceptor);
+        var result = GeneratorTestHost.RunWithAllCandidates(GenericInterceptor);
 
         Assert.Empty(result.CompilationErrors);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "ERGO016");
@@ -59,7 +59,7 @@ public class GenericParticipantDiagnosticTests
     [Trait("Category", "Unit")]
     public void GenericParticipant_IsAbsentFromEveryMessagePipeline()
     {
-        var result = GeneratorTestHost.Run(GenericInterceptor);
+        var result = GeneratorTestHost.RunWithAllCandidates(GenericInterceptor);
 
         Assert.Empty(result.CompilationErrors);
 
@@ -68,7 +68,7 @@ public class GenericParticipantDiagnosticTests
 
         // ...and yet no frozen composition names it, which is the whole finding.
         var compositions = result.GeneratedSource
-            .Split("AddFrozenComposition")
+            .Split("AddPipelineDescriptor")
             .Skip(1);
 
         Assert.All(compositions, composition =>
@@ -83,7 +83,7 @@ public class GenericParticipantDiagnosticTests
     [Trait("Category", "Unit")]
     public void NonGenericParticipant_BindsAndReportsNothing()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Commands.Abstractions;
             using System.Threading.Tasks;
@@ -109,7 +109,7 @@ public class GenericParticipantDiagnosticTests
         Assert.DoesNotContain(result.GeneratorDiagnostics, d => d.Id == "ERGO016");
 
         var composition = result.GeneratedSource
-            .Split("AddFrozenComposition")
+            .Split("AddPipelineDescriptor")
             .Skip(1)
             .Single();
 
@@ -127,7 +127,7 @@ public class GenericParticipantDiagnosticTests
     [Trait("Category", "Unit")]
     public void GenericParticipantForAGenericMessage_BindsAndReportsNothing()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Commands.Abstractions;
             using System.Threading.Tasks;
@@ -154,7 +154,7 @@ public class GenericParticipantDiagnosticTests
 
         // And it really does bind: the message's own composition names both participants.
         var composition = result.GeneratedSource
-            .Split("AddFrozenComposition")
+            .Split("AddPipelineDescriptor")
             .Skip(1)
             .Single();
 
@@ -170,7 +170,7 @@ public class GenericParticipantDiagnosticTests
     [Trait("Category", "Unit")]
     public void GenericNonParticipant_ReportsNothing()
     {
-        var result = GeneratorTestHost.Run("""
+        var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Core.Abstractions;
             using Stella.Ergosfare.Commands.Abstractions;
             using System.Threading.Tasks;

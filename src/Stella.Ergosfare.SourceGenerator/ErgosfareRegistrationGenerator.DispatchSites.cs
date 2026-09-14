@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Stella.Ergosfare.SourceGenerator.Models;
+using Stella.Ergosfare.SourceGenerator.Planning;
 using Stella.Ergosfare.SourceGenerator.Symbols;
 
 namespace Stella.Ergosfare.SourceGenerator;
@@ -15,15 +16,15 @@ namespace Stella.Ergosfare.SourceGenerator;
 /// <remarks>
 /// It finds the mediator dispatches in this compilation, gathers the manifests referenced
 /// assemblies recorded, and — in a composition root, where the closure is complete — judges
-/// what can reach what: dead dispatches as ERGO005 and ERGO006, unreachable handlers as
-/// ERGO007, the opt-in trim as ERGO008, and opaque sites as ERGO009.
+/// what can reach what: dead dispatches as ERGO005 and ERGO006, a dispatch its own group set
+/// empties as ERGO024, unreachable handlers as ERGO007, the opt-in trim as ERGO008, and
+/// opaque sites as ERGO009.
 /// </remarks>
 public sealed partial class ErgosfareRegistrationGenerator
 {
     private const string CommandMediatorInterfaceName = "ICommandMediator";
     private const string QueryMediatorInterfaceName = "IQueryMediator";
     private const string EventMediatorInterfaceName = "IEventMediator";
-    private const string MessageMediatorInterfaceName = "IMessageMediator";
 
 
     private const string CompositionRootBuildProperty = "build_property.ErgosfareCompositionRoot";
@@ -67,7 +68,7 @@ public sealed partial class ErgosfareRegistrationGenerator
     /// <c>true</c> for an invocation whose name is one of the registration methods.
     /// </returns>
     /// <remarks>
-    /// <c>RegisterGenerated</c> and <c>RegisterAll</c> are left out on purpose: they collect
+    /// <c>AddGenerated</c> and <c>RegisterAll</c> are left out on purpose: they collect
     /// in bulk what discovery already counts as evidence.
     /// </remarks>
     private static bool IsRegistrationInvocationCandidate(SyntaxNode node)
@@ -85,7 +86,7 @@ public sealed partial class ErgosfareRegistrationGenerator
             _ => null,
         };
 
-        return name is "Register" or "RegisterParticipants";
+        return name is "Register" or "RegisterParticipants" or "AddGenerated" or "RegisterAll";
     }
 
     /// <summary>
@@ -99,16 +100,22 @@ public sealed partial class ErgosfareRegistrationGenerator
     /// registrations are the builder calls inside it.
     /// </returns>
     /// <remarks>
-    /// A hand-written registration reaches the container the same way <c>RegisterGenerated</c>
+    /// A hand-written registration reaches the container the same way <c>AddGenerated</c>
     /// does, so a type it names outright contributes its main-handler contracts as coverage
     /// evidence. A type it cannot name comes back opaque, which suspends the dead-dispatch
     /// judgment.
     /// </remarks>
     private static RegistrationSiteModel? TransformRegistrationSite(GeneratorSyntaxContext ctx, CancellationToken ct)
-    {
-        var invocation = (InvocationExpressionSyntax)ctx.Node;
+        => ReadRegistrationSite((InvocationExpressionSyntax)ctx.Node, ctx.SemanticModel, ct) is { } site ? site with { DeclaringMethod = EnclosingMethod(ctx.Node, ctx.SemanticModel, ct) } : null;
 
-        if (ctx.SemanticModel.GetSymbolInfo(invocation, ct).Symbol is not IMethodSymbol method
+    private static RegistrationSiteModel? ReadRegistrationSite(InvocationExpressionSyntax invocation, SemanticModel semanticModel, CancellationToken ct)
+    {
+
+        if (TryReadBulkSelection(semanticModel, invocation, ct) is { } bulk) return bulk;
+        if (ReadUnboundExplicitSelection(semanticModel, invocation, ct) is { TypeKind: not TypeKind.Error } explicitType)
+            return EvidenceRegistration(explicitType);
+
+        if (semanticModel.GetSymbolInfo(invocation, ct).Symbol is not IMethodSymbol method
             || method.ContainingType is not { } containing
             || !IsErgosfareRegistrationSurface(containing))
         {
@@ -120,7 +127,7 @@ public sealed partial class ErgosfareRegistrationGenerator
             case "RegisterParticipants":
                 // A batch assembled at run time is a value, not a list of type arguments, and
                 // nothing here can say which types it carries.
-                return OpaqueRegistration();
+                return UnknownTypeRegistration(invocation);
 
             case "Register" when method is { IsGenericMethod: true, TypeArguments.Length: 1 }:
                 // A type argument that is itself a type parameter, as in Register<T>() inside
@@ -141,7 +148,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                     // argument is decided at run time.
                     if (FindMessageArgument(invocation, method) is { } argument
                         && UnwrapConversions(argument.Expression) is TypeOfExpressionSyntax typeOf
-                        && ctx.SemanticModel.GetTypeInfo(typeOf.Type, ct).Type is INamedTypeSymbol literal
+                        && semanticModel.GetTypeInfo(typeOf.Type, ct).Type is INamedTypeSymbol literal
                         && literal is not IErrorTypeSymbol)
                     {
                         return EvidenceRegistration(literal);
@@ -160,17 +167,6 @@ public sealed partial class ErgosfareRegistrationGenerator
                 return null;
         }
 
-        static RegistrationSiteModel OpaqueRegistration() => new()
-        {
-            TypeMetadataName = null,
-            MainHandlerMessageKeys = ImmutableArray<string>.Empty,
-            IsOpaque = true,
-            UnknownTypeLocation = null,
-        };
-
-        // Opaque, and a defect: ERGO018 reports it at the call. Opaque all the same, so the
-        // dead-dispatch judgment stays quiet — the dispatches downstream of an unknown
-        // registration are not the finding, the registration is.
         static RegistrationSiteModel UnknownTypeRegistration(SyntaxNode call) => new()
         {
             TypeMetadataName = null,
@@ -180,36 +176,11 @@ public sealed partial class ErgosfareRegistrationGenerator
         };
     }
 
-    /// <summary>
-    /// Builds the evidence a named registration contributes: the messages its main handlers
-    /// claim.
-    /// </summary>
-    /// <param name="registered">The registered type.</param>
-    /// <returns>The site's model, opaque when the type is generic.</returns>
-    /// <remarks>
-    /// A generic registration stays opaque: the runtime builds its descriptors reflectively
-    /// per closed form, and <see cref="ContractReader.BuildDescriptors"/> answers nothing for
-    /// it. The type is known and its evidence is not, which is a different thing from the
-    /// unknown type ERGO018 reports.
-    /// </remarks>
+    /// <summary>Records an explicit compile-time type selection.</summary>
+    /// <param name="registered">The selected participant or message type.</param>
+    /// <returns>A selection request consumed before planning.</returns>
     private static RegistrationSiteModel EvidenceRegistration(INamedTypeSymbol registered)
     {
-        for (var current = registered; current is not null; current = current.ContainingType)
-        {
-            if (current.Arity > 0)
-            {
-                return new RegistrationSiteModel
-                {
-                    TypeMetadataName = null,
-                    MainHandlerMessageKeys = ImmutableArray<string>.Empty,
-                    IsOpaque = true,
-
-                    // Nothing to report: the type is known, only its evidence is missing.
-                    UnknownTypeLocation = null,
-                };
-            }
-        }
-
         ImmutableArray<string>.Builder? keys = null;
 
         foreach (var descriptor in ContractReader.BuildDescriptors(registered))
@@ -222,6 +193,9 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         return new RegistrationSiteModel
         {
+            TypeExpression = registered.IsGenericType && !Monomorphizer.IsUnboundOrDefinition(registered)
+                ? SymbolNaming.VerbatimTypeExpression(registered)
+                : SymbolNaming.BuildTypeofExpression(registered),
             TypeMetadataName = SymbolNaming.BuildMetadataName(registered.OriginalDefinition),
             MainHandlerMessageKeys = keys?.ToImmutable() ?? ImmutableArray<string>.Empty,
             IsOpaque = false,
@@ -423,6 +397,13 @@ public sealed partial class ErgosfareRegistrationGenerator
         if (depth > 1)
         {
             return false;
+        }
+
+        // A string converts to a one-name GroupSet; preserve "" as a name as well.
+        if (ctx.SemanticModel.GetConstantValue(expression, ct) is { HasValue: true, Value: string group })
+        {
+            names.Add(group);
+            return true;
         }
 
         switch (expression)
@@ -665,8 +646,6 @@ public sealed partial class ErgosfareRegistrationGenerator
                 => DispatchSiteKind.Stream,
             "PublishAsync" when type.Name == EventMediatorInterfaceName && SymbolNaming.IsInNamespace(type, ContractNames.EventMarkerNamespace)
                 => DispatchSiteKind.Event,
-            "DispatchAsync" or "Mediate" when type.Name == MessageMediatorInterfaceName && SymbolNaming.IsInNamespace(type, ContractNames.CoreAbstractionsNamespace)
-                => DispatchSiteKind.Message,
             _ => null,
         };
 
@@ -783,18 +762,6 @@ public sealed partial class ErgosfareRegistrationGenerator
         }
 
         var isOpaque = IsOpaqueStaticType(named);
-
-        if (kind == DispatchSiteKind.Message && !isOpaque)
-        {
-            ParticipantAttributes.GetMarkers(named, out var isCommand, out var isQuery, out var isEvent);
-
-            if (!isCommand && !isQuery && !isEvent)
-            {
-                // A markerless type through the core mediator is a plain message, and the
-                // closed-world judgment has nothing to say about one.
-                return null;
-            }
-        }
 
         return new DispatchSiteModel
         {
@@ -990,7 +957,6 @@ public sealed partial class ErgosfareRegistrationGenerator
 
             var hasManifestMarker = false;
             List<(string MetadataName, DispatchSiteKind Kind, bool Opaque, ImmutableArray<string> Groups)>? siteEntries = null;
-            List<string>? registrationEntries = null;
 
             foreach (var attribute in assembly.GetAttributes())
             {
@@ -1015,12 +981,6 @@ public sealed partial class ErgosfareRegistrationGenerator
 
                         continue;
 
-                    case "ManualRegistrationAttribute"
-                        when attribute.ConstructorArguments.Length == 1
-                             && attribute.ConstructorArguments[0].Value is string registeredName:
-                        (registrationEntries ??= []).Add(registeredName);
-                        continue;
-
                     case "DispatchSiteAttribute"
                         when attribute.ConstructorArguments.Length == 3
                              && attribute.ConstructorArguments[0].Value is string metadataName
@@ -1033,7 +993,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                             _ => (DispatchSiteKind?)null,
                         };
 
-                        if (kind is not null && kind.Value <= DispatchSiteKind.Message)
+                        if (kind is not null && kind.Value <= DispatchSiteKind.Event)
                         {
                             (siteEntries ??= []).Add(
                                 (metadataName, kind.Value, opaque, ReadManifestGroups(attribute)));
@@ -1077,27 +1037,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                 }
             }
 
-            if (registrationEntries is not null)
-            {
-                foreach (var metadataName in registrationEntries)
-                {
-                    var symbol = assembly.GetTypeByMetadataName(metadataName)
-                                 ?? compilation.GetTypeByMetadataName(metadataName);
 
-                    if (symbol is null)
-                    {
-                        // Evidence that cannot be resolved is missing evidence, and reading it
-                        // as an opaque registration suspends the dead-dispatch judgment
-                        // rather than letting it fire on a gap.
-                        hasOpaqueRegistrations = true;
-                        continue;
-                    }
-
-                    var model = EvidenceRegistration(symbol);
-                    hasOpaqueRegistrations |= model.IsOpaque;
-                    (registrations ??= ImmutableArray.CreateBuilder<RegistrationSiteModel>()).Add(model);
-                }
-            }
         }
 
         return new DispatchManifestScanResult(
@@ -1249,47 +1189,32 @@ public sealed partial class ErgosfareRegistrationGenerator
             return types;
         }
 
-        // The coverage evidence, from every path that feeds the registry: discovery in bulk
-        // through RegisterGenerated, and hand-written Register calls one type at a time —
-        // the same registry, trusted the same way. One opaque registration anywhere in the
-        // closure makes the evidence incomplete.
-        var hasOpaqueRegistrations = manifestScan.HasOpaqueRegistrations;
+        // Only fully selected models contribute coverage. Referenced registrations
+        // and unreadable registration calls cannot supply alternative evidence.
+        var hasOpaqueRegistrations = false;
         var handlerMessageKeys = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var registration in registrationSites)
-        {
-            hasOpaqueRegistrations |= registration.IsOpaque;
-
-            foreach (var key in registration.MainHandlerMessageKeys)
-            {
-                handlerMessageKeys.Add(TypeExpressions.DefinitionKey(key));
-            }
-        }
-
-        foreach (var registration in manifestScan.RegistrationSites)
-        {
-            foreach (var key in registration.MainHandlerMessageKeys)
-            {
-                handlerMessageKeys.Add(TypeExpressions.DefinitionKey(key));
-            }
-        }
-
-        // Indexes over the composition, hidden types included: they can still be dispatched,
-        // their coverage simply has to come from a hand-written registration. Every
-        // comparison runs on definition-normalized keys, so a constructed generic matches its
-        // definition rather than being missed.
         var modelsByKey = new Dictionary<string, RegistrableTypeModel>(StringComparer.Ordinal);
         var subtypesByKey = new Dictionary<string, List<RegistrableTypeModel>>(StringComparer.Ordinal);
 
         IndexCompositionTypes(types, handlerMessageKeys, modelsByKey, subtypesByKey, collectHandlerEvidence: true);
         IndexCompositionTypes(excludedShadows, handlerMessageKeys, modelsByKey, subtypesByKey, collectHandlerEvidence: false);
 
+        // The group-aware half of the same evidence, for ERGO024: which handlers cover a
+        // message, and which of them carry [Group]. A message whose coverage comes from
+        // somewhere that says nothing about groups is recorded as unjudgeable rather than
+        // guessed at.
+        var groupBlindKeys = new HashSet<string>(StringComparer.Ordinal);
+        var handlersByMessageKey = IndexMainHandlersByMessage(types, groupBlindKeys);
+
         // The per-site verdicts, ERGO005 and ERGO006 — reached only while every registration
         // in the closure is one this compilation could read.
         if (!hasOpaqueRegistrations)
         {
-            JudgeSites(context, sourceSites, handlerMessageKeys, modelsByKey, subtypesByKey);
-            JudgeSites(context, manifestScan.Sites, handlerMessageKeys, modelsByKey, subtypesByKey);
+            JudgeSites(context, sourceSites, handlerMessageKeys, modelsByKey, subtypesByKey,
+                handlersByMessageKey, groupBlindKeys);
+            JudgeSites(context, manifestScan.Sites, handlerMessageKeys, modelsByKey, subtypesByKey,
+                handlersByMessageKey, groupBlindKeys);
         }
 
         // The per-message verdict: two main handlers on one level break every container in
@@ -1391,6 +1316,58 @@ public sealed partial class ErgosfareRegistrationGenerator
     }
 
     /// <summary>
+    /// Indexes the discovered main handlers by the message they claim.
+    /// </summary>
+    /// <param name="types">The discovered types.</param>
+    /// <param name="groupBlindKeys">
+    /// The keys ERGO024 must not judge; a keyed handler's messages are added here.
+    /// </param>
+    /// <returns>The handlers claiming each message key.</returns>
+    /// <remarks>
+    /// Handlers rather than a covered/not-covered bit, because whether a dispatch selects one
+    /// is decided against the groups each handler declares. A keyed handler takes part only
+    /// when the container asks for its key, which nothing here can prove either way, so its
+    /// messages join the unjudgeable set instead of the index.
+    /// </remarks>
+    private static Dictionary<string, List<RegistrableTypeModel>> IndexMainHandlersByMessage(
+        List<RegistrableTypeModel> types,
+        HashSet<string> groupBlindKeys)
+    {
+        var byKey = new Dictionary<string, List<RegistrableTypeModel>>(StringComparer.Ordinal);
+
+        foreach (var type in types)
+        {
+            // One entry per handler type per message: claiming it through several contracts
+            // still makes one claimant.
+            HashSet<string>? claimed = null;
+
+            foreach (var descriptor in type.Descriptors)
+            {
+                if (descriptor.Kind != DescriptorKind.MainHandler)
+                {
+                    continue;
+                }
+
+                var key = TypeExpressions.DefinitionKey(descriptor.MessageTypeExpression);
+
+                if (!(claimed ??= new HashSet<string>(StringComparer.Ordinal)).Add(key))
+                {
+                    continue;
+                }
+
+                if (!byKey.TryGetValue(key, out var handlers))
+                {
+                    byKey.Add(key, handlers = []);
+                }
+
+                handlers.Add(type);
+            }
+        }
+
+        return byKey;
+    }
+
+    /// <summary>
     /// Judges each dispatch against the closure's coverage.
     /// </summary>
     /// <param name="context">The context diagnostics are reported to.</param>
@@ -1398,16 +1375,20 @@ public sealed partial class ErgosfareRegistrationGenerator
     /// <param name="handlerMessageKeys">The messages some handler covers.</param>
     /// <param name="modelsByKey">The map from message key to model.</param>
     /// <param name="subtypesByKey">The map from a type's key to the messages assignable to it.</param>
+    /// <param name="handlersByMessageKey">The handlers claiming each message key.</param>
+    /// <param name="groupBlindKeys">The messages whose coverage says nothing about groups.</param>
     /// <remarks>
     /// A dispatch nothing can serve is ERGO005; one where only a subtype is served is
-    /// ERGO006.
+    /// ERGO006; one that is served, but not under the group set it names, is ERGO024.
     /// </remarks>
     private static void JudgeSites(
         SourceProductionContext context,
         ImmutableArray<DispatchSiteModel> sites,
         HashSet<string> handlerMessageKeys,
         Dictionary<string, RegistrableTypeModel> modelsByKey,
-        Dictionary<string, List<RegistrableTypeModel>> subtypesByKey)
+        Dictionary<string, List<RegistrableTypeModel>> subtypesByKey,
+        Dictionary<string, List<RegistrableTypeModel>> handlersByMessageKey,
+        HashSet<string> groupBlindKeys)
     {
         foreach (var site in sites)
         {
@@ -1427,6 +1408,9 @@ public sealed partial class ErgosfareRegistrationGenerator
 
             if (IsCovered(siteKey, site.AssignableKeys, site.IsValueType, handlerMessageKeys))
             {
+                // Covered, so ERGO005 and ERGO006 have nothing to say — but coverage is not
+                // selection, and the group filter may still empty this pipeline.
+                JudgeGroupFilter(context, site, siteKey, subtypesByKey, handlersByMessageKey, groupBlindKeys);
                 continue;
             }
 
@@ -1460,9 +1444,7 @@ public sealed partial class ErgosfareRegistrationGenerator
                     // A publish reaching nobody returns; every other lane throws. The verdict
                     // is the same either way, the consequence is not, and the message says
                     // which one the caller gets.
-                    site.Kind == DispatchSiteKind.Event
-                        ? "the publish is guaranteed to reach nobody"
-                        : "the call is guaranteed to throw NoHandlerFoundException at runtime",
+                    "the call is guaranteed to throw NoHandlerFoundException at runtime",
                     originSuffix));
             }
             else if (modelsByKey.TryGetValue(siteKey, out var selfModel) && selfModel.IsDispatchableMessage)
@@ -1477,6 +1459,213 @@ public sealed partial class ErgosfareRegistrationGenerator
                     originSuffix));
             }
         }
+    }
+
+    /// <summary>
+    /// Reports ERGO024 for a dispatch whose group set selects none of the handlers covering
+    /// its message.
+    /// </summary>
+    /// <param name="context">The context diagnostics are reported to.</param>
+    /// <param name="site">The dispatch to judge.</param>
+    /// <param name="siteKey">The site's normalized message key.</param>
+    /// <param name="subtypesByKey">The map from a type's key to the messages assignable to it.</param>
+    /// <param name="handlersByMessageKey">The handlers claiming each message key.</param>
+    /// <param name="groupBlindKeys">The messages whose coverage says nothing about groups.</param>
+    /// <remarks>
+    /// Reached only for a message the closure covers, so the finding is never that nothing
+    /// serves the message — that is ERGO005 — but that the filter this call names empties a
+    /// pipeline which exists. Every handler any runtime instance of the static type could
+    /// reach is considered, the message's own and every closure subtype's, and one that takes
+    /// part settles it.
+    /// </remarks>
+    private static void JudgeGroupFilter(
+        SourceProductionContext context,
+        DispatchSiteModel site,
+        string siteKey,
+        Dictionary<string, List<RegistrableTypeModel>> subtypesByKey,
+        Dictionary<string, List<RegistrableTypeModel>> handlersByMessageKey,
+        HashSet<string> groupBlindKeys)
+    {
+        // A set assembled at run time names nothing to judge, and an opaque static type names
+        // no concrete message whose handlers could be looked up.
+        if (site.HasUnprovableGroups || site.IsOpaque)
+        {
+            return;
+        }
+
+        // A manifest records an unreadable set as no set, so an empty one read back from a
+        // referenced assembly cannot be told apart from a dispatch that named none. Only a
+        // recorded set with names in it proves what the call asked for.
+        if (site.ReferencedAssemblyName is not null && site.Groups.IsEmpty)
+        {
+            return;
+        }
+
+        var candidates = new List<RegistrableTypeModel>();
+
+        if (!TryCollectGroupCandidates(siteKey, site.AssignableKeys, site.IsValueType,
+                handlersByMessageKey, groupBlindKeys, candidates))
+        {
+            return;
+        }
+
+        // Every message a runtime instance of this static type could turn out to be, not the
+        // static type alone: a subtype whose handler is in the set keeps the dispatch alive.
+        if (subtypesByKey.TryGetValue(siteKey, out var subtypes))
+        {
+            foreach (var subtype in subtypes)
+            {
+                if (!TryCollectGroupCandidates(TypeExpressions.DefinitionKey(subtype.TypeofExpression),
+                        subtype.AssignableKeys, subtype.IsValueType, handlersByMessageKey, groupBlindKeys, candidates))
+                {
+                    return;
+                }
+            }
+        }
+
+        // Coverage came from evidence this index does not hold. Nothing to name, so nothing to
+        // claim.
+        if (candidates.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var candidate in candidates)
+        {
+            // The same test the runtime makes, shared with the plans so a verdict here and a
+            // plan there can never disagree about who is in a set.
+            if (PlanGroupFilter.Participates(candidate, site.Groups))
+            {
+                return;
+            }
+        }
+
+        ReportUnselectableGroupSet(context, site, candidates);
+    }
+
+    /// <summary>
+    /// Collects the handlers one message's coverage chain holds.
+    /// </summary>
+    /// <param name="typeKey">The message's normalized key.</param>
+    /// <param name="assignableKeys">The keys of the types it is assignable to.</param>
+    /// <param name="isValueType">Whether the message is a value type.</param>
+    /// <param name="handlersByMessageKey">The handlers claiming each message key.</param>
+    /// <param name="groupBlindKeys">The messages whose coverage says nothing about groups.</param>
+    /// <param name="into">The list handlers are added to.</param>
+    /// <returns><c>false</c> when the chain reaches a message no group verdict may cover.</returns>
+    /// <remarks>
+    /// The chain is the message itself plus the types it is assignable to, mirroring
+    /// <see cref="IsCovered"/> — a handler registered against a base type serves the message
+    /// covariantly, and its groups decide the same way the direct handler's do.
+    /// </remarks>
+    private static bool TryCollectGroupCandidates(
+        string typeKey,
+        ImmutableArray<string> assignableKeys,
+        bool isValueType,
+        Dictionary<string, List<RegistrableTypeModel>> handlersByMessageKey,
+        HashSet<string> groupBlindKeys,
+        List<RegistrableTypeModel> into)
+    {
+        if (!TryAdd(typeKey))
+        {
+            return false;
+        }
+
+        // Contract variance never applies to a value type, so its assignable keys stay out
+        // here as they do in IsCovered.
+        if (!isValueType)
+        {
+            foreach (var key in assignableKeys)
+            {
+                if (!TryAdd(TypeExpressions.DefinitionKey(key)))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+
+        bool TryAdd(string key)
+        {
+            if (groupBlindKeys.Contains(key))
+            {
+                return false;
+            }
+
+            if (!handlersByMessageKey.TryGetValue(key, out var handlers))
+            {
+                return true;
+            }
+
+            foreach (var handler in handlers)
+            {
+                // One handler can be reached twice — directly and through a base type it also
+                // handles — and would then be named twice in the message.
+                var duplicate = false;
+
+                foreach (var collected in into)
+                {
+                    if (string.Equals(collected.TypeofExpression, handler.TypeofExpression, StringComparison.Ordinal))
+                    {
+                        duplicate = true;
+                        break;
+                    }
+                }
+
+                if (!duplicate)
+                {
+                    into.Add(handler);
+                }
+            }
+
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Reports one dispatch whose group set selects nobody.
+    /// </summary>
+    /// <param name="context">The context diagnostics are reported to.</param>
+    /// <param name="site">The dispatch being reported.</param>
+    /// <param name="candidates">The handlers covering the message, none of them in the set.</param>
+    /// <remarks>
+    /// The handlers are named with the groups they carry, because what the author has to
+    /// change is one of those two lists — the set at the call or the <c>[Group]</c> on a
+    /// handler — and neither is visible from the other file.
+    /// </remarks>
+    private static void ReportUnselectableGroupSet(
+        SourceProductionContext context,
+        DispatchSiteModel site,
+        List<RegistrableTypeModel> candidates)
+    {
+        var handlers = new StringBuilder();
+
+        foreach (var candidate in candidates)
+        {
+            handlers.Append(handlers.Length == 0 ? string.Empty : ", ")
+                .Append('\'').Append(candidate.DisplayName).Append("' in [")
+                // A handler declaring no groups is in the default group and nowhere else,
+                // which is worth spelling out: it is the reason a literal set misses it.
+                .Append(candidate.GroupNames.IsEmpty
+                    ? GroupNames.Default
+                    : string.Join(", ", candidate.GroupNames))
+                .Append(']');
+        }
+
+        context.ReportDiagnostic(Diagnostic.Create(
+            GeneratorDiagnostics.NoHandlerInGroupSet,
+            site.Location?.ToLocation(),
+            site.DisplayName,
+            site.Groups.IsEmpty
+                ? "no group set, which means the default group"
+                : "group set [" + string.Join(", ", site.Groups) + "]",
+            handlers.ToString(),
+            // Every dispatch lane requires at least one selected main handler.
+            "the call is guaranteed to throw NoHandlerFoundException at runtime",
+            site.ReferencedAssemblyName is { } assemblyName
+                ? $" (dispatch site recorded in referenced assembly '{assemblyName}')"
+                : string.Empty));
     }
 
     /// <summary>
@@ -1510,7 +1699,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         foreach (var type in types)
         {
-            if (!type.DiscoveryKeys.IsEmpty || type.GroupsExpression is not null)
+            if (type.GroupsExpression is not null)
             {
                 continue;
             }
@@ -1750,7 +1939,7 @@ public sealed partial class ErgosfareRegistrationGenerator
 
         foreach (var type in types)
         {
-            if (!type.IsAccessible || !type.DiscoveryKeys.IsEmpty)
+            if (!type.IsAccessible)
             {
                 continue;
             }

@@ -64,7 +64,7 @@ public class PluginReservedPrefixDiagnosticTests
     [Fact]
     public void PluginUnderTheReservedPrefix_WithoutOptIn_IsReported()
     {
-        var result = GeneratorTestHost.Run(
+        var result = GeneratorTestHost.RunWithAllCandidates(
             AppSource,
             libraries: [("Stella.Ergosfare.Plugins.Tracing", PluginSource)]);
 
@@ -79,7 +79,7 @@ public class PluginReservedPrefixDiagnosticTests
     [Fact]
     public void PluginUnderTheReservedPrefix_WithOptIn_IsNotReported()
     {
-        var result = GeneratorTestHost.Run(
+        var result = GeneratorTestHost.RunWithAllCandidates(
             AppSource,
             libraries: [("Stella.Ergosfare.Plugins.Tracing2", OptedInPluginSource)]);
 
@@ -89,7 +89,7 @@ public class PluginReservedPrefixDiagnosticTests
     [Fact]
     public void PluginOutsideTheReservedPrefix_IsNotReported()
     {
-        var result = GeneratorTestHost.Run(
+        var result = GeneratorTestHost.RunWithAllCandidates(
             AppSource,
             libraries: [("Contoso.Ergosfare.Tracing", PluginSource)]);
 
@@ -104,7 +104,7 @@ public class PluginReservedPrefixDiagnosticTests
     [Fact]
     public void NonPluginAssemblyUnderTheReservedPrefix_IsNotReported()
     {
-        var result = GeneratorTestHost.Run(AppSource);
+        var result = GeneratorTestHost.RunWithAllCandidates(AppSource);
 
         Assert.False(HasErgosg015(result));
     }

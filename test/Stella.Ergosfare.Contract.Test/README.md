@@ -49,7 +49,7 @@ covariant subscribers and interceptor-free events.
 
 Two registration styles remain, and both feed the same lane:
 
-- **The pattern-less `RegisterGenerated()`** — reserved for the four contract areas
+- **The pattern-less `AddGenerated()`** — reserved for the four contract areas
   below. It registers every default-discovery construct in the assembly, including every
   other area's unkeyed types. That is safe only while each unkeyed message stays scoped
   to its own test class and no interceptor targets a shared or marker type: a
@@ -136,7 +136,7 @@ the test process, and it never forgets. Everything below follows from that.
    message type across classes. Cross-class isolation is type isolation; there is nothing
    else.
 2. **Register your area's participants explicitly, and never call the pattern-less
-   `RegisterGenerated()`.** That overload registers every default-discovery construct in
+   `AddGenerated()`.** That overload registers every default-discovery construct in
    the assembly, and it belongs to the four contract areas alone (see
    [Registration axes](#registration-axes)). A new area declares top-level, unkeyed,
    message-scoped types and lists each dispatched message's full pipeline with

@@ -24,8 +24,8 @@ public sealed class GeneratedRegistrationPostAbortTests : PostAbortSemanticsCont
     protected override ServiceProvider CreateProvider()
         => new ServiceCollection()
             .AddErgosfare(options => options
-                .AddCommandModule(commands => commands.RegisterGenerated())
-                .AddQueryModule(queries => queries.RegisterGenerated()))
+                .AddCommandModule(commands => commands.AddGenerated())
+                .AddQueryModule(queries => queries.AddGenerated()))
             .BuildServiceProvider();
 
     /// <inheritdoc />

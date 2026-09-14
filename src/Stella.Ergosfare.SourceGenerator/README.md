@@ -5,15 +5,15 @@ compile-time registration that replaces reflection-based assembly scanning.
 
 The generator discovers every Ergosfare construct (messages, handlers, interceptors) in
 your compilation **and its referenced assemblies**, pre-computes their handler descriptors,
-and emits `RegisterGenerated()` extensions plus dispatch roots that let the runtime build
+and emits `AddGenerated()` extensions plus dispatch roots that let the runtime build
 its pipelines without reflection — trimming- and Native AOT-friendly, value-type messages
 included.
 
 ```csharp
 builder.Services.AddErgosfare(o => o
     .AddCommandModule(c => c
-        .RegisterGenerated()                  // default discovery
-        .RegisterGenerated("reporting.*")));  // cherry-pick [DiscoveryKey] gated types
+        .AddGenerated()                  // default discovery
+        .AddGenerated("reporting.*")));  // cherry-pick [DiscoveryKey] gated types
 ```
 
 - `[DiscoveryKey("key")]` gates a type behind explicit selection; `[ExcludeFromDiscovery]`

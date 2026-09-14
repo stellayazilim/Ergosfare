@@ -39,7 +39,8 @@ public interface IModuleRegistry
     /// one fallback adapter (<c>ERGO020</c>), and the adapter must be one generated code can
     /// name and construct (<c>ERGO021</c>). Which result types it serves — and what closes an
     /// open definition over each of them — is answered there and written into the generated
-    /// adapter table, which is where the runtime reads it back.
+    /// adapter table and the compiled plan. This declaration does not register an adapter
+    /// service in DI, and dispatch does not read it again.
     /// </para>
     /// </remarks>
     [Experimental(ExperimentalIds.ResultAdapterSurface)]

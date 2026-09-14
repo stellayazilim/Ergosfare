@@ -46,7 +46,7 @@ internal sealed partial class PlanBuilder
 
         foreach (var type in types)
         {
-            if (!type.IsDispatchableMessage || type.HasPipelineExclusion)
+            if (!type.IsDispatchableMessage)
             {
                 continue;
             }
@@ -116,6 +116,28 @@ internal sealed partial class PlanBuilder
                     return;
                 }
             }
+            else if (filter.Filtering)
+            {
+                if (!handlersByMessage.TryGetValue(type.TypeofExpression, out var candidates)) return;
+                var selected = ImmutableArray.CreateBuilder<StagedHandlerModel>();
+                var expectedResult = resultTypeExpression is null
+                    ? EmittedExpressions.ValueTask
+                    : EmittedExpressions.ValueTask + "<" + resultTypeExpression + ">";
+                foreach (var candidate in candidates.OrderByDescending(c => c.Model.Weight)
+                             .ThenBy(c => c.Model.DisplayName, StringComparer.Ordinal))
+                {
+                    if (!candidate.Model.IsAccessible
+                        || !candidate.Descriptor.IsAsync
+                        || candidate.Descriptor.ResultTypeExpression != expectedResult
+                        || !filter.TryInclude(candidate.Model, out var guard)) return;
+                    selected.Add(new StagedHandlerModel(candidate.Model.TypeofExpression,
+                        GatedConstructionExpression(candidate.Model, hasKeyedServiceExtensions), guard));
+                }
+                if (selected.Count == 0) return;
+                handlers = selected.ToImmutable();
+                if (!TryCollectCovariantMainHandlers(type, types, excludedShadows, hasKeyedServiceExtensions,
+                        filter, out indirectHandlers)) return;
+            }
             else
             {
                 // The same sole-handler requirement the single-handler plans have, minus their
@@ -131,7 +153,7 @@ internal sealed partial class PlanBuilder
                     return;
                 }
 
-                if (!handler.IsAccessible || !handler.DiscoveryKeys.IsEmpty)
+                if (!handler.IsAccessible)
                 {
                     return;
                 }
@@ -158,7 +180,7 @@ internal sealed partial class PlanBuilder
                     ? EmittedExpressions.ValueTask
                     : EmittedExpressions.ValueTask + "<" + resultTypeExpression + ">";
 
-                if (handlerDescriptor.ResultTypeExpression != expectedHandlerResult
+                if (!handlerDescriptor.IsAsync || handlerDescriptor.ResultTypeExpression != expectedHandlerResult
                     || handlerDescriptor.MessageTypeExpression != type.TypeofExpression)
                 {
                     return;
@@ -177,30 +199,9 @@ internal sealed partial class PlanBuilder
 
             var pluginCalls = SelectPluginCalls(pluginInvocations, type);
 
-            if (pre.Length + post.Length + exceptionCalls.Length + finalCalls.Length == 0
-                && pluginCalls.IsEmpty
-                && !isBroadcast
-                && targetGroups.IsEmpty)
-            {
-                // No interceptor and no plugin: the single-handler plans already serve this
-                // shape. A plugin is what pulls an interceptorless pipeline in here, since
-                // its observer has to reach both plan families and a plan body is the only
-                // place a call can live. The body collapses accordingly — with no pre chain,
-                // the pipeline start and the pre-handler boundary are one point, as are the
-                // post-handler and after-post ones.
-                //
-                // A broadcast has no single-handler family to fall back on, so its bare loop
-                // is the plan: an interceptorless publish gets the same straight-line body,
-                // and the same direct construction, an interceptorless send already gets.
-                // Without this arm, publishing would be the one lane still resolving its
-                // participants through the container every time.
-                //
-                // A grouped dispatch has no such family either — the single-handler plans are
-                // keyed by message alone and answer the default set only — so leaving a
-                // grouped pipeline out here would send every grouped dispatch, however
-                // simple, through the container.
+            // Preserve the supported bare-handler exclusion shape in the single plan family.
+            if (type.HasPipelineExclusion && pre.Length + post.Length + exceptionCalls.Length + finalCalls.Length > 0)
                 return;
-            }
 
             // The same order the runtime binding walks: the opt-out suppresses every tier;
             // otherwise the annotation when it fits the slot exactly, then the native
@@ -334,7 +335,7 @@ internal sealed partial class PlanBuilder
                 // runtime reaches the ValueTask-shaped and synchronous ones through a type
                 // switch, which a plan would have to reproduce per handler — and the general
                 // path already does it.
-                if (descriptor.ResultTypeExpression != EmittedExpressions.ValueTask)
+                if (!descriptor.IsAsync || descriptor.ResultTypeExpression != EmittedExpressions.ValueTask)
                 {
                     return false;
                 }
@@ -364,7 +365,6 @@ internal sealed partial class PlanBuilder
             }
 
             if (!candidate.IsAccessible
-                || !candidate.DiscoveryKeys.IsEmpty
                 || candidate.IsNestedType)
             {
                 return false;
@@ -427,7 +427,7 @@ internal sealed partial class PlanBuilder
     /// <remarks>
     /// <para>
     /// They come back in the order the frozen composition holds them — heavier weights first,
-    /// then by metadata name, the rule <see cref="ComputeFrozenCompositions"/> applies to
+    /// then by metadata name, the rule <see cref="ComputePipelineDescriptors"/> applies to
     /// this same segment. None of them runs: the priority ladder gives the message to its
     /// direct handler however many covariant candidates there are, and both pipeline bodies
     /// do exactly that. They are collected because the check compares every segment of the
@@ -490,7 +490,7 @@ internal sealed partial class PlanBuilder
                 continue;
             }
 
-            if (matched > 1 || !candidate.DiscoveryKeys.IsEmpty)
+            if (matched > 1)
             {
                 return false;
             }

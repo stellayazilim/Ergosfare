@@ -11,9 +11,8 @@ var builder = WebApplication.CreateSlimBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("Todo") ?? "Data Source=e2e-todos.db";
 
-// The application layer owns the composition — including the generator that emits
-// RegisterGenerated() and the plugin it installs. This host holds no Ergosfare reference of
-// its own; it reaches the mediator contracts transitively and dispatches through them.
+// UseCases owns the registration API. This composition root's generator consumes its
+// selection manifest and combines it with endpoint dispatches to emit executable plans.
 builder.Services.AddApplication();
 
 builder.Services.AddInfrastructure(connectionString);

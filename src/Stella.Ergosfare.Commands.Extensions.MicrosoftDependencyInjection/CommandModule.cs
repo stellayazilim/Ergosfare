@@ -1,4 +1,6 @@
-﻿using Stella.Ergosfare.Commands.Abstractions;
+using Stella.Ergosfare.Core;
+using Microsoft.Extensions.DependencyInjection;
+using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -32,13 +34,14 @@ internal class CommandModule : IModule
         // transient still receives the calling scope's provider — so participants resolve
         // against the right scope. Registering it scoped would pay the locking and
         // bookkeeping of a scoped resolution on every fresh scope, with nothing to gain.
-        configuration.Services.TryAddTransient<ICommandMediator, EngineBackedCommandMediator>();
+        configuration.Services.TryAddTransient<ICommandMediator>(
+            static provider => new CommandMediator(provider.GetRequiredService<MessageDispatchEngine>(), provider));
 
         // The same facade under its concrete name, so an application can inject either. A
         // send through the interface pays a generic virtual call the JIT cannot resolve
         // ahead of time; through the class it is a direct call. The difference is a few
         // nanoseconds — nothing to most callers, something to a hot loop — so the choice is
-        // the caller's, and both names resolve to one object.
+        // the caller's. Each transient resolution creates one facade.
         configuration.Services.TryAddTransient<CommandMediator>(
             static provider => Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<ICommandMediator>(provider) as CommandMediator
                 ?? throw new InvalidOperationException(
