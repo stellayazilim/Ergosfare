@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions;
 
 namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -31,7 +31,7 @@ public interface IModuleRegistry
     /// required; instances are created per served result type and cached.
     /// </param>
     /// <returns>The instance of the module registry for method chaining.</returns>
-    [Experimental(ExperimentalIds.ResultAdapterSurface)]
+    [Obsolete("Experimental API: subject to change or removal in any release.", false, DiagnosticId = ExperimentalIds.ResultAdapterSurface)]
     IModuleRegistry UseDefaultResultAdapter(
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.Interfaces)]
         Type adapterType);

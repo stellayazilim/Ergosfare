@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Core.Abstractions;
+using Stella.Ergosfare.Core.Abstractions;
 
 namespace Stella.Ergosfare.Queries.Abstractions;
 
@@ -21,6 +21,7 @@ public interface IQueryMediator: IMessage
     ///     is executed, including pre-handlers, the main handler, post-handlers, and error handlers if exceptions occur.
     ///     The result produced by the handler is returned to the caller.
     /// </remarks>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     ValueTask<TQueryResult> QueryAsync<TQueryResult>(IQuery<TQueryResult> query,
                                                 QueryMediationSettings? queryMediationSettings = null,
                                                 CancellationToken cancellationToken = default);
@@ -36,6 +37,7 @@ public interface IQueryMediator: IMessage
     /// <param name="query">The query to be executed.</param>
     /// <param name="context">The externally owned execution context to dispatch under.</param>
     /// <param name="queryMediationSettings">Optional mediation settings (groups etc.).</param>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     ValueTask<TQueryResult> QueryAsync<TQueryResult>(IQuery<TQueryResult> query,
                                                 ErgosfareContext context,
                                                 QueryMediationSettings? queryMediationSettings = null);
@@ -61,6 +63,7 @@ public interface IQueryMediator: IMessage
     ///     The sequence of results produced by the handler is returned to the caller as an <see cref="IAsyncEnumerable{T}" />,
     ///     allowing for asynchronous enumeration of the results.
     /// </remarks>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query,
                                                              QueryMediationSettings? queryMediationSettings = null,
                                                              CancellationToken cancellationToken = default);

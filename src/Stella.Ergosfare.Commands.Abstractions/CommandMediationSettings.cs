@@ -1,4 +1,4 @@
-﻿namespace Stella.Ergosfare.Commands.Abstractions;
+namespace Stella.Ergosfare.Commands.Abstractions;
 
 /// <summary>
 ///     Represents the configuration settings that control command mediation behavior.
@@ -8,6 +8,7 @@
 ///     including filtering which handlers participate in command processing.
 ///     These settings can be provided when sending commands through the ICommandMediator.
 /// </remarks>
+[Obsolete("Removed in preview. Use the mediator overloads with CancellationToken, GroupSet or ErgosfareContext when upgrading; settings objects are no longer supported.", false)]
 public sealed class CommandMediationSettings
 {
     /// <summary>

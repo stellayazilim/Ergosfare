@@ -21,6 +21,7 @@ namespace Stella.Ergosfare.Commands.Abstractions;
 /// The <c>HandleAsync</c> method is called before the command is processed. The returned
 /// <typeparamref name="TModifiedCommand"/> will continue through the pipeline as the new command.
 /// </remarks>
+[Obsolete("Removed in preview. Use ICommandPreInterceptor<TMessage>; the message type must stay unchanged.", false)]
 public interface ICommandPreInterceptor<in TCommand,  TModifiedCommand>: ICommand, IAsyncPreInterceptor<TCommand>
     where TCommand : ICommand
     where TModifiedCommand : TCommand

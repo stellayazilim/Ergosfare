@@ -29,6 +29,7 @@ namespace Stella.Ergosfare.Events;
 /// (unlike request/response message patterns).
 /// </para>
 /// </remarks>
+[Obsolete("Removed in preview. Dispatch through IEventMediator; source-generated plans replace custom runtime mediation strategies.", false)]
 public sealed class AsyncBroadcastMediationStrategy<TMessage>(
     EventMediationSettings settings)
     : IMessageMediationStrategy<TMessage, ValueTask>

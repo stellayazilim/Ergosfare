@@ -25,6 +25,7 @@ namespace Stella.Ergosfare.Queries.Abstractions;
 /// avoiding casts from <see cref="object"/>.
 /// </remarks>
 // ReSharper disable once UnusedType.Global
+[Obsolete("Removed in preview. Use IQueryPreInterceptor<TMessage>; the message type must stay unchanged.", false)]
 public interface IQueryPreInterceptor<in TQuery, TModifiedQuery>
     :IQuery, IAsyncPreInterceptor<TQuery> where TQuery: IQuery
     where TModifiedQuery: TQuery 

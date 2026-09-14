@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Core;
+using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Events.Abstractions;
 
@@ -35,6 +35,7 @@ public class EventMediator : IPublisher
     /// </summary>
     /// <param name="engine">The singleton dispatch engine.</param>
     /// <param name="serviceProvider">The provider of the scope this facade serves.</param>
+    [Obsolete("Removed in preview. Resolve the module mediator from dependency injection instead of constructing it directly.", false)]
     public EventMediator(
         MessageDispatchEngine engine,
         IServiceProvider serviceProvider)
@@ -53,6 +54,7 @@ public class EventMediator : IPublisher
     /// <param name="eventMediationSettings">Optional settings for pipeline execution, e.g., filters, items, and exception behavior.</param>
     /// <param name="cancellationToken">Cancellation token for async execution.</param>
     /// <returns>A <see cref="ValueTask"/> representing the asynchronous publish operation.</returns>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     public ValueTask PublishAsync(IEvent @event,
                              EventMediationSettings? eventMediationSettings = null,
                              CancellationToken cancellationToken = default)
@@ -70,6 +72,7 @@ public class EventMediator : IPublisher
     /// <param name="eventMediationSettings">Optional settings for pipeline execution.</param>
     /// <param name="cancellationToken">Cancellation token for async execution.</param>
     /// <returns>A <see cref="ValueTask"/> representing the asynchronous publish operation.</returns>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     public ValueTask PublishAsync<TEvent>(TEvent @event,
                                      EventMediationSettings? eventMediationSettings = null,
                                      CancellationToken cancellationToken = default) where TEvent : notnull
@@ -136,6 +139,7 @@ public class EventMediator : IPublisher
     /// <param name="event">The event message to publish.</param>
     /// <param name="context">The externally owned execution context to publish under.</param>
     /// <param name="eventMediationSettings">Optional settings for pipeline execution.</param>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     public ValueTask PublishAsync(IEvent @event, ErgosfareContext context,
                              EventMediationSettings? eventMediationSettings = null)
     {

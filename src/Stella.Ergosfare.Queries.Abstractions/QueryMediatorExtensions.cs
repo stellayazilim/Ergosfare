@@ -4,6 +4,7 @@ namespace Stella.Ergosfare.Queries.Abstractions;
 /// Provides extension methods for <see cref="IQueryMediator"/> to simplify dispatching
 /// queries and stream queries with optional group filtering.
 /// </summary>
+[Obsolete("Removed in preview. Call the module mediator instance methods when upgrading; convert group sequences to GroupSet.Of(groups).", false)]
 public static class QueryMediatorExtensions
 {
     /// <summary>

@@ -21,7 +21,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Results;
 /// the container's lifetime, so resolution runs once per slot. Adapters are expected to
 /// be stateless; a public parameterless constructor is required.
 /// </remarks>
-[Experimental(ExperimentalIds.ResultAdapterSurface)]
+[Obsolete("Experimental API: subject to change or removal in any release.", false, DiagnosticId = ExperimentalIds.ResultAdapterSurface)]
 public sealed class DefaultResultAdapter
 {
     private readonly ConcurrentDictionary<Type, object?> _closedAdapters = new();

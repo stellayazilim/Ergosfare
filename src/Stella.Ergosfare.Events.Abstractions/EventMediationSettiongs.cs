@@ -1,8 +1,9 @@
-﻿namespace Stella.Ergosfare.Events.Abstractions;
+namespace Stella.Ergosfare.Events.Abstractions;
 
 /// <summary>
 ///     Represents the settings used for event mediation.
 /// </summary>
+[Obsolete("Removed in preview. Use the mediator overloads with CancellationToken, GroupSet or ErgosfareContext when upgrading; settings objects are no longer supported.", false)]
 public sealed class EventMediationSettings
 {
 

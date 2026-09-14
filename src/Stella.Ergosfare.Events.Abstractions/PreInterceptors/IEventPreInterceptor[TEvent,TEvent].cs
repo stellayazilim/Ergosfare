@@ -24,6 +24,7 @@ namespace Stella.Ergosfare.Events.Abstractions;
 /// </para>
 /// </remarks>
 // ReSharper disable once UnusedType.Global
+[Obsolete("Removed in preview. Use IEventPreInterceptor<TMessage>; the message type must stay unchanged.", false)]
 public interface IEventPreInterceptor<in TEvent,  TModifiedEvent>: IAsyncPreInterceptor<TEvent>
     where TEvent : notnull
     where TModifiedEvent : TEvent

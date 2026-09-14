@@ -1,4 +1,4 @@
-﻿namespace Stella.Ergosfare.Events.Abstractions;
+namespace Stella.Ergosfare.Events.Abstractions;
 
 /// <summary>
 ///     Represents the mediator interface for publishing events within the application.
@@ -31,6 +31,7 @@ public interface IEventMediator
     ///     By default, if no handlers are found for the event, the operation completes successfully
     ///     without any action. This behavior can be changed using the <see cref="EventMediationSettings" />.
     /// </remarks>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     ValueTask PublishAsync(IEvent @event, EventMediationSettings? eventMediationSettings = null, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -43,6 +44,7 @@ public interface IEventMediator
     /// <param name="event">The event to publish.</param>
     /// <param name="context">The externally owned execution context to publish under.</param>
     /// <param name="eventMediationSettings">Optional settings for pipeline execution.</param>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     ValueTask PublishAsync(IEvent @event, Core.Abstractions.ErgosfareContext context, EventMediationSettings? eventMediationSettings = null);
 
     /// <summary>
@@ -65,6 +67,7 @@ public interface IEventMediator
     ///     By default, if no handlers are found for the event, the operation completes successfully
     ///     without any action. This behavior can be changed using the <see cref="EventMediationSettings" />.
     /// </remarks>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     ValueTask PublishAsync<TEvent>(TEvent @event, EventMediationSettings? eventMediationSettings = null, CancellationToken cancellationToken = default)
         where TEvent : notnull;
 

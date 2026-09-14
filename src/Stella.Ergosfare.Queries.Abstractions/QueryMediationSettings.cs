@@ -1,4 +1,4 @@
-﻿namespace Stella.Ergosfare.Queries.Abstractions;
+namespace Stella.Ergosfare.Queries.Abstractions;
 
 /// <summary>
 ///     Represents the configuration settings that control query mediation behavior.
@@ -8,6 +8,7 @@
 ///     including filtering which handlers participate in query processing.
 ///     These settings can be provided when sending queries through the IQueryMediator.
 /// </remarks>
+[Obsolete("Removed in preview. Use the mediator overloads with CancellationToken, GroupSet or ErgosfareContext when upgrading; settings objects are no longer supported.", false)]
 public sealed class QueryMediationSettings
 {
     /// <summary>

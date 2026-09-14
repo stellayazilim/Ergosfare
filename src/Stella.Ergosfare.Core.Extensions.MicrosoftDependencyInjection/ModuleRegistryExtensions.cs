@@ -1,4 +1,4 @@
-﻿namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
+namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
 
 /// <summary>
 /// Provides extension methods for configuring and registering modules with an <see cref="IModuleRegistry"/>.
@@ -18,6 +18,7 @@ public static class ModuleRegistryExtensions
     /// handlers and interceptors are all singleton-registered use the memoized fast path
     /// automatically, everything else is resolved from the calling scope's provider.
     /// </remarks>
+    [Obsolete("Removed in preview. Generated plans honor dispatch-scope DI lifetimes; configure singleton lifetimes explicitly where reuse is intended.", false)]
     public static IModuleRegistry ForceMemoizedHandlers(this IModuleRegistry moduleRegistry)
     {
         if (moduleRegistry is ModuleRegistry concreteRegistry)

@@ -1,9 +1,10 @@
-﻿namespace Stella.Ergosfare.Events.Abstractions;
+namespace Stella.Ergosfare.Events.Abstractions;
 
 
 /// <summary>
 /// Provides extension methods for <see cref="IEventMediator"/> to simplify event publishing.
 /// </summary>
+[Obsolete("Removed in preview. Call the module mediator instance methods when upgrading; convert group sequences to GroupSet.Of(groups).", false)]
 public static class EventMediatorExtensions
 {
 

@@ -1,4 +1,4 @@
-﻿
+
 
 namespace Stella.Ergosfare.Commands.Abstractions;
 /// <summary>
@@ -29,6 +29,7 @@ public interface ICommandMediator
     ///     appropriate handler based on its type, and the command handling pipeline is executed, including
     ///     pre-handlers, the main handler, post-handlers, and error handlers if exceptions occur.
     /// </remarks>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     ValueTask SendAsync(ICommand command, CommandMediationSettings? commandMediationSettings = null, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -40,6 +41,7 @@ public interface ICommandMediator
     /// <param name="command">The command to send.</param>
     /// <param name="context">The externally owned execution context to dispatch under.</param>
     /// <param name="commandMediationSettings">Optional mediation settings (groups etc.).</param>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     ValueTask SendAsync(ICommand command, Core.Abstractions.ErgosfareContext context,
         CommandMediationSettings? commandMediationSettings = null);
 
@@ -51,6 +53,7 @@ public interface ICommandMediator
     /// <param name="command">The command to send.</param>
     /// <param name="context">The externally owned execution context to dispatch under.</param>
     /// <param name="commandMediationSettings">Optional mediation settings (groups etc.).</param>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command, Core.Abstractions.ErgosfareContext context,
         CommandMediationSettings? commandMediationSettings = null);
 
@@ -71,6 +74,7 @@ public interface ICommandMediator
     ///     is executed, including pre-handlers, the main handler, post-handlers, and error handlers if exceptions occur.
     ///     The result produced by the handler is returned to the caller.
     /// </remarks>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> command,
                                                    CommandMediationSettings? commandMediationSettings = null,
                                                    CancellationToken cancellationToken = default);

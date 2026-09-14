@@ -17,7 +17,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Attributes;
 /// message's execution plan and fails the build when the adapter does not fit the declared
 /// result (planned diagnostic ERGOSG011).
 /// </remarks>
-[Experimental(ExperimentalIds.ResultAdapterSurface)]
+[Obsolete("Experimental API: subject to change or removal in any release.", false, DiagnosticId = ExperimentalIds.ResultAdapterSurface)]
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface)]
 public sealed class ResultAdapterAttribute(
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.Interfaces)]

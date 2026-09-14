@@ -32,6 +32,7 @@ public class CommandMediator : ICommandMediator
     /// Wraps an existing <see cref="IMessageMediator"/> — the original construction shape,
     /// kept for direct construction and foreign mediator implementations.
     /// </summary>
+    [Obsolete("Removed in preview. Resolve the module mediator from dependency injection instead of constructing it directly.", false)]
     public CommandMediator(IMessageMediator messageMediator)
     {
         _messageMediator = messageMediator;
@@ -44,6 +45,7 @@ public class CommandMediator : ICommandMediator
     /// </summary>
     /// <param name="engine">The singleton dispatch engine.</param>
     /// <param name="serviceProvider">The provider of the scope this facade serves.</param>
+    [Obsolete("Removed in preview. Resolve the module mediator from dependency injection instead of constructing it directly.", false)]
     public CommandMediator(MessageDispatchEngine engine, IServiceProvider serviceProvider)
     {
         ArgumentNullException.ThrowIfNull(engine);
@@ -56,6 +58,7 @@ public class CommandMediator : ICommandMediator
     /// <summary>
     /// Sends a void command through the executor pipeline.
     /// </summary>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     public ValueTask SendAsync(ICommand commandConstruct, CommandMediationSettings? commandMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
@@ -81,6 +84,7 @@ public class CommandMediator : ICommandMediator
     /// <param name="commandMediationSettings">Optional settings for command mediation, such as filtering or additional items.</param>
     /// <param name="cancellationToken">Cancellation token for aborting the operation.</param>
     /// <returns>A <see cref="ValueTask{TResult}"/> representing the asynchronous operation and containing the command result.</returns>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct,
         CommandMediationSettings? commandMediationSettings = null,
         CancellationToken cancellationToken = default)
@@ -137,6 +141,7 @@ public class CommandMediator : ICommandMediator
     /// child here. The caller owns the context's lifetime; cancellation flows from the
     /// context.
     /// </summary>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     public ValueTask SendAsync(ICommand commandConstruct, ErgosfareContext context,
         CommandMediationSettings? commandMediationSettings = null)
     {
@@ -156,6 +161,7 @@ public class CommandMediator : ICommandMediator
     /// Result-producing counterpart of
     /// <see cref="SendAsync(ICommand, ErgosfareContext, CommandMediationSettings?)"/>.
     /// </summary>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     public ValueTask<TResult> SendAsync<TResult>(ICommand<TResult> commandConstruct, ErgosfareContext context,
         CommandMediationSettings? commandMediationSettings = null)
     {

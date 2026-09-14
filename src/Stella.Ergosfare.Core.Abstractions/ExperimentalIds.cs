@@ -1,8 +1,8 @@
 namespace Stella.Ergosfare.Core.Abstractions;
 
 /// <summary>
-/// The diagnostic ids behind the framework's <see cref="System.Diagnostics.CodeAnalysis.ExperimentalAttribute"/>
-/// markings — one id per experimental surface, so consumers opt in with a single,
+/// The diagnostic ids behind the framework's experimental warnings, emitted with
+/// <see cref="ObsoleteAttribute"/> — one id per experimental surface, allowing a single,
 /// documented suppression instead of chasing members.
 /// </summary>
 public static class ExperimentalIds

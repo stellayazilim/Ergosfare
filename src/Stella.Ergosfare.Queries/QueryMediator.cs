@@ -1,4 +1,4 @@
-﻿using Stella.Ergosfare.Core;
+using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Queries.Abstractions;
 
@@ -29,6 +29,7 @@ public class QueryMediator : IQueryMediator
     /// </summary>
     /// <param name="engine">The singleton dispatch engine.</param>
     /// <param name="serviceProvider">The provider of the scope this facade serves.</param>
+    [Obsolete("Removed in preview. Resolve the module mediator from dependency injection instead of constructing it directly.", false)]
     public QueryMediator(
         MessageDispatchEngine engine,
         IServiceProvider serviceProvider)
@@ -51,6 +52,7 @@ public class QueryMediator : IQueryMediator
     /// </param>
     /// <param name="cancellationToken">A cancellation token for async execution.</param>
     /// <returns>A <see cref="ValueTask{TResult}"/> representing the asynchronous execution of the query.</returns>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, QueryMediationSettings? queryMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
@@ -74,6 +76,7 @@ public class QueryMediator : IQueryMediator
     /// </param>
     /// <param name="cancellationToken">A cancellation token for async streaming.</param>
     /// <returns>An <see cref="IAsyncEnumerable{TResult}"/> representing the results of the streaming query.</returns>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, QueryMediationSettings? queryMediationSettings = null,
         CancellationToken cancellationToken = default)
     {
@@ -120,6 +123,7 @@ public class QueryMediator : IQueryMediator
     /// path: a handler opens a scope on its own context and passes the child here. The
     /// caller owns the context's lifetime; cancellation flows from the context.
     /// </summary>
+    [Obsolete("Removed in preview. Use the CancellationToken, GroupSet or ErgosfareContext overloads without mediation settings when upgrading.", false)]
     public ValueTask<TResult> QueryAsync<TResult>(IQuery<TResult> query, ErgosfareContext context,
         QueryMediationSettings? queryMediationSettings = null)
     {
