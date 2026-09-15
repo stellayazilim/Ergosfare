@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <NoWarn>$(NoWarn);ERGOEXP002</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Stella.Ergosfare.Plugins.Outbox.Generators/Stella.Ergosfare.Plugins.Outbox.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all" />
+    <ProjectReference Include="../Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection/Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj" />
+    <ProjectReference Include="../Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection/Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj" />
+    <ProjectReference Include="../Stella.Ergosfare.Plugins.Abstractions/Stella.Ergosfare.Plugins.Abstractions.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.8" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="../Stella.Ergosfare.Plugins.Outbox.Generators/bin/$(Configuration)/netstandard2.0/Stella.Ergosfare.Plugins.Outbox.Generators.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+  </ItemGroup>
+</Project>

@@ -96,6 +96,8 @@ jobs:
       - name: Pack source libraries
         run: |
           projects=(
+            ./src/Stella.Ergosfare.Plugins.Outbox/Stella.Ergosfare.Plugins.Outbox.csproj
+            ./src/Stella.Ergosfare.Plugins.Abstractions/Stella.Ergosfare.Plugins.Abstractions.csproj
             ./src/Stella.Ergosfare/Stella.Ergosfare.csproj
             ./src/Stella.Ergosfare.Core/Stella.Ergosfare.Core.csproj
             ./src/Stella.Ergosfare.Core.Abstractions/Stella.Ergosfare.Core.Abstractions.csproj

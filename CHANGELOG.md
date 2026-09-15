@@ -1,3 +1,24 @@
+## v2.17.0-preview – '2026-09-15'
+
+### Experimental outbox proof of concept
+
+* Add `Stella.Ergosfare.Plugins.Outbox`, an experimental concept implementation,
+  not a production-ready transactional outbox. Its InMemory store is process-local,
+  loses messages on exit, and does not participate in domain transactions.
+* Enqueue through `context.EnqueueOutboxAsync(message)` and normal command plans.
+  Deliver through `IOutboxHandler<T> : IEventHandler<OutboxEvent<T>>`, keeping ordinary
+  message handlers separate without changing the Ergosfare dispatch engine.
+* Include a bounded hosted worker with independent scopes, lease renewal and fencing,
+  retry limits, and cancellation-aware cleanup. Delivery is at least once.
+* Bundle an outbox source generator in the same package. `[OutboxMessage]` on public
+  partial POCO classes/records generates reflection-free JSON codecs and registration.
+  Support primitive values, nullable values, arrays and lists; diagnose unsupported
+  shapes explicitly. Import codec manifests from referenced message assemblies.
+* Add runtime and generator tests on .NET 9, 10 and 11. Keep persistence adapters,
+  operator tooling and broader serialization support outside this initial PoC.
+* Organize solution projects under `src/library` and `src/plugins`, preserving their
+  physical paths. Ship plugin packages with the common repository version.
+
 ## v2.16.2-preview – '2026-09-15'
 
 ### Startup and registration
