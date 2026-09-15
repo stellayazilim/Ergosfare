@@ -46,9 +46,12 @@ public class StreamPlanExecutionTests
                 public int Seed { get; set; } = 1;
             }
 
-            public sealed class GenTickStreamHandler : IStreamQueryHandler<GenTickStream, int>
+            public sealed class GenTickStreamHandler : IQueryHandler<GenTickStream, IAsyncEnumerable<int>>
             {
-                public async IAsyncEnumerable<int> StreamAsync(GenTickStream query, ErgosfareContext context)
+                public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<int>> HandleAsync(GenTickStream query, ErgosfareContext context)
+                    => new(Enumerate(query, context));
+
+                private async IAsyncEnumerable<int> Enumerate(GenTickStream query, ErgosfareContext context)
                 {
                     Sink.Entries.Add("handler:" + query.Seed);
                     yield return query.Seed;
@@ -90,9 +93,12 @@ public class StreamPlanExecutionTests
 
             public sealed class GenFailStream : IStreamQuery<int>;
 
-            public sealed class GenFailStreamHandler : IStreamQueryHandler<GenFailStream, int>
+            public sealed class GenFailStreamHandler : IQueryHandler<GenFailStream, IAsyncEnumerable<int>>
             {
-                public async IAsyncEnumerable<int> StreamAsync(GenFailStream query, ErgosfareContext context)
+                public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<int>> HandleAsync(GenFailStream query, ErgosfareContext context)
+                    => new(Enumerate(query, context));
+
+                private async IAsyncEnumerable<int> Enumerate(GenFailStream query, ErgosfareContext context)
                 {
                     yield return 1;
                     await Task.Yield();
@@ -123,9 +129,12 @@ public class StreamPlanExecutionTests
 
             public sealed class GenAbortStream : IStreamQuery<int>;
 
-            public sealed class GenAbortStreamHandler : IStreamQueryHandler<GenAbortStream, int>
+            public sealed class GenAbortStreamHandler : IQueryHandler<GenAbortStream, IAsyncEnumerable<int>>
             {
-                public async IAsyncEnumerable<int> StreamAsync(GenAbortStream query, ErgosfareContext context)
+                public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<int>> HandleAsync(GenAbortStream query, ErgosfareContext context)
+                    => new(Enumerate(query, context));
+
+                private async IAsyncEnumerable<int> Enumerate(GenAbortStream query, ErgosfareContext context)
                 {
                     Sink.Entries.Add("handler");
                     await Task.Yield();
@@ -210,11 +219,9 @@ public class StreamPlanExecutionTests
             items.Add(item);
         }
 
-        // The handler streams from the pre-interceptor's rewritten instance, the post
-        // stage observes the enumerator once enumeration ends, and the final stage sees a
-        // clean outcome last — the strategy's exact order, baked.
+        // Pre can rewrite the message. Post is excluded; final sees completion.
         Assert.Equal([10, 11], items);
-        Assert.Equal(["pre:1", "handler:10", "post:enumerator", "final:clean"], Entries);
+        Assert.Equal(["pre:1", "handler:10", "final:clean"], Entries);
     }
 
     [Fact]

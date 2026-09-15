@@ -18,17 +18,20 @@ namespace Stella.Ergosfare.Contract.Test.Streaming;
 public sealed class StreamFailure() : Exception("stream failed");
 
 /// <summary>Streamed query whose handler can stop mid-stream by throwing.</summary>
-public sealed class Ticks : IStreamQuery<int>
+public sealed class Ticks : IQuery<IAsyncEnumerable<int>>
 {
     /// <summary>Whether the handler stops mid-stream by throwing.</summary>
     public bool FailMidway;
 }
 
 /// <inheritdoc />
-public sealed class TicksHandler : IStreamQueryHandler<Ticks, int>
+public sealed class TicksHandler : IQueryHandler<Ticks, IAsyncEnumerable<int>>
 {
     /// <inheritdoc />
-    public async IAsyncEnumerable<int> StreamAsync(Ticks query, ErgosfareContext context)
+    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<int>> HandleAsync(Ticks query, ErgosfareContext context)
+        => new(Enumerate(query, context));
+
+    private async IAsyncEnumerable<int> Enumerate(Ticks query, ErgosfareContext context)
     {
         yield return 1;
 
@@ -46,13 +49,16 @@ public sealed class TicksHandler : IStreamQueryHandler<Ticks, int>
 }
 
 /// <summary>Streamed query whose sequence carries a <c>null</c> element.</summary>
-public sealed class Names : IStreamQuery<string?>;
+public sealed class Names : IQuery<IAsyncEnumerable<string?>>;
 
 /// <inheritdoc />
-public sealed class NamesHandler : IStreamQueryHandler<Names, string?>
+public sealed class NamesHandler : IQueryHandler<Names, IAsyncEnumerable<string?>>
 {
     /// <inheritdoc />
-    public async IAsyncEnumerable<string?> StreamAsync(Names query, ErgosfareContext context)
+    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<string?>> HandleAsync(Names query, ErgosfareContext context)
+        => new(Enumerate(query, context));
+
+    private async IAsyncEnumerable<string?> Enumerate(Names query, ErgosfareContext context)
     {
         yield return "a";
 

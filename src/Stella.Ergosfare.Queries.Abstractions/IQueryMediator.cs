@@ -56,7 +56,7 @@ public interface IQueryMediator : IMessage
     /// the caller pulls rather than before this method returns.
     /// </remarks>
     [Obsolete(StreamRevision.Notice)]
-    IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query,
+    IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IQuery<IAsyncEnumerable<TQueryResult>> query,
         GroupSet groups, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -81,7 +81,7 @@ public interface IQueryMediator : IMessage
     /// <param name="groups">The groups to run; an empty set runs the default group.</param>
     /// <returns>The streamed results.</returns>
     [Obsolete(StreamRevision.Notice)]
-    IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query,
+    IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IQuery<IAsyncEnumerable<TQueryResult>> query,
         ErgosfareContext context, GroupSet? groups = null);
 
     /// <summary>
@@ -92,7 +92,7 @@ public interface IQueryMediator : IMessage
     /// <param name="cancellationToken">Token for the enumeration.</param>
     /// <returns>The streamed results.</returns>
     [Obsolete(StreamRevision.Notice)]
-    IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query,
+    IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IQuery<IAsyncEnumerable<TQueryResult>> query,
         CancellationToken cancellationToken = default)
 #pragma warning disable CS0618
         => StreamAsync(query, GroupSet.Empty, cancellationToken);

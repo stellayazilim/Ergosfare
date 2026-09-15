@@ -19,7 +19,7 @@ internal sealed partial class PlanBuilder
     /// A stream plan is built for the default set only — per-set stream plans do not exist
     /// yet, and the engine refuses a grouped stream outright — so candidacy is the staged
     /// plans' with the streaming differences: the message's result entry is a streamed one,
-    /// its sole direct handler claims it through the stream-handler contract, and no
+    /// its sole direct handler claims it through the ordinary async-handler contract, and no
     /// covariant handler claims it at all. The stages around the enumeration are assembled
     /// exactly as for the other plans, closed over the enumerator the stream threads through
     /// them.
@@ -68,12 +68,12 @@ internal sealed partial class PlanBuilder
                 }
 
                 // It must be nameable, discovered by default, and claim exactly this pair
-                // through the stream-handler contract — the one contract a stream plan calls.
-                if (!handler.IsAccessible
+                // through the ordinary async-handler contract — the one contract a stream plan calls.
+                if (!handlerDescriptor.IsAsync || !handler.IsAccessible
 
                     || handler.IsNestedType
                     || handlerDescriptor.ResultTypeExpression
-                        != EmittedExpressions.AsyncEnumerable + "<" + dispatchResult.ResultTypeExpression + ">"
+                        != EmittedExpressions.ValueTask + "<" + EmittedExpressions.AsyncEnumerable + "<" + dispatchResult.ResultTypeExpression + ">>"
                     || handlerDescriptor.MessageTypeExpression != type.TypeofExpression)
                 {
                     continue;
@@ -90,9 +90,8 @@ internal sealed partial class PlanBuilder
                     continue;
                 }
 
-                // The stages close over the enumerator: a streaming pipeline's post,
-                // exception and final interceptors receive it in their result slot, so the
-                // arm selection asks about that type rather than the item's.
+                // Only pre and final stages participate. Final receives the enumerator
+                // when one was created, including when enumeration fails.
                 if (!TryAssembleStagedStages(type, types,
                         EmittedExpressions.AsyncEnumerator + "<" + dispatchResult.ResultTypeExpression + ">",
                         resultIsValueType: false, hasKeyedServiceExtensions, filter,

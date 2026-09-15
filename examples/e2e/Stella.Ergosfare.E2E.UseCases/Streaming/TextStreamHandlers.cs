@@ -18,9 +18,12 @@ public sealed class CollectTextHandler : ICommandHandler<CollectText, string>
     }
 }
 
-public sealed class AccumulateTextHandler : IStreamQueryHandler<AccumulateText, string>
+public sealed class AccumulateTextHandler : IQueryHandler<AccumulateText, IAsyncEnumerable<string>>
 {
-    public async IAsyncEnumerable<string> StreamAsync(AccumulateText query, ErgosfareContext context)
+    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<string>> HandleAsync(AccumulateText query, ErgosfareContext context)
+        => new(Enumerate(query, context));
+
+    private async IAsyncEnumerable<string> Enumerate(AccumulateText query, ErgosfareContext context)
     {
         var text = new StringBuilder();
         await foreach (var chunk in query.WithCancellation(context.CancellationToken))
@@ -31,9 +34,12 @@ public sealed class AccumulateTextHandler : IStreamQueryHandler<AccumulateText, 
     }
 }
 
-public sealed class StreamGreetingHandler : IStreamQueryHandler<StreamGreeting, string>
+public sealed class StreamGreetingHandler : IQueryHandler<StreamGreeting, IAsyncEnumerable<string>>
 {
-    public async IAsyncEnumerable<string> StreamAsync(StreamGreeting query, ErgosfareContext context)
+    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<string>> HandleAsync(StreamGreeting query, ErgosfareContext context)
+        => new(Enumerate(query, context));
+
+    private async IAsyncEnumerable<string> Enumerate(StreamGreeting query, ErgosfareContext context)
     {
         foreach (var character in "Hello world")
         {

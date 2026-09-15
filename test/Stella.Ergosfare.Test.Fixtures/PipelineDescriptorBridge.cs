@@ -44,7 +44,6 @@ public static class PipelineDescriptorBridge
         (typeof(IHandler<,>), Segment.MainHandler),
         (typeof(IAsyncHandler<>), Segment.MainHandler),
         (typeof(IAsyncHandler<,>), Segment.MainHandler),
-        (typeof(IStreamHandler<,>), Segment.MainHandler),
         (typeof(IPreInterceptor<>), Segment.PreInterceptor),
         (typeof(IAsyncPreInterceptor<>), Segment.PreInterceptor),
         (typeof(IPostInterceptor<,>), Segment.PostInterceptor),

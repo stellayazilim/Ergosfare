@@ -34,7 +34,7 @@ public class StubNonGenericStringResultQueryHandler: IQueryHandler<StubNonGeneri
 /// Handles <see cref="StubNonGenericStreamStringResultQuery"/> and streams string results asynchronously.
 /// Used for testing non-generic streaming query handling.
 /// </summary>
-public class StubNonGenericStreamStringResultQueryHandler: IStreamQueryHandler<StubNonGenericStreamStringResultQuery, string>
+public class StubNonGenericStreamStringResultQueryHandler: IQueryHandler<StubNonGenericStreamStringResultQuery, IAsyncEnumerable<string>>
 {
     /// <summary>
     /// Indicates whether the handler was called.
@@ -47,7 +47,10 @@ public class StubNonGenericStreamStringResultQueryHandler: IStreamQueryHandler<S
     /// <param name="message">The query message.</param>
     /// <param name="context">The execution context.</param>
     /// <returns>An asynchronous stream of strings.</returns>
-    public async IAsyncEnumerable<string> StreamAsync(StubNonGenericStreamStringResultQuery message, ErgosfareContext context)
+    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<string>> HandleAsync(StubNonGenericStreamStringResultQuery message, ErgosfareContext context)
+        => new(Enumerate(message, context));
+
+    private async IAsyncEnumerable<string> Enumerate(StubNonGenericStreamStringResultQuery message, ErgosfareContext context)
     {
         IsCalled = true;
         await Task.Delay(1, context.CancellationToken);

@@ -25,13 +25,13 @@ public record UnrelatedStubStreamMessage : IMessage;
 
 
 /// <summary>
-/// A stub implementation of <see cref="IStreamHandler{TMessage, TResult}"/> for <see cref="StubStreamMessage"/>.
+/// A stub implementation of <see cref="IAsyncHandler{TMessage, TResult}"/> for <see cref="StubStreamMessage"/>.
 /// Produces a predefined asynchronous stream of string results for testing purposes.
 /// </summary>
-public class StubStreamHandler : IStreamHandler<StubStreamMessage, string>
+public class StubStreamHandler : IAsyncHandler<StubStreamMessage, IAsyncEnumerable<string>>
 {
     /// <summary>
-    /// The sequence of string results to be yielded by <see cref="StreamAsync"/>.
+    /// The sequence of string results to be yielded by <see cref="HandleAsync"/>.
     /// Can be updated dynamically to adjust test expectations.
     /// </summary>
     public static readonly string[] Results = [ "foo", "bar", "baz"];
@@ -42,7 +42,10 @@ public class StubStreamHandler : IStreamHandler<StubStreamMessage, string>
     /// <param name="message">The message to process.</param>
     /// <param name="context">The execution context provided by the test fixture.</param>
     /// <returns>An asynchronous stream of string results.</returns>
-    public async IAsyncEnumerable<string> StreamAsync(StubStreamMessage message, ErgosfareContext context)
+    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<string>> HandleAsync(StubStreamMessage message, ErgosfareContext context)
+        => new(Enumerate(message, context));
+
+    private async IAsyncEnumerable<string> Enumerate(StubStreamMessage message, ErgosfareContext context)
     {
         // simulate async operation
         await ValueTask.CompletedTask;

@@ -134,9 +134,10 @@ public class DispatchManifestEmissionTests
                         => new(1);
                 }
 
-                public sealed class RowStreamHandler : IStreamQueryHandler<RowStream, int>
+                public sealed class RowStreamHandler : IQueryHandler<RowStream, IAsyncEnumerable<int>>
                 {
-                    public async IAsyncEnumerable<int> StreamAsync(RowStream message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
+                    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<int>> HandleAsync(RowStream message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context) => new(Enumerate(message, context));
+                    private async IAsyncEnumerable<int> Enumerate(RowStream message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                     {
                         await Task.Yield();
                         yield return 1;

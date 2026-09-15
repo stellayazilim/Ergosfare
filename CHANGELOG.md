@@ -1,3 +1,20 @@
+## v2.16.1-preview – '2026-09-15'
+
+### Streaming handler contracts
+
+* Remove `IStreamHandler<TMessage, TItem>` and `IStreamQueryHandler<TQuery, TItem>`.
+  Use `IAsyncHandler<TMessage, IAsyncEnumerable<TItem>>` or the normal module handler,
+  such as `IQueryHandler<TQuery, IAsyncEnumerable<TItem>>`.
+* Infer query output streaming from `IQuery<IAsyncEnumerable<TItem>>`. `StreamAsync`
+  accepts that ordinary query contract. `IStreamQuery<TItem>` remains a convenience
+  alias for it and is now invariant, matching `IQuery<TResult>`.
+* Keep ErgoStream input types and bounded input lifetime handling. If either the input
+  or output is streaming, generated plans and descriptors omit post and exception
+  participants; pre and final remain. Failures propagate instead of being recovered by
+  an exception interceptor. Explicit abort semantics are unchanged.
+* Keep `StreamInfo` as observational metadata; no separate StreamInfo-based post or
+  exception handler contracts are introduced.
+
 ## v2.16.0-preview – '2026-09-14'
 
 ### Fluent stream inputs and conversion

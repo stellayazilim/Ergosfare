@@ -1782,11 +1782,11 @@ internal static class RegistrationEmitter
         sb.AppendLine("                    try");
         sb.AppendLine("                    {");
         EmitPreCalls(sb, plan, "                        ");
-        sb.Append("                        var enumerable = ((").Append(HandlersNamespace).Append("IHandler<")
+        sb.Append("                        var enumerable = await ((").Append(HandlersNamespace).Append("IAsyncHandler<")
             .Append(plan.MessageTypeExpression).Append(", ").Append(EmittedExpressions.AsyncEnumerable)
             .Append('<').Append(plan.ResultTypeExpression).Append(">>)");
         AppendParticipant(sb, plan.HandlerTypeExpression, plan.HandlerConstructionExpression);
-        sb.AppendLine(").Handle(message, context);");
+        sb.AppendLine(").HandleAsync(message, context);");
         sb.AppendLine("                        enumerator = enumerable.GetAsyncEnumerator(cancellationToken);");
         sb.AppendLine("                    }");
         sb.AppendLine("                    catch (global::System.Exception e) { exception = e; }");

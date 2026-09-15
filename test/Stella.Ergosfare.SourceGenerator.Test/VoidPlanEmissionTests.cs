@@ -375,9 +375,10 @@ public class VoidPlanEmissionTests
             {
                 public sealed record NumberStream : IStreamQuery<int>;
 
-                public sealed class NumberStreamHandler : IStreamQueryHandler<NumberStream, int>
+                public sealed class NumberStreamHandler : IQueryHandler<NumberStream, IAsyncEnumerable<int>>
                 {
-                    public IAsyncEnumerable<int> StreamAsync(NumberStream message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
+                    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<int>> HandleAsync(NumberStream message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context) => new(Enumerate(message, context));
+                    private IAsyncEnumerable<int> Enumerate(NumberStream message, Stella.Ergosfare.Core.Abstractions.ErgosfareContext context)
                         => throw new System.NotImplementedException();
                 }
             }

@@ -55,7 +55,7 @@ public class QueryMediator : IQueryMediator
 
     /// <inheritdoc />
     [Obsolete(StreamRevision.Notice)]
-    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, GroupSet groups,
+    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IQuery<IAsyncEnumerable<TResult>> query, GroupSet groups,
         CancellationToken cancellationToken = default)
         // The engine keeps this container's streaming pipelines, so nothing is resolved or
         // looked up per call.
@@ -63,7 +63,7 @@ public class QueryMediator : IQueryMediator
 
     /// <inheritdoc />
     [Obsolete(StreamRevision.Notice)]
-    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query, ErgosfareContext context,
+    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IQuery<IAsyncEnumerable<TResult>> query, ErgosfareContext context,
         GroupSet? groups = null)
         => _engine.StreamAsync<TResult>(query, context, _serviceProvider, groups);
 
@@ -91,7 +91,7 @@ public class QueryMediator : IQueryMediator
     /// <param name="cancellationToken">Token for the enumeration.</param>
     /// <returns>The streamed results.</returns>
     [Obsolete(StreamRevision.Notice)]
-    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IStreamQuery<TResult> query,
+    public IAsyncEnumerable<TResult> StreamAsync<TResult>(IQuery<IAsyncEnumerable<TResult>> query,
         CancellationToken cancellationToken = default)
         => StreamAsync(query, GroupSet.Empty, cancellationToken);
 
