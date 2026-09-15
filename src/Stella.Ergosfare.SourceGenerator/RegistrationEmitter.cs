@@ -11,32 +11,11 @@ namespace Stella.Ergosfare.SourceGenerator;
 /// Writes the generated registration source.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The emitted code is plain, conservative C# — a block namespace, no target-typed
-/// constructs — because it compiles inside the consumer's project under whatever language
-/// version they use.
-/// </para>
-/// <para>
-/// Every registration surface comes in two overloads. The one taking no pattern selects
-/// default discovery, the types carrying no <c>[DiscoveryKey]</c>; the one taking a pattern
-/// picks keyed types, as in <c>AddGenerated("reporting.*")</c>. Types are written in
-/// clusters sharing a discovery-key set, each behind a key-match test, and selection is a
-/// union, so overlapping selections across chained calls are safe.
-/// </para>
-/// <para>
-/// Registration names constructs and nothing more: what each one's pipeline looks like was
-/// decided at compile time and lives in the frozen composition table. A message goes through
-/// <c>Register(typeof(T))</c>, and participants are batched into one
-/// <c>RegisterParticipants</c> call. Every type is named through <c>typeof</c>, which also
-/// leaves the trimming and AOT analyzers with nothing to complain about.
-/// </para>
+/// Selection arrays, participant factories, descriptors and executable plans are emitted
+/// together. Startup applies this generated data without discovering participant types.
 /// </remarks>
-internal static class RegistrationEmitter
+internal static partial class RegistrationEmitter
 {
-    private const string CatalogFullName = "global::Stella.Ergosfare.Core.Abstractions.Planning.DispatchPlanCatalog";
-    private const string CommandBuilderFullName = "global::Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.CommandModuleBuilder";
-    private const string QueryBuilderFullName = "global::Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.QueryModuleBuilder";
-    private const string EventBuilderFullName = "global::Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.EventModuleBuilder";
     private const string PlanRegistryFullName = "global::Stella.Ergosfare.Core.Abstractions.Planning.GeneratedPlanRegistry";
     private const string DispatchSiteAttributeFullName = "global::Stella.Ergosfare.Core.Abstractions.DispatchSites.DispatchSiteAttribute";
     private const string DispatchManifestAttributeFullName = "global::Stella.Ergosfare.Core.Abstractions.DispatchSites.DispatchManifestAttribute";
@@ -118,31 +97,7 @@ internal static class RegistrationEmitter
 
         EmitGeneratedSelections(sb, types, registrationSites);
 
-        if (builders.HasCompositionCatalog)
-        {
-            EmitCatalogSurface(sb, ref wroteMember, types, emitPlanRegistry);
-        }
-
-        if (builders.HasCommandModuleBuilder)
-        {
-            EmitBuilderSurface(sb, ref wroteMember, CommandBuilderFullName, "command",
-                Filter(types, static t => t.IsCommand), builders.CommandBuilderHasRegisterParticipants,
-                emitPlanRegistry);
-        }
-
-        if (builders.HasQueryModuleBuilder)
-        {
-            EmitBuilderSurface(sb, ref wroteMember, QueryBuilderFullName, "query",
-                Filter(types, static t => t.IsQuery), builders.QueryBuilderHasRegisterParticipants,
-                emitPlanRegistry);
-        }
-
-        if (builders.HasEventModuleBuilder)
-        {
-            EmitBuilderSurface(sb, ref wroteMember, EventBuilderFullName, "event",
-                Filter(types, static t => t.IsEvent), builders.EventBuilderHasRegisterParticipants,
-                emitPlanRegistry);
-        }
+        EmitParticipantRegistrations(sb, types, stagedPlans);
 
         if (emitPlanRegistry)
         {
@@ -160,7 +115,6 @@ internal static class RegistrationEmitter
             EmitPipelineDescriptors(sb, ref wroteMember, pipelineDescriptors);
         }
 
-        EmitMatchesHelper(sb, ref wroteMember);
 
         sb.AppendLine("    }");
         sb.AppendLine("}");
@@ -171,27 +125,24 @@ internal static class RegistrationEmitter
     private static void EmitGeneratedSelections(StringBuilder sb, IReadOnlyList<RegistrableTypeModel> types,
         IReadOnlyList<RegistrationSiteModel> requests)
     {
-        var emitted = new HashSet<(byte, string)>();
-        var opened = false;
-        foreach (var request in requests)
+        var selections = requests.Where(r => r.Module != 0 && !r.IsOpaque && r.DiscoveryPattern is not null)
+            .GroupBy(r => (r.Module, r.DiscoveryPattern)).Select(g => g.First()).ToArray();
+        for (var i = 0; i < selections.Length; i++)
         {
-            if (request.Module == 0 || request.IsOpaque
-                || request.DiscoveryPattern is not { } pattern || !emitted.Add((request.Module, pattern))) continue;
-            if (!opened)
-            {
-                sb.AppendLine("        [global::System.Runtime.CompilerServices.ModuleInitializer]");
-                sb.AppendLine("        internal static void PopulateGeneratedSelections()");
-                sb.AppendLine("        {");
-                opened = true;
-            }
-            var selected = Planning.ParticipantSelection.Select(types.ToImmutableArray(), ImmutableArray.Create(request));
-            sb.Append("            ").Append(PlanRegistryFullName).Append(".AddGeneratedSelection(")
-                .Append(request.Module).Append(", ")
-                .Append(SymbolDisplay.FormatLiteral(pattern, true)).Append(", new global::System.Type[] { ");
+            var selected = Planning.ParticipantSelection.Select(types.ToImmutableArray(), ImmutableArray.Create(selections[i]));
+            sb.Append("        internal static readonly global::System.Type[] Selection").Append(i).Append(" = new global::System.Type[] { ");
             foreach (var type in selected) sb.Append("typeof(").Append(type.TypeofExpression).Append("), ");
-            sb.AppendLine("});");
+            sb.AppendLine("};");
         }
-        if (opened) sb.AppendLine("        }");
+        sb.AppendLine("        [global::System.Runtime.CompilerServices.ModuleInitializer]");
+        sb.AppendLine("        internal static void PopulateGeneratedSelections()");
+        sb.AppendLine("        {");
+        for (var i = 0; i < selections.Length; i++)
+            sb.Append("            ").Append(PlanRegistryFullName).Append(".AddGeneratedSelection(")
+                .Append(selections[i].Module).Append(", ")
+                .Append(SymbolDisplay.FormatLiteral(selections[i].DiscoveryPattern!, true))
+                .Append(", Selection").Append(i).AppendLine(");");
+        sb.AppendLine("        }");
     }
 
     /// <summary>
@@ -489,48 +440,6 @@ internal static class RegistrationEmitter
         };
 
     /// <summary>
-    /// Selects the types a predicate accepts.
-    /// </summary>
-    /// <param name="types">The types to filter.</param>
-    /// <param name="predicate">The test each type has to pass.</param>
-    /// <returns>The accepted types, in order.</returns>
-    private static List<RegistrableTypeModel> Filter(
-        IReadOnlyList<RegistrableTypeModel> types,
-        Func<RegistrableTypeModel, bool> predicate)
-    {
-        var filtered = new List<RegistrableTypeModel>(types.Count);
-
-        foreach (var type in types)
-        {
-            if (predicate(type))
-            {
-                filtered.Add(type);
-            }
-        }
-
-        return filtered;
-    }
-
-    /// <summary>
-    /// Reports whether any of these types is a pipeline participant rather than a plain
-    /// message.
-    /// </summary>
-    /// <param name="types">The types to test.</param>
-    /// <returns><c>true</c> when one of them carries a handler contract.</returns>
-    private static bool HasParticipants(IReadOnlyList<RegistrableTypeModel> types)
-    {
-        foreach (var type in types)
-        {
-            if (type.Descriptors.Length > 0)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// Reports whether any of these types can be dispatched.
     /// </summary>
     /// <param name="types">The types to test.</param>
@@ -546,102 +455,6 @@ internal static class RegistrationEmitter
         }
 
         return false;
-    }
-
-    /// <summary>
-    /// Writes the catalog surface: the two <c>RegisterAll</c> overloads.
-    /// </summary>
-    /// <param name="sb">The buffer to write to.</param>
-    /// <param name="wroteMember">Tracks whether a blank line is owed before the next member.</param>
-    /// <param name="types">The types to select.</param>
-    /// <param name="emitPlanRegistry">Whether this assembly roots dispatch generics.</param>
-    private static void EmitCatalogSurface(
-        StringBuilder sb,
-        ref bool wroteMember,
-        IReadOnlyList<RegistrableTypeModel> types,
-        bool emitPlanRegistry)
-    {
-        StartMember(sb, ref wroteMember);
-        sb.AppendLine("        /// <summary>");
-        sb.AppendLine("        ///     Selects every discovered construct that participates in default discovery");
-        sb.AppendLine("        ///     (no <c>[DiscoveryKey]</c>) into the given catalog, regardless of module.");
-        sb.AppendLine("        /// </summary>");
-        sb.Append("        public static void RegisterAll(").Append(CatalogFullName).AppendLine(" compositions)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            RegisterAll(compositions, \"\");");
-        sb.AppendLine("        }");
-
-        StartMember(sb, ref wroteMember);
-        sb.AppendLine("        /// <summary>");
-        sb.AppendLine("        ///     Selects every discovered construct whose discovery keys match the given");
-        sb.AppendLine("        ///     pattern — an exact key or a trailing-<c>*</c> prefix glob — regardless of");
-        sb.AppendLine("        ///     module. Chained calls with overlapping patterns are safe: selection is a");
-        sb.AppendLine("        ///     union.");
-        sb.AppendLine("        /// </summary>");
-        sb.Append("        public static void RegisterAll(").Append(CatalogFullName).AppendLine(" compositions, string discoveryKeyPattern)");
-        sb.AppendLine("        {");
-
-        if (emitPlanRegistry)
-        {
-            sb.AppendLine("            RegisterGeneratedPlans();");
-            sb.AppendLine();
-        }
-
-        EmitKeyedBody(sb, types, batchParticipants: false, receiver: "compositions", registerMethod: "Select");
-        sb.AppendLine("        }");
-    }
-
-    /// <summary>
-    /// Writes one module's registration surface: the two <c>AddGenerated</c> overloads.
-    /// </summary>
-    /// <param name="sb">The buffer to write to.</param>
-    /// <param name="wroteMember">Tracks whether a blank line is owed before the next member.</param>
-    /// <param name="builderFullName">The module builder the extensions hang off.</param>
-    /// <param name="moduleName">The module's name, for the generated documentation.</param>
-    /// <param name="moduleTypes">The types belonging to this module.</param>
-    /// <param name="batchParticipants">
-    /// Whether the referenced package offers the batch registration call.
-    /// </param>
-    /// <param name="emitPlanRegistry">Whether this assembly roots dispatch generics.</param>
-    private static void EmitBuilderSurface(
-        StringBuilder sb,
-        ref bool wroteMember,
-        string builderFullName,
-        string moduleName,
-        List<RegistrableTypeModel> moduleTypes,
-        bool batchParticipants,
-        bool emitPlanRegistry)
-    {
-        StartMember(sb, ref wroteMember);
-        sb.AppendLine("        /// <summary>");
-        sb.Append("        ///     Registers every discovered ").Append(moduleName).AppendLine("-module construct that participates");
-        sb.AppendLine("        ///     in default discovery (no <c>[DiscoveryKey]</c>) — the bulk collection path.");
-        sb.AppendLine("        /// </summary>");
-        sb.Append("        public static ").Append(builderFullName).AppendLine(" AddGenerated(");
-        sb.Append("            this ").Append(builderFullName).AppendLine(" builder)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            return AddGenerated(builder, \"\");");
-        sb.AppendLine("        }");
-
-        StartMember(sb, ref wroteMember);
-        sb.AppendLine("        /// <summary>");
-        sb.Append("        ///     Registers every discovered ").Append(moduleName).AppendLine("-module construct whose discovery");
-        sb.AppendLine("        ///     keys match the given pattern — an exact key or a trailing-<c>*</c> prefix");
-        sb.AppendLine("        ///     glob. Chain calls to compose selections; overlapping patterns are safe.");
-        sb.AppendLine("        /// </summary>");
-        sb.Append("        public static ").Append(builderFullName).AppendLine(" AddGenerated(");
-        sb.Append("            this ").Append(builderFullName).AppendLine(" builder, string discoveryKeyPattern)");
-        sb.AppendLine("        {");
-
-        if (emitPlanRegistry)
-        {
-            sb.AppendLine("            RegisterGeneratedPlans();");
-            sb.AppendLine();
-        }
-
-        EmitKeyedBody(sb, moduleTypes, batchParticipants, receiver: "builder", registerMethod: "Register");
-        sb.AppendLine("            return builder;");
-        sb.AppendLine("        }");
     }
 
     /// <summary>
@@ -663,7 +476,7 @@ internal static class RegistrationEmitter
         // A module initializer rather than something a registration call does: the roots and
         // the compiled plans are properties of the compilation, like the frozen compositions,
         // so they enter the process-wide tables the moment the assembly loads. A container
-        // that never calls AddGenerated or RegisterAll still dispatches through the
+        // that never calls AddGenerated still dispatches through the
         // plans compiled here, and which rows it runs is settled by what it registered. The
         // registration surfaces call this too; every addition below is idempotent.
         sb.AppendLine("        [global::System.Runtime.CompilerServices.ModuleInitializer]");
@@ -2158,193 +1971,4 @@ internal static class RegistrationEmitter
         sb.AppendLine("                return result;");
     }
 
-    /// <summary>
-    /// Writes the registration body the catalog and builder surfaces share.
-    /// </summary>
-    /// <param name="sb">The buffer to write to.</param>
-    /// <param name="types">The types to register.</param>
-    /// <param name="batchParticipants">
-    /// Whether participants are gathered into one batch call; off for the catalog surface and
-    /// for a package predating the batch surface.
-    /// </param>
-    /// <param name="receiver">The identifier the registration calls are made on.</param>
-    /// <param name="registerMethod">The per-type method to call.</param>
-    /// <remarks>
-    /// One block per discovery-key cluster, each behind a key-match test. A message is named
-    /// one call at a time; participants go into a local list and are registered in a single
-    /// batch at the end, or one at a time through the same per-type call when batching is off.
-    /// </remarks>
-    private static void EmitKeyedBody(
-        StringBuilder sb,
-        IReadOnlyList<RegistrableTypeModel> types,
-        bool batchParticipants,
-        string receiver,
-        string registerMethod)
-    {
-        var emitParticipants = batchParticipants && HasParticipants(types);
-
-        if (emitParticipants)
-        {
-            sb.AppendLine("            var participants = new global::System.Collections.Generic.List<global::System.Type>();");
-            sb.AppendLine();
-        }
-
-        var clusters = BuildClusters(types);
-
-        for (var i = 0; i < clusters.Count; i++)
-        {
-            var cluster = clusters[i];
-
-            if (i > 0)
-            {
-                sb.AppendLine();
-            }
-
-            sb.Append("            if (");
-
-            for (var k = 0; k < cluster.Keys.Count; k++)
-            {
-                if (k > 0)
-                {
-                    sb.Append(" || ");
-                }
-
-                sb.Append("MatchesDiscoveryKey(")
-                  .Append(SymbolDisplay.FormatLiteral(cluster.Keys[k], quote: true))
-                  .Append(", discoveryKeyPattern)");
-            }
-
-            sb.AppendLine(")");
-            sb.AppendLine("            {");
-
-            foreach (var type in cluster.Types)
-            {
-                if (emitParticipants && type.Descriptors.Length > 0)
-                {
-                    sb.Append("                participants.Add(typeof(")
-                      .Append(type.TypeofExpression).AppendLine("));");
-                }
-                else
-                {
-                    sb.Append("                ").Append(receiver)
-                      .Append('.').Append(registerMethod)
-                      .Append("(typeof(").Append(type.TypeofExpression).AppendLine("));");
-                }
-            }
-
-            sb.AppendLine("            }");
-        }
-
-        if (emitParticipants)
-        {
-            sb.AppendLine();
-            sb.AppendLine("            if (participants.Count > 0)");
-            sb.AppendLine("            {");
-            sb.Append("                ").Append(receiver).AppendLine(".RegisterParticipants(participants);");
-            sb.AppendLine("            }");
-        }
-    }
-
-    /// <summary>
-    /// Writes the helper the generated blocks test their discovery keys with.
-    /// </summary>
-    /// <param name="sb">The buffer to write to.</param>
-    /// <param name="wroteMember">Tracks whether a blank line is owed before the next member.</param>
-    private static void EmitMatchesHelper(StringBuilder sb, ref bool wroteMember)
-    {
-        StartMember(sb, ref wroteMember);
-        sb.AppendLine("        /// <summary>");
-        sb.AppendLine("        ///     Whether a discovery key matches a pattern: ordinal equality, or — when the");
-        sb.AppendLine("        ///     pattern ends with <c>*</c> — an ordinal prefix match on the part before the");
-        sb.AppendLine("        ///     star. Mirrors the runtime <c>Discovery</c> helper.");
-        sb.AppendLine("        /// </summary>");
-        sb.AppendLine("        private static bool MatchesDiscoveryKey(string key, string discoveryKeyPattern)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            if (discoveryKeyPattern.Length > 0 && discoveryKeyPattern[discoveryKeyPattern.Length - 1] == '*')");
-        sb.AppendLine("            {");
-        sb.AppendLine("                return key.Length >= discoveryKeyPattern.Length - 1");
-        sb.AppendLine("                    && string.CompareOrdinal(key, 0, discoveryKeyPattern, 0, discoveryKeyPattern.Length - 1) == 0;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            return string.Equals(key, discoveryKeyPattern, global::System.StringComparison.Ordinal);");
-        sb.AppendLine("        }");
-    }
-
-    /// <summary>
-    /// Groups the types by the discovery keys they share.
-    /// </summary>
-    /// <param name="types">The types to group.</param>
-    /// <returns>The clusters, ordered so the same input always writes the same blocks.</returns>
-    private static List<Cluster> BuildClusters(IReadOnlyList<RegistrableTypeModel> types)
-    {
-        var bySignature = new Dictionary<string, Cluster>(StringComparer.Ordinal);
-        var clusters = new List<Cluster>();
-
-        foreach (var type in types)
-        {
-            var keys = EffectiveKeys(type);
-            var signature = string.Join("\u001f", keys);
-
-            if (!bySignature.TryGetValue(signature, out var cluster))
-            {
-                cluster = new Cluster(signature, keys);
-                bySignature.Add(signature, cluster);
-                clusters.Add(cluster);
-            }
-
-            cluster.Types.Add(type);
-        }
-
-        // A fixed block order, with the default cluster's empty signature sorting first.
-        clusters.Sort(static (x, y) => string.CompareOrdinal(x.Signature, y.Signature));
-
-        return clusters;
-    }
-
-    /// <summary>
-    /// Gives the discovery keys a type is written under.
-    /// </summary>
-    /// <param name="type">The type to read.</param>
-    /// <returns>
-    /// The implicit default key when it declares none, otherwise its own keys, sorted and
-    /// deduplicated so two equivalent declarations land in one cluster.
-    /// </returns>
-    private static List<string> EffectiveKeys(in RegistrableTypeModel type)
-    {
-        if (type.DiscoveryKeys.IsEmpty)
-        {
-            return [""];
-        }
-
-        var keys = new List<string>(type.DiscoveryKeys.Length);
-
-        foreach (var key in type.DiscoveryKeys)
-        {
-            if (!keys.Contains(key))
-            {
-                keys.Add(key);
-            }
-        }
-
-        keys.Sort(static (x, y) => string.CompareOrdinal(x, y));
-
-        return keys;
-    }
-
-    /// <summary>
-    /// Separates one generated member from the last.
-    /// </summary>
-    /// <param name="sb">The buffer to write to.</param>
-    /// <param name="wroteMember">
-    /// Whether a member was already written; set on the way out.
-    /// </param>
-    private static void StartMember(StringBuilder sb, ref bool wroteMember)
-    {
-        if (wroteMember)
-        {
-            sb.AppendLine();
-        }
-
-        wroteMember = true;
-    }
 }

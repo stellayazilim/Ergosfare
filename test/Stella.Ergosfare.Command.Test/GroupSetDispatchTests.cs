@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Stella.Ergosfare.Command.Test;
 
+[ExcludeFromPipeline]
 public sealed class SlottedCommand : ICommand { }
 
 [Group("gs.east")]
@@ -29,6 +30,7 @@ public sealed class WestSlottedHandler : ICommandHandler<SlottedCommand>
     }
 }
 
+[ExcludeFromPipeline]
 public sealed class GroupSetDefaultCommand : ICommand { }
 
 public sealed class GroupSetDefaultCommandHandler : ICommandHandler<GroupSetDefaultCommand>
@@ -40,6 +42,7 @@ public sealed class GroupSetDefaultCommandHandler : ICommandHandler<GroupSetDefa
     }
 }
 
+[ExcludeFromPipeline]
 public sealed class SlottedEcho : ICommand<string> { }
 
 [Group("gs.east")]

@@ -152,27 +152,16 @@ public class StagedPlanExecutionTests
     [Fact]
     [Trait("Category", "Unit")]
     [Trait("Category", "Coverage")]
-    public async Task MismatchedComposition_FailsTheDispatch()
+    public void MismatchedComposition_FailsAtStartup()
     {
         GeneratedPlanRegistry.AddStagedPlan(new MismatchedCommandPlan());
-
-        var provider = new ServiceCollection()
+        var command = new MismatchedCommand();
+        var thrown = Assert.Throws<UnplannedDispatchException>(() => new ServiceCollection()
             .AddErgosfare(x => x.AddCommandModule(c =>
             {
                 c.Register<MismatchedCommandHandler>();
                 c.Register<MismatchedCommandPreInterceptor>();
-            }))
-            .BuildServiceProvider();
-        await using var _ = provider;
-
-        var mediator = provider.GetRequiredService<ICommandMediator>();
-
-        // The live pipeline lacks the post-interceptor the plan was baked against; the
-        // dispatch fails naming the divergence, and nothing of the pipeline runs.
-        var command = new MismatchedCommand();
-        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(
-            async () => await mediator.SendAsync(command));
-
+            })));
         Assert.Equal(UnplannedDispatchReason.CompositionDiverged, thrown.Reason);
         Assert.Empty(command.Order);
     }

@@ -112,7 +112,7 @@ public class BroadcastPlanExecutionTests
         var assembly = Assembly.Load(stream.ToArray());
         var registrations = assembly.GetType(
             "Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
-        var registerEvents = registrations.GetMethod("AddGenerated", [typeof(EventModuleBuilder)])!;
+        var registerEvents = GeneratorTestHost.SelectionFor(registrations, typeof(EventModuleBuilder));
         var hooks = assembly.GetType("TestApp.GenBroadcastHooks", throwOnError: true)!;
 
         var services = new ServiceCollection();

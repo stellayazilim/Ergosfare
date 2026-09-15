@@ -137,6 +137,9 @@ internal static class ConstructionAnalyzer
     /// <param name="usesKeyedServices">
     /// Set when the expression resolves at least one keyed service.
     /// </param>
+    /// <param name="forServiceRegistration">
+    /// Allows disposable and closed generic participants when DI owns their lifetime.
+    /// </param>
     /// <returns>
     /// The construction expression, or <c>null</c> when the participant does not qualify;
     /// see <see cref="GetProviderConstructionExpression"/> for what qualifying means.
@@ -153,11 +156,11 @@ internal static class ConstructionAnalyzer
         IAssemblySymbol? currentAssembly,
         string providerIdentifier,
         bool allowParameterless,
-        out bool usesKeyedServices)
+        out bool usesKeyedServices, bool forServiceRegistration = false)
     {
         usesKeyedServices = false;
 
-        if (!HasDirectConstructionShape(symbol))
+        if (forServiceRegistration ? !HasServiceConstructionShape(symbol) : !HasDirectConstructionShape(symbol))
         {
             return null;
         }
@@ -243,6 +246,16 @@ internal static class ConstructionAnalyzer
         }
 
         return "new " + typeExpression + "(" + string.Join(", ", arguments) + ")";
+    }
+
+    private static bool HasServiceConstructionShape(INamedTypeSymbol symbol)
+    {
+        if (symbol.TypeKind != TypeKind.Class || symbol.IsAbstract || symbol.IsUnboundGenericType
+            || symbol.TypeArguments.Any(t => t.TypeKind == TypeKind.TypeParameter)) return false;
+        for (var type = symbol; type is not null; type = type.BaseType)
+            if (type.GetMembers().Any(m => m is IPropertySymbol { IsRequired: true } or IFieldSymbol { IsRequired: true }))
+                return false;
+        return true;
     }
 
     /// <summary>

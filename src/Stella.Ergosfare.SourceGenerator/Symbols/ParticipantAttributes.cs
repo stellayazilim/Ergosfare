@@ -155,8 +155,7 @@ internal static class ParticipantAttributes
     /// empty means default discovery.
     /// </returns>
     /// <remarks>
-    /// The same precedence the runtime <c>Discovery</c> helper applies: a type's own keys
-    /// replace its assembly's rather than adding to them.
+    /// A type's own keys replace its assembly's rather than adding to them.
     /// </remarks>
     internal static ImmutableArray<string> GetDiscoveryKeys(INamedTypeSymbol symbol)
     {

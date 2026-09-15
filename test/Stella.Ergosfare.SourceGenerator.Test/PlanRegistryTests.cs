@@ -155,7 +155,7 @@ public class PlanRegistryTests
         var registrations = assembly.GetType("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
         var catalog = new DispatchPlanCatalog();
 
-        registrations.GetMethod("RegisterAll", [typeof(DispatchPlanCatalog)])!.Invoke(null, [catalog]);
+        GeneratorTestHost.SelectionFor(registrations).Invoke(null, [catalog]);
 
         var voidPing = assembly.GetType("TestApp.VoidPing", throwOnError: true)!;
         var typedPing = assembly.GetType("TestApp.TypedPing", throwOnError: true)!;

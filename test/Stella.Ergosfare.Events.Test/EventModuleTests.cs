@@ -62,22 +62,4 @@ public class EventModuleTests
 
     }
 
-    /// <summary>
-    /// Tests that attempting to register a non-event handler to the <see cref="EventModule"/>
-    /// throws a <see cref="NotSupportedException"/>.
-    /// </summary>
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
-    public void ShouldNotRegisterNonEventsToEventModule()
-    {
-        var serviceCollection = new ServiceCollection();
-        Assert.Throws<NotSupportedException>(() =>
-        {
-            serviceCollection.AddErgosfare(x => 
-                x.AddEventModule(c =>
-                    c.Register(typeof(NonEventHandler)))).BuildServiceProvider();
-        });
-    }
-
 }

@@ -41,6 +41,37 @@ internal static class GeneratorTestHost
         };
     }
 
+    internal sealed class FixtureSelection(Type[] types)
+    {
+        public object? Invoke(object? target, object?[] arguments)
+        {
+            switch (arguments[0])
+            {
+                case Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.CommandModuleBuilder commands:
+                    commands.RegisterParticipants(types); break;
+                case Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.QueryModuleBuilder queries:
+                    queries.RegisterParticipants(types); break;
+                case Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.EventModuleBuilder events:
+                    events.RegisterParticipants(types); break;
+                case Stella.Ergosfare.Core.Abstractions.Planning.DispatchPlanCatalog catalog:
+                    catalog.Select(types); break;
+                default: throw new InvalidOperationException("Unsupported fixture receiver.");
+            }
+            return null;
+        }
+    }
+
+    internal static FixtureSelection SelectionFor(Type registrations, Type? builder = null)
+    {
+        // Fixtures explicitly select all three modules in command/query/event order.
+        var index = builder?.Name switch { "CommandModuleBuilder" => 0, "QueryModuleBuilder" => 1, "EventModuleBuilder" => 2, _ => -1 };
+        var fields = registrations.GetFields(BindingFlags.NonPublic | BindingFlags.Static)
+            .Where(f => f.Name.StartsWith("Selection", StringComparison.Ordinal));
+        var types = fields.Where(f => index < 0 || f.Name == "Selection" + index)
+            .SelectMany(f => (Type[])f.GetValue(null)!).Distinct().ToArray();
+        return new FixtureSelection(types);
+    }
+
     public sealed record GeneratorRunResult(
         Compilation OutputCompilation,
         GeneratorDriverRunResult DriverResult,
@@ -75,7 +106,7 @@ internal static class GeneratorTestHost
         bool generateLibrarySelections = false,
         bool sourceLibraryReferences = false)
     {
-        var references = referenceModuleBuilders ? AllReferences.Value : ReferencesWithoutModuleBuilders.Value;
+        var references = referenceModuleBuilders || fixtureSelection ? AllReferences.Value : ReferencesWithoutModuleBuilders.Value;
 
         if (libraries is { Count: > 0 })
         {
@@ -106,7 +137,11 @@ internal static class GeneratorTestHost
             trees.Add(CSharpSyntaxTree.ParseText("""
                 internal static class EmissionFixtureSelection {
                     internal static void Select(Stella.Ergosfare.Core.Abstractions.Planning.DispatchPlanCatalog catalog)
-                        => Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations.RegisterAll(catalog, "*");
+                    {
+                        new Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.CommandModuleBuilder(catalog).AddGenerated("*");
+                        new Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.QueryModuleBuilder(catalog).AddGenerated("*");
+                        new Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.EventModuleBuilder(catalog).AddGenerated("*");
+                    }
                 }
                 """, new CSharpParseOptions(LanguageVersion.Latest)));
         var compilation = CSharpCompilation.Create(

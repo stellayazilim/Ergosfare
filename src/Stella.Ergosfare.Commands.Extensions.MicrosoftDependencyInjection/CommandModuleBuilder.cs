@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Commands.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Planning;
 
@@ -44,7 +43,7 @@ public sealed class CommandModuleBuilder
     /// commands.
     /// </typeparam>
     /// <returns>The same builder, so calls can be chained.</returns>
-    public CommandModuleBuilder Register<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] T>() where T : ICommand
+    public CommandModuleBuilder Register<T>() where T : ICommand
     {
         Register(typeof(T));
         return this;
@@ -58,15 +57,9 @@ public sealed class CommandModuleBuilder
     /// commands — their contracts carry the module's marker too.
     /// </param>
     /// <returns>The same builder, so calls can be chained.</returns>
-    /// <exception cref="NotSupportedException">
-    /// The type does not belong to the command module.
-    /// </exception>
-    public CommandModuleBuilder Register([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type type)
+    public CommandModuleBuilder Register(Type type)
     {
-        if (!type.IsAssignableTo(typeof(ICommand)))
-        {
-            throw new NotSupportedException($"The given type '{type.Name}' is not a command construct and cannot be registered.");
-        }
+        ArgumentNullException.ThrowIfNull(type);
 
         _compositions.Select(type);
         return this;

@@ -1,3 +1,23 @@
+## v2.16.2-preview – '2026-09-15'
+
+### Startup and registration
+
+* Generate participant DI factories and closed generic selection mappings. Remove runtime
+  interface scanning, generic-definition normalization, ancestor descriptor lookup, and
+  descriptor traversal for service registration. Existing DI registrations retain their lifetimes.
+* Validate plan/descriptor consistency during AddErgosfare and reject incompatible selected
+  pipelines before the first dispatch. Keep dispatch-time missing-plan diagnostics.
+* Diagnose wrong-module selections with ERGO025. Remove generated RegisterAll and redundant
+  AddGenerated extension methods; public module builder calls remain unchanged.
+* Participants whose constructors cannot be modelled require an explicit DI factory registration
+  before AddErgosfare; no reflective activation fallback is installed by Ergosfare.
+
+### Removed
+
+* Remove the unused runtime `Discovery` reflection helper. Discovery attributes and
+  key patterns continue to be evaluated by generated selection; no runtime discovery
+  or plan-construction fallback is introduced. Preserve matching coverage in generator tests.
+
 ## v2.16.1-preview – '2026-09-15'
 
 ### Streaming handler contracts

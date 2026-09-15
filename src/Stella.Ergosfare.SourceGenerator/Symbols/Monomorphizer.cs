@@ -364,6 +364,8 @@ internal static class Monomorphizer
             DispatchResults = ImmutableArray<DispatchResultModel>.Empty,
             IsDirectlyConstructible = ConstructionAnalyzer.IsDirectlyConstructible(closed),
             ProviderConstructionExpression = providerConstruction,
+            ServiceConstructionExpression = ConstructionAnalyzer.TryBuildConstructionExpression(
+                closed, typeofExpression, currentAssembly, "provider", true, out _, forServiceRegistration: true),
             ProviderConstructionUsesKeyedServices = usesKeyedServices,
             HasPipelineExclusion = ParticipantAttributes.HasPipelineExclusionAttribute(openDefinition),
             ExcludedInterceptorGroups = ParticipantAttributes.GetPipelineExclusionGroups(openDefinition),

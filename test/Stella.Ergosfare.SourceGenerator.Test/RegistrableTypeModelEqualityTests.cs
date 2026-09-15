@@ -48,6 +48,7 @@ public class RegistrableTypeModelEqualityTests
         DispatchResults = [new DispatchResultModel("string", false, false)],
         IsDirectlyConstructible = true,
         ProviderConstructionExpression = "new global::TestApp.Ping()",
+        ServiceConstructionExpression = "new global::TestApp.Ping()",
         ProviderConstructionUsesKeyedServices = true,
         HasPipelineExclusion = true,
         ExcludedInterceptorGroups = ["g"],

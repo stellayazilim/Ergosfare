@@ -144,6 +144,9 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     /// </remarks>
     public required string? ProviderConstructionExpression { get; init; }
 
+    /// <summary>Construction performed by DI so lifetime and disposal remain container-owned.</summary>
+    public string? ServiceConstructionExpression { get; init; }
+
     /// <summary>
     /// Whether <see cref="ProviderConstructionExpression"/> resolves any parameter through
     /// the keyed-service extensions, which emission then requires the consuming compilation
@@ -362,6 +365,7 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
             || IsMessageShape != other.IsMessageShape
             || IsDirectlyConstructible != other.IsDirectlyConstructible
             || ProviderConstructionExpression != other.ProviderConstructionExpression
+            || ServiceConstructionExpression != other.ServiceConstructionExpression
             || ProviderConstructionUsesKeyedServices != other.ProviderConstructionUsesKeyedServices
             || HasPipelineExclusion != other.HasPipelineExclusion
             || IsValueType != other.IsValueType

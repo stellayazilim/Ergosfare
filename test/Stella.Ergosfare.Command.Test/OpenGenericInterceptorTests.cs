@@ -4,7 +4,7 @@ using Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection;
 using Stella.Ergosfare.Core.Abstractions;
 using Stella.Ergosfare.Core.Abstractions.Exceptions;
 using Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
-using Stella.Ergosfare.Generated;
+using Stella.Ergosfare.Core.Abstractions.Attributes;
 
 namespace Stella.Ergosfare.Command.Test;
 
@@ -18,6 +18,7 @@ public interface IAuditedCommand : ICommand;
 
 public sealed class Ship : IAuditedCommand { }
 
+[DiscoveryKey("startup.generic")]
 public sealed class ShipHandler : ICommandHandler<Ship>
 {
     public ValueTask HandleAsync(Ship command, ErgosfareContext context)
@@ -29,6 +30,7 @@ public sealed class ShipHandler : ICommandHandler<Ship>
 
 public sealed class Dock : IAuditedCommand { }
 
+[DiscoveryKey("startup.generic")]
 public sealed class DockHandler : ICommandHandler<Dock>
 {
     public ValueTask HandleAsync(Dock command, ErgosfareContext context)
@@ -38,6 +40,7 @@ public sealed class DockHandler : ICommandHandler<Dock>
     }
 }
 
+[DiscoveryKey("startup.generic")]
 public sealed class AuditCommands<TCommand> : ICommandPreInterceptor<TCommand>
     where TCommand : IAuditedCommand
 {
@@ -67,7 +70,7 @@ public class OpenGenericInterceptorTests
     public async Task GeneratedRegistration_RunsTheMonomorphizedInterceptor()
     {
         await using var provider = new ServiceCollection()
-            .AddErgosfare(o => o.AddCommandModule(c => c.AddGenerated()))
+            .AddErgosfare(o => o.AddCommandModule(c => c.AddGenerated("startup.generic")))
             .BuildServiceProvider();
 
         var context = new ErgosfareContext();
@@ -87,7 +90,7 @@ public class OpenGenericInterceptorTests
     public async Task EachMessage_GetsItsOwnInstantiation()
     {
         await using var provider = new ServiceCollection()
-            .AddErgosfare(o => o.AddCommandModule(c => c.AddGenerated()))
+            .AddErgosfare(o => o.AddCommandModule(c => c.AddGenerated("startup.generic")))
             .BuildServiceProvider();
 
         var mediator = provider.GetRequiredService<ICommandMediator>();
@@ -134,15 +137,10 @@ public class OpenGenericInterceptorTests
     /// </summary>
     [Fact]
     [Trait("Category", "Unit")]
-    public async Task NotRegisteringIt_DivergesFromTheCompiledPlan()
+    public void NotRegisteringIt_FailsAtStartup()
     {
-        await using var provider = new ServiceCollection()
-            .AddErgosfare(o => o.AddCommandModule(c => c.Register<ShipHandler>()))
-            .BuildServiceProvider();
-
-        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(async () =>
-            await provider.GetRequiredService<ICommandMediator>().SendAsync(new Ship(), new ErgosfareContext()));
-
+        var thrown = Assert.Throws<UnplannedDispatchException>(() => new ServiceCollection()
+            .AddErgosfare(o => o.AddCommandModule(c => c.Register<ShipHandler>())));
         Assert.Equal(UnplannedDispatchReason.CompositionDiverged, thrown.Reason);
         Assert.Equal(typeof(Ship), thrown.MessageType);
     }

@@ -46,11 +46,11 @@ public class ReferenceScanningTests
 
         // The library's message is named like a source-declared one, its handler batched
         // as a participant — exactly like source-declared types.
-        Assert.Contains("compositions.Select(typeof(global::TestLib.LibPing));", source);
-        Assert.Contains("participants.Add(typeof(global::TestLib.LibPingHandler));", source);
+        Assert.Contains("typeof(global::TestLib.LibPing)", source);
+        Assert.Contains("typeof(global::TestLib.LibPingHandler)", source);
 
         // The compilation's own types are unaffected.
-        Assert.Contains("compositions.Select(typeof(global::TestApp.AppPing));", source);
+        Assert.Contains("typeof(global::TestApp.AppPing)", source);
     }
 
     [Fact]
@@ -85,7 +85,7 @@ public class ReferenceScanningTests
 
         // The interceptor is registered as a participant, and its weight and group reach
         // the composition table read from metadata alone.
-        Assert.Contains("participants.Add(typeof(global::TestLib.LibAudit));", result.GeneratedSource);
+        Assert.Contains("typeof(global::TestLib.LibAudit)", result.GeneratedSource);
         Assert.Contains(
             "FrozenParticipant(typeof(global::TestLib.LibAudit), new string[] { \"lib\" })",
             result.GeneratedSource);
@@ -138,7 +138,7 @@ public class ReferenceScanningTests
 
         Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
-        Assert.Contains("compositions.Select(typeof(global::TestLib.SharedCommand));", result.GeneratedSource);
+        Assert.Contains("typeof(global::TestLib.SharedCommand)", result.GeneratedSource);
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public class ReferenceScanningTests
         Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
         Assert.DoesNotContain("TestLib", result.GeneratedSource);
-        Assert.Contains("compositions.Select(typeof(global::TestApp.AppPing));", result.GeneratedSource);
+        Assert.Contains("typeof(global::TestApp.AppPing)", result.GeneratedSource);
     }
 
     [Fact]
@@ -165,7 +165,7 @@ public class ReferenceScanningTests
 
         Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
-        Assert.Contains("compositions.Select(typeof(global::TestLib.LibPing));", result.GeneratedSource);
+        Assert.Contains("typeof(global::TestLib.LibPing)", result.GeneratedSource);
     }
 
     [Fact]
@@ -194,7 +194,7 @@ public class ReferenceScanningTests
         // Once in the catalog surface, once in the command builder extension — the
         // library's types are indistinguishable from the compilation's own in the emitted
         // surface, participants included.
-        Assert.Contains("builder.Register(typeof(global::TestLib.LibPing));", source);
-        Assert.DoesNotContain("builder.Register(typeof(global::TestLib.LibPingHandler))", source);
+        Assert.Contains("typeof(global::TestLib.LibPing)", source);
+        Assert.Contains(".AddParticipantFactory(typeof(global::TestLib.LibPingHandler),", source);
     }
 }

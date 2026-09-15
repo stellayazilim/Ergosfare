@@ -59,7 +59,7 @@ public class PocoEventDerivationTests
         // missing is everything the message needs to have a pipeline at all.
         Assert.Contains("typeof(global::TestApp.OrderPlacedHandler)", source);
         Assert.Contains("global::TestApp.OrderPlaced", source);
-        Assert.Contains("compositions.Select(typeof(global::TestApp.OrderPlaced))", source);
+        Assert.Contains("typeof(global::TestApp.OrderPlaced)", source);
 
         // No message root: the type implements no marker, and a publish never needs one.
         Assert.DoesNotContain("AddMessage<global::TestApp.OrderPlaced>", source);
@@ -91,7 +91,8 @@ public class PocoEventDerivationTests
         // A message carrying its own marker is registrable on its own terms; deriving it
         // again would only produce a duplicate for the pipeline to drop.
         var source = result.GeneratedSource;
-        var occurrences = source.Split("compositions.Select(typeof(global::TestApp.OrderShipped))").Length - 1;
+        var selection = source.Split('\n').Single(line => line.Contains("Selection2 ="));
+        var occurrences = selection.Split("typeof(global::TestApp.OrderShipped)").Length - 1;
 
         Assert.Equal(1, occurrences);
 

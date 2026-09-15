@@ -183,7 +183,7 @@ public class StreamPlanExecutionTests
 
         var assembly = Assembly.Load(stream.ToArray());
         var registrations = assembly.GetType("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
-        var registerQueries = registrations.GetMethod("AddGenerated", [typeof(QueryModuleBuilder)])!;
+        var registerQueries = GeneratorTestHost.SelectionFor(registrations, typeof(QueryModuleBuilder));
 
         var provider = new ServiceCollection()
             .AddErgosfare(options => options.AddQueryModule(queries => registerQueries.Invoke(null, [queries])))

@@ -283,6 +283,8 @@ internal static class ReferenceScanner
             DispatchResults = dispatchResults,
             IsDirectlyConstructible = isAccessible && ConstructionAnalyzer.IsDirectlyConstructible(symbol),
             ProviderConstructionExpression = providerConstruction,
+            ServiceConstructionExpression = ConstructionAnalyzer.TryBuildConstructionExpression(
+                symbol, typeofExpression, null, "provider", true, out _, forServiceRegistration: true),
             ProviderConstructionUsesKeyedServices = usesKeyedServices,
             HasPipelineExclusion = ParticipantAttributes.HasPipelineExclusionAttribute(symbol),
             ExcludedInterceptorGroups = ParticipantAttributes.GetPipelineExclusionGroups(symbol),

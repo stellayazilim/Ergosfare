@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions.Planning;
 using Stella.Ergosfare.Queries.Abstractions;
 
@@ -35,7 +34,7 @@ public sealed class QueryModuleBuilder(DispatchPlanCatalog compositions)
     /// queries.
     /// </typeparam>
     /// <returns>The same builder, so calls can be chained.</returns>
-    public QueryModuleBuilder Register<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] TQuery>() where TQuery : IQuery
+    public QueryModuleBuilder Register<TQuery>() where TQuery : IQuery
     {
         Register(typeof(TQuery));
         return this;
@@ -49,13 +48,9 @@ public sealed class QueryModuleBuilder(DispatchPlanCatalog compositions)
     /// queries — their contracts carry the module's marker too.
     /// </param>
     /// <returns>The same builder, so calls can be chained.</returns>
-    /// <exception cref="NotSupportedException">
-    /// The type does not belong to the query module.
-    /// </exception>
-    public QueryModuleBuilder Register([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicConstructors)] Type queryType)
+    public QueryModuleBuilder Register(Type queryType)
     {
-        if (!queryType.IsAssignableTo(typeof(IQuery)))
-            throw new NotSupportedException($"The given type '{queryType.Name}' is not a query construct and cannot be registered.");
+        ArgumentNullException.ThrowIfNull(queryType);
 
         _compositions.Select(queryType);
         return this;

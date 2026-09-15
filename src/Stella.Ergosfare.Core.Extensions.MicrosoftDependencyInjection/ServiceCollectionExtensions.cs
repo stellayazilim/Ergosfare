@@ -20,16 +20,9 @@ public static class ServiceCollectionExtensions
     /// </param>
     /// <returns>The same collection, so calls can be chained.</returns>
     /// <remarks>
-    /// <para>
-    /// This registers the dispatch machinery — the dependencies factory, the pipeline
-    /// executors and the mediators — along with this container's view of the compiled
-    /// composition table, the default result adapter if one was configured, and every
-    /// participant the registered modules named.
-    /// </para>
-    /// <para>
-    /// The modules are configured first and the registry is finalized afterwards, so
-    /// everything registered during configuration is in place before the container is built.
-    /// </para>
+    /// Configures modules, validates generated plans, and registers generated participant
+    /// factories before the container is built. Existing participant registrations retain
+    /// their lifetime. An incompatible plan fails here, before the first dispatch.
     /// </remarks>
     public static IServiceCollection AddErgosfare(this IServiceCollection services,
         Action<IModuleRegistry> ergosfareBuilderAction)

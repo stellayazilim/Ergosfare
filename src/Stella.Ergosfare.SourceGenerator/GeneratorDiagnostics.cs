@@ -45,20 +45,18 @@ internal static class GeneratorDiagnostics
         isEnabledByDefault: true);
 
     /// <summary>
-    /// ERGO003: a handler with several public constructors stays on the container path.
+    /// ERGO003: a handler with several public constructors requires an explicit DI factory.
     /// </summary>
     /// <remarks>
-    /// Which constructor the container picks depends on what is registered, so the plan
-    /// cannot prove direct construction would do the same thing. Informational: everything
-    /// still works, only the construction fast path is lost.
+    /// Constructor selection cannot be fixed without knowing the application's DI
+    /// registrations. A user-supplied factory makes the choice explicit without reflection.
     /// </remarks>
     public static readonly DiagnosticDescriptor MultiplePublicConstructors = new(
         id: "ERGO003",
-        title: "Multiple public constructors keep the handler on the container path",
+        title: "Multiple public constructors require an explicit DI factory",
         messageFormat:
-            "Handler '{0}' has more than one public constructor, so generated plans cannot prove which one the " +
-            "container would pick and skip its direct-construction fast path. Collapse to a single public " +
-            "constructor to enable it.",
+            "Handler '{0}' has more than one public constructor. Use a single public constructor or register " +
+            "an explicit DI factory before AddErgosfare; no reflective activation fallback is generated.",
         category: "Performance",
         defaultSeverity: DiagnosticSeverity.Info,
         isEnabledByDefault: true);

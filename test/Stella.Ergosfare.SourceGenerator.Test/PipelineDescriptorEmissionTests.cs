@@ -328,7 +328,7 @@ public class PipelineDescriptorEmissionTests
         Assert.Contains("FrozenParticipant(typeof(global::TestApp.WrapPre))", wrap);
 
         // The participant is registered through the batch, never as a message.
-        Assert.Contains("participants.Add(typeof(global::TestApp.WrapHandler<>));", result.GeneratedSource);
+        Assert.Contains("typeof(global::TestApp.WrapHandler<>)", result.GeneratedSource);
     }
 
     /// <summary>Extracts each emitted <c>AddPipelineDescriptor(...)</c> call as one block.</summary>

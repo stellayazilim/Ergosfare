@@ -17,6 +17,25 @@ namespace Stella.Ergosfare.Core.Abstractions.Planning;
 public static class GeneratedPlanRegistry
 {
     private static readonly ConcurrentDictionary<(byte Module, string Pattern), Type[]> GeneratedSelections = new();
+    private static readonly ConcurrentDictionary<Type, Type[]> SelectionExpansions = new();
+    private static readonly ConcurrentDictionary<Type, Func<IServiceProvider, object>?> ParticipantFactories = new();
+
+    /// <summary>Stores the generated closed constructions of an explicitly selected generic definition.</summary>
+    public static void AddSelectionExpansion(Type definition, Type[] closedTypes)
+        => SelectionExpansions[definition] = closedTypes;
+
+    /// <summary>Stores a participant's generated DI factory; invoking it is the container's responsibility.</summary>
+    public static void AddParticipantFactory(Type participant, Func<IServiceProvider, object>? factory)
+        => ParticipantFactories.TryAdd(participant, factory);
+
+    internal static Type[]? ExpandSelection(Type type)
+        => SelectionExpansions.TryGetValue(type, out var types) ? types : null;
+
+    internal static Func<IServiceProvider, object>? FindParticipantFactory(Type type)
+        => ParticipantFactories.TryGetValue(type, out var factory) ? factory : null;
+
+    internal static bool IsParticipant(Type type) => ParticipantFactories.ContainsKey(type);
+
 
     /// <summary>Stores the exact participant selection emitted for a source declaration.</summary>
     public static void AddGeneratedSelection(byte module, string pattern, Type[] types)
@@ -184,7 +203,6 @@ public static class GeneratedPlanRegistry
     /// The key the group-filtering plans are stored under. It opens with a control
     /// character no group name can contain, so it never collides with a real group key.
     /// </summary>
-    private const string FilteredPlanKey = "\u0000filtered";
 
     /// <summary>
     /// Roots the plan that serves dispatches whose group filter is only known at runtime:
@@ -261,7 +279,6 @@ public static class GeneratedPlanRegistry
 
 
     private static readonly ConcurrentDictionary<Type, PipelineDescriptor> PipelineDescriptors = new();
-    private static readonly ConcurrentDictionary<Type, PipelineDescriptor?> PipelineDescriptorLadder = new();
 
     /// <summary>
     /// Roots a message's compiled pipeline composition. Generated module initializers call
@@ -272,56 +289,8 @@ public static class GeneratedPlanRegistry
     public static void AddPipelineDescriptor(PipelineDescriptor composition)
         => PipelineDescriptors.TryAdd(composition.MessageType, composition);
 
-    /// <summary>
-    /// Every composition in the table.
-    /// </summary>
-    /// <remarks>
-    /// The only enumeration offered, and meant for setup-time questions a per-message
-    /// lookup cannot answer — chiefly which participant types exist at all, which container
-    /// registration intersects with its own selection.
-    /// </remarks>
-    public static IEnumerable<PipelineDescriptor> PipelineDescriptorEntries => PipelineDescriptors.Values;
-
-    /// <summary>
-    /// Returns the composition serving a runtime message type.
-    /// </summary>
-    /// <param name="messageType">The dispatched message's runtime type.</param>
-    /// <returns>
-    /// The exact entry when there is one; otherwise the nearest entry up the type's
-    /// ancestor chain, which is how runtime-generated subtypes such as ORM proxies and
-    /// mocks are served. <c>null</c> when no ancestor has an entry either.
-    /// </returns>
-    /// <remarks>
-    /// Closed generic entries take priority over generic-definition metadata. Outcomes are cached
-    /// per runtime type, misses included, so an entry added after a type was first resolved
-    /// is not picked up for that type — which holds because entries are only added as
-    /// assemblies load.
-    /// </remarks>
+    /// <summary>Returns the exact compiled descriptor, or null for an unknown type.</summary>
+    /// <remarks>Inheritance and closed generic coverage are resolved by the generator.</remarks>
     public static PipelineDescriptor? FindPipelineDescriptor(Type messageType)
-    {
-        if (PipelineDescriptors.TryGetValue(messageType, out var exact))
-        {
-            return exact;
-        }
-
-        return PipelineDescriptorLadder.GetOrAdd(messageType, static runtimeType =>
-        {
-            if (runtimeType.IsGenericType
-                && PipelineDescriptors.TryGetValue(runtimeType.GetGenericTypeDefinition(), out var definition))
-                return definition;
-
-            for (var current = runtimeType.BaseType; current is not null; current = current.BaseType)
-            {
-                if (PipelineDescriptors.TryGetValue(current, out var closed)) return closed;
-                var key = current.IsGenericType ? current.GetGenericTypeDefinition() : current;
-
-                if (PipelineDescriptors.TryGetValue(key, out var entry))
-                {
-                    return entry;
-                }
-            }
-
-            return null;
-        });
-    }
+        => PipelineDescriptors.TryGetValue(messageType, out var descriptor) ? descriptor : null;
 }

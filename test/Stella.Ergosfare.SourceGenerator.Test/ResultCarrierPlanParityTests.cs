@@ -219,7 +219,7 @@ public class ResultCarrierPlanParityTests
 
         var assembly = Assembly.Load(stream.ToArray());
         var registrations = assembly.GetType("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
-        var registerCommands = registrations.GetMethod("AddGenerated", [typeof(CommandModuleBuilder)])!;
+        var registerCommands = GeneratorTestHost.SelectionFor(registrations, typeof(CommandModuleBuilder));
 
         var provider = new ServiceCollection()
             .AddErgosfare(options => options.AddCommandModule(commands => registerCommands.Invoke(null, [commands])))

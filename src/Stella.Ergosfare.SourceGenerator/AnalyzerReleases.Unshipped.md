@@ -7,7 +7,7 @@ Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
 ERGO001 | Usage | Warning | Registrable type is not accessible from generated registration code
 ERGO002 | Usage | Warning | Registrable type in a referenced assembly is not visible to generated registration code
-ERGO003 | Performance | Info | Multiple public constructors keep the handler on the container path
+ERGO003 | Performance | Info | Multiple public constructors require an explicit DI factory
 ERGO004 | Usage | Info | [FromServices] has no effect on constructor parameters
 ERGO005 | Usage | Error | Dispatch can never reach a handler
 ERGO006 | Usage | Warning | Only subtypes of the dispatched static type are handled
@@ -29,3 +29,4 @@ ERGO021 | Usage | Error | Default result adapter cannot be constructed by genera
 ERGO022 | Usage | Error | Stream message is published
 ERGO023 | Usage | Error | Group set selects two main handlers
 ERGO024 | Usage | Error | Group set selects no main handler
+ERGO025 | Usage | Error | Explicit registration selects a type through the wrong module

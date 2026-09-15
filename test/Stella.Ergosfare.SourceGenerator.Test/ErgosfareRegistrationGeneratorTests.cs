@@ -28,7 +28,7 @@ public class ErgosfareRegistrationGeneratorTests
         """;
 
     [Fact]
-    public void FullSurface_EmitsRegisterAllAndBuilderExtensions()
+    public void FullSurface_EmitsStartupTablesWithoutLegacyExtensions()
     {
         var result = GeneratorTestHost.RunWithAllCandidates(FullSurfaceSource);
 
@@ -37,15 +37,16 @@ public class ErgosfareRegistrationGeneratorTests
 
         var source = result.GeneratedSource;
         Assert.Contains("internal static class ErgosfareGeneratedRegistrations", source);
-        Assert.Contains("public static void RegisterAll(global::Stella.Ergosfare.Core.Abstractions.Planning.DispatchPlanCatalog compositions)", source);
+        Assert.DoesNotContain("RegisterAll", source);
+        Assert.Contains("RegisterParticipantFactories", source);
         Assert.Contains("typeof(global::TestApp.CreatePing)", source);
         Assert.Contains("typeof(global::TestApp.CreatePingHandler)", source);
         Assert.Contains("typeof(global::TestApp.GetPong)", source);
         Assert.Contains("typeof(global::TestApp.PingCreated)", source);
 
-        Assert.Contains("global::Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.CommandModuleBuilder AddGenerated(", source);
-        Assert.Contains("global::Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.QueryModuleBuilder AddGenerated(", source);
-        Assert.Contains("global::Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.EventModuleBuilder AddGenerated(", source);
+        Assert.DoesNotContain("this global::Stella.Ergosfare", source);
+        Assert.DoesNotContain("this global::Stella.Ergosfare", source);
+        Assert.DoesNotContain("this global::Stella.Ergosfare", source);
     }
 
     [Fact]
@@ -54,21 +55,11 @@ public class ErgosfareRegistrationGeneratorTests
         var result = GeneratorTestHost.RunWithAllCandidates(FullSurfaceSource);
         var source = result.GeneratedSource;
 
-        // Messages are named one call each: once in the module-agnostic catalog surface
-        // and once in exactly one builder extension.
-        Assert.Equal(1, CountOccurrences(source, "compositions.Select(typeof(global::TestApp.CreatePing));"));
-        Assert.Equal(1, CountOccurrences(source, "builder.Register(typeof(global::TestApp.CreatePing));"));
-        Assert.Equal(1, CountOccurrences(source, "compositions.Select(typeof(global::TestApp.GetPong));"));
-        Assert.Equal(1, CountOccurrences(source, "builder.Register(typeof(global::TestApp.GetPong));"));
-        Assert.Equal(1, CountOccurrences(source, "compositions.Select(typeof(global::TestApp.PingCreated));"));
-        Assert.Equal(1, CountOccurrences(source, "builder.Register(typeof(global::TestApp.PingCreated));"));
-
-        // Participants go into the builder's batch rather than through Register, which
-        // asserts module membership a participant contract need not carry.
-        Assert.Equal(1, CountOccurrences(source, "participants.Add(typeof(global::TestApp.CreatePingHandler));"));
-        Assert.Equal(1, CountOccurrences(source, "compositions.Select(typeof(global::TestApp.CreatePingHandler));"));
-        Assert.DoesNotContain("builder.Register(typeof(global::TestApp.CreatePingHandler))", source);
-        Assert.Contains("builder.RegisterParticipants(participants);", source);
+        Assert.Contains("Selection0 = new global::System.Type[] { typeof(global::TestApp.CreatePing), typeof(global::TestApp.CreatePingHandler),", source);
+        Assert.Contains("Selection1 = new global::System.Type[] { typeof(global::TestApp.GetPong),", source);
+        Assert.Contains("Selection2 = new global::System.Type[] { typeof(global::TestApp.PingCreated),", source);
+        Assert.Equal(1, CountOccurrences(source, ".AddParticipantFactory(typeof(global::TestApp.CreatePingHandler),"));
+        Assert.DoesNotContain("RegisterParticipants", source);
     }
 
     [Fact]
@@ -103,9 +94,9 @@ public class ErgosfareRegistrationGeneratorTests
 
         // The open generic message is named by its definition — how the table keys it —
         // while the participants closing over one instantiation are named verbatim.
-        Assert.Contains("compositions.Select(typeof(global::TestApp.Wrapped<>));", source);
-        Assert.Contains("participants.Add(typeof(global::TestApp.WrappedIntHandler));", source);
-        Assert.Contains("participants.Add(typeof(global::TestApp.WrappedIntPre));", source);
+        Assert.Contains("typeof(global::TestApp.Wrapped<>)", source);
+        Assert.Contains("typeof(global::TestApp.WrappedIntHandler)", source);
+        Assert.Contains("typeof(global::TestApp.WrappedIntPre)", source);
     }
 
     [Fact]
@@ -183,7 +174,7 @@ public class ErgosfareRegistrationGeneratorTests
     }
 
     [Fact]
-    public void WithoutModuleBuilderReferences_OnlyRegisterAllIsEmitted()
+    public void GeneratedSelections_DoNotEmitBuilderExtensions()
     {
         var result = GeneratorTestHost.RunWithAllCandidates("""
             using Stella.Ergosfare.Commands.Abstractions;
@@ -197,7 +188,8 @@ public class ErgosfareRegistrationGeneratorTests
 
         Assert.Empty(result.GeneratorDiagnostics);
         Assert.Empty(result.CompilationErrors);
-        Assert.Contains("RegisterAll", result.GeneratedSource);
+        Assert.DoesNotContain("RegisterAll", result.GeneratedSource);
+        Assert.Contains("AddGeneratedSelection", result.GeneratedSource);
         Assert.DoesNotContain("AddGenerated(", result.GeneratedSource);
     }
 
@@ -259,7 +251,7 @@ public class ErgosfareRegistrationGeneratorTests
     }
 
     [Fact]
-    public void GeneratedRegisterAll_ExecutesAgainstACatalog()
+    public void GeneratedSelectionTables_ExecuteAgainstACatalog()
     {
         var result = GeneratorTestHost.RunWithAllCandidates(FullSurfaceSource);
 
@@ -277,7 +269,7 @@ public class ErgosfareRegistrationGeneratorTests
         var registrations = assembly.GetType("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
         var catalog = new DispatchPlanCatalog();
 
-        registrations.GetMethod("RegisterAll", [typeof(DispatchPlanCatalog)])!.Invoke(null, [catalog]);
+        GeneratorTestHost.SelectionFor(registrations).Invoke(null, [catalog]);
 
         // Messages and participants alike land in the container's selection — registration
         // names constructs, and the compiled table decides what each one's pipeline is.

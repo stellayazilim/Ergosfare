@@ -62,35 +62,22 @@ public sealed partial class ErgosfareRegistrationGenerator
         }
     }
 
-    // Generated extension methods do not bind in the input compilation. Resolve their
-    // receiver's real builder type, rather than requiring the generated method symbol.
+    // Read literal selections from the public module builders.
     private static RegistrationSiteModel? TryReadBulkSelection(SemanticModel semanticModel,
         InvocationExpressionSyntax call, CancellationToken ct)
     {
         if (call.Expression is not MemberAccessExpressionSyntax member
-            || member.Name.Identifier.ValueText is not ("AddGenerated" or "RegisterAll")) return null;
+            || member.Name.Identifier.ValueText != "AddGenerated") return null;
 
-        var name = member.Name.Identifier.ValueText;
         var receiver = ReadBuilderReceiver(semanticModel, member.Expression, ct);
-        var offset = 0;
-        if (receiver is null || receiver.TypeKind == TypeKind.Error)
-        {
-            if (call.ArgumentList.Arguments.Count == 0) return null;
-            receiver = semanticModel.GetTypeInfo(call.ArgumentList.Arguments[0].Expression, ct).Type as INamedTypeSymbol;
-            offset = 1;
-        }
-        if (receiver is null) return null;
-        byte module;
-        if (name == "RegisterAll" && receiver.ToDisplayString() == ContractMetadataNames.CompositionCatalog) module = 0;
-        else if (name is ("AddGenerated") && IsErgosfareRegistrationSurface(receiver))
-            module = receiver.Name switch { "CommandModuleBuilder" => (byte)1, "QueryModuleBuilder" => 2, "EventModuleBuilder" => 3, _ => 255 };
-        else return null;
+        if (receiver is null || !IsErgosfareRegistrationSurface(receiver)) return null;
+        byte module = receiver.Name switch { "CommandModuleBuilder" => 1, "QueryModuleBuilder" => 2, "EventModuleBuilder" => 3, _ => 255 };
         if (module == 255) return null;
 
         string? pattern = "";
-        if (call.ArgumentList.Arguments.Count > offset)
+        if (call.ArgumentList.Arguments.Count > 0)
         {
-            var constant = semanticModel.GetConstantValue(call.ArgumentList.Arguments[offset].Expression, ct);
+            var constant = semanticModel.GetConstantValue(call.ArgumentList.Arguments[0].Expression, ct);
             pattern = constant.HasValue ? constant.Value as string : null;
         }
         return new RegistrationSiteModel
