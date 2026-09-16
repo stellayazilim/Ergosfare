@@ -13,6 +13,8 @@ public class ForeignCarrierCoverageTests
     [InlineData(true, false, true)]
     public async Task ReferenceCarrier_PostFailuresAndFilteredThrowsKeepTheirChannels(bool materializes, bool postFailure, bool bare)
     {
+        // Each loaded fixture owns its participant selection even when other test
+        // assemblies register the same default discovery pattern concurrently.
         var source = $$"""
             using System;
             using System.Threading.Tasks;
@@ -53,7 +55,8 @@ public class ForeignCarrierCoverageTests
                 public static async Task<string> Run(bool postFailure)
                 {
                     await using var provider = new ServiceCollection()
-                        .AddErgosfare(o => o.AddCommandModule(c => c.AddGenerated())).BuildServiceProvider();
+                        .AddErgosfare(o => o.AddCommandModule(c => c.Register<Main>()
+                            {{(bare ? "" : ".Register<Post>().Register<Recover>().Register<Final>()")}})).BuildServiceProvider();
                     try
                     {
                         var result = await provider.GetRequiredService<ICommandMediator>().SendAsync(new Work(postFailure));

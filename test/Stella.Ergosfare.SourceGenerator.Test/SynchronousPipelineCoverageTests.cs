@@ -11,6 +11,8 @@ public class SynchronousPipelineCoverageTests
     [InlineData(true, true, "pre,main,final:0:True|unhandled")]
     public async Task SyncStages_PreserveOrderResultsAndExceptionFilters(bool fail, bool unmatched, string expected)
     {
+        // Explicit participant registrations isolate this fixture from other dynamically
+        // loaded test assemblies' process-wide AddGenerated selection tables.
         var result = GeneratorTestHost.RunWithAllCandidates("""
             using System;
             using System.Collections.Generic;
@@ -29,14 +31,16 @@ public class SynchronousPipelineCoverageTests
                 public static async Task<string> Run(bool fail, bool unmatched)
                 {
                     await using var provider = new ServiceCollection()
-                        .AddErgosfare(o => o.AddCommandModule(c => c.AddGenerated()))
+                        .AddErgosfare(o => o.AddCommandModule(c => c.Register<Main>()
+                            .Register<Pre>().Register<Post>().Register<Recover>().Register<Final>()))
                         .BuildServiceProvider();
                     try
                     {
                         var value = await provider.GetRequiredService<ICommandMediator>().SendAsync(new Work(fail, unmatched));
                         return string.Join(",", Log) + "|" + value;
                     }
-                    catch (InvalidOperationException) { return string.Join(",", Log) + "|unhandled"; }
+                    catch (InvalidOperationException) when (Log.Contains("main"))
+                    { return string.Join(",", Log) + "|unhandled"; }
                 }
             }
             public sealed class Main : ICommandHandler<Work, int>

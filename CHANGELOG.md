@@ -7,7 +7,7 @@
   literals, result adapters, and streaming boundaries. Keep coverage exclusions unchanged.
 * Require coverage above 95% in CI, reading the report's root line counts without
   percentage truncation. Use framework-specific test result filenames.
-* Isolate generated test assemblies and synchronize the outbox polling test with lease
+* Isolate generated test assemblies and their participant selections; synchronize the outbox polling test with lease
   renewal and store acknowledgment, avoiding shutdown races on busy runners.
 
 ### Test corrections
