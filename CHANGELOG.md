@@ -1,5 +1,11 @@
 ## Unreleased
 
+### Release packaging
+
+* Keep the experimental `Stella.Ergosfare.Plugins.Outbox` package exclusive to
+  prerelease versions. Stable NuGet and GitHub releases omit it; its source and
+  tests remain in the repository.
+
 ### Coverage and CI
 
 * Raise line coverage from 91.75% to 95.33% with regression tests for synchronous

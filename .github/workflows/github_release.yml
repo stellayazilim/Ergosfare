@@ -85,7 +85,6 @@ jobs:
       - name: Pack all GitHub packages
         run: |
           projects=(
-            ./src/Stella.Ergosfare.Plugins.Outbox/Stella.Ergosfare.Plugins.Outbox.csproj
             ./src/Stella.Ergosfare.Plugins.Abstractions/Stella.Ergosfare.Plugins.Abstractions.csproj
             ./src/Stella.Ergosfare/Stella.Ergosfare.csproj
             ./src/Stella.Ergosfare.Core/Stella.Ergosfare.Core.csproj
@@ -102,6 +101,11 @@ jobs:
             ./src/Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection/Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.csproj
             ./src/Stella.Ergosfare.SourceGenerator/Stella.Ergosfare.SourceGenerator.csproj
           )
+
+          # The experimental outbox remains a prerelease-only package.
+          if [[ "$VERSION" == *-* ]]; then
+            projects+=(./src/Stella.Ergosfare.Plugins.Outbox/Stella.Ergosfare.Plugins.Outbox.csproj)
+          fi
 
           for proj in "${projects[@]}"; do
             echo "Packing $proj"
