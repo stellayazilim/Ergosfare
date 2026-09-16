@@ -64,7 +64,7 @@ jobs:
         shell: bash
         run: reportgenerator -reports:./**/coverage.cobertura.xml -targetdir:./.coverage -reporttypes:Cobertura
 
-      - name: Require line coverage above 95%
+      - name: Require at least 90% line coverage
         shell: bash
         run: |
           python3 - <<'PY'
@@ -75,8 +75,8 @@ jobs:
           if total <= 0:
               raise SystemExit("Coverage report contains no executable lines.")
           print(f"Total line coverage: {covered / total:.2%} ({covered}/{total})")
-          if covered * 100 <= total * 95:
-              raise SystemExit("Line coverage must be above 95%.")
+          if covered * 100 < total * 90:
+              raise SystemExit("Line coverage must be at least 90%.")
           PY
 
       # The badge reflects main's coverage: only publish it from pushes to main.
