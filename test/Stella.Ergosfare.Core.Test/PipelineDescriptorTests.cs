@@ -13,7 +13,7 @@ public class PipelineDescriptorTests
     private sealed class LadderHandler;
 
     [Fact]
-    public void MissLadder_ServesARuntimeSubtypeFromTheNearestFrozenAncestor()
+    public void UnknownSubtypes_DoNotAcquireAnAncestorDescriptor()
     {
         var baseComposition = new PipelineDescriptor(
             typeof(LadderBase),
@@ -25,14 +25,12 @@ public class PipelineDescriptorTests
 
         GeneratedPlanRegistry.AddPipelineDescriptor(baseComposition);
 
-        // A runtime subtype nobody registered — the EF/Castle proxy shape — resolves to
-        // its nearest frozen ancestor, and the resolution is cached per runtime type.
-        Assert.Same(baseComposition, GeneratedPlanRegistry.FindPipelineDescriptor(typeof(LadderDerived)));
-        Assert.Same(baseComposition, GeneratedPlanRegistry.FindPipelineDescriptor(typeof(LadderGrandchild)));
-        Assert.Same(baseComposition, GeneratedPlanRegistry.FindPipelineDescriptor(typeof(LadderDerived)));
+        // An unknown subtype does not acquire metadata from an ancestor.
+        Assert.Null(GeneratedPlanRegistry.FindPipelineDescriptor(typeof(LadderDerived)));
+        Assert.Null(GeneratedPlanRegistry.FindPipelineDescriptor(typeof(LadderGrandchild)));
+        Assert.Null(GeneratedPlanRegistry.FindPipelineDescriptor(typeof(LadderDerived)));
 
-        // A type whose whole ancestor chain is foreign resolves to nothing — the caller's
-        // no-handler guard, the one deliberately remaining corner.
+        // Unknown types are handled by the missing-plan guard.
         Assert.Null(GeneratedPlanRegistry.FindPipelineDescriptor(typeof(LadderForeign)));
     }
 
@@ -41,7 +39,7 @@ public class PipelineDescriptorTests
     private sealed record LadderGenericMessage<T>;
 
     [Fact]
-    public void MissLadder_NormalizesGenericRuntimeTypesToTheirDefinitions()
+    public void UnknownClosedTypes_DoNotAcquireAnOpenGenericDescriptor()
     {
         var composition = new PipelineDescriptor(
             typeof(LadderGenericMessage<>),
@@ -53,6 +51,7 @@ public class PipelineDescriptorTests
 
         GeneratedPlanRegistry.AddPipelineDescriptor(composition);
 
-        Assert.Same(composition, GeneratedPlanRegistry.FindPipelineDescriptor(typeof(LadderGenericMessage<string>)));
+        Assert.Null(GeneratedPlanRegistry.FindPipelineDescriptor(typeof(LadderGenericMessage<string>)));
+        Assert.Same(composition, GeneratedPlanRegistry.FindPipelineDescriptor(typeof(LadderGenericMessage<>)));
     }
 }

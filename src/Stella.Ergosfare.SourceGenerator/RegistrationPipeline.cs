@@ -214,14 +214,6 @@ internal static class RegistrationPipeline
                     model.DisplayName));
             }
 
-            if (model.HasMultiplePublicConstructors)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    GeneratorDiagnostics.MultiplePublicConstructors,
-                    model.InfoLocation?.ToLocation(),
-                    model.DisplayName));
-            }
-
             if (model.HasFromServicesConstructorParameter)
             {
                 context.ReportDiagnostic(Diagnostic.Create(

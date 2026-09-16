@@ -95,8 +95,8 @@ internal static class ContractReader
     /// <param name="symbol">The message to read.</param>
     /// <returns>One entry per distinct result contract the message closes.</returns>
     /// <remarks>
-    /// <c>ICommand&lt;T&gt;</c> and <c>IQuery&lt;T&gt;</c> feed the result path;
-    /// <c>IStreamQuery&lt;T&gt;</c> feeds the streaming one.
+    /// Query results of IAsyncEnumerable&lt;T&gt; feed the streaming path;
+    /// other command and query results feed the single-result path.
     /// </remarks>
     internal static ImmutableArray<DispatchResultModel> GetDispatchResults(INamedTypeSymbol symbol)
     {
@@ -116,15 +116,20 @@ internal static class ContractReader
                 case "ICommand" when SymbolNaming.IsInNamespace(iface, ContractNames.CommandMarkerNamespace):
                 case "IQuery" when SymbolNaming.IsInNamespace(iface, ContractNames.QueryMarkerNamespace):
                     break;
-                case "IStreamQuery" when SymbolNaming.IsInNamespace(iface, ContractNames.QueryMarkerNamespace):
-                    isStream = true;
-                    break;
                 default:
                     continue;
             }
 
+            var resultType = iface.TypeArguments[0];
+            if (iface.Name == "IQuery" && resultType is INamedTypeSymbol { Arity: 1, Name: "IAsyncEnumerable" } sequence
+                && SymbolNaming.IsInNamespace(sequence, "System.Collections.Generic"))
+            {
+                isStream = true;
+                resultType = sequence.TypeArguments[0];
+            }
+
             var model = new DispatchResultModel(
-                SymbolNaming.VerbatimTypeExpression(iface.TypeArguments[0]), isStream, iface.TypeArguments[0].IsValueType);
+                SymbolNaming.VerbatimTypeExpression(resultType), isStream, resultType.IsValueType);
 
             results ??= ImmutableArray.CreateBuilder<DispatchResultModel>();
 

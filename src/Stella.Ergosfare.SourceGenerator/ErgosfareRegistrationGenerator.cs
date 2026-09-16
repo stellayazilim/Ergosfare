@@ -59,6 +59,11 @@ public sealed partial class ErgosfareRegistrationGenerator : IIncrementalGenerat
         // itself a plugin.
         RegisterPluginFacade(context);
         RegisterPluginScanDiagnostics(context);
+        context.RegisterSourceOutput(context.SyntaxProvider.CreateSyntaxProvider(
+                static (node, _) => node is InvocationExpressionSyntax,
+                static (ctx, ct) => ValidateRegistrationModule(ctx, ct))
+            .Where(static diagnostic => diagnostic is not null),
+            static (output, diagnostic) => output.ReportDiagnostic(diagnostic!));
 
         var registrableTypes = context.SyntaxProvider
             .CreateSyntaxProvider(

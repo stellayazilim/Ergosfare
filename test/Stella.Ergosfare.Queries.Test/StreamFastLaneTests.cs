@@ -18,9 +18,12 @@ namespace Stella.Ergosfare.Queries.Test;
 
 public sealed record NumberStream : IStreamQuery<int>;
 
-public sealed class NumberStreamHandler : IStreamQueryHandler<NumberStream, int>
+public sealed class NumberStreamHandler : IQueryHandler<NumberStream, IAsyncEnumerable<int>>
 {
-    public async IAsyncEnumerable<int> StreamAsync(NumberStream query, ErgosfareContext context)
+    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<int>> HandleAsync(NumberStream query, ErgosfareContext context)
+        => new(Enumerate(query, context));
+
+    private async IAsyncEnumerable<int> Enumerate(NumberStream query, ErgosfareContext context)
     {
         context.Set("streamRan", true);
         yield return 1;
@@ -33,9 +36,12 @@ public sealed class NumberStreamHandler : IStreamQueryHandler<NumberStream, int>
 public sealed record RoutedStream : IStreamQuery<string>;
 
 [Group("east")]
-public sealed class EastStreamHandler : IStreamQueryHandler<RoutedStream, string>
+public sealed class EastStreamHandler : IQueryHandler<RoutedStream, IAsyncEnumerable<string>>
 {
-    public async IAsyncEnumerable<string> StreamAsync(RoutedStream query, ErgosfareContext context)
+    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<string>> HandleAsync(RoutedStream query, ErgosfareContext context)
+        => new(Enumerate(query, context));
+
+    private async IAsyncEnumerable<string> Enumerate(RoutedStream query, ErgosfareContext context)
     {
         await Task.Yield();
         yield return "east";
@@ -43,9 +49,12 @@ public sealed class EastStreamHandler : IStreamQueryHandler<RoutedStream, string
 }
 
 [Group("west")]
-public sealed class WestStreamHandler : IStreamQueryHandler<RoutedStream, string>
+public sealed class WestStreamHandler : IQueryHandler<RoutedStream, IAsyncEnumerable<string>>
 {
-    public async IAsyncEnumerable<string> StreamAsync(RoutedStream query, ErgosfareContext context)
+    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<string>> HandleAsync(RoutedStream query, ErgosfareContext context)
+        => new(Enumerate(query, context));
+
+    private async IAsyncEnumerable<string> Enumerate(RoutedStream query, ErgosfareContext context)
     {
         await Task.Yield();
         yield return "west";

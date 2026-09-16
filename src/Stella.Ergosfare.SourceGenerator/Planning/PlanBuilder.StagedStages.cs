@@ -4,6 +4,12 @@ using Stella.Ergosfare.SourceGenerator.Models;
 namespace Stella.Ergosfare.SourceGenerator.Planning;
 internal sealed partial class PlanBuilder
 {
+    private static bool IsStreamingPipeline(RegistrableTypeModel message)
+        => message.AssignableKeys.Any(key => key.StartsWith(
+               "global::Stella.Ergosfare.Core.Abstractions.Streaming.ErgosfareStream", StringComparison.Ordinal))
+           || message.DispatchResults.Any(result => result.IsStream
+               || result.ResultTypeExpression.StartsWith(EmittedExpressions.AsyncEnumerable + "<", StringComparison.Ordinal));
+
     /// <summary>Chooses parameterless construction at compile time; injected types stay with DI.</summary>
     private static string? GatedConstructionExpression(RegistrableTypeModel participant, bool hasKeyedServiceExtensions)
         => participant.IsDirectlyConstructible
@@ -65,6 +71,8 @@ internal sealed partial class PlanBuilder
             for (var kindIndex = 0; kindIndex < 4; kindIndex++)
             {
                 var kind = (DescriptorKind)(kindIndex + 1);
+                if (IsStreamingPipeline(message) && kind is DescriptorKind.PostInterceptor or DescriptorKind.ExceptionInterceptor)
+                    continue;
 
                 // This candidate's registrations that reach the message, deduped the way the
                 // descriptor builders do it: first one wins per (message, result), with a

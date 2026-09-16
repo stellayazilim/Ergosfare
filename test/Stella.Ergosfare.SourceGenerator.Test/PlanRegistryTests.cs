@@ -92,9 +92,12 @@ public class PlanRegistryTests
             public sealed record HiddenStream : IStreamQuery<int>;
 
             [ExcludeFromDiscovery]
-            public sealed class HiddenStreamHandler : IStreamQueryHandler<HiddenStream, int>
+            public sealed class HiddenStreamHandler : IQueryHandler<HiddenStream, IAsyncEnumerable<int>>
             {
-                public async IAsyncEnumerable<int> StreamAsync(HiddenStream query, ErgosfareContext context)
+                public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<int>> HandleAsync(HiddenStream query, ErgosfareContext context)
+                    => new(Enumerate(query, context));
+
+                private async IAsyncEnumerable<int> Enumerate(HiddenStream query, ErgosfareContext context)
                 {
                     await Task.Yield();
                     yield return 1;
@@ -152,7 +155,7 @@ public class PlanRegistryTests
         var registrations = assembly.GetType("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
         var catalog = new DispatchPlanCatalog();
 
-        registrations.GetMethod("RegisterAll", [typeof(DispatchPlanCatalog)])!.Invoke(null, [catalog]);
+        GeneratorTestHost.SelectionFor(registrations).Invoke(null, [catalog]);
 
         var voidPing = assembly.GetType("TestApp.VoidPing", throwOnError: true)!;
         var typedPing = assembly.GetType("TestApp.TypedPing", throwOnError: true)!;

@@ -48,7 +48,7 @@ public class DynamicGroupCommandPlanTests
         Assert.True(result.OutputCompilation.Emit(output).Success);
         var assembly = Assembly.Load(output.ToArray());
         var registrations = assembly.GetType("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations")!;
-        var register = registrations.GetMethod("AddGenerated", [typeof(CommandModuleBuilder)])!;
+        var register = GeneratorTestHost.SelectionFor(registrations, typeof(CommandModuleBuilder));
         await using var provider = new ServiceCollection()
             .AddErgosfare(r => r.AddCommandModule(m => register.Invoke(null, [m])))
             .BuildServiceProvider();

@@ -235,8 +235,8 @@ public class StagedPlanExecutionParityTests
 
         var assembly = Assembly.Load(stream.ToArray());
         var registrations = assembly.GetType("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
-        var registerCommands = registrations.GetMethod("AddGenerated", [typeof(CommandModuleBuilder)])!;
-        var registerQueries = registrations.GetMethod("AddGenerated", [typeof(QueryModuleBuilder)])!;
+        var registerCommands = GeneratorTestHost.SelectionFor(registrations, typeof(CommandModuleBuilder));
+        var registerQueries = GeneratorTestHost.SelectionFor(registrations, typeof(QueryModuleBuilder));
 
         var provider = new ServiceCollection()
             .AddErgosfare(options =>

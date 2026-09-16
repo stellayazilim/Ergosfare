@@ -10,24 +10,25 @@ pipeline-shape construction, or group-composition cache on the dispatch path.
 
 Code generation selects construction per participant. A safe public parameterless
 constructor is emitted as `new Participant()`. Constructor dependencies are handled by
-resolving the participant from the calling DI scope. Disposable types, required members,
-and ambiguous constructors stay with DI. A directly constructed participant bypasses
+resolving the participant from the calling DI scope. Generated typed DI registrations support
+disposable participants and closed generic types. The configured container selects constructors
+and resolves dependencies, including optional parameters. A directly constructed participant bypasses
 DI registrations, including factory and singleton overrides; injected participants retain
 their DI lifetimes and overrides.
 
 Known group sets get specialized plan bodies without participant filtering. Dynamic
 group sets use a generated full plan with local guards, including missing/ambiguous
-handler checks for commands and queries. Array, list, and `GroupSet` lookups neither sort
-nor copy group names. A one-shot `IEnumerable<string>` is materialized once. Grouped
+handler checks for commands and queries. `GroupSet` lookup does not sort or copy group names. Grouped
 streaming queries remain unsupported.
 
-Registration selects references to the original generated plans when the engine is
-initialized, without building dependency graphs. Dispatch performs one plan lookup and
+`AddErgosfare` validates selected compositions and binds references to the original generated
+plans before the service provider is built. Incompatible plans fail at startup without
+building dependency graphs. Dispatch performs one plan lookup and
 invokes that instance; there is no second admission lookup or adapter/options DI query.
 Stateless result adapters are selected and validated by the generator and called directly
 by the compiled plan. `UseDefaultResultAdapter(typeof(...))` is a compile-time declaration,
-not an adapter service registration. Public legacy descriptor/root APIs remain for source compatibility; newly
-generated code does not allocate separate message roots or single-handler plan objects.
+not an adapter service registration. Descriptor lookup is exact: inheritance and closed
+generic coverage are generated, with no runtime ancestor walk or generic normalization.
 
 Context pooling is unchanged. Caller-owned contexts remain caller-owned; streaming
 queries retain their context for enumeration. This refactor removes infrastructure

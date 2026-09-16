@@ -70,8 +70,8 @@ public class EmptyStringGroupTests
         Assert.True(result.OutputCompilation.Emit(stream).Success);
         var assembly = Assembly.Load(stream.ToArray());
         var eventType = assembly.GetType("EmptyGroupProbe.Notice", true)!;
-        var registration = assembly.GetType("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", true)!
-            .GetMethod("AddGenerated", [typeof(EventModuleBuilder)])!;
+        var registration = GeneratorTestHost.SelectionFor(
+            assembly.GetType("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", true)!, typeof(EventModuleBuilder));
         await using var provider = new ServiceCollection()
             .AddErgosfare(options => options.AddEventModule(events => registration.Invoke(null, [events])))
             .BuildServiceProvider();

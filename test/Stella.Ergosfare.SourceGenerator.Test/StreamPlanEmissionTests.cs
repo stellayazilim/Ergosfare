@@ -10,7 +10,7 @@ public class StreamPlanEmissionTests
 {
     [Fact]
     [Trait("Category", "Unit")]
-    public void SoleStreamHandler_EmitsTheStreamPlan()
+    public void EnumerableResult_EmitsStreamPlanWithoutStreamContracts()
     {
         var result = GeneratorTestHost.RunWithAllCandidates("""
             #pragma warning disable CS0618
@@ -20,11 +20,14 @@ public class StreamPlanEmissionTests
 
             namespace TestApp
             {
-                public sealed record TickStream : IStreamQuery<int>;
+                public sealed record TickStream : IQuery<IAsyncEnumerable<int>>;
 
-                public sealed class TickStreamHandler : IStreamQueryHandler<TickStream, int>
+                public sealed class TickStreamHandler : IQueryHandler<TickStream, IAsyncEnumerable<int>>
                 {
-                    public async IAsyncEnumerable<int> StreamAsync(TickStream query, ErgosfareContext context)
+                    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<int>> HandleAsync(TickStream query, ErgosfareContext context)
+                        => new(Enumerate(query, context));
+
+                    private async IAsyncEnumerable<int> Enumerate(TickStream query, ErgosfareContext context)
                     {
                         await System.Threading.Tasks.Task.Yield();
                         yield return 1;
@@ -48,8 +51,8 @@ public class StreamPlanEmissionTests
         // The handler is resolved concretely and called through the stream-handler
         // contract, whose Handle is a default interface member.
         Assert.Contains(
-            "((global::Stella.Ergosfare.Core.Abstractions.Handlers.IHandler<global::TestApp.TickStream, global::System.Collections.Generic.IAsyncEnumerable<int>>)"
-            + "new global::TestApp.TickStreamHandler()).Handle(message, context);",
+            "((global::Stella.Ergosfare.Core.Abstractions.Handlers.IAsyncHandler<global::TestApp.TickStream, global::System.Collections.Generic.IAsyncEnumerable<int>>)"
+            + "new global::TestApp.TickStreamHandler()).HandleAsync(message, context);",
             result.GeneratedSource);
         Assert.Contains("yield return item;", result.GeneratedSource);
 
@@ -76,9 +79,12 @@ public class StreamPlanEmissionTests
             {
                 public sealed record StagedTickStream : IStreamQuery<int>;
 
-                public sealed class StagedTickStreamHandler : IStreamQueryHandler<StagedTickStream, int>
+                public sealed class StagedTickStreamHandler : IQueryHandler<StagedTickStream, IAsyncEnumerable<int>>
                 {
-                    public async IAsyncEnumerable<int> StreamAsync(StagedTickStream query, ErgosfareContext context)
+                    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<int>> HandleAsync(StagedTickStream query, ErgosfareContext context)
+                        => new(Enumerate(query, context));
+
+                    private async IAsyncEnumerable<int> Enumerate(StagedTickStream query, ErgosfareContext context)
                     {
                         await Task.Yield();
                         yield return 1;
@@ -122,8 +128,8 @@ public class StreamPlanEmissionTests
 
         // The post stage closes over the enumerator — the items are already with the
         // caller — and the final stage receives it with the pending exception.
-        Assert.Contains("object? postChain = enumerator;", result.GeneratedSource);
-        Assert.Contains(
+        Assert.DoesNotContain("object? postChain = enumerator;", result.GeneratedSource);
+        Assert.DoesNotContain(
             "IAsyncPostInterceptor<global::TestApp.StagedTickStream, global::System.Collections.Generic.IAsyncEnumerator<int>>)",
             result.GeneratedSource);
         Assert.Contains(").HandleAsync(message, enumerator, exception, context);", result.GeneratedSource);
@@ -149,9 +155,12 @@ public class StreamPlanEmissionTests
                 public sealed record KeyedTickStream : IStreamQuery<int>;
 
                 [DiscoveryKey("area")]
-                public sealed class KeyedTickStreamHandler : IStreamQueryHandler<KeyedTickStream, int>
+                public sealed class KeyedTickStreamHandler : IQueryHandler<KeyedTickStream, IAsyncEnumerable<int>>
                 {
-                    public async IAsyncEnumerable<int> StreamAsync(KeyedTickStream query, ErgosfareContext context)
+                    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<int>> HandleAsync(KeyedTickStream query, ErgosfareContext context)
+                        => new(Enumerate(query, context));
+
+                    private async IAsyncEnumerable<int> Enumerate(KeyedTickStream query, ErgosfareContext context)
                     {
                         await System.Threading.Tasks.Task.Yield();
                         yield return 1;
@@ -183,9 +192,12 @@ public class StreamPlanEmissionTests
                 {
                     public sealed record NestedTickStream : IStreamQuery<int>;
 
-                    public sealed class NestedTickStreamHandler : IStreamQueryHandler<NestedTickStream, int>
+                    public sealed class NestedTickStreamHandler : IQueryHandler<NestedTickStream, IAsyncEnumerable<int>>
                     {
-                        public async IAsyncEnumerable<int> StreamAsync(NestedTickStream query, ErgosfareContext context)
+                        public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<int>> HandleAsync(NestedTickStream query, ErgosfareContext context)
+                            => new(Enumerate(query, context));
+
+                        private async IAsyncEnumerable<int> Enumerate(NestedTickStream query, ErgosfareContext context)
                         {
                             await System.Threading.Tasks.Task.Yield();
                             yield return 1;
@@ -213,18 +225,24 @@ public class StreamPlanEmissionTests
             {
                 public sealed record ContestedTickStream : IStreamQuery<int>;
 
-                public sealed class FirstTickStreamHandler : IStreamQueryHandler<ContestedTickStream, int>
+                public sealed class FirstTickStreamHandler : IQueryHandler<ContestedTickStream, IAsyncEnumerable<int>>
                 {
-                    public async IAsyncEnumerable<int> StreamAsync(ContestedTickStream query, ErgosfareContext context)
+                    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<int>> HandleAsync(ContestedTickStream query, ErgosfareContext context)
+                        => new(Enumerate(query, context));
+
+                    private async IAsyncEnumerable<int> Enumerate(ContestedTickStream query, ErgosfareContext context)
                     {
                         await System.Threading.Tasks.Task.Yield();
                         yield return 1;
                     }
                 }
 
-                public sealed class SecondTickStreamHandler : IStreamQueryHandler<ContestedTickStream, int>
+                public sealed class SecondTickStreamHandler : IQueryHandler<ContestedTickStream, IAsyncEnumerable<int>>
                 {
-                    public async IAsyncEnumerable<int> StreamAsync(ContestedTickStream query, ErgosfareContext context)
+                    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<int>> HandleAsync(ContestedTickStream query, ErgosfareContext context)
+                        => new(Enumerate(query, context));
+
+                    private async IAsyncEnumerable<int> Enumerate(ContestedTickStream query, ErgosfareContext context)
                     {
                         await System.Threading.Tasks.Task.Yield();
                         yield return 2;
@@ -256,9 +274,12 @@ public class StreamPlanEmissionTests
                 public sealed record RoutedTickStream : IStreamQuery<int>;
 
                 [Group("east")]
-                public sealed class EastTickStreamHandler : IStreamQueryHandler<RoutedTickStream, int>
+                public sealed class EastTickStreamHandler : IQueryHandler<RoutedTickStream, IAsyncEnumerable<int>>
                 {
-                    public async IAsyncEnumerable<int> StreamAsync(RoutedTickStream query, ErgosfareContext context)
+                    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<int>> HandleAsync(RoutedTickStream query, ErgosfareContext context)
+                        => new(Enumerate(query, context));
+
+                    private async IAsyncEnumerable<int> Enumerate(RoutedTickStream query, ErgosfareContext context)
                     {
                         await System.Threading.Tasks.Task.Yield();
                         yield return 1;
@@ -289,18 +310,24 @@ public class StreamPlanEmissionTests
 
                 public sealed record AuditedTickStream : IAuditedStream;
 
-                public sealed class AuditedTickStreamHandler : IStreamQueryHandler<AuditedTickStream, int>
+                public sealed class AuditedTickStreamHandler : IQueryHandler<AuditedTickStream, IAsyncEnumerable<int>>
                 {
-                    public async IAsyncEnumerable<int> StreamAsync(AuditedTickStream query, ErgosfareContext context)
+                    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<int>> HandleAsync(AuditedTickStream query, ErgosfareContext context)
+                        => new(Enumerate(query, context));
+
+                    private async IAsyncEnumerable<int> Enumerate(AuditedTickStream query, ErgosfareContext context)
                     {
                         await System.Threading.Tasks.Task.Yield();
                         yield return 1;
                     }
                 }
 
-                public sealed class AuditedBaseStreamHandler : IStreamQueryHandler<IAuditedStream, int>
+                public sealed class AuditedBaseStreamHandler : IQueryHandler<IAuditedStream, IAsyncEnumerable<int>>
                 {
-                    public async IAsyncEnumerable<int> StreamAsync(IAuditedStream query, ErgosfareContext context)
+                    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<int>> HandleAsync(IAuditedStream query, ErgosfareContext context)
+                        => new(Enumerate(query, context));
+
+                    private async IAsyncEnumerable<int> Enumerate(IAuditedStream query, ErgosfareContext context)
                     {
                         await System.Threading.Tasks.Task.Yield();
                         yield return 2;

@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 
 namespace Stella.Ergosfare.Core.Abstractions.Planning;
 
@@ -6,27 +5,22 @@ namespace Stella.Ergosfare.Core.Abstractions.Planning;
 /// One participant of a frozen composition: the type to run, and the groups it runs under.
 /// </summary>
 /// <remarks>
-/// Rows arrive already ordered — descending weight, then ordinal type name — so consuming
-/// a composition only filters and closes them, never sorts.
+/// Rows arrive already ordered — descending weight, then ordinal type name — so startup validation never sorts them.
 /// </remarks>
 /// <param name="handlerType">
-/// The participant's type, which is a generic definition when the participant closes over
-/// the message's type arguments at dispatch time. Its public constructors are preserved
-/// under trimming: this is the only annotated point on the path from the generated table to
-/// the container registrations that activate the type.
+/// The statically known participant type. Its generated typed DI registration preserves its public constructors.
 /// </param>
 /// <param name="groups">
 /// The groups the participant declared, or <c>null</c> for the default group alone — the
 /// common case, carried without allocating an array.
 /// </param>
 public sealed class FrozenParticipant(
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type handlerType,
+    Type handlerType,
     string[]? groups = null)
 {
     /// <summary>
-    /// The participant's type, possibly an open generic definition.
+    /// The statically known participant type.
     /// </summary>
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
     public Type HandlerType { get; } = handlerType;
 
     /// <summary>

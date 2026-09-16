@@ -55,7 +55,7 @@ jobs:
       - name: Run Unit & Coverage Tests
         shell: bash
         run: |
-          dotnet test Stella.Ergosfare.slnx --settings coverlet.runsettings /p:CoverletOutput=./.coverage/coverage.cobertura.xml /p:MergeWith=""  --logger "trx;LogFileName=TestResults.trx" --filter "Category!=E2E"
+          dotnet test Stella.Ergosfare.slnx --settings coverlet.runsettings /p:CoverletOutput=./.coverage/coverage.cobertura.xml /p:MergeWith="" --logger "trx;LogFilePrefix=Coverage" --filter "Category!=E2E"
 
       - name: Install Report Generator
         run: dotnet tool install --global dotnet-reportgenerator-globaltool
@@ -64,16 +64,20 @@ jobs:
         shell: bash
         run: reportgenerator -reports:./**/coverage.cobertura.xml -targetdir:./.coverage -reporttypes:Cobertura
 
-      - name: Fail if coverage < 90%
+      - name: Require at least 90% line coverage
         shell: bash
         run: |
-          COVERAGE=$(grep -oP '(?<=line-rate=")[0-9.]+' ./.coverage/Cobertura.xml)
-          echo "Total line coverage: $COVERAGE"
-          COVERAGE_INT=$(echo "$COVERAGE * 100 / 1" | bc)
-          if [ "$COVERAGE_INT" -lt 90 ]; then
-            echo "Coverage $COVERAGE% is below 90%!"
-            exit 1
-          fi
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          coverage = ET.parse(".coverage/Cobertura.xml").getroot()
+          covered = int(coverage.attrib["lines-covered"])
+          total = int(coverage.attrib["lines-valid"])
+          if total <= 0:
+              raise SystemExit("Coverage report contains no executable lines.")
+          print(f"Total line coverage: {covered / total:.2%} ({covered}/{total})")
+          if covered * 100 < total * 90:
+              raise SystemExit("Line coverage must be at least 90%.")
+          PY
 
       # The badge reflects main's coverage: only publish it from pushes to main.
       # Publishing from pull requests both raced the branch ref and overwrote the

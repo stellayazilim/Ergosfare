@@ -14,13 +14,14 @@ using Stella.Ergosfare.Queries.Abstractions;
 using Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
 
 var provider = new ServiceCollection()
+    .AddScoped(static _ => new Ergosfare.AotSmoke.AnswerValue(42))
     .AddErgosfare(options =>
     {
         options.AddCommandModule(commands => commands.AddGenerated());
-        options.AddQueryModule(queries => queries.AddGenerated());
+        options.AddQueryModule(queries => queries.AddGenerated().Register(typeof(Ergosfare.AotSmoke.QueryPre<>)));
         options.AddEventModule(events => events.AddGenerated());
     })
-    .BuildServiceProvider();
+    .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
 
 await using var _ = provider;
 
@@ -46,12 +47,16 @@ if (echoed != "aot!")
 }
 
 // Query — result executor over a value-type result.
-var queries = provider.GetRequiredService<IQueryMediator>();
-var answer = await queries.QueryAsync(new Ergosfare.AotSmoke.TheAnswer());
-if (answer != 42)
+await using (var scope = provider.CreateAsyncScope())
 {
-    failures.Add($"query returned {answer}, expected 42");
+    var queries = scope.ServiceProvider.GetRequiredService<IQueryMediator>();
+    var answer = await queries.QueryAsync(new Ergosfare.AotSmoke.TheAnswer());
+    if (answer != 42) failures.Add($"query returned {answer}, expected 42");
+    if (!Ergosfare.AotSmoke.QueryPre<Ergosfare.AotSmoke.TheAnswer>.Ran)
+        failures.Add("the generated closed generic registration did not resolve its scoped dependency");
 }
+if (!Ergosfare.AotSmoke.TheAnswerHandler.Disposed)
+    failures.Add("the generated DI registration did not preserve scope disposal");
 
 // Class event broadcast with two handlers.
 var events = provider.GetRequiredService<IEventMediator>();
@@ -113,10 +118,28 @@ namespace Ergosfare.AotSmoke
 
     public sealed class TheAnswer : IQuery<int> { }
 
-    public sealed class TheAnswerHandler : IQueryHandler<TheAnswer, int>
+    public sealed record AnswerValue(int Value);
+
+    public sealed class QueryPre<T>(AnswerValue answer) : IQueryPreInterceptor<T> where T : IQuery
     {
+        public static bool Ran { get; private set; }
+        public ValueTask<T> HandleAsync(T query, ErgosfareContext context)
+        {
+            Ran = answer.Value == 42;
+            return new(query);
+        }
+    }
+
+    public sealed class TheAnswerHandler : IQueryHandler<TheAnswer, int>, IDisposable
+    {
+        private readonly int value;
+        public required string Label { get; init; }
+        public TheAnswerHandler() => value = -1;
+        public TheAnswerHandler(AnswerValue answer, int offset = 0) => value = answer.Value + offset;
+        public static bool Disposed { get; private set; }
+        public void Dispose() => Disposed = true;
         public ValueTask<int> HandleAsync(TheAnswer query, ErgosfareContext context)
-            => ValueTask.FromResult(42);
+            => ValueTask.FromResult(value);
     }
 
     public sealed class NotePublished : IEvent { }

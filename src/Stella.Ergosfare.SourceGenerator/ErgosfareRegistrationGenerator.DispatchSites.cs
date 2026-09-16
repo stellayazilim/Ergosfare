@@ -68,7 +68,7 @@ public sealed partial class ErgosfareRegistrationGenerator
     /// <c>true</c> for an invocation whose name is one of the registration methods.
     /// </returns>
     /// <remarks>
-    /// <c>AddGenerated</c> and <c>RegisterAll</c> are left out on purpose: they collect
+    /// <c>AddGenerated</c> selects generated metadata; explicit registrations name
     /// in bulk what discovery already counts as evidence.
     /// </remarks>
     private static bool IsRegistrationInvocationCandidate(SyntaxNode node)
@@ -86,7 +86,7 @@ public sealed partial class ErgosfareRegistrationGenerator
             _ => null,
         };
 
-        return name is "Register" or "RegisterParticipants" or "AddGenerated" or "RegisterAll";
+        return name is "Register" or "RegisterParticipants" or "AddGenerated";
     }
 
     /// <summary>

@@ -13,6 +13,6 @@ public sealed class CollectText() : CommandStream<string, CollectText>(), IComma
     public string ContentType { get; init; } = "text/plain";
 }
 
-// The input stream is the message; IStreamQuery describes its streamed output.
-public sealed class AccumulateText() : QueryStream<string, AccumulateText>(), IStreamQuery<string>;
-public sealed record StreamGreeting : IStreamQuery<string>;
+// The input stream is the message; IQuery<IAsyncEnumerable<T>> describes its streamed output.
+public sealed class AccumulateText() : QueryStream<string, AccumulateText>(), IQuery<IAsyncEnumerable<string>>;
+public sealed record StreamGreeting : IQuery<IAsyncEnumerable<string>>;

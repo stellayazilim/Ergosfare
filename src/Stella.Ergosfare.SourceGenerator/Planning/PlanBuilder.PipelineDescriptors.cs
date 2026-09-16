@@ -68,6 +68,8 @@ internal sealed partial class PlanBuilder
 
                 foreach (var descriptor in candidate.Descriptors)
                 {
+                    if (IsStreamingPipeline(message) && descriptor.Kind is DescriptorKind.PostInterceptor or DescriptorKind.ExceptionInterceptor)
+                        continue;
                     var declaredKey = message.IsDispatchableMessage
                         ? descriptor.MessageTypeExpression : TypeExpressions.DefinitionKey(descriptor.MessageTypeExpression);
                     var direct = declaredKey == messageKey;

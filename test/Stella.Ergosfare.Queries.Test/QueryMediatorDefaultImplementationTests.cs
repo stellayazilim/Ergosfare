@@ -83,7 +83,7 @@ public class QueryMediatorDefaultImplementationTests
         }
 
         [Obsolete(StreamRevision.Notice)]
-        public IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query,
+        public IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IQuery<IAsyncEnumerable<TQueryResult>> query,
             GroupSet groups, CancellationToken cancellationToken)
         {
             Record(Lane.Stream, query, groups, cancellationToken, null);
@@ -91,7 +91,7 @@ public class QueryMediatorDefaultImplementationTests
         }
 
         [Obsolete(StreamRevision.Notice)]
-        public IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IStreamQuery<TQueryResult> query,
+        public IAsyncEnumerable<TQueryResult> StreamAsync<TQueryResult>(IQuery<IAsyncEnumerable<TQueryResult>> query,
             ErgosfareContext context, GroupSet? groups = null)
         {
             Record(Lane.StreamContext, query, groups, context.CancellationToken, context);

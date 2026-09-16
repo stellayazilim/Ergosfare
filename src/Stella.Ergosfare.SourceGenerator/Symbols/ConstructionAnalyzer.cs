@@ -245,6 +245,16 @@ internal static class ConstructionAnalyzer
         return "new " + typeExpression + "(" + string.Join(", ", arguments) + ")";
     }
 
+    /// <summary>Checks that a participant can be named as a concrete, closed DI service.</summary>
+    internal static bool CanRegisterParticipant(INamedTypeSymbol symbol)
+    {
+        if (symbol.TypeKind != TypeKind.Class || symbol.IsAbstract) return false;
+        for (var type = symbol; type is not null; type = type.ContainingType)
+            if (type.IsUnboundGenericType || type.TypeArguments.Any(t => t.TypeKind == TypeKind.TypeParameter))
+                return false;
+        return true;
+    }
+
     /// <summary>
     /// Reports whether generated code can name a closed type in a generic argument position.
     /// </summary>
@@ -370,30 +380,6 @@ internal static class ConstructionAnalyzer
             default:
                 return null;
         }
-    }
-
-    /// <summary>
-    /// Reports whether a type declares more than one public instance constructor.
-    /// </summary>
-    /// <param name="symbol">The type to test.</param>
-    /// <returns><c>true</c> when a second public constructor is found.</returns>
-    /// <remarks>
-    /// What ERGO003 reports: with more than one, the container's greedy selection depends on
-    /// what is registered, and no factory can be proven to match it.
-    /// </remarks>
-    internal static bool HasMultiplePublicInstanceConstructors(INamedTypeSymbol symbol)
-    {
-        var count = 0;
-
-        foreach (var constructor in symbol.InstanceConstructors)
-        {
-            if (constructor.DeclaredAccessibility == Accessibility.Public && ++count > 1)
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /// <summary>

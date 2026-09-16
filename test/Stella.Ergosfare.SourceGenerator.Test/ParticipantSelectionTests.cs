@@ -52,7 +52,7 @@ public class ParticipantSelectionTests
     [InlineData(true)]
     public void BulkSelection_OnlyPlansSelectedKey(bool referenced)
     {
-        var result = Run("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations.AddGenerated(builder, \"users\");", referenced: referenced);
+        var result = Run("builder.AddGenerated(\"users\");", referenced: referenced);
         Assert.Empty(result.CompilationErrors);
         Assert.Contains("global::SelectionProbe.UserHandler", result.GeneratedSource);
         Assert.DoesNotContain("global::SelectionProbe.AdminHandler", result.GeneratedSource);
@@ -89,7 +89,7 @@ public class ParticipantSelectionTests
     [Fact]
     public void DynamicDiscoveryPattern_IsACompileError()
     {
-        var result = Run("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations.AddGenerated(builder, System.Environment.GetEnvironmentVariable(\"SELECTION\"));");
+        var result = Run("builder.AddGenerated(System.Environment.GetEnvironmentVariable(\"SELECTION\"));");
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "ERGO018");
     }
 

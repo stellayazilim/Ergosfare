@@ -46,20 +46,4 @@ public class QueryModuleTests
     }
 
 
-    /// <summary>
-    /// Tests that attempting to register a non-query handler throws a <see cref="NotSupportedException"/>.
-    /// </summary>
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
-    public void  ShouldNotRegisterNonQueriesToQueryModule()
-    {
-        var serviceCollection = new ServiceCollection();
-        Assert.Throws<NotSupportedException>(() =>
-        {
-            serviceCollection.AddErgosfare(x => 
-                x.AddQueryModule(c =>
-                    c.Register(typeof(NonQueryHandler)))).BuildServiceProvider();
-        });
-    }
 }

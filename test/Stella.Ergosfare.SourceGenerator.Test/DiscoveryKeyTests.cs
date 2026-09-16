@@ -1,3 +1,4 @@
+using Microsoft.CodeAnalysis;
 using System.Reflection;
 using Stella.Ergosfare.Core.Abstractions.Planning;
 
@@ -6,58 +7,74 @@ namespace Stella.Ergosfare.SourceGenerator.Test;
 /// <summary>
 ///     Discovery attributes in generated registration: <c>[DiscoveryKey]</c> gates types
 ///     behind key patterns, <c>[ExcludeFromDiscovery]</c> removes them from discovery
-///     entirely. Semantics are asserted by executing the emitted <c>RegisterAll</c>
-///     overloads against a real composition catalog and reading back its selection.
+///     entirely. Semantics are asserted by compiling literal selections and reading the generated selection arrays.
 /// </summary>
 public class DiscoveryKeyTests
 {
-    /// <summary>
-    ///     Emits and loads a generator run's output once, then executes the generated
-    ///     <c>RegisterAll</c> overloads against fresh recording registries.
-    /// </summary>
-    private sealed class DiscoveryHarness
+    [Theory]
+    [InlineData("", "", true)]
+    [InlineData("a", "", false)]
+    [InlineData("", "a", false)]
+    [InlineData("a", "a", true)]
+    [InlineData("a", "A", false)]
+    [InlineData("abc", "a*", true)]
+    [InlineData("a", "a*", true)]
+    [InlineData("b", "a*", false)]
+    [InlineData("", "*", true)]
+    [InlineData("anything", "*", true)]
+    [InlineData("reporting.daily", "reporting.*", true)]
+    [InlineData("reporting", "reporting.*", false)]
+    public void GeneratedSelection_AppliesExactOrPrefixSemantics(string key, string pattern, bool expected)
     {
-        // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
-        private readonly Assembly _assembly;
-        private readonly Type _registrations;
+        var result = GeneratorTestHost.RunWithAllCandidates($$"""
+            using Stella.Ergosfare.Commands.Abstractions;
+            using Stella.Ergosfare.Core.Abstractions.Attributes;
 
-        public DiscoveryHarness(GeneratorTestHost.GeneratorRunResult result)
-        {
-            Assert.Empty(result.CompilationErrors);
+            namespace TestApp
+            {
+                [DiscoveryKey("{{key}}")]
+                public sealed record SelectedCommand : ICommand;
+            }
+            """, referenceModuleBuilders: false);
 
-            // Make sure the real abstractions assembly is loaded so the emitted assembly's
-            // references bind to it by name.
-            _ = typeof(DispatchPlanCatalog);
+        var selected = new DiscoveryHarness(result).Run(pattern);
+        if (expected)
+            Assert.Equal(["SelectedCommand"], selected);
+        else
+            Assert.Empty(selected);
+    }
 
-            using var stream = new MemoryStream();
-            var emitResult = result.OutputCompilation.Emit(stream);
-            Assert.True(emitResult.Success);
-
-            _assembly = Assembly.Load(stream.ToArray());
-            _registrations = _assembly.GetType("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
-        }
-
-        /// <summary>
-        ///     Runs <c>RegisterAll(compositions)</c> (<paramref name="pattern"/> <c>null</c>)
-        ///     or <c>RegisterAll(compositions, pattern)</c> and returns the simple names of
-        ///     everything the run selected.
-        /// </summary>
+    /// <summary>
+    ///     Compiles each requested selection and reads its generated type array.
+    /// </summary>
+    private sealed class DiscoveryHarness(GeneratorTestHost.GeneratorRunResult initial)
+    {
         public IReadOnlyList<string> Run(string? pattern = null)
         {
+            var literal = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(pattern ?? "", true);
+            var original = initial.OutputCompilation.SyntaxTrees.First();
+            var selection = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText($$"""
+                internal static class DiscoverySelection {
+                    internal static void Select(Stella.Ergosfare.Core.Abstractions.Planning.DispatchPlanCatalog catalog) {
+                        new Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.CommandModuleBuilder(catalog).AddGenerated({{literal}});
+                        new Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection.QueryModuleBuilder(catalog).AddGenerated({{literal}});
+                        new Stella.Ergosfare.Events.Extensions.MicrosoftDependencyInjection.EventModuleBuilder(catalog).AddGenerated({{literal}});
+                    }
+                }
+                """);
+            var compilation = initial.OutputCompilation.RemoveAllSyntaxTrees().AddSyntaxTrees(original, selection);
+            Microsoft.CodeAnalysis.GeneratorDriver driver = Microsoft.CodeAnalysis.CSharp.CSharpGeneratorDriver.Create(
+                new ErgosfareRegistrationGenerator().AsSourceGenerator());
+            driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+            Assert.DoesNotContain(diagnostics, d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error);
+            using var stream = new MemoryStream();
+            var emit = output.Emit(stream);
+            Assert.True(emit.Success, string.Join("\n", emit.Diagnostics));
+            var assembly = Assembly.Load(stream.ToArray());
+            var registrations = assembly.GetType("Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", true)!;
             var catalog = new DispatchPlanCatalog();
-
-            if (pattern is null)
-            {
-                _registrations.GetMethod("RegisterAll", [typeof(DispatchPlanCatalog)])!
-                    .Invoke(null, [catalog]);
-            }
-            else
-            {
-                _registrations.GetMethod("RegisterAll", [typeof(DispatchPlanCatalog), typeof(string)])!
-                    .Invoke(null, [catalog, pattern]);
-            }
-
-            return [.. catalog.Selections.Select(type => type.Name)];
+            GeneratorTestHost.SelectionFor(registrations).Invoke(null, [catalog]);
+            return catalog.Selections.Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
         }
     }
 
@@ -162,7 +179,7 @@ public class DiscoveryKeyTests
         // The keyed handler's pre-computed descriptor stays out of default discovery and
         // arrives only when its key is selected.
         Assert.Equal(["Ping"], harness.Run());
-        Assert.Equal(["ReportingPingHandler"], harness.Run("reporting"));
+        Assert.Equal(["Ping", "ReportingPingHandler"], harness.Run("reporting"));
     }
 
     [Fact]

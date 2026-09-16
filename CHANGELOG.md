@@ -1,3 +1,866 @@
+## Unreleased
+
+### Release packaging
+
+* Keep the experimental `Stella.Ergosfare.Plugins.Outbox` package exclusive to
+  prerelease versions. Stable NuGet and GitHub releases omit it; its source and
+  tests remain in the repository.
+
+### Coverage and CI
+
+* Raise line coverage from 91.75% to 95.33% with regression tests for synchronous
+  pipeline execution, group-expression analysis, generic dispatch evidence, keyed-service
+  literals, result adapters, and streaming boundaries. Keep coverage exclusions unchanged.
+* Require at least 90% coverage in CI, reading the report's root line counts without
+  percentage truncation. Use framework-specific test result filenames.
+* Isolate generated test assemblies and their participant selections; synchronize the outbox polling test with lease
+  renewal and store acknowledgment, avoiding shutdown races on busy runners.
+
+### Test corrections
+
+* Update command startup tests to expect typed DI registrations and container-owned
+  constructor selection introduced in v2.17.1-preview. Include startup and activation
+  regression tests in the normal UnitTests workflow through their category traits.
+
+## v2.17.1-preview – '2026-09-16'
+
+### Container-owned participant activation
+
+* Resolve #223: generate typed DI registrations for closed participant types instead of
+  constructor invocation factories. Let the configured container select constructors
+  and resolve dependencies, including multiple constructors, optional/default parameters,
+  array parameters and types with required members.
+* Preserve existing DI registrations, service lifetimes and disposal ownership for
+  injected participants. Keep the existing safe parameterless direct-construction optimization.
+* Remove factory-specific registration machinery and the ERGO003 diagnostic. Preserve
+  compile-time participant selection, closed generic mappings, generated execution plans,
+  startup consistency validation and missing-plan diagnostics.
+* Keep NativeAOT constructor metadata through typed registrations. Ergosfare performs no
+  runtime discovery or pipeline composition; the container retains its supported activation behavior.
+* Add activation, override and scope/disposal regression coverage. Verify 527 tests on
+  .NET 10 and the Windows x64 NativeAOT smoke application with multiple constructors,
+  an optional parameter, a required member and scoped closed generic participants.
+
+## v2.17.0-preview – '2026-09-15'
+
+### Experimental outbox proof of concept
+
+* Add `Stella.Ergosfare.Plugins.Outbox`, an experimental concept implementation,
+  not a production-ready transactional outbox. Its InMemory store is process-local,
+  loses messages on exit, and does not participate in domain transactions.
+* Enqueue through `context.EnqueueOutboxAsync(message)` and normal command plans.
+  Deliver through `IOutboxHandler<T> : IEventHandler<OutboxEvent<T>>`, keeping ordinary
+  message handlers separate without changing the Ergosfare dispatch engine.
+* Include a bounded hosted worker with independent scopes, lease renewal and fencing,
+  retry limits, and cancellation-aware cleanup. Delivery is at least once.
+* Bundle an outbox source generator in the same package. `[OutboxMessage]` on public
+  partial POCO classes/records generates reflection-free JSON codecs and registration.
+  Support primitive values, nullable values, arrays and lists; diagnose unsupported
+  shapes explicitly. Import codec manifests from referenced message assemblies.
+* Add runtime and generator tests on .NET 9, 10 and 11. Keep persistence adapters,
+  operator tooling and broader serialization support outside this initial PoC.
+* Organize solution projects under `src/library` and `src/plugins`, preserving their
+  physical paths. Ship plugin packages with the common repository version.
+
+## v2.16.2-preview – '2026-09-15'
+
+### Startup and registration
+
+* Generate participant DI factories and closed generic selection mappings. Remove runtime
+  interface scanning, generic-definition normalization, ancestor descriptor lookup, and
+  descriptor traversal for service registration. Existing DI registrations retain their lifetimes.
+* Validate plan/descriptor consistency during AddErgosfare and reject incompatible selected
+  pipelines before the first dispatch. Keep dispatch-time missing-plan diagnostics.
+* Diagnose wrong-module selections with ERGO025. Remove generated RegisterAll and redundant
+  AddGenerated extension methods; public module builder calls remain unchanged.
+* Participants whose constructors cannot be modelled require an explicit DI factory registration
+  before AddErgosfare; no reflective activation fallback is installed by Ergosfare.
+
+### Removed
+
+* Remove the unused runtime `Discovery` reflection helper. Discovery attributes and
+  key patterns continue to be evaluated by generated selection; no runtime discovery
+  or plan-construction fallback is introduced. Preserve matching coverage in generator tests.
+
+## v2.16.1-preview – '2026-09-15'
+
+### Streaming handler contracts
+
+* Remove `IStreamHandler<TMessage, TItem>` and `IStreamQueryHandler<TQuery, TItem>`.
+  Use `IAsyncHandler<TMessage, IAsyncEnumerable<TItem>>` or the normal module handler,
+  such as `IQueryHandler<TQuery, IAsyncEnumerable<TItem>>`.
+* Infer query output streaming from `IQuery<IAsyncEnumerable<TItem>>`. `StreamAsync`
+  accepts that ordinary query contract. `IStreamQuery<TItem>` remains a convenience
+  alias for it and is now invariant, matching `IQuery<TResult>`.
+* Keep ErgoStream input types and bounded input lifetime handling. If either the input
+  or output is streaming, generated plans and descriptors omit post and exception
+  participants; pre and final remain. Failures propagate instead of being recovered by
+  an exception interceptor. Explicit abort semantics are unchanged.
+* Keep `StreamInfo` as observational metadata; no separate StreamInfo-based post or
+  exception handler contracts are introduced.
+
+## v2.16.0-preview – '2026-09-14'
+
+### Fluent stream inputs and conversion
+
+* Add `StreamInput<TChunk, TSelf>`, `CommandStream<TChunk, TSelf>` and
+  `QueryStream<TChunk, TSelf>`. Metadata lives on the concrete message; fluent operations
+  preserve its type. Existing experimental metadata-wrapper types remain available.
+* `Pipe` starts producing immediately, before dispatch if necessary, and waits when the
+  bounded queue fills. Capacity counts queued items rather than bytes or reachable memory.
+* Add `IPipeConverter<T>` for incremental byte-stream decoding and `IPipeConverter<S,T>`
+  for item conversion, plus `Func<byte,T>`, `Func<S,T>` and per-source-item `Func<T>` overloads.
+  Byte and owned-byte-block helpers and stateful UTF-8 line conversion leave sources open.
+* Implement explicit `IBufferWriter<T>` with growable staging separate from queue capacity.
+  `FlushAsync` publishes staged items with backpressure; manual writes and bound sources
+  cannot be mixed.
+* Move `IAsyncDisposable` to the root `ErgosfareStream`. Repeated disposal shares completion;
+  dispatch/disposal stops bound production and waits for its cleanup. Keep `ERGOEXP003`:
+  dedicated stream interceptor signatures and output-only cancellation remain open design work.
+* Keep the core `IStreamHandler` visible so consumers can combine it with module markers.
+
+### Stream termination and failures
+
+* Generated output-stream plans run cleanup on early output disposal. Pending input writers
+  and final interceptors receive `StreamOutputDisposedException`, derived from
+  `ExecutionAbortedException`. Explicit context abort continues to skip finals.
+* Output-stream failures bypass exception interceptors and propagate to the consumer and
+  final stage. Source/handler errors are preserved when cleanup also fails.
+* Command input termination forwards the original dispatch failure to waiting producers.
+  Bounded input, concurrent input/output, refusal, cancellation and producer cleanup have
+  regression coverage, included in the CI unit-test filter.
+
+### Multipart upload recipe and E2E
+
+* Add `/streams/upload`: an English browser form with progress and cancellation. The
+  endpoint pipes raw `Request.Body`; pre validates multipart headers and the file section,
+  then shares its first payload chunk and open parser with the handler through context.
+* The handler writes incrementally, preserves byte identity and SHA-256, and stores the
+  client-declared MIME in a companion JSON file. Missing MIME remains null; this is metadata
+  preservation rather than content sniffing. Partial files are removed on failure/cancellation.
+* Test a 64 MiB multipart request, writes before request EOF, WAV/UTF-8 byte identity, MIME
+  metadata, empty/missing files, extra sections and cleanup. Add `task e2e:test:upload`;
+  generated uploads and metadata are Git-ignored.
+* Document the streaming upload recipe, experimental contracts and refreshed API reference.
+
+
+## v2.15.1-preview – '2026-09-14'
+
+### Closed generic message plans
+
+* Preserve closed generic message identities throughout discovery, selection, plan
+  generation and dispatch lookup. `WrappedProbe<int>` and `WrappedProbe<string>` are
+  separate inputs, including their grouped plans and referenced-assembly handlers.
+* Selecting a closed generic handler selects that construction; selecting an open generic
+  handler includes the compatible closed constructions visible to the compiler. Unknown
+  runtime constructions do not create plans.
+
+### Experimental warnings and compatibility
+
+* Experimental adapters, plugins and stream input contracts now produce warnings using
+  the existing `ERGOEXP001–003` IDs. Generated plugin facades follow the same policy.
+  Existing suppressions remain valid; warnings-as-errors settings can still fail a build.
+* Warning markers use `Obsolete(false)` with an experimental message and custom diagnostic
+  ID, so IDEs may display obsolete styling. This does not declare these APIs discontinued.
+* Hide the core `IStreamHandler` contract from IntelliSense suggestions while retaining
+  the public module contract and existing inheritance.
+* Clarify that APIs deprecated or removed in preview may be removed in the corresponding
+  stable minor release without a separate stable deprecation release.
+
+### E2E streaming examples and scripts
+
+* Add native Ergosfare stream input, cumulative input/output over WebSocket, and a flushed
+  character-by-character SSE greeting. Include a browser page, HTTP Client requests and
+  automated stream checks. These examples exercise existing stream behavior; they do not
+  introduce new interceptor lifecycle semantics.
+* Move E2E helper scripts into `examples/e2e/scripts/` and HTTP pre-request helpers into
+  its `http/` subdirectory. Update request includes and documented launch commands.
+* Include the E2E Taskfile from the root with the correct working directory. Expose run,
+  standalone solution build, Todo suite and stream-check tasks while preserving existing
+  `task e2e` and `task e2e:test` commands. Manual startup still invokes `dotnet` directly.
+
+## v2.15.0-preview – '2026-09-14'
+
+### Unify dispatch around executable generated plans
+
+This release consolidates the plan infrastructure into one executable generated-plan model
+and closes participant discovery at compile time. Runtime dispatch executes the pipeline
+already emitted by the generator; it does not discover a composition or build an execution
+chain. Startup applies generated registrations and binds the compiled plans to the container.
+Neither startup nor later runtime registration can introduce a participant outside the
+compile-time selection.
+
+* The generated plan carries its fixed composition descriptor and the hardcoded sequence
+  of handler, interceptor and adapter calls. Command, query, event and stream execution use
+  the shared compiled-plan contract, with signatures appropriate to their dispatch shape.
+* Removed the parallel legacy message roots, single-handler `VoidHandlerPlan` /
+  `ResultHandlerPlan` tables, plan visitors, runtime dispatch wrappers and unused executor
+  variants. The generated executable plan is the execution path.
+* Removed runtime shape building and composition projection (`FrozenComposition.BuildShape`
+  and `FrozenPipelineShape`), reflective executor construction, and the unplanned execution
+  fallback implementations. A missing generated plan cannot trigger runtime pipeline creation.
+* Removed runtime result-adapter selection and binding helpers. Generated plans contain the
+  adapter invocation; adapters are helpers rather than DI services. Invalid compile-time
+  adapter configurations are diagnosed during compilation.
+* Dynamic group values are evaluated against the participants of a generated filtering
+  plan. They do not discover new types, add participants or construct another pipeline.
+
+### Close participant selection at compile time
+
+* Assembly scanning finds candidates. `AddGenerated()` / `AddGenerated(pattern)` and
+  explicit `Register<T>()` / `Register(typeof(T))` declarations select from them through
+  the same compile-time process, before validation, descriptors and plans are emitted.
+* A type that was not selected does not receive a plan merely because the generator can
+  see it. Dispatch must be covered by the selected composition, including the supported
+  covariant handler coverage.
+* There is no dynamic participant discovery or addition during application startup or
+  dispatch. A `Type` value, discovery pattern or user-supplied participant batch that
+  cannot be resolved at compile time reports ERGO018. Changing the participant set requires
+  recompilation; startup only applies the already compiled selection.
+* `ExcludeFromDiscovery` prevents automatic collection. Explicit selection can include
+  the excluded type with its full handler, group, constructor and adapter information.
+  Removed `ManualRegistrationAttribute` and its separate registration-evidence path.
+* The catalog is sealed after initialization; subsequent selection and descriptor mutations
+  are rejected. DI still controls the lifetime of injected participants: the compiled
+  composition does not turn scoped handlers into singleton instances.
+
+### Generate application plans across assembly boundaries
+
+* Moved `AddGenerated()` and `AddGenerated(pattern)` onto the public command, query and
+  event builders, so application libraries can declare selections without generated
+  extension methods in their public API.
+* Libraries can use `ErgosfareGeneratePlans=false` to export selection and dispatch
+  manifests. The composition-root generator follows called configuration methods and
+  their helper calls, collects the selections and emits the executable plans. Merely
+  referencing an assembly does not select its uncalled configuration methods.
+* Source project references without generated manifests use the same semantic selection
+  readers, fixing false ERGO005 reports during IDE analysis.
+* Referenced event subscribers contribute their unmarked POCO message types to plan
+  generation, matching the behavior for source-declared subscribers.
+
+### Reject dispatches without a selected main handler
+
+* Events now require a selected main handler too. A known message or literal group set
+  without coverage fails compilation with ERGO005 / ERGO024. Dynamic group selections
+  without a matching main handler throw `NoHandlerFoundException` before interceptors run.
+* ERGO024 complements ERGO023: an empty main-handler selection is invalid, just as two
+  competing main handlers in a command/query group selection are invalid. Explicit and
+  keyed selections retain the group evidence needed for these checks.
+* Command/query resolution preserves direct-handler priority followed by covariant
+  coverage. Event delivery retains both direct and covariant handlers.
+* Recorded ERGO019–ERGO024 in analyzer release tracking and corrected ERGO021's
+  single-sentence diagnostic wording.
+
+### Simplify runtime infrastructure and grouped APIs
+
+* Removed the unused core `IMessageMediator` implementation and registration. Module
+  mediators call the internal dispatch engine directly. DI factories construct command,
+  query and event mediators without the empty `EngineBacked*Mediator` subclasses.
+* Split internal engine helpers by execution, preparation and diagnostic responsibility.
+  Renamed `FrozenComposition`, `FrozenCompositionCatalog` and `GeneratedDispatchRoots`
+  to `PipelineDescriptor`, `DispatchPlanCatalog` and `GeneratedPlanRegistry`, respectively,
+  under `Core.Abstractions.Planning`.
+* Removed `ErgosfareRuntimeOptions` and `ForceMemoizedHandlers`. Generated plans resolve
+  injected participants with their DI lifetimes and construct parameterless participants
+  directly. The context pool remains available for dispatch context reuse.
+* Grouped mediator calls now take `GroupSet`; removed array/enumerable overloads. Collection
+  expressions such as `["audit", "metrics"]` and implicit conversion from a string keep
+  calls concise. `""` / `[""]` select the empty-string group; `[]` selects the default group.
+  Existing sequences can be converted with `GroupSet.Of(sequence)` or `[.. sequence]`.
+* Benchmarks exercise the public module mediator surfaces. Removed obsolete memoized
+  rows and the direct-engine diagnostic row; historical reports remain unchanged.
+
+### Make E2E startup and HTTP execution reproducible
+
+* `AddApplication()` and selections stay in UseCases; the API generates executable plans.
+* The API starts directly through `dotnet run`, Rider's `http` launch profile or `task e2e`.
+  Both solution directories have relative commands using port 5099; startup logs show
+  the listening address.
+* `http/run-all.http` runs the full HTTP flow with one Run action. Requests requiring
+  `todoId` explain the create prerequisite. `task e2e:test` retains optional automation
+  with separate build/startup handling and a check for an already occupied port.
+
+## v2.14.0-preview – '2026-08-18'
+
+Preview release. The theme: **one lane.** The runtime dispatch lane is deleted end to end —
+a dispatch either runs its compiled plan or fails stating why, streaming included — and a
+group set that provably cannot be satisfied stops the build instead of every dispatch.
+
+### A plan the compiler cannot build is a build error, not a quieter path
+
+* A group set that selects two main handlers for one message fails the build with `ERGO023`.
+  A send delivers to one handler, so the set cannot be satisfied — every dispatch under it
+  threw `MultipleHandlerFoundException`, and the build said nothing. The ungrouped case stays
+  with `ERGO010`, which judges main handlers contesting at the same level.
+* The planner had no way to say what it saw. Its vocabulary for a shape it could not plan was
+  a bare `return`, because it has no `SourceProductionContext` and returned only plans — so a
+  lost plan never appeared in a build, and the dispatch found out at run time instead. It now
+  returns findings alongside plans, and the pipeline reports them. That channel is what the
+  remaining silent disqualifications need; `ERGO023` is the first through it.
+
+### The runtime dispatch lane is removed
+
+Nothing is dispatched at run time that was not produced at compile time. A dispatch either
+runs its compiled plan or fails stating why; the lane that used to serve what no plan
+covered is deleted, streaming included.
+
+* **Gone:** the reflective executor construction (`Activator.CreateInstance` over
+  `MakeGenericType`, and the trimming/AOT suppressions it needed), the general pipeline
+  bodies, the mediation and invocation strategies — the `Strategies` namespace no longer
+  exists — and every fall-back-to-the-runtime-lane decision point in the executors.
+  **Breaking.**
+* A pipeline no verified plan serves raises `UnplannedDispatchException`, carrying the
+  message type and a `Reason`: `NoCompiledPlan`, `NoDispatchRoot`, `CompositionDiverged`,
+  `MemoizedInstances`, `UnplannedResultAdapter`, `ForeignDependenciesFactory` or
+  `UnplannedGroupSet`. A composition mismatch names the diverged stage —
+  `pre-interceptors: compiled [Audit], live [Audit, Outbox]` — so a participant that exists
+  only at run time can never again silently not run. The failure surface stays precise: a
+  message nobody serves still raises `NoHandlerFoundException`, a contested level still
+  raises `MultipleHandlerFoundException`, and a publish that reaches nobody — a group-only
+  event published without groups included — is still a silent no-op.
+* Streaming joins the compiled plans: the generator emits a stream plan per (query, item)
+  pair, reproducing the retired strategy exactly — a pre-interceptor may replace the query,
+  an abort cuts the stream and skips the final stage, a deferred failure flows through the
+  post, exception and final stages, and an unmatched exception leaves with its original
+  stack. Grouped streams have no per-set plans yet and fail as `UnplannedGroupSet`.
+* Only demanded memoization bars a plan: a user's `AddSingleton` handler keeps working,
+  since resolving a singleton per dispatch returns the one instance anyway.
+  `ForceMemoizedHandlers` itself now fails every dispatch, loudly. **Breaking.**
+* Constructs the generator does not model yet fail loudly instead of degrading: keyed
+  discovery dispatches, synchronous main-handler shapes, nested and generic message types,
+  `[ExcludeFromPipeline]` messages, covariant-only sends, runtime-configured default result
+  adapters and custom dependencies factories. Each is pinned in the test suites and queued
+  for compiled coverage. **Breaking.**
+
+## v2.13.0-preview – '2026-08-17'
+
+Preview release. The theme: **what the compiler already knows, the runtime stops asking
+again.** The result adapter was answering at first dispatch a question the generator had
+resolved at build time, over `Type` objects and a second unifier kept in agreement by hand.
+It now reads a generated table, and the layer's reflection is gone.
+
+On the other side, a message can now arrive in chunks. Streaming meant one thing — a query
+whose result came over time — and the direction that matters for a converter or an upload was
+missing: a handler that has to read four gigabytes cannot be handed it as a single value.
+
+### The result adapter stops asking at run time what the generator already answered
+
+* The result adapter binding is a generated table. Three tiers used to be answered by
+  reflection at first dispatch: an annotated adapter was activated, the configured fallback was
+  closed over the slot by a second unifier living beside the generator's, and both attributes
+  were read off the message's base chain. The generator writes one entry per (message, result)
+  slot an annotation binds, one per message that opts out, and one per result type the fallback
+  serves — each passing its adapter as a type argument constrained to the slot's contract, so
+  an adapter that does not serve the slot is a compile error in the generated file. What
+  reaches the runtime is a dictionary read and one interface call.
+* `DefaultResultAdapter`'s constructor is internal. **Breaking.** A carrier built by hand
+  names an adapter no generated table answers for, which is the same hole `ERGO019` closes at
+  the call site; the fallback is declared through `UseDefaultResultAdapter`, the call the
+  generator reads. A container configured that way and reached by an application the generator
+  never ran for now says so on the first dispatch instead of serving nobody in silence.
+* This was reached even in a generated application: a staged plan bakes its adapter, but the
+  executor still had to bind one reflectively to compare identity against it, so the plan's
+  compile-time answer never removed the run-time one.
+* Measured the way the reflective arms were measured before: with each replaced by a throw and
+  the suite run, the shapes reaching the adapter layer drop from 18 to 0. Every trimming and
+  AOT suppression in the layer is gone with them.
+
+### A message can arrive in chunks
+
+* `ErgosfareStream<TChunk>` is a message whose payload arrives a chunk at a time, with
+  `ErgosfareCommandStream<TChunk, TMeta[, TResult]>` and `ErgosfareQueryStream<TChunk, TMeta,
+  TResult>` over it. What makes a dispatch streaming is the message's own type — not the verb
+  it is sent with, not the module it belongs to — so a command streams exactly the way a query
+  does, and there is no `StreamAsync`, no streaming handler contract and no lane of its own.
+* Streaming used to mean one thing only: a query whose *result* arrives over time. The other
+  direction was missing, and it is the one that matters for a converter or an upload — a
+  handler that must read four gigabytes cannot be handed it as a single value. The two are
+  independent axes now: chunks in is a property of the message, chunks out is a property of
+  the result (`TResult = IAsyncEnumerable<T>`), and either, neither or both may hold.
+* The channel is bounded, so a producer faster than the handler waits instead of filling
+  memory, and single-pass, so nothing is replayed — which is why a stream message has no retry
+  and no resume: the handler runs once for the whole sequence. It is also an
+  `IAsyncEnumerable<TChunk>`, so a handler writes `await foreach (var chunk in command)` and
+  nothing stands between it and the payload.
+* `AsStream()` and `Chunked()` bridge to and from `System.IO.Stream`, written against
+  `IAsyncEnumerable<ReadOnlyMemory<byte>>` rather than against the message: they belong to the
+  byte shape, and a sequence of frames should not carry a method claiming to be a stream. Each
+  chunk owns its bytes — handing out slices of one reused buffer would be cheaper by an
+  allocation and would leave a handler that kept a chunk reading memory the next read
+  overwrote.
+* `StreamInfo` is what a stream reports about itself: chunks taken, duration, and how it
+  ended. It describes one stream, so an operation that takes chunks in and hands chunks out
+  has two — the two directions start, end and fail independently.
+* A pipeline that stops ends the stream with it. The two are separate synchronisation
+  objects, so a stage refusing an upload or a handler failing said nothing to a caller
+  waiting on a full buffer — it would have waited for a reader that was never coming, and the
+  pump task would have leaked with the chunks it held. The executors now close the channel
+  however the dispatch turns out, and the next write fails with a message naming what to do:
+  await the dispatch to see why it ended.
+* The metadata is the half of the message that exists before the payload moves, and that is
+  what it is for: the stages that run before the handler see it and nothing else, so an upload
+  can be refused without a byte of it arriving.
+* The whole streaming surface is marked `[Experimental]` under `ERGOEXP003`. What a stream
+  message *is* — bounded, single-pass, a chunk at a time — is settled; what the pipeline does
+  around one is not: which stages it gets and what they are handed, and how a refused dispatch
+  reaches a caller that is still writing. Experimental rather than obsolete because none of it
+  has shipped, and in this repository experimental is an error by default — the honest default
+  for a surface nobody depends on yet. Opt in with `<NoWarn>$(NoWarn);ERGOEXP003</NoWarn>`.
+* Nothing on the dispatch path changed. A stream message is an ordinary `ICommand<TResult>`
+  with an ordinary handler, so it gets the same compiled plan, the same interceptor stages and
+  the same frozen composition every other message gets — measured rather than assumed: a
+  stream message with a pre- and a post-interceptor emits `AddStagedPlan<…>` with both baked
+  into it.
+
+### Diagnostics
+
+* `ERGO019`, `ERGO020` and `ERGO021` judge the `UseDefaultResultAdapter` call: the argument
+  must be a literal `typeof` the compilation resolves, a compilation names one default adapter,
+  and generated code must be able to name and construct it. **Breaking.** An unreadable or
+  duplicated call used to turn compile-time baking off for the whole compilation and leave the
+  answer to the runtime; there is no runtime answer any more, so what used to compile into a
+  slower path now fails the build. An adapter serving several result families does so through
+  several `IResultAdapter<TResult>` implementations.
+* `ERGO011` now also reports an annotated adapter the generated registration cannot name —
+  inaccessible from the compilation that declares the message. Same reason: the annotation's
+  binding lives in the generated table or nowhere.
+* `ERGO022` reports a published stream message. A publish delivers to every subscriber and a
+  chunk channel is consumed once, so whichever subscriber reads first takes the payload and
+  the rest see nothing — which one that is depending on registration order. An error: no
+  arrangement of subscribers makes it work.
+
+## v2.12.0-preview – '2026-08-17'
+
+Preview release. The theme: **a pipeline stops failing in silence.** Four shapes compiled,
+ran, and delivered the wrong thing without saying so — a publish nobody subscribes to, an
+exception interceptor answering a dispatch with `null`, a stream dropping a `null` element, a
+`Register` naming a type only run time knows. Each of them is now either a build error or a
+correct result, and the settings that let a caller opt into the silence are gone.
+
+Underneath it, the same work continues on the other side: what a dispatch closes at run time
+keeps moving to compile time, so the difference between a shape that works in development and
+one that fails at publish keeps shrinking.
+
+### A publish that reaches nobody
+
+* The dead-dispatch judgment no longer exempts event sites. Publishing an event no subscriber
+  in the compilation serves fails the build with `ERGO005` in a composition root. **Breaking.**
+* The exemption rested on "reaching zero subscribers is a legal no-op", which answers a
+  different question: the runtime default decides what happens when no handler matched on a
+  call, while the judgment asks whether any handler can ever match. Declaring the event and
+  forgetting the subscriber is the ordinary way to arrive there, and it used to compile in
+  silence.
+* `throwIfNoHandlerFound` is removed from `PublishAsync`. **Breaking.** It asked the caller to
+  decide at run time about something the compilation can prove. What remains at run time is a
+  selection the container made — which is what the caller asked for — so reaching nobody
+  returns, and it now does so unconditionally. Measured before removing: the flag was never
+  passed `true` outside the tests that existed to exercise it.
+* The `string[]` group overloads go with it. **Breaking.** The full call takes
+  `IEnumerable<string>?`, which subsumes them, and keeping both made
+  `PublishAsync(@event, ["a"], token)` ambiguous — a trap every caller would meet, rather than
+  the two internal sites that had to be adjusted.
+
+### A plain domain type is an event message once a subscriber names it
+
+* A domain event declared without an Ergosfare reference used to compile, register its
+  handler, and never dispatch: the handler was collected — its contract carries the marker —
+  and the message had no pipeline to reach it with.
+* Requiring `IEvent` on the message pushed a mediator reference into the layer that declares
+  domain events, which runs the wrong way. Nothing in the publish path needed it:
+  `IEventHandler<TEvent>`, `PublishAsync<TEvent>` and `FrozenBroadcastDispatch<TEvent>` are
+  declared over `notnull`, because a broadcast carries no result and asks nothing of
+  `IMessage`.
+* What needed the marker was being *seen*. An `IEventHandler<T>` signature is not evidence
+  pointing at a message — it is the classification itself, so the message is born from the
+  subscriber's visit and its own declaration never has to be found. That is also why this
+  works across assembly boundaries, where the symbol comes from the contract's type argument.
+* `EventModuleBuilder.Register<TEvent>()` takes `notnull`. The module assertion on the `Type`
+  overload now applies to participants only: a subscriber or interceptor belongs to a module
+  and registering one in the wrong module is still reported, while a message belongs to
+  nothing and has no marker to assert against.
+
+### The result lane can take its message as a type argument
+
+* `DispatchAsync<TMessage, TResult>` joins the lanes that name their message. Every other one
+  already did; this one took the result and read the message's type back per call — not a
+  decision but an inference accident, since the return type forces `TResult` to be a type
+  parameter and C# does not infer type arguments through constraints.
+* The command and query facades carry five typed shapes each — groups, context, cancellation
+  token, `GroupSet`, `string[]` — mirroring the untyped surface rather than adding a second
+  vocabulary. They are default interface methods, so an existing `ICommandMediator` or
+  `IQueryMediator` implementation keeps compiling and forwards to its untyped call. Both
+  facades pin that the shipped mediators override them, because an implementation that does
+  not still returns the right answer and simply never reaches the typed engine path.
+* Not a hot-path change, and checkable rather than remembered: three paired benchmark runs put
+  the typed and untyped lanes within a nanosecond of each other, in both directions. What it
+  buys is the construction path — the executor closes from arguments the compiler already
+  resolved, so the `MakeGenericType` arm the untyped lane takes for a message with no
+  generated root is never reached.
+* The streaming members stay untyped on purpose: their shape is under revision, and adding a
+  surface to something scheduled to change is work that has to be undone.
+
+### Reflection keeps leaving the dispatch path
+
+* The native result carriers name their own adapter. Binding a slot to `Result<T>` used to
+  close `ResultExceptionAdapter<>` with `MakeGenericType` and read its `Instance` field
+  reflectively — an answer only a JIT can give. The slot is a generic context and the carrier
+  is the closed type in it, so the carrier answers for itself. 9 of the adapter layer's 18
+  reflective bindings were this one, and the `IL2055`/`IL3050` suppressions are gone with it.
+* Every hidden message the compilation declares gets a dispatch root, and its result contracts
+  get theirs. `[ExcludeFromDiscovery]` keeps a type out of bulk collection; it says nothing
+  about dispatch, and rooting is not registering — `AddMessage<T>()` selects nothing into any
+  container. Rooting the message while skipping `AddResult`/`AddStream` left a hidden
+  `ICommand<string>` closing one generic from the table and the other through
+  `MakeGenericType`.
+* Measured by making the reflective arms throw and running the suite: the shapes reaching them
+  drop from 25 to 2. What remains is generic messages, whose closed forms are never rooted
+  because an open definition is not a dispatchable message — tracked separately.
+
+### The plan gates stop disqualifying legal pipelines
+
+* The single-handler gate counted handler registrations per message and knew nothing about
+  groups, so two handlers in different groups — the canonical use of groups, unambiguous at
+  every set — read as a contested pipeline and lost every plan for the message, including the
+  ungrouped default. The count is now taken per plan, within the (message, group set) pair a
+  plan is built for.
+* The covariant gate threw the plan away whenever any base type of the message also had a
+  handler — a shape the priority ladder resolves without hesitation, and the very idiom the
+  v2.3.0 announcement recommends for cross-cutting handlers. A message with exactly one direct
+  handler is plannable regardless of what its bases carry; the staged plans now carry their
+  covariant segment for the gate alone, since none of it is called but the gate compares the
+  composition segment by segment.
+
+### Removed: the two-parameter pre-interceptor contracts
+
+* `ICommandPreInterceptor<TCommand, TModifiedCommand>`, `IQueryPreInterceptor<TQuery, TModifiedQuery>`
+  and `IEventPreInterceptor<TEvent, TModifiedEvent>` are gone. **Breaking.**
+* They existed to return a *narrower* message than the one that arrived, from a time when the
+  single-parameter contracts still returned `object`. Since those started returning the typed
+  message, the second parameter buys nothing: an interceptor declaring
+  `ICommandPreInterceptor<PlaceOrder>` may already return any `PlaceOrder`, derived types
+  included.
+* Migration is a deletion: drop the second type argument. A
+  `ICommandPreInterceptor<PlaceOrder, ValidatedPlaceOrder>` becomes
+  `ICommandPreInterceptor<PlaceOrder>` and keeps returning its `ValidatedPlaceOrder`.
+* The event variant was also the odd one out: alone among the pre-interceptor contracts it did
+  not carry `IEvent`, so module discovery never found it and it had to be registered by hand.
+
+### Diagnostics
+
+* `ERGOSG001`–`ERGOSG018` become `ERGO001`–`ERGO018`. **Breaking.** Numbers are preserved, so
+  the mapping is one rule: drop the `SG`. The scheme stays coherent — `ERGO###` for analyzer
+  diagnostics, `ERGOEXP###` for the experimental-API markers, which are untouched.
+* Anyone who suppressed a diagnostic by id is affected: an `.editorconfig` severity line, a
+  `NoWarn` entry, a `#pragma` or a `SuppressMessage` naming `ERGOSG###` stops matching and the
+  diagnostic comes back — as a build failure for the error-severity rules. This repository's
+  own suppressions are the demonstration: two test projects carried
+  `<NoWarn>ERGOSG005</NoWarn>` and their builds broke until updated.
+* `ERGO018` reports a `Register` call naming its type at run time, rather than quietly
+  suspending the reachability judgment. The closed world compiles a construct's pipeline,
+  freezes its composition and bakes its plan from what the compilation can see, and a type only
+  run time knows enters none of that. `Register(typeof(T))` and `Register<T>()` are unaffected.
+
+### Corrections
+
+* **Fix:** an exception interceptor that matched the failure and returned `null` made the
+  dispatch return `null` — into a non-nullable slot, with the handler's exception gone, no
+  diagnostic and no throw. A dispatch locks its result type at the call site and no stage
+  downstream may downgrade that. The four typed-result exception facades now return
+  `ValueTask<TResult>` rather than `ValueTask<TResult?>`. **Breaking.** The parameter stays
+  nullable and the asymmetry is the point: the handler may have thrown before producing
+  anything, so nullable in, non-nullable out. The erased core contracts keep their nullable
+  return, because they serve the void lane too, where an empty slot legitimately reaches the
+  exception and final stages as `null`.
+* **Fix:** a stream handler yielding `null` for a reference-typed element had that element
+  silently discarded, so the caller received a well-formed but shorter sequence. The null test
+  stood in for "did `MoveNextAsync` produce an element", which the consumption already answers,
+  and the two are not the same question — `null` is a legitimate element of an
+  `IAsyncEnumerable<T?>`.
+
+### Documentation
+
+* Every comment under `src/` is rewritten from scratch, XML documentation and inline alike. The
+  old text had drifted: it described legacy usage, named parameters the signatures no longer
+  had, and more than once a documentation block sat above the wrong member entirely, leaving
+  its real owner undocumented. Signature mismatches are corrected against the code rather than
+  the prose. No behaviour change, and the compiler now validates the whole set — the generator
+  builds with documentation generation on and zero warnings.
+* The `<see cref="..."/>` targets the earlier surgery left dangling are corrected to the types
+  that own the members now, along with the parameter docs left by removed parameters.
+
+### Repository
+
+* The generator body becomes wiring: `ErgosfareRegistrationGenerator.cs` goes from 4742 lines
+  to 244, with `Initialize` registering providers and nothing else. The plan layer is one
+  `PlanBuilder` split by responsibility, the symbol layer is readers per concern, and the
+  constants that had a copy in each layer now have one declaration.
+* Coverage is 86.5% → 91.1% line, with no project below 90%. The distribution was the real
+  problem rather than the number: three assemblies carried almost every open line, and two had
+  collapsed to near zero when the typed default interface methods arrived with nothing calling
+  them. Four groups of tests, no source change — the default interface methods dispatched
+  through a mediator that overrides nothing, suspended and failing pipelines that exercise the
+  context's non-inline return, foreign dependency factories that freeze nothing, and the
+  declarative surfaces the generator reads off symbols but never constructs.
+* `RegistrableTypeModel`'s hand-written equality is swept by reflection rather than a list of
+  cases, because it decides whether the incremental pipeline sees an edit at all: a property
+  left out of it serves a stale file with no diagnostic, no wrong build and no failing test.
+  All 36 properties participate, and a property added later is covered without anyone
+  remembering to cover it.
+* The e2e application layer owns its composition; the host only dispatches.
+
+### Breaking changes
+
+* `IEventMediator.PublishAsync` no longer takes `throwIfNoHandlerFound`, and its `string[]`
+  group overloads are removed. A publish that reaches nobody returns.
+* Publishing an event no subscriber in the compilation serves fails the build with `ERGO005`
+  in a composition root.
+* `ICommandExceptionInterceptor<TCommand, TResult>`, `IQueryExceptionInterceptor<TQuery, TResult>`
+  and their `For<TException>` variants return `ValueTask<TResult>`. An implementation returning
+  `null` no longer compiles without a warning, and no longer answers a dispatch at run time.
+* The generator diagnostics are renamed `ERGOSG###` → `ERGO###`. Suppressions naming the old
+  ids stop matching.
+* The two-parameter pre-interceptor contracts are removed; drop the second type argument.
+
+## v2.11.0-preview – '2026-08-15'
+
+Preview release. The theme: **a plugin observes a pipeline, and cannot reshape one.** The
+plugin surface shipped in v2.10.0-preview with six addressable stages, two of which let a
+plugin change the emitted plan's structure. That is the wrong relationship: a plugin is a
+third-party package, the consumer's pipeline is the consumer's, and neither is obliged to
+fit the other's model. This release settles what a plugin can ask for, and gives it settings
+without putting them in the container.
+
+The whole release lives behind `ERGOEXP002`. Nothing outside the experimental plugin surface
+changes shape.
+
+### Four hooks, all of them free
+
+* `Hook` replaces `Stage` and names four points: `Start`, `PreMain`, `PostMain`, `Finish`.
+  Every one is a straight-line position that exists in every pipeline, so **no plan grows a
+  `try`, a `catch` or a `finally` because a plugin was installed.** An interceptorless
+  pipeline carrying calls at all four is still the straight line it is without them.
+* The interceptor stages are deliberately not addressable. A plugin that must see the failure
+  path, or run on every exit, writes an interceptor — which a plugin package ships just as
+  easily, and which the consumer's composition already knows how to place.
+* Points coincide rather than disappear: with no pre chain, `Start` and `PreMain` name the
+  same instant and both calls run. In a broadcast, `PreMain` and `PostMain` name the seam
+  around a *delivery*, so they run once per handler.
+
+### One declaration, whatever the pipeline produces
+
+* No hook carries a result, so `[PipelineInvokable]` and `[VoidPipelineInvokable]` collapse
+  into one attribute with one signature — generic over the message alone. A void command, a
+  result-producing query and an event broadcast call the same method the same way.
+* With them go `PluginPipelineShape`, the arity check, the result parameter binding, and the
+  per-plan selection that had to decide which family a method fitted.
+
+### Settings the container never sees
+
+* `[ErgosfarePlugin]` takes an optional options type. Naming one makes the generated
+  `Add<Name>` take an instance, which the module holds and hands to the constructed service.
+  **It is never registered**: the container carries nothing for it and no dispatch resolves
+  it. The consumer constructs what they pass, so there is no builder in between and nothing
+  configurable the call site cannot see.
+* Two ways in, chosen by what the author writes. A constructor taking the options type is
+  left alone, and its *other* parameters are resolved from the container — so a plugin
+  service takes ordinary dependencies too. A `partial` service with no constructor gets the
+  `readonly` field and the line that assigns it written for it.
+* `ERGOSG017` reports a service that is neither, rather than letting it silently ignore
+  settings its own plugin declared. Several public constructors is an ambiguity this emission
+  will not guess at, and takes the same diagnostic.
+* A plugin that declares no options is untouched by any of it: `Add<Name>` stays
+  parameterless and the container activates the service as before.
+
+### Corrections
+
+* **Fix:** the void and result plan bodies emitted `finally { if (!aborted) { } }` — an empty
+  guard and the abort flag that fed it — for any plan with an exception stage and no final
+  stage. The `finally` existed to host the final stage and the now-retired final observer; it
+  is emitted only when there is a final stage to run.
+* Two documented claims were wrong on their own terms. The plugin selector still said events
+  never reach it, though the broadcast plan family arrived in v2.10.0-preview and a test had
+  been pinning the opposite since. And `Module.Query` claimed to cover streams, though the
+  stream lane has no plan and a plugin call lives only in a plan body. Both now say what the
+  code does; the stream gap is tracked separately.
+
+### Breaking changes
+
+Within the experimental plugin surface only, and a plugin is recompiled against the
+abstractions it targets:
+
+* `Stage` is replaced by `Hook`, and the exception and final stages have no successor. An
+  observer that needs either becomes an interceptor.
+* `VoidPipelineInvokableAttribute` is removed. `[PipelineInvokable]` serves every pipeline,
+  and a hook method takes one type parameter — its message — where the result-bearing shape
+  took two.
+
+### Examples
+
+* `examples/TimingPlugin`: a complete plugin small enough to read in one sitting — one
+  assembly attribute, two hook methods, and a README walking the stages. The consumer side is
+  the e2e app, which is also the NativeAOT gate, so installing it there tests the claim that
+  baked hook calls survive trimming.
+
+### Repository
+
+* A `--artifacts` benchmark run writes to a suffixed sibling of `BenchmarkDotNet.Artifacts`,
+  which the existing ignore pattern never matched — it excludes the directory's *contents* so
+  committed baselines can be re-included. Those siblings are per-run and hold no baselines, so
+  they are ignored whole.
+
+## v2.10.0-preview – '2026-08-15'
+
+Preview release. The theme: **a dispatch stops deciding and starts executing.** Six
+generations of dispatch machinery had been living side by side — runtime strategies, fast
+lanes, generated plans, staged plans, memoized gates — and an options object could still
+change the pipeline at the call site. Both are gone. What a dispatch does is settled before
+it runs: the compiled plan is the pipeline, and everything that used to be decided per
+dispatch is now part of what keys it.
+
+### The options objects are gone
+
+* `SendAsync`, `QueryAsync`, `StreamAsync` and `PublishAsync` no longer take a settings
+  object. Everything a dispatch can be told is a parameter: the group filter, the
+  no-handler behaviour, the cancellation token. A settings object meant allocating one per
+  dispatch and reading it at dispatch time — a shape nothing can be compiled from.
+* The execution context is the only item channel. Items seeded through settings, and the
+  parallel context-versus-settings paths that came with it, are removed.
+* Six settings types go with them, without obsolete shims. The replacements are parameters
+  on the same members, so a call site is edited once and the compiler finds every one.
+
+### The group filter is a dispatch argument
+
+* A filter no longer forms part of an executor's identity. One pipeline per message type
+  serves every filter and selects its composition per call — which is what later lets a
+  filter key a plan instead of disqualifying one.
+
+### Events dispatch through compiled plans
+
+* Broadcasts get their own plan family, so a publish looks in one store and a send in
+  another, and nothing has to branch on the message.
+* The broadcast lane becomes a table the container owns, and the streaming lane joins it.
+  Closing a dispatch generic happens in one place for all three.
+
+### The plugin surface
+
+A plugin is a NuGet package that declares what it wants observed; the generator writes the
+call. `Stella.Ergosfare.Plugins.Abstractions` carries the declaration surface —
+`[ErgosfarePlugin]`, `[PipelineInvokable]`, `[VoidPipelineInvokable]`,
+`[PluginServiceFilter]`, and the Stage/Module enums — and references nothing: the generator
+matches attributes by metadata name, so a new stage ships without moving the core's version.
+Emission covers both plan families, and a compilation that references no plugin gets exactly
+the plan it would have had before this existed.
+
+This is deliberately still experimental and not yet part of the supported public API;
+`ERGOEXP002` marks it. It is recorded here because it works end to end and already shapes
+the plan bodies visible in generated output.
+
+### One dispatch shape
+
+* `BroadcastDispatch`, `BroadcastDispatchTable` and `BroadcastMediation` are replaced by
+  `FrozenBroadcastDispatch` and its table: plan or runtime body, bare loop or staged
+  pipeline, direct construction or provider resolution — all decided once, in the
+  constructor, from the container's settled composition.
+* The four pipeline executors collapse into `FrozenVoidDispatch` and `FrozenResultDispatch`.
+* `SingleAsyncHandlerMediationStrategy<TMessage>` and `<TMessage, TResult>` retire; their
+  bodies are relocated as the plan family's N = 1 base case, so a single-handler pipeline
+  and a broadcast become one body with a different handler count. The stream lane keeps its
+  own strategy.
+* Nothing on a dispatch path consults a gate, materializes a composition, or picks a
+  strategy any more.
+
+### Compiled plans load unconditionally
+
+* Dispatch roots and every plan family enter the process-wide tables from a module
+  initializer, as frozen compositions always have. A container that only calls
+  `Register<T>()` dispatches through compiled plans for the first time; the tables used to
+  be populated only by `RegisterGenerated()` or `RegisterAll()`.
+* An interceptorless broadcast gets a plan too — its bare loop *is* the plan. A command in
+  that shape falls back to the single-handler family; a publish has none, so the flagship
+  "hooks cost nothing while not attached" lane was the one lane still resolving its handlers
+  through the container on every dispatch.
+* **Fix:** a plan with exactly one handler was filed under the sending store, where no
+  publish ever looks — so every single-handler intercepted event plan was emitted, validated
+  and never run. Which store a plan belongs to is a property of the message kind now.
+
+### The group set keys the plan
+
+* The generator reads the group sets its call sites prove — `GroupSet.Of(...)`, array and
+  collection literals, and one hop through a named reference, since the documented idiom is
+  a reused `static readonly GroupSet` — and bakes one plan per (message, set). Sets are
+  normalized, because selection is an any-of test and two spellings of one set must key one
+  plan.
+* A participant outside a plan's set is skipped rather than disqualifying the plan. This
+  lifts an older over-conservatism too: a grouped interceptor used to cost its message the
+  default plan even though the default dispatch never runs it.
+* A dispatch whose filter is a runtime value gets a plan as well: one body carrying every
+  participant, each call behind a baked group test, validated against the composition over
+  the groups it covers.
+* Group sets travel to composition roots through `DispatchSiteAttribute.Groups`.
+
+### Generic participants
+
+* A participant that takes its message as a type parameter is monomorphized: the generator
+  emits the closed forms, and registering the open definition selects the forms compiled
+  from it.
+* `ERGOSG016` reports the participant that registers and never runs.
+
+### Lifetime correctness
+
+* **Fix:** the all-participants-singleton verdict was cached per message type, but the
+  answer is a property of the pipeline *shape*. A message whose handlers all live in a named
+  group has an empty default shape, which is vacuously all-singleton — and that verdict
+  leaked into the grouped shape, silently promoting its transient handlers to de-facto
+  singletons. The cache is gone; a regression test pins the lifetime.
+
+### Both facade names resolve
+
+* `CommandMediator`, `QueryMediator` and `EventMediator` register under their concrete names
+  alongside their interfaces, resolving one object graph. A dispatch through the interface
+  pays a generic-virtual dispatch the JIT cannot devirtualize; through the class it is a
+  direct call. Injecting the interface behaves exactly as before.
+
+### Measured
+
+Typical-user benchmark — one `AddErgosfare`, explicit `Register<T>()`, dispatch through the
+public facades — against the v2.3.0 surface, medians:
+
+| Row | v2.3.0 | this release |
+| --- | --- | --- |
+| Publish, no interceptors | 48.9 ns / 48 B | 28.4 ns / 0 B |
+| Publish, intercepted | 205.2 ns | 84.1 ns |
+| Publish, group-filtered | ~54 ns / 48 B | 32.8 ns / 0 B |
+| Send, no interceptors | 29.5 ns | 23.5 ns |
+| Send, intercepted | 150.0 ns | 59.4 ns |
+| Send, group-filtered | ~42 ns / 24 B | 30.8 ns / 0 B |
+| Query | 35.2 ns | 24.9 ns |
+| Query, intercepted | 184.3 ns | 88.3 ns |
+
+The zeroed allocations are dependency-free participants constructed with a visible `new`
+through the existing construction gate, which the JIT can stack-allocate.
+
+### Breaking changes
+
+* The dispatch surfaces drop their options objects, and six settings types are removed with
+  no obsolete shims.
+* `SingleAsyncHandlerMediationStrategy<TMessage>` and `<TMessage, TResult>` are removed from
+  `Core.Abstractions`. They were a LiteBus-era seam; the stream strategy is unaffected.
+* The event exception and final interceptor facades no longer take a result parameter:
+  `IEventExceptionInterceptor`, `IEventExceptionInterceptor<TEvent>`,
+  `IEventFinalInterceptor` and `IEventFinalInterceptor<TEvent>` declare
+  `(event, exception, context)`. A publish produces no result, so the parameter only ever
+  carried a fixed placeholder.
+* `CommandMediator(IMessageMediator)` is removed; the engine-backed constructor is the only
+  construction shape, as it already was for the query and event facades.
+
+### Repository
+
+* An [AI policy](.github/AI_POLICY.md): an assistant is a co-developer and never the
+  responsible party, architectural decisions stay with the developer, disclosure is
+  recommended rather than required, and every line is reviewed by a human.
+* A checked-in Codex MCP declaration for the documentation catalog, with `.codex/` admitting
+  only that declaration.
+
 ## v2.4.0 – '2026-09-14'
 
 ### Compiled selection and generated execution

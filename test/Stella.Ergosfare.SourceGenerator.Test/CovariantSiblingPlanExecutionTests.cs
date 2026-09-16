@@ -86,7 +86,7 @@ public class CovariantSiblingPlanExecutionTests
         var assembly = Assembly.Load(stream.ToArray());
         var registrations = assembly.GetType(
             "Stella.Ergosfare.Generated.ErgosfareGeneratedRegistrations", throwOnError: true)!;
-        var registerCommands = registrations.GetMethod("AddGenerated", [typeof(CommandModuleBuilder)])!;
+        var registerCommands = GeneratorTestHost.SelectionFor(registrations, typeof(CommandModuleBuilder));
 
         var services = new ServiceCollection();
         services.AddSingleton(assembly.GetType("TestApp.GenLadderHooks", throwOnError: true)!);

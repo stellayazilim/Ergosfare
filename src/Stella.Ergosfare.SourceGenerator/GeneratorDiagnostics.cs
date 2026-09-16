@@ -45,25 +45,6 @@ internal static class GeneratorDiagnostics
         isEnabledByDefault: true);
 
     /// <summary>
-    /// ERGO003: a handler with several public constructors stays on the container path.
-    /// </summary>
-    /// <remarks>
-    /// Which constructor the container picks depends on what is registered, so the plan
-    /// cannot prove direct construction would do the same thing. Informational: everything
-    /// still works, only the construction fast path is lost.
-    /// </remarks>
-    public static readonly DiagnosticDescriptor MultiplePublicConstructors = new(
-        id: "ERGO003",
-        title: "Multiple public constructors keep the handler on the container path",
-        messageFormat:
-            "Handler '{0}' has more than one public constructor, so generated plans cannot prove which one the " +
-            "container would pick and skip its direct-construction fast path. Collapse to a single public " +
-            "constructor to enable it.",
-        category: "Performance",
-        defaultSeverity: DiagnosticSeverity.Info,
-        isEnabledByDefault: true);
-
-    /// <summary>
     /// ERGO004: <c>[FromServices]</c> sits on a constructor parameter, where it does nothing.
     /// </summary>
     /// <remarks>

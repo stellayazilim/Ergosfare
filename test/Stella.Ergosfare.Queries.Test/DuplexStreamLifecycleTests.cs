@@ -23,9 +23,12 @@ public sealed class DuplexProbe() : QueryStream<string, DuplexProbe>(capacity: 1
     public TaskCompletionSource HandlerDisposed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 }
 
-public sealed class DuplexProbeHandler : IStreamQueryHandler<DuplexProbe, string>
+public sealed class DuplexProbeHandler : IQueryHandler<DuplexProbe, IAsyncEnumerable<string>>
 {
-    public async IAsyncEnumerable<string> StreamAsync(DuplexProbe query, ErgosfareContext context)
+    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<string>> HandleAsync(DuplexProbe query, ErgosfareContext context)
+        => new(Enumerate(query, context));
+
+    private async IAsyncEnumerable<string> Enumerate(DuplexProbe query, ErgosfareContext context)
     {
         var text = "";
         try

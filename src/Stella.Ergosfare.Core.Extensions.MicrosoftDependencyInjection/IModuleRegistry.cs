@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions;
 
 namespace Stella.Ergosfare.Core.Extensions.MicrosoftDependencyInjection;
@@ -45,6 +44,5 @@ public interface IModuleRegistry
     /// </remarks>
     [Obsolete("Experimental API: subject to change or removal in any release.", false, DiagnosticId = ExperimentalIds.ResultAdapterSurface)]
     IModuleRegistry UseDefaultResultAdapter(
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.Interfaces)]
         Type adapterType);
 }

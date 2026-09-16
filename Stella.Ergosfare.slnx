@@ -1,4 +1,4 @@
-﻿<Solution>
+<Solution>
   <Folder Name="/RepositoryItems/">
     <File Path="readme.md" />
     <File Path="CHANGELOG.md" />
@@ -7,6 +7,8 @@
   </Folder>
   <Folder Name="/src/">
     <File Path="src\Directory.Build.props" />
+  </Folder>
+  <Folder Name="/src/library/">
     <Project Path="src\Stella.Ergosfare.Commands.Abstractions\Stella.Ergosfare.Commands.Abstractions.csproj" />
     <Project Path="src\Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection\Stella.Ergosfare.Commands.Extensions.MicrosoftDependencyInjection.csproj" />
     <Project Path="src\Stella.Ergosfare.Commands\Stella.Ergosfare.Commands.csproj" />
@@ -23,7 +25,13 @@
     <Project Path="src\Stella.Ergosfare.SourceGenerator\Stella.Ergosfare.SourceGenerator.csproj" />
     <Project Path="src\Stella.Ergosfare\Stella.Ergosfare.csproj" />
   </Folder>
+  <Folder Name="/src/plugins/">
+    <Project Path="src/Stella.Ergosfare.Plugins.Outbox.Generators/Stella.Ergosfare.Plugins.Outbox.Generators.csproj" />
+    <Project Path="src/Stella.Ergosfare.Plugins.Outbox/Stella.Ergosfare.Plugins.Outbox.csproj" />
+  </Folder>
   <Folder Name="/test/">
+    <Project Path="test/Stella.Ergosfare.Plugins.Outbox.Generators.Test/Stella.Ergosfare.Plugins.Outbox.Generators.Test.csproj" />
+    <Project Path="test/Stella.Ergosfare.Plugins.Outbox.Test/Stella.Ergosfare.Plugins.Outbox.Test.csproj" />
     <File Path="test\Directory.Packages.props" />
     <File Path="coverlet.runsettings" />
     <Project Path="test/Stella.Ergosfare.Benchmarking/Stella.Ergosfare.Benchmarking.csproj" />

@@ -47,14 +47,8 @@ public sealed class WrapPre<T> : ICommandPreInterceptor<Wrap<T>>
 }
 
 /// <summary>
-/// A pipeline whose participants are open generic definitions cannot be dispatched today.
-/// Engine suspect, pinned as observed: the generator records the dispatch sites under the
-/// open definition (<c>Wrap`1</c>, no type arguments) and emits no plan for any closed
-/// form, even though the compilation names <c>Wrap&lt;int&gt;</c> and
-/// <c>Wrap&lt;string&gt;</c> at the dispatch call sites below — so a lane the runtime
-/// registry used to serve (closing the definition over the message's arguments) now fails
-/// unplanned. See the suite README's suspicious-behaviors entry on the runtime-lane
-/// removal.
+/// Without an emitted closed plan, selecting a generic definition cannot synthesize a
+/// pipeline at runtime. These fixtures pin the missing-handler guard for unsupported shapes.
 /// </summary>
 public sealed class GenericHandlerDispatchTests
 {
@@ -70,31 +64,29 @@ public sealed class GenericHandlerDispatchTests
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_closed_form_of_an_open_generic_pipeline_fails_unplanned()
+    public async Task A_closed_form_without_a_generated_descriptor_is_rejected()
     {
         await using var provider = CreateProvider();
         var command = new Wrap<int> { Value = 7 };
 
-        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(
+        var thrown = await Assert.ThrowsAsync<NoHandlerFoundException>(
             async () => await provider.GetRequiredService<ICommandMediator>().SendAsync(command));
 
-        Assert.Equal(UnplannedDispatchReason.NoCompiledPlan, thrown.Reason);
         Assert.Equal(typeof(Wrap<int>), thrown.MessageType);
         Assert.Null(command.HandledBy);
     }
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task Every_instantiation_fails_the_same_way()
+    public async Task Each_unknown_instantiation_is_rejected()
     {
         await using var provider = CreateProvider();
         var mediator = provider.GetRequiredService<ICommandMediator>();
         var strings = new Wrap<string> { Value = "x" };
 
-        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(
+        var thrown = await Assert.ThrowsAsync<NoHandlerFoundException>(
             async () => await mediator.SendAsync(strings));
 
-        Assert.Equal(UnplannedDispatchReason.NoCompiledPlan, thrown.Reason);
         Assert.Equal(typeof(Wrap<string>), thrown.MessageType);
         Assert.Null(strings.InterceptedBy);
     }

@@ -127,14 +127,14 @@ to honor `GetMemory(sizeHint)` / `GetSpan(sizeHint)` independently of queue capa
 `Advance` commits staging, `FlushAsync` publishes it with backpressure, and `Complete`
 signals EOF after flushing. Manual writing cannot be combined with a bound pipe source.
 
-Input-to-single-result
-uses the ordinary command pipeline. In the current generated output-stream pipeline, pre runs
-once when enumeration starts, post runs after successful exhaustion and receives the enumerator,
-and failures bypass exception interceptors. Final interceptors observe failures and early output
-enumerator disposal; pending input writers receive the terminal error. Early disposal uses
-`StreamOutputDisposedException`, derived from `ExecutionAbortedException`. Explicit participant
-aborts still skip finals. Per-item interception and dedicated stream interceptor signatures
-remain stream-contract design questions.
+Input and output streaming use normal main-handler contracts. Output handlers implement
+`IQueryHandler<TQuery, IAsyncEnumerable<TItem>>`; messages can declare
+`IQuery<IAsyncEnumerable<TItem>>` directly. `StreamAsync` owns output enumeration lifetime.
+If either direction streams, generated plans exclude post and exception interceptors.
+Pre runs once; final observes completion, failures and early output disposal. Pending input
+writers receive the terminal error. Early disposal uses `StreamOutputDisposedException`,
+derived from `ExecutionAbortedException`. Explicit participant aborts still skip finals.
+`StreamInfo` remains observational metadata, not a separate interceptor contract.
 The endpoint keeps its request scope alive while enumerating and propagates request cancellation.
 
 For automated transport checks against an already running API (Node.js 22 or later):

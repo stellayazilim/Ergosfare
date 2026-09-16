@@ -3,13 +3,6 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 /// <summary>
 /// Which Ergosfare surfaces the consuming compilation can actually reach.
 /// </summary>
-/// <param name="HasCompositionCatalog">Whether the per-container composition catalog is available.</param>
-/// <param name="HasCommandModuleBuilder">Whether the command module's builder is available.</param>
-/// <param name="HasQueryModuleBuilder">Whether the query module's builder is available.</param>
-/// <param name="HasEventModuleBuilder">Whether the event module's builder is available.</param>
-/// <param name="CommandBuilderHasRegisterParticipants">Whether the command builder takes participants in bulk.</param>
-/// <param name="QueryBuilderHasRegisterParticipants">Whether the query builder takes participants in bulk.</param>
-/// <param name="EventBuilderHasRegisterParticipants">Whether the event builder takes participants in bulk.</param>
 /// <param name="HasPlanRegistry">Whether the store generated registration writes into is available.</param>
 /// <param name="HasKeyedServiceExtensions">
 /// Whether the keyed-service extensions are available, which a construction needs when the
@@ -37,13 +30,6 @@ namespace Stella.Ergosfare.SourceGenerator.Models;
 /// whatever it can host rather than nothing.
 /// </remarks>
 internal readonly record struct ModuleBuilderAvailability(
-    bool HasCompositionCatalog,
-    bool HasCommandModuleBuilder,
-    bool HasQueryModuleBuilder,
-    bool HasEventModuleBuilder,
-    bool CommandBuilderHasRegisterParticipants,
-    bool QueryBuilderHasRegisterParticipants,
-    bool EventBuilderHasRegisterParticipants,
     bool HasPlanRegistry,
     bool HasKeyedServiceExtensions,
     bool PlanRegistryHasStagedPlans,

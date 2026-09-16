@@ -43,9 +43,12 @@ public sealed class GsqDefaultQueryHandler : IQueryHandler<GsqDefaultQuery, stri
 public sealed record GsqRoutedStreamQuery : IStreamQuery<string>;
 
 [Group("gsq.east")]
-public sealed class GsqEastRoutedStreamHandler : IStreamQueryHandler<GsqRoutedStreamQuery, string>
+public sealed class GsqEastRoutedStreamHandler : IQueryHandler<GsqRoutedStreamQuery, IAsyncEnumerable<string>>
 {
-    public async IAsyncEnumerable<string> StreamAsync(GsqRoutedStreamQuery query, ErgosfareContext context)
+    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<string>> HandleAsync(GsqRoutedStreamQuery query, ErgosfareContext context)
+        => new(Enumerate(query, context));
+
+    private async IAsyncEnumerable<string> Enumerate(GsqRoutedStreamQuery query, ErgosfareContext context)
     {
         await Task.Yield();
         yield return "east";
@@ -53,9 +56,12 @@ public sealed class GsqEastRoutedStreamHandler : IStreamQueryHandler<GsqRoutedSt
 }
 
 [Group("gsq.west")]
-public sealed class GsqWestRoutedStreamHandler : IStreamQueryHandler<GsqRoutedStreamQuery, string>
+public sealed class GsqWestRoutedStreamHandler : IQueryHandler<GsqRoutedStreamQuery, IAsyncEnumerable<string>>
 {
-    public async IAsyncEnumerable<string> StreamAsync(GsqRoutedStreamQuery query, ErgosfareContext context)
+    public global::System.Threading.Tasks.ValueTask<IAsyncEnumerable<string>> HandleAsync(GsqRoutedStreamQuery query, ErgosfareContext context)
+        => new(Enumerate(query, context));
+
+    private async IAsyncEnumerable<string> Enumerate(GsqRoutedStreamQuery query, ErgosfareContext context)
     {
         await Task.Yield();
         yield return "west";

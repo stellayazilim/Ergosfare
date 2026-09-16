@@ -57,21 +57,4 @@ public class CommandModuleTests
         
     }
 
-    /// <summary>
-    /// Tests that attempting to register a non-command handler in a command module
-    /// throws a <see cref="NotSupportedException"/>.
-    /// </summary>
-    [Fact]
-    [Trait("Category", "Unit")]
-    [Trait("Category", "Coverage")]
-    public void  ShouldNotRegisterNonCommandsToCommandModule()
-    {
-        var serviceCollection = new ServiceCollection();
-        Assert.Throws<NotSupportedException>(() =>
-        {
-            serviceCollection.AddErgosfare(x => 
-                x.AddCommandModule(c =>
-                c.Register(typeof(NonCommandHandler)))).BuildServiceProvider();
-        });
-    }
 }

@@ -59,7 +59,7 @@ public class RegistrableTypeModelEqualityTests
         ContractShapes = [new ContractShapeModel(DescriptorKind.MainHandler, true, true, "global::TestApp.Ping", "string")],
         StagedConstructionExpression = "new global::TestApp.Ping()",
         StagedConstructionUsesKeyedServices = true,
-        HasMultiplePublicConstructors = true,
+        CanRegisterParticipant = true,
         HasFromServicesConstructorParameter = true,
         InfoLocation = new LocationInfo("Ping.cs", new TextSpan(3, 4), new LinePositionSpan()),
         IsExcludedFromDiscovery = true,

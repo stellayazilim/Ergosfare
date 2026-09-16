@@ -121,21 +121,11 @@ public sealed class UnplannedDispatchTests
 
     [Fact]
     [Trait("Category", "Contract")]
-    public async Task A_container_holding_part_of_a_compiled_pipeline_fails_naming_the_diverged_stage()
+    public void A_container_holding_part_of_a_compiled_pipeline_fails_at_startup()
     {
-        // The compiled plan for PartialPipelineCommand is handler plus pre-interceptor.
-        // This container registers the handler and leaves the interceptor out, so the live
-        // pipeline is not the one the plan was baked against.
-        await using var provider = new ServiceCollection()
+        var thrown = Assert.Throws<UnplannedDispatchException>(() => new ServiceCollection()
             .AddErgosfare(options => options
-                .AddCommandModule(commands => commands.Register<PartialPipelineCommandHandler>()))
-            .BuildServiceProvider();
-
-        var mediator = provider.GetRequiredService<ICommandMediator>();
-
-        var thrown = await Assert.ThrowsAsync<UnplannedDispatchException>(
-            async () => await mediator.SendAsync(new PartialPipelineCommand()));
-
+                .AddCommandModule(commands => commands.Register<PartialPipelineCommandHandler>())));
         Assert.Equal(UnplannedDispatchReason.CompositionDiverged, thrown.Reason);
         Assert.Contains("pre-interceptors", thrown.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(PartialPipelineCommandPre), thrown.Message, StringComparison.Ordinal);
