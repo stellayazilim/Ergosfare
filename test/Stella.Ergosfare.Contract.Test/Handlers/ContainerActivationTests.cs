@@ -7,6 +7,7 @@ using Stella.Ergosfare.Queries.Extensions.MicrosoftDependencyInjection;
 
 namespace Stella.Ergosfare.Contract.Test.Handlers;
 
+[Trait("Category", "Contract")]
 public class ContainerActivationTests
 {
     private static ServiceProvider Build(IServiceCollection services)

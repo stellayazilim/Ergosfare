@@ -1,3 +1,11 @@
+## Unreleased
+
+### Test corrections
+
+* Update command startup tests to expect typed DI registrations and container-owned
+  constructor selection introduced in v2.17.1-preview. Include startup and activation
+  regression tests in the normal UnitTests workflow through their category traits.
+
 ## v2.17.1-preview – '2026-09-16'
 
 ### Container-owned participant activation
