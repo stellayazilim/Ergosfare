@@ -68,7 +68,7 @@ public sealed class ProductCreatedHandler(Observations observations, ScopeIdenti
 [Trait("Category", "Unit")]
 public sealed class OutboxTests
 {
-    private static ServiceProvider Build(Observations observations)
+    private static ServiceProvider Build(Observations observations, IOutboxStore? store = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton(observations);
@@ -77,7 +77,8 @@ public sealed class OutboxTests
         {
             options.AddOutboxPlugin(outbox =>
             {
-                outbox.UseInMemory();
+                if (store is null) outbox.UseInMemory();
+                else outbox.UseStore(services => services.AddSingleton(store));
                 outbox.RetryDelay = TimeSpan.Zero;
                 outbox.MaxConcurrency = 2;
                 outbox.PollInterval = TimeSpan.FromMilliseconds(10);
@@ -163,6 +164,36 @@ public sealed class OutboxTests
         public override DateTimeOffset GetUtcNow() => Now;
     }
 
+    // Keep lease time deterministic while observing the worker's real renewal timer.
+    // Delivery is observable before acknowledgment; shutdown must wait for the latter.
+    private sealed class ObservedStore : IOutboxStore
+    {
+        private readonly InMemoryOutboxStore inner = new(new TestClock());
+        private readonly ConcurrentDictionary<Guid, int> renewals = new();
+        private int completed;
+        public TaskCompletionSource Renewed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Completed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ValueTask AppendAsync(OutboxMessage message, CancellationToken ct) => inner.AppendAsync(message, ct);
+        public ValueTask<OutboxLease?> ClaimAsync(TimeSpan duration, CancellationToken ct) => inner.ClaimAsync(duration, ct);
+        public async ValueTask<bool> RenewAsync(OutboxLease lease, TimeSpan duration, CancellationToken ct)
+        {
+            var renewed = await inner.RenewAsync(lease, duration, ct);
+            if (renewed)
+            {
+                renewals.AddOrUpdate(lease.Token, 1, (_, count) => count + 1);
+                if (renewals.Count(pair => pair.Value >= 2) >= 2) Renewed.TrySetResult();
+            }
+            return renewed;
+        }
+        public async ValueTask CompleteAsync(OutboxLease lease, CancellationToken ct)
+        {
+            await inner.CompleteAsync(lease, ct);
+            if (Interlocked.Increment(ref completed) == 6) Completed.TrySetResult();
+        }
+        public ValueTask FailAsync(OutboxLease lease, string error, TimeSpan delay, bool deadLetter, CancellationToken ct)
+            => inner.FailAsync(lease, error, delay, deadLetter, ct);
+    }
+
     [Fact]
     public async Task HostedPolling_BoundsConcurrency_RenewsLeases_AndDisposesScopes()
     {
@@ -170,7 +201,8 @@ public sealed class OutboxTests
         {
             Release = new(TaskCreationOptions.RunContinuationsAsynchronously)
         };
-        await using var provider = Build(observations);
+        var store = new ObservedStore();
+        await using var provider = Build(observations, store);
         await using (var scope = provider.CreateAsyncScope())
             for (var i = 0; i < 6; i++)
                 await scope.ServiceProvider.GetRequiredService<ICommandMediator>().SendAsync(new CreateProduct(i));
@@ -179,13 +211,11 @@ public sealed class OutboxTests
         try
         {
             await observations.TwoStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            await Task.Delay(350); // Longer than two original lease periods.
+            await store.Renewed.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Equal(2, observations.Active);
             Assert.Equal(2, observations.Peak);
             observations.Release.SetResult();
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            while (observations.Delivered.Count < 6)
-                await Task.Delay(10, timeout.Token);
+            await store.Completed.Task.WaitAsync(TimeSpan.FromSeconds(10));
         }
         finally { await worker.StopAsync(default); }
         Assert.Equal(6, observations.Delivered.Count);

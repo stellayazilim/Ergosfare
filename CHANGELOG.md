@@ -1,5 +1,15 @@
 ## Unreleased
 
+### Coverage and CI
+
+* Raise line coverage from 91.75% to 95.33% with regression tests for synchronous
+  pipeline execution, group-expression analysis, generic dispatch evidence, keyed-service
+  literals, result adapters, and streaming boundaries. Keep coverage exclusions unchanged.
+* Require coverage above 95% in CI, reading the report's root line counts without
+  percentage truncation. Use framework-specific test result filenames.
+* Isolate generated test assemblies and synchronize the outbox polling test with lease
+  renewal and store acknowledgment, avoiding shutdown races on busy runners.
+
 ### Test corrections
 
 * Update command startup tests to expect typed DI registrations and container-owned
