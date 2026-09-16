@@ -68,7 +68,6 @@ internal static class RegistrableTypeReader
 
         // The informational diagnostics are about how a pipeline participant is built, so
         // only a type carrying contracts answers for them.
-        var hasMultipleCtors = !descriptors.IsEmpty && ConstructionAnalyzer.HasMultiplePublicInstanceConstructors(symbol);
         var hasFromServices = !descriptors.IsEmpty && ConstructionAnalyzer.HasFromServicesOnConstructor(symbol);
 
         var stagedKeyedServices = false;
@@ -97,8 +96,7 @@ internal static class RegistrableTypeReader
             DispatchResults = dispatchResults,
             IsDirectlyConstructible = isAccessible && ConstructionAnalyzer.IsDirectlyConstructible(symbol),
             ProviderConstructionExpression = providerConstruction,
-            ServiceConstructionExpression = ConstructionAnalyzer.TryBuildConstructionExpression(
-                symbol, typeofExpression, symbol.ContainingAssembly, "provider", true, out _, forServiceRegistration: true),
+            CanRegisterParticipant = isAccessible && ConstructionAnalyzer.CanRegisterParticipant(symbol),
             ProviderConstructionUsesKeyedServices = usesKeyedServices,
             HasPipelineExclusion = ParticipantAttributes.HasPipelineExclusionAttribute(symbol),
             ExcludedInterceptorGroups = ParticipantAttributes.GetPipelineExclusionGroups(symbol),
@@ -109,12 +107,11 @@ internal static class RegistrableTypeReader
             ContractShapes = isAccessible ? ContractReader.BuildContractShapes(symbol) : ImmutableArray<ContractShapeModel>.Empty,
             StagedConstructionExpression = stagedConstruction,
             StagedConstructionUsesKeyedServices = stagedKeyedServices,
-            HasMultiplePublicConstructors = hasMultipleCtors,
             HasFromServicesConstructorParameter = hasFromServices,
             // A handler-bearing type keeps its declaration location too: ERGO007 and ERGO008
             // anchor an unreachable handler there, and an annotated or dispatchable message
             // anchors ERGO011 through ERGO013 the same way.
-            InfoLocation = hasMultipleCtors || hasFromServices || !descriptors.IsEmpty
+            InfoLocation = hasFromServices || !descriptors.IsEmpty
                            || resultAdapter is not null || isDispatchable
                 ? LocationInfo.From(symbol)
                 : null,
@@ -211,7 +208,6 @@ internal static class RegistrableTypeReader
             ContractShapes = ImmutableArray<ContractShapeModel>.Empty,
             StagedConstructionExpression = null,
             StagedConstructionUsesKeyedServices = false,
-            HasMultiplePublicConstructors = false,
             HasFromServicesConstructorParameter = false,
             InfoLocation = isDispatchable && declaredHere ? LocationInfo.From(symbol) : null,
             IsExcludedFromDiscovery = false,

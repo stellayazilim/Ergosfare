@@ -55,8 +55,8 @@ public class DispatchPlanCatalogTests
     public void SelectionIncludesOnlyRegisteredParticipants()
     {
         GeneratedPlanRegistry.AddPipelineDescriptor(Composition);
-        GeneratedPlanRegistry.AddParticipantFactory(typeof(SelectedHandler), static _ => new SelectedHandler());
-        GeneratedPlanRegistry.AddParticipantFactory(typeof(SelectedPre), static _ => new SelectedPre());
+        GeneratedPlanRegistry.AddParticipant<SelectedHandler>();
+        GeneratedPlanRegistry.AddParticipant<SelectedPre>();
         var catalog = new DispatchPlanCatalog();
         Assert.Empty(catalog.SelectedParticipants());
         catalog.Select(typeof(SelectedHandler));

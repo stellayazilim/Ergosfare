@@ -53,10 +53,10 @@ await using (var scope = provider.CreateAsyncScope())
     var answer = await queries.QueryAsync(new Ergosfare.AotSmoke.TheAnswer());
     if (answer != 42) failures.Add($"query returned {answer}, expected 42");
     if (!Ergosfare.AotSmoke.QueryPre<Ergosfare.AotSmoke.TheAnswer>.Ran)
-        failures.Add("the generated closed generic factory did not resolve its scoped dependency");
+        failures.Add("the generated closed generic registration did not resolve its scoped dependency");
 }
 if (!Ergosfare.AotSmoke.TheAnswerHandler.Disposed)
-    failures.Add("the generated DI factory did not preserve scope disposal");
+    failures.Add("the generated DI registration did not preserve scope disposal");
 
 // Class event broadcast with two handlers.
 var events = provider.GetRequiredService<IEventMediator>();
@@ -130,12 +130,16 @@ namespace Ergosfare.AotSmoke
         }
     }
 
-    public sealed class TheAnswerHandler(AnswerValue answer) : IQueryHandler<TheAnswer, int>, IDisposable
+    public sealed class TheAnswerHandler : IQueryHandler<TheAnswer, int>, IDisposable
     {
+        private readonly int value;
+        public required string Label { get; init; }
+        public TheAnswerHandler() => value = -1;
+        public TheAnswerHandler(AnswerValue answer, int offset = 0) => value = answer.Value + offset;
         public static bool Disposed { get; private set; }
         public void Dispose() => Disposed = true;
         public ValueTask<int> HandleAsync(TheAnswer query, ErgosfareContext context)
-            => ValueTask.FromResult(answer.Value);
+            => ValueTask.FromResult(value);
     }
 
     public sealed class NotePublished : IEvent { }

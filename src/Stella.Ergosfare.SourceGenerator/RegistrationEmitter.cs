@@ -11,7 +11,7 @@ namespace Stella.Ergosfare.SourceGenerator;
 /// Writes the generated registration source.
 /// </summary>
 /// <remarks>
-/// Selection arrays, participant factories, descriptors and executable plans are emitted
+/// Selection arrays, participant registrations, descriptors and executable plans are emitted
 /// together. Startup applies this generated data without discovering participant types.
 /// </remarks>
 internal static partial class RegistrationEmitter
@@ -97,7 +97,7 @@ internal static partial class RegistrationEmitter
 
         EmitGeneratedSelections(sb, types, registrationSites);
 
-        EmitParticipantRegistrations(sb, types, stagedPlans);
+        EmitParticipantRegistrations(sb, types);
 
         if (emitPlanRegistry)
         {

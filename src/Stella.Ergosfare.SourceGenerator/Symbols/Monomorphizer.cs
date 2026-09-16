@@ -364,8 +364,7 @@ internal static class Monomorphizer
             DispatchResults = ImmutableArray<DispatchResultModel>.Empty,
             IsDirectlyConstructible = ConstructionAnalyzer.IsDirectlyConstructible(closed),
             ProviderConstructionExpression = providerConstruction,
-            ServiceConstructionExpression = ConstructionAnalyzer.TryBuildConstructionExpression(
-                closed, typeofExpression, currentAssembly, "provider", true, out _, forServiceRegistration: true),
+            CanRegisterParticipant = ConstructionAnalyzer.CanRegisterParticipant(closed),
             ProviderConstructionUsesKeyedServices = usesKeyedServices,
             HasPipelineExclusion = ParticipantAttributes.HasPipelineExclusionAttribute(openDefinition),
             ExcludedInterceptorGroups = ParticipantAttributes.GetPipelineExclusionGroups(openDefinition),
@@ -378,7 +377,6 @@ internal static class Monomorphizer
             ContractShapes = ContractReader.BuildContractShapes(closed),
             StagedConstructionExpression = stagedConstruction,
             StagedConstructionUsesKeyedServices = stagedKeyedServices,
-            HasMultiplePublicConstructors = false,
             HasFromServicesConstructorParameter = false,
             InfoLocation = null,
             IsExcludedFromDiscovery = ParticipantAttributes.IsExcludedFromDiscovery(openDefinition),

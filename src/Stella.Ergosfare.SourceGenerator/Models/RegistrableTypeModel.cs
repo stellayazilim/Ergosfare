@@ -144,8 +144,8 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     /// </remarks>
     public required string? ProviderConstructionExpression { get; init; }
 
-    /// <summary>Construction performed by DI so lifetime and disposal remain container-owned.</summary>
-    public string? ServiceConstructionExpression { get; init; }
+    /// <summary>Whether this concrete, closed type can receive a generated typed DI registration.</summary>
+    public bool CanRegisterParticipant { get; init; }
 
     /// <summary>
     /// Whether <see cref="ProviderConstructionExpression"/> resolves any parameter through
@@ -245,12 +245,6 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
     /// keyed-service extensions.
     /// </summary>
     public required bool StagedConstructionUsesKeyedServices { get; init; }
-
-    /// <summary>
-    /// Whether a participant declares more than one public constructor, which keeps it on the
-    /// container path. Reported as ERGO003.
-    /// </summary>
-    public required bool HasMultiplePublicConstructors { get; init; }
 
     /// <summary>
     /// Whether any constructor parameter carries <c>[FromServices]</c>, where it does
@@ -365,7 +359,7 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
             || IsMessageShape != other.IsMessageShape
             || IsDirectlyConstructible != other.IsDirectlyConstructible
             || ProviderConstructionExpression != other.ProviderConstructionExpression
-            || ServiceConstructionExpression != other.ServiceConstructionExpression
+            || CanRegisterParticipant != other.CanRegisterParticipant
             || ProviderConstructionUsesKeyedServices != other.ProviderConstructionUsesKeyedServices
             || HasPipelineExclusion != other.HasPipelineExclusion
             || IsValueType != other.IsValueType
@@ -374,7 +368,6 @@ internal readonly struct RegistrableTypeModel : IEquatable<RegistrableTypeModel>
             || MonomorphizedFrom != other.MonomorphizedFrom
             || StagedConstructionExpression != other.StagedConstructionExpression
             || StagedConstructionUsesKeyedServices != other.StagedConstructionUsesKeyedServices
-            || HasMultiplePublicConstructors != other.HasMultiplePublicConstructors
             || HasFromServicesConstructorParameter != other.HasFromServicesConstructorParameter
             || IsExcludedFromDiscovery != other.IsExcludedFromDiscovery
             || MetadataSortKey != other.MetadataSortKey

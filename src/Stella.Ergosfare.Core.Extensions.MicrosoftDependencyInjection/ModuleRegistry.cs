@@ -2,6 +2,7 @@
 #pragma warning disable ERGOEXP001
 
 using Stella.Ergosfare.Core.Abstractions;
+using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core;
 using Stella.Ergosfare.Core.Abstractions.Results;
 using Microsoft.Extensions.DependencyInjection;
@@ -73,12 +74,20 @@ public class ModuleRegistry(
 
     private void RegisterParticipants()
     {
+        var registrar = new ParticipantRegistrar(services);
         foreach (var participantType in compositions.SelectedParticipants())
         {
             if (services.Any(service => !service.IsKeyedService && service.ServiceType == participantType)) continue;
-            var factory = GeneratedPlanRegistry.FindParticipantFactory(participantType)
-                ?? throw new InvalidOperationException($"Participant '{participantType}' has no generated constructor factory. Register it explicitly with a DI factory before AddErgosfare.");
-            services.TryAdd(ServiceDescriptor.Transient(participantType, factory));
+            var registration = GeneratedPlanRegistry.FindParticipantRegistration(participantType)
+                ?? throw new InvalidOperationException($"Participant '{participantType}' has no generated registration. Ensure the composition root generates its closed participant types.");
+            registration(registrar);
         }
+    }
+
+    private sealed class ParticipantRegistrar(IServiceCollection services) : IParticipantRegistrar
+    {
+        public void Register<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TParticipant>()
+            where TParticipant : class
+            => services.TryAddTransient<TParticipant>();
     }
 }

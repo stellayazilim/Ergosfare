@@ -137,9 +137,6 @@ internal static class ConstructionAnalyzer
     /// <param name="usesKeyedServices">
     /// Set when the expression resolves at least one keyed service.
     /// </param>
-    /// <param name="forServiceRegistration">
-    /// Allows disposable and closed generic participants when DI owns their lifetime.
-    /// </param>
     /// <returns>
     /// The construction expression, or <c>null</c> when the participant does not qualify;
     /// see <see cref="GetProviderConstructionExpression"/> for what qualifying means.
@@ -156,11 +153,11 @@ internal static class ConstructionAnalyzer
         IAssemblySymbol? currentAssembly,
         string providerIdentifier,
         bool allowParameterless,
-        out bool usesKeyedServices, bool forServiceRegistration = false)
+        out bool usesKeyedServices)
     {
         usesKeyedServices = false;
 
-        if (forServiceRegistration ? !HasServiceConstructionShape(symbol) : !HasDirectConstructionShape(symbol))
+        if (!HasDirectConstructionShape(symbol))
         {
             return null;
         }
@@ -248,12 +245,12 @@ internal static class ConstructionAnalyzer
         return "new " + typeExpression + "(" + string.Join(", ", arguments) + ")";
     }
 
-    private static bool HasServiceConstructionShape(INamedTypeSymbol symbol)
+    /// <summary>Checks that a participant can be named as a concrete, closed DI service.</summary>
+    internal static bool CanRegisterParticipant(INamedTypeSymbol symbol)
     {
-        if (symbol.TypeKind != TypeKind.Class || symbol.IsAbstract || symbol.IsUnboundGenericType
-            || symbol.TypeArguments.Any(t => t.TypeKind == TypeKind.TypeParameter)) return false;
-        for (var type = symbol; type is not null; type = type.BaseType)
-            if (type.GetMembers().Any(m => m is IPropertySymbol { IsRequired: true } or IFieldSymbol { IsRequired: true }))
+        if (symbol.TypeKind != TypeKind.Class || symbol.IsAbstract) return false;
+        for (var type = symbol; type is not null; type = type.ContainingType)
+            if (type.IsUnboundGenericType || type.TypeArguments.Any(t => t.TypeKind == TypeKind.TypeParameter))
                 return false;
         return true;
     }
@@ -383,30 +380,6 @@ internal static class ConstructionAnalyzer
             default:
                 return null;
         }
-    }
-
-    /// <summary>
-    /// Reports whether a type declares more than one public instance constructor.
-    /// </summary>
-    /// <param name="symbol">The type to test.</param>
-    /// <returns><c>true</c> when a second public constructor is found.</returns>
-    /// <remarks>
-    /// What ERGO003 reports: with more than one, the container's greedy selection depends on
-    /// what is registered, and no factory can be proven to match it.
-    /// </remarks>
-    internal static bool HasMultiplePublicInstanceConstructors(INamedTypeSymbol symbol)
-    {
-        var count = 0;
-
-        foreach (var constructor in symbol.InstanceConstructors)
-        {
-            if (constructor.DeclaredAccessibility == Accessibility.Public && ++count > 1)
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /// <summary>

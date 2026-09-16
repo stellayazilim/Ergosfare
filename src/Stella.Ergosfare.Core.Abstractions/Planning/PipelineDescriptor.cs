@@ -8,7 +8,7 @@ namespace Stella.Ergosfare.Core.Abstractions.Planning;
 /// Rows arrive already ordered — descending weight, then ordinal type name — so startup validation never sorts them.
 /// </remarks>
 /// <param name="handlerType">
-/// The statically known participant type. Its generated DI factory roots its constructor.
+/// The statically known participant type. Its generated typed DI registration preserves its public constructors.
 /// </param>
 /// <param name="groups">
 /// The groups the participant declared, or <c>null</c> for the default group alone — the

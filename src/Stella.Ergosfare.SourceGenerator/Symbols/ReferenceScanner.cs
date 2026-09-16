@@ -283,8 +283,7 @@ internal static class ReferenceScanner
             DispatchResults = dispatchResults,
             IsDirectlyConstructible = isAccessible && ConstructionAnalyzer.IsDirectlyConstructible(symbol),
             ProviderConstructionExpression = providerConstruction,
-            ServiceConstructionExpression = ConstructionAnalyzer.TryBuildConstructionExpression(
-                symbol, typeofExpression, null, "provider", true, out _, forServiceRegistration: true),
+            CanRegisterParticipant = ConstructionAnalyzer.CanRegisterParticipant(symbol),
             ProviderConstructionUsesKeyedServices = usesKeyedServices,
             HasPipelineExclusion = ParticipantAttributes.HasPipelineExclusionAttribute(symbol),
             ExcludedInterceptorGroups = ParticipantAttributes.GetPipelineExclusionGroups(symbol),
@@ -295,7 +294,6 @@ internal static class ReferenceScanner
             ContractShapes = isAccessible ? ContractReader.BuildContractShapes(symbol) : ImmutableArray<ContractShapeModel>.Empty,
             StagedConstructionExpression = referencedStagedConstruction,
             StagedConstructionUsesKeyedServices = referencedStagedKeyedServices,
-            HasMultiplePublicConstructors = false,
             HasFromServicesConstructorParameter = false,
             InfoLocation = null,
             IsExcludedFromDiscovery = assemblyExcluded || ParticipantAttributes.IsExcludedFromDiscovery(symbol),

@@ -195,6 +195,6 @@ public class ReferenceScanningTests
         // library's types are indistinguishable from the compilation's own in the emitted
         // surface, participants included.
         Assert.Contains("typeof(global::TestLib.LibPing)", source);
-        Assert.Contains(".AddParticipantFactory(typeof(global::TestLib.LibPingHandler),", source);
+        Assert.Contains(".AddParticipant<global::TestLib.LibPingHandler>()", source);
     }
 }

@@ -38,7 +38,7 @@ public class ErgosfareRegistrationGeneratorTests
         var source = result.GeneratedSource;
         Assert.Contains("internal static class ErgosfareGeneratedRegistrations", source);
         Assert.DoesNotContain("RegisterAll", source);
-        Assert.Contains("RegisterParticipantFactories", source);
+        Assert.Contains("RegisterParticipantTypes", source);
         Assert.Contains("typeof(global::TestApp.CreatePing)", source);
         Assert.Contains("typeof(global::TestApp.CreatePingHandler)", source);
         Assert.Contains("typeof(global::TestApp.GetPong)", source);
@@ -58,7 +58,7 @@ public class ErgosfareRegistrationGeneratorTests
         Assert.Contains("Selection0 = new global::System.Type[] { typeof(global::TestApp.CreatePing), typeof(global::TestApp.CreatePingHandler),", source);
         Assert.Contains("Selection1 = new global::System.Type[] { typeof(global::TestApp.GetPong),", source);
         Assert.Contains("Selection2 = new global::System.Type[] { typeof(global::TestApp.PingCreated),", source);
-        Assert.Equal(1, CountOccurrences(source, ".AddParticipantFactory(typeof(global::TestApp.CreatePingHandler),"));
+        Assert.Equal(1, CountOccurrences(source, ".AddParticipant<global::TestApp.CreatePingHandler>()"));
         Assert.DoesNotContain("RegisterParticipants", source);
     }
 

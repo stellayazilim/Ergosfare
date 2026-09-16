@@ -1,3 +1,22 @@
+## v2.17.1-preview – '2026-09-16'
+
+### Container-owned participant activation
+
+* Resolve #223: generate typed DI registrations for closed participant types instead of
+  constructor invocation factories. Let the configured container select constructors
+  and resolve dependencies, including multiple constructors, optional/default parameters,
+  array parameters and types with required members.
+* Preserve existing DI registrations, service lifetimes and disposal ownership for
+  injected participants. Keep the existing safe parameterless direct-construction optimization.
+* Remove factory-specific registration machinery and the ERGO003 diagnostic. Preserve
+  compile-time participant selection, closed generic mappings, generated execution plans,
+  startup consistency validation and missing-plan diagnostics.
+* Keep NativeAOT constructor metadata through typed registrations. Ergosfare performs no
+  runtime discovery or pipeline composition; the container retains its supported activation behavior.
+* Add activation, override and scope/disposal regression coverage. Verify 527 tests on
+  .NET 10 and the Windows x64 NativeAOT smoke application with multiple constructors,
+  an optional parameter, a required member and scoped closed generic participants.
+
 ## v2.17.0-preview – '2026-09-15'
 
 ### Experimental outbox proof of concept

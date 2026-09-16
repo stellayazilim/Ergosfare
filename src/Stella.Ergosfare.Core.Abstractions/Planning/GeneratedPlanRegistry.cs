@@ -1,5 +1,6 @@
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using Stella.Ergosfare.Core.Abstractions.Handlers;
 using Stella.Ergosfare.Core.Abstractions.StagedPlans;
 
@@ -18,23 +19,24 @@ public static class GeneratedPlanRegistry
 {
     private static readonly ConcurrentDictionary<(byte Module, string Pattern), Type[]> GeneratedSelections = new();
     private static readonly ConcurrentDictionary<Type, Type[]> SelectionExpansions = new();
-    private static readonly ConcurrentDictionary<Type, Func<IServiceProvider, object>?> ParticipantFactories = new();
+    private static readonly ConcurrentDictionary<Type, Action<IParticipantRegistrar>> ParticipantRegistrations = new();
 
     /// <summary>Stores the generated closed constructions of an explicitly selected generic definition.</summary>
     public static void AddSelectionExpansion(Type definition, Type[] closedTypes)
         => SelectionExpansions[definition] = closedTypes;
 
-    /// <summary>Stores a participant's generated DI factory; invoking it is the container's responsibility.</summary>
-    public static void AddParticipantFactory(Type participant, Func<IServiceProvider, object>? factory)
-        => ParticipantFactories.TryAdd(participant, factory);
+    /// <summary>Stores a typed registration for a compile-time selected, closed participant.</summary>
+    public static void AddParticipant<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TParticipant>()
+        where TParticipant : class
+        => ParticipantRegistrations.TryAdd(typeof(TParticipant), static registrar => registrar.Register<TParticipant>());
 
     internal static Type[]? ExpandSelection(Type type)
         => SelectionExpansions.TryGetValue(type, out var types) ? types : null;
 
-    internal static Func<IServiceProvider, object>? FindParticipantFactory(Type type)
-        => ParticipantFactories.TryGetValue(type, out var factory) ? factory : null;
+    internal static Action<IParticipantRegistrar>? FindParticipantRegistration(Type type)
+        => ParticipantRegistrations.TryGetValue(type, out var registration) ? registration : null;
 
-    internal static bool IsParticipant(Type type) => ParticipantFactories.ContainsKey(type);
+    internal static bool IsParticipant(Type type) => ParticipantRegistrations.ContainsKey(type);
 
 
     /// <summary>Stores the exact participant selection emitted for a source declaration.</summary>

@@ -45,23 +45,6 @@ internal static class GeneratorDiagnostics
         isEnabledByDefault: true);
 
     /// <summary>
-    /// ERGO003: a handler with several public constructors requires an explicit DI factory.
-    /// </summary>
-    /// <remarks>
-    /// Constructor selection cannot be fixed without knowing the application's DI
-    /// registrations. A user-supplied factory makes the choice explicit without reflection.
-    /// </remarks>
-    public static readonly DiagnosticDescriptor MultiplePublicConstructors = new(
-        id: "ERGO003",
-        title: "Multiple public constructors require an explicit DI factory",
-        messageFormat:
-            "Handler '{0}' has more than one public constructor. Use a single public constructor or register " +
-            "an explicit DI factory before AddErgosfare; no reflective activation fallback is generated.",
-        category: "Performance",
-        defaultSeverity: DiagnosticSeverity.Info,
-        isEnabledByDefault: true);
-
-    /// <summary>
     /// ERGO004: <c>[FromServices]</c> sits on a constructor parameter, where it does nothing.
     /// </summary>
     /// <remarks>

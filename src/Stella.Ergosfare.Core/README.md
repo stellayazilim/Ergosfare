@@ -10,9 +10,9 @@ pipeline-shape construction, or group-composition cache on the dispatch path.
 
 Code generation selects construction per participant. A safe public parameterless
 constructor is emitted as `new Participant()`. Constructor dependencies are handled by
-resolving the participant from the calling DI scope. Generated DI factories support
-disposable participants and closed generic types. Constructor shapes the generator cannot
-model require an explicit DI factory before `AddErgosfare`. A directly constructed participant bypasses
+resolving the participant from the calling DI scope. Generated typed DI registrations support
+disposable participants and closed generic types. The configured container selects constructors
+and resolves dependencies, including optional parameters. A directly constructed participant bypasses
 DI registrations, including factory and singleton overrides; injected participants retain
 their DI lifetimes and overrides.
 
