@@ -22,9 +22,7 @@ The result is a mediator built for applications that want rich CQRS pipelines wi
 giving up predictable performance, dependency-injection lifetimes, Native AOT or explicit
 control over execution state.
 
-> **You are viewing the `preview` branch.** It contains the next generation of Ergosfare
-> and may introduce breaking changes between preview releases. For the current stable line,
-> see [`main`](https://github.com/stellayazilim/Ergosfare/tree/main).
+> **Stable v2.4.0 promotion.** Stream input, adapters and plugins retain their experimental warnings.
 
 [Preview documentation](https://stellayazilim.github.io/ergosfare.docs/preview/) ·
 [Changelog](https://stellayazilim.github.io/ergosfare.changelog) ·
@@ -297,9 +295,9 @@ only the modules they use:
 Libraries that only declare messages and participants normally need the relevant
 `.Abstractions` package. The application owns source generation and DI composition.
 
-## Preview notes
+## v2.4 release notes
 
-The current preview executes generated plans with fixed participant metadata and hardcoded
+The v2.4 release executes generated plans with fixed participant metadata and hardcoded
 call sequences. `AddGenerated()` and `Register<T>()` select compiler-visible participants;
 runtime registration cannot introduce new types or construct another pipeline.
 
@@ -312,7 +310,7 @@ Experimental surfaces emit `ERGOEXP001–003` warnings using experimental `Obsol
 Suppressions are optional unless warnings are treated as errors; see [COMPATIBILITY.md](COMPATIBILITY.md).
 
 Fluent stream inputs support bounded eager production, chunk conversion and asynchronous
-disposal. The [streaming upload recipe](https://stellayazilim.github.io/ergosfare.docs/preview/recipes/streaming-upload)
+disposal. The [streaming upload recipe](https://stellayazilim.github.io/ergosfare.docs/recipes/streaming-upload)
 demonstrates raw HTTP body piping, pre-interceptor first-chunk handoff, incremental file
 writing, MIME metadata and cancellation cleanup. Run it at `/streams/upload` in the
 [E2E application](examples/e2e/README.md). Stream input remains experimental.

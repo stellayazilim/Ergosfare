@@ -861,6 +861,75 @@ through the existing construction gate, which the JIT can stack-allocate.
 * A checked-in Codex MCP declaration for the documentation catalog, with `.codex/` admitting
   only that declaration.
 
+## v2.4.0 – '2026-09-14'
+
+### Compiled selection and generated execution
+
+Promote the completed preview changes since v2.3.1. This stable release includes breaking
+public API changes announced through the v2.3.1 deprecations. Stream input, adapters and
+plugins retain their experimental warning markers.
+
+* Unify command, query, event and stream execution around generated executable plans with
+  fixed composition metadata and hardcoded participant/adapter calls. Remove legacy roots,
+  parallel single-handler tables, runtime pipeline construction and reflective fallbacks.
+* `AddGenerated()` / `AddGenerated(pattern)` and explicit `Register<T>()` select the
+  compiler-visible participant pool. Selection does not enable runtime discovery or later
+  dynamic participant registration. Unselected types produce no executable plans.
+* Keep application selections in referenced assemblies and generate executable plans in
+  the composition root. Referenced libraries can export selections with
+  `ErgosfareGeneratePlans=false`; endpoint calls are checked against those selections.
+* Preserve closed generic message identities and their groups. Open generic selections
+  include visible compatible constructions; unseen runtime constructions have no plans.
+* Validate result adapters at compile time and embed their calls in plans. Adapters are
+  helpers, not DI services. Preserve the polymorphic handler resolution priority ladder.
+
+### Public dispatch surface and diagnostics
+
+* Grouped dispatch accepts `GroupSet`, including collection expressions, implicit strings
+  and `GroupSet.Of()`. Remove the deprecated string/array/enumerable overload families.
+* Module mediators use their shared internal engine and dispatch provider through DI;
+  remove unused facade layers and obsolete manual construction surfaces.
+* Missing handlers for compile-time-known messages/groups, including events, produce
+  compilation diagnostics. Dynamic groups use generated filtering plans and fail at
+  runtime when no main handler matches; they cannot discover additional participants.
+* Experimental surfaces emit `ERGOEXP001–003` warnings rather than unconditional errors.
+  Preview deprecation can precede removal in the corresponding stable minor release.
+
+### Experimental streams and multipart upload
+
+* Add fluent `CommandStream<TChunk, TSelf>` and `QueryStream<TChunk, TSelf>` inputs, immediate
+  bounded `Pipe`, reusable stream/item converters, and growable `IBufferWriter<T>` staging
+  with asynchronous flush/backpressure. Metadata belongs to the message itself.
+* Root stream inputs are asynchronously disposable. Dispatch/disposal releases producers;
+  output-stream failures preserve the original error and reach consumers/finals. Early
+  output disposal uses `StreamOutputDisposedException`. Explicit context abort still skips
+  finals; output-stream failures bypass exception interceptors.
+* Add a multipart upload recipe and runnable E2E browser form: raw body → pre validation
+  and first-chunk context handoff → incremental file handler → final cleanup. Preserve
+  client-declared MIME in JSON metadata and prove byte identity with SHA-256 and WAV/UTF-8
+  samples. Include cancellation, missing/empty file and malformed-body tests.
+* Add E2E WebSocket input/duplex and SSE examples, root/local Taskfile commands and organized
+  helper scripts. Refresh the generated API reference and documentation for both lines.
+
+
+## v2.3.1 – '2026-09-14'
+
+### Deprecation notice
+
+* Marked the public APIs already removed from preview as obsolete on the stable line:
+  mediation settings and their dispatch overloads, mediator extension classes, direct
+  mediator constructors, two-parameter pre-interceptors, `ForceMemoizedHandlers`, and
+  `AsyncBroadcastMediationStrategy<TMessage>`. Their existing behavior remains available
+  in this patch; they are scheduled for removal in the next stable minor release.
+* Obsolete messages describe the migration path: module mediator methods, `GroupSet`,
+  DI resolution, single-message pre-interceptors, and source-generated execution plans.
+* Experimental result-adapter APIs now emit warnings with the existing `ERGOEXP001`
+  diagnostic ID instead of default compilation errors. Existing suppressions still work;
+  projects treating warnings as errors retain control of their diagnostic policy.
+* Updated the English and Turkish compatibility policy: preview deprecation or removal
+  can precede removal in the corresponding stable minor without a separate stable
+  deprecation release. No API is removed by this patch.
+
 ## v2.3.0 – '2026-08-12'
 
 Stable release. The theme: **the pipeline becomes a compiled artifact.** The preview cycle
